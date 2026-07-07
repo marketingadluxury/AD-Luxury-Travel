@@ -1,0 +1,415 @@
+import React, { useState, useEffect } from 'react';
+import { X, Upload, CheckCircle2, FileText, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Passenger } from '../types';
+import { DatePicker } from './DatePicker';
+import { supabase } from '../lib/supabase';
+
+interface EditPassengerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  passenger: Passenger | null;
+  onSave: (passengerId: string, updatedData: Partial<Passenger>) => void;
+}
+
+const getInitials = (fullName: string): string => {
+  if (!fullName) return '';
+  const unsigned = fullName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/Đ/g, 'D')
+    .replace(/đ/g, 'd')
+    .toUpperCase();
+  const parts = unsigned.trim().split(/\s+/);
+  return parts.map(p => p[0]).join('');
+};
+
+export default function EditPassengerModal({
+  isOpen,
+  onClose,
+  passenger,
+  onSave,
+}: EditPassengerModalProps) {
+  const [fullName, setFullName] = useState('');
+  const [passportNumber, setPassportNumber] = useState('');
+  const [dob, setDob] = useState('');
+  const [phone, setPhone] = useState('');
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
+  const [deletingState, setDeletingState] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showDeletedAlert, setShowDeletedAlert] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && passenger && passenger.id !== activeId) {
+      setFullName(passenger.full_name || '');
+      setPassportNumber(passenger.passport_number || '');
+      setDob(passenger.dob || '');
+      setPhone(passenger.phone || '');
+      setUploadedUrls(passenger.passport_url ? passenger.passport_url.split(',').filter(Boolean) : []);
+      setActiveId(passenger.id);
+      setErrorMsg(null);
+      setShowDeletedAlert(false);
+    }
+  }, [isOpen, passenger, activeId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveId(null);
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !passenger) return null;
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    setIsUploading(true);
+    setErrorMsg(null);
+    try {
+      const filesArray = Array.from(fileList) as File[];
+      const newUrls: string[] = [];
+
+      for (const file of filesArray) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('passportNumber', passportNumber || 'CHUA_CO_HC');
+        formData.append('fullName', fullName || 'KHACH_HANG');
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || `Không thể tải file ${file.name} lên`);
+        }
+
+        const data = await res.json();
+        if (data.success && data.url) {
+          newUrls.push(data.url);
+        } else {
+          throw new Error(data.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
+        }
+      }
+
+      setUploadedUrls(prev => [...prev, ...newUrls]);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(`Lỗi: ${err.message || 'Không thể tải file lên hệ thống'}`);
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleFileDelete = async (urlToDelete: string) => {
+    setDeletingState(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch('/api/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ url: urlToDelete })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn('Xóa file thất bại hoặc file không tồn tại:', errText);
+      }
+
+      setUploadedUrls(prev => prev.filter(url => url !== urlToDelete));
+      setShowDeletedAlert(true);
+    } catch (err) {
+      console.error('Lỗi khi xóa file:', err);
+      setUploadedUrls(prev => prev.filter(url => url !== urlToDelete));
+      setShowDeletedAlert(true);
+    } finally {
+      setDeletingState(false);
+      setDeletingUrl(null);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!fullName.trim()) {
+      setErrorMsg('Vui lòng nhập Họ tên hành khách!');
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMsg(null);
+    try {
+      // Update passenger details
+      onSave(passenger.id, {
+        full_name: fullName.trim().toUpperCase(),
+        passport_number: passportNumber.trim().toUpperCase(),
+        dob,
+        phone: phone.trim(),
+        passport_url: uploadedUrls.join(','),
+      });
+
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Đã xảy ra lỗi trong quá trình cập nhật hồ sơ hành khách.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-100 font-sans">
+        
+        {/* Modal Header */}
+        <div className="bg-slate-50 border-b border-slate-150 px-6 py-4 flex justify-between items-center">
+          <div>
+            <h2 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+              <span>Chỉnh sửa thông tin hành khách</span>
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5 font-medium">
+              Cập nhật thông tin chi tiết và đính kèm hồ sơ
+            </p>
+          </div>
+          <button 
+            onClick={onClose} 
+            disabled={isSaving}
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto space-y-4 flex-1">
+          {errorMsg && (
+            <div className="bg-rose-50 border border-rose-100 text-rose-700 px-3.5 py-3 rounded-xl text-xs font-bold flex justify-between items-center gap-2 animate-fade-in shadow-sm">
+              <span className="flex-1">{errorMsg}</span>
+              <button 
+                type="button"
+                onClick={() => setErrorMsg(null)} 
+                className="text-rose-500 hover:text-rose-700 p-1 rounded-full hover:bg-rose-100 transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Full Name */}
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              Họ và tên khách <span className="text-rose-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              placeholder="NGUYEN VAN A" 
+              required
+              value={fullName} 
+              onChange={e => setFullName(e.target.value.toUpperCase())} 
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase" 
+            />
+          </div>
+
+          {/* Passport, Phone & DOB Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Phone Number */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Số điện thoại
+              </label>
+              <input 
+                type="tel" 
+                placeholder="Nhập số điện thoại" 
+                value={phone} 
+                onChange={e => setPhone(e.target.value)} 
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-semibold text-slate-800" 
+              />
+            </div>
+
+            {/* Passport Number */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Số hộ chiếu (Passport)
+              </label>
+              <input 
+                type="text" 
+                placeholder="Nhập số hộ chiếu" 
+                value={passportNumber} 
+                onChange={e => setPassportNumber(e.target.value.toUpperCase())} 
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase font-semibold text-slate-800" 
+              />
+            </div>
+
+            {/* Date of Birth */}
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Ngày tháng năm sinh
+              </label>
+              <DatePicker 
+                value={dob} 
+                onChange={val => setDob(val)} 
+                align="left"
+              />
+            </div>
+          </div>
+
+          {/* Document Section */}
+          <div className="border-t border-slate-150 pt-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-slate-500" />
+              <span className="text-xs font-bold text-slate-700">Hồ sơ, tài liệu đính kèm</span>
+            </div>
+
+            {showDeletedAlert && (
+              <div className="bg-amber-50 border border-amber-100 text-amber-800 text-[11px] p-3 rounded-xl font-bold flex items-center gap-1.5 animate-fade-in shadow-sm">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Đã gỡ tài liệu tạm thời. Hãy nhớ bấm nút "Lưu thay đổi" phía dưới để hoàn tất cập nhật vào hệ thống!</span>
+              </div>
+            )}
+
+            {/* List of uploaded files */}
+            {uploadedUrls.length > 0 ? (
+              <div className="space-y-2">
+                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Danh sách tài liệu đã tải lên:</div>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {uploadedUrls.map((url, uIdx) => {
+                    // Extract file name from URL or generic name
+                    let displayFileName = `Tài liệu đính kèm #${uIdx + 1}`;
+                    if (url.includes('drive.google.com')) {
+                      displayFileName = `Tài liệu #${uIdx + 1}`;
+                    }
+
+                    const isConfirming = deletingUrl === url;
+
+                    return (
+                      <div key={uIdx} className={`flex items-center justify-between p-3 transition-all ${isConfirming ? 'bg-rose-50/75' : 'hover:bg-slate-50'}`}>
+                        {isConfirming ? (
+                          <>
+                            <div className="flex items-center gap-1.5 text-rose-700 font-bold text-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                              <span>Xác nhận xóa tài liệu này?</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                disabled={deletingState}
+                                onClick={() => handleFileDelete(url)}
+                                className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white text-[10px] font-bold px-2.5 py-1 rounded-md transition-colors cursor-pointer shadow-sm"
+                              >
+                                {deletingState ? 'Đang xóa...' : 'Xóa'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deletingState}
+                                onClick={() => setDeletingUrl(null)}
+                                className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                              >
+                                Hủy
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[80%]"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                              <span className="truncate">{displayFileName}</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingUrl(url)}
+                              className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded transition-all cursor-pointer"
+                              title="Xóa tài liệu này"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="text-[11px] text-slate-500 bg-slate-50 px-3.5 py-3 rounded-xl border border-slate-150">
+                <p className="font-bold text-slate-700">Chưa có tài liệu đính kèm</p>
+                <p className="text-gray-400 mt-0.5">
+                  Bạn có thể kéo thả hoặc chọn file phía dưới để tải trực tiếp lên cho hành khách này.
+                </p>
+              </div>
+            )}
+
+            {/* Upload Box */}
+            <div className="relative">
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/50 hover:bg-slate-50 rounded-2xl p-5 cursor-pointer transition-all">
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  disabled={isUploading || isSaving}
+                  className="hidden"
+                />
+                <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                <span className="text-xs font-bold text-slate-700">Tải lên tài liệu mới</span>
+                <span className="text-[10px] text-gray-400 mt-1 text-center font-medium">
+                  Hỗ trợ định dạng PDF, hình ảnh (JPG, PNG), Word, v.v.
+                </span>
+              </label>
+
+              {isUploading && (
+                <div className="absolute inset-0 bg-white/80 rounded-2xl flex flex-col items-center justify-center gap-2">
+                  <svg className="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span className="text-xs font-bold text-slate-700">Đang tải file lên...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="bg-slate-50 border-t border-slate-150 px-6 py-4 flex justify-end gap-3 shrink-0">
+          <button 
+            type="button"
+            onClick={onClose} 
+            disabled={isSaving}
+            className="px-4 py-2 border border-slate-250 hover:bg-slate-100 rounded-lg text-xs font-bold text-slate-600 transition-all shadow-sm"
+          >
+            Hủy bỏ
+          </button>
+          <button 
+            type="button"
+            onClick={handleSave} 
+            disabled={isSaving}
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-xs font-black shadow-md shadow-blue-600/10 transition-all flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Đang xử lý...</span>
+              </>
+            ) : (
+              <span>Lưu thay đổi</span>
+            )}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}

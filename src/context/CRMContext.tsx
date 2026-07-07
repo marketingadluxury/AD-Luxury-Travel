@@ -1,0 +1,1845 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Tour, Order, Passenger, Role, User, TourStatus, MembershipSettings } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
+
+const idMap: { [key: string]: string } = {
+  '1': 'a809b4db-9ee7-4c07-b352-09419106093d',
+  '2': '1a3df3bf-7cf9-42b7-a8a2-f90b9b3df985',
+  '3': 'f920875c-75b2-4d22-841c-b71524317181',
+  'O-1001': 'b7c15234-a12f-48d6-9cb3-b26a64235fb6',
+  'O-1002': 'd6b88019-354a-4e2b-bbbf-f3a38612140c',
+  'P-101': 'c2b81234-8c8d-4cb5-8025-a1c23df7a6b1',
+  'P-102': 'd4e32152-7cb1-432d-96fb-c3214da8fb2c',
+  'P-103': 'f3c834a3-7cfd-4a1b-9aef-cf23bd72a6b2',
+  'N-1': 'e1234567-89ab-cdef-0123-456789abcdef',
+  'N-2': 'f1234567-89ab-cdef-0123-456789abcdef'
+};
+
+function toUuid(id: string): string {
+  if (!id) return crypto.randomUUID();
+  if (idMap[id]) return idMap[id];
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(id)) return id;
+  return crypto.randomUUID();
+}
+
+function isSupabaseConfigured(): boolean {
+  const url = (import.meta as any).env.VITE_SUPABASE_URL;
+  const key = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+  return !!(url && !url.includes('placeholder') && key && !key.includes('placeholder'));
+}
+
+export interface Notification {
+  id: string;
+  type: 'visa' | 'accounting' | 'extension';
+  title: string;
+  message: string;
+  targetId: string; // ID of order or passenger
+  createdAt: string;
+  read: boolean;
+}
+
+interface CRMContextType {
+  tours: Tour[];
+  orders: Order[];
+  passengers: Passenger[];
+  notifications: Notification[];
+  currentRole: Role;
+  setCurrentRole: (role: Role) => void;
+  categories: string[];
+  addCategory: (category: string) => void;
+  deleteCategory: (category: string) => void;
+  updateCategory: (oldCategory: string, newCategory: string) => void;
+  addTour: (tour: Omit<Tour, 'id' | 'sold_seats' | 'hold_seats' | 'available_seats' | 'seat_status'>) => void;
+  updateTour: (tour: Tour) => void;
+  deleteTour: (tourId: string) => void;
+  createOrder: (orderData: {
+    tour_id: string;
+    status: 'hold' | 'sure';
+    total_price?: number;
+    adult_price: number;
+    passengers?: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[];
+    booker_name?: string;
+    booker_phone?: string;
+    created_by?: string;
+    user_id?: string;
+    adult_count?: number;
+    child_count?: number;
+    infant_count?: number;
+    single_room_count?: number;
+    room_share_info?: string;
+    vat_option?: string;
+    special_requests?: string;
+  }) => void;
+  confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
+  cancelOrder: (orderId: string) => void;
+  requestExtension: (orderId: string, hours: number) => void;
+  handleExtensionRequest: (orderId: string, approve: boolean) => void;
+  updateVisaStatus: (passengerId: string, status: Passenger['visa_status'], reason?: string) => void;
+  updatePassenger: (passengerId: string, updatedData: Partial<Passenger>) => void;
+  updateOrder: (orderId: string, updatedData: Partial<Order>) => void;
+  updateInvoiceStatus: (orderId: string, status: Order['invoice_status']) => void;
+  releaseExpiredHolds: () => void;
+  membershipSettings: MembershipSettings;
+  updateMembershipSettings: (settings: MembershipSettings) => void;
+}
+
+const CRMContext = createContext<CRMContextType | undefined>(undefined);
+
+const INITIAL_TOURS: Tour[] = [
+  {
+    id: '1',
+    code: 'THAILAN-VN-5D-ART-VN-260701',
+    name: '[SÀI GÒN] THÁI LAN: BANGKOK - PATTAYA - NONG NOOCH - ART',
+    duration: '5 ngày 4 đêm',
+    departure_time: '2026-07-15T08:00:00Z',
+    return_time: '2026-07-19T20:00:00Z',
+    airline: 'Vietnam Airlines',
+    hotel: 'Khách sạn 4*',
+    price: 8490000,
+    commission: 600000,
+    total_seats: 30,
+    sold_seats: 25,
+    hold_seats: 2,
+    available_seats: 3,
+    seat_status: 'Còn chỗ',
+    flight_out: 'VN607 SGN BKK 16:50 - 18:30',
+    flight_out_transit: '',
+    flight_in: 'VN606 BKK SGN 19:30 - 21:15',
+    flight_in_transit: '',
+    transit_info: '',
+    guide_name: 'PHẠM VĂN THÁI',
+    guide_phone: '0903.391.831',
+    ticket_status: 'ĐÃ CHỐT XUẤT VÉ',
+    visa_deadline: '2026-07-05T00:00:00Z',
+    description: 'Chương trình du lịch chất lượng cao, bao gồm buffet nhà hàng xoay 86 tầng Baiyoke Sky.',
+    tour_status: 'on_sale',
+    category: 'Du lịch Đông Nam Á',
+    hold_duration_hours: 48,
+  },
+  {
+    id: '2',
+    code: 'LAO-MF-5N4D-VJ-260701',
+    name: '[SÀI GÒN] LÀO: VIENTIANE - LUANG PRABANG - MEUNG FEUANG',
+    duration: '5 ngày 4 đêm',
+    departure_time: '2026-07-20T08:00:00Z',
+    return_time: '2026-07-24T20:00:00Z',
+    airline: 'Vietjet Air',
+    hotel: 'Khách sạn 4*-5*',
+    price: 13990000,
+    commission: 700000,
+    total_seats: 20,
+    sold_seats: 8,
+    hold_seats: 4,
+    available_seats: 8,
+    seat_status: 'Còn chỗ',
+    flight_out: 'VJ1831 SGN - VTE 16:25 - 17:45',
+    flight_out_transit: '',
+    flight_in: 'VJ1832 VTE - SGN 19:10 - 20:45',
+    flight_in_transit: '',
+    transit_info: '',
+    guide_name: 'NGÔ GIA TỊNH',
+    guide_phone: '039.830.9461',
+    ticket_status: 'ĐÃ XUẤT VÉ',
+    visa_deadline: '2026-07-10T00:00:00Z',
+    description: 'Trải nghiệm văn hóa tâm linh độc đáo, lễ khất thực tại Luang Prabang.',
+    tour_status: 'available',
+    category: 'Du lịch Đông Nam Á',
+    hold_duration_hours: 24,
+  },
+  {
+    id: '3',
+    code: 'EU-QR-11D10N-260701',
+    name: '[SÀI GÒN] CHÂU ÂU: PHÁP - THỤY SĨ - Ý - VATICAN',
+    duration: '11 ngày 10 đêm',
+    departure_time: '2026-08-10T19:55:00Z',
+    return_time: '2026-08-21T14:25:00Z',
+    airline: 'Qatar Airways',
+    hotel: 'Khách sạn 4*',
+    price: 65900000,
+    commission: 3000000,
+    total_seats: 25,
+    sold_seats: 24,
+    hold_seats: 1,
+    available_seats: 0,
+    seat_status: 'Hết chỗ',
+    flight_out: 'QR971 SGN - DOH 19:55 - 23:25',
+    flight_out_transit: 'QR039 DOH - CDG 01:25 - 07:25',
+    flight_in: 'QR116 FCO - DOH 16:35 - 23:10',
+    flight_in_transit: 'QR970 DOH - SGN 02:35 - 14:25',
+    transit_info: 'Quá cảnh tại Doha (DOH)',
+    guide_name: 'TRẦN VĂN A',
+    guide_phone: '0901.234.567',
+    ticket_status: 'CHỜ XUẤT VÉ',
+    visa_deadline: '2026-07-10T00:00:00Z',
+    description: 'Hành trình khám phá Tây-Nam Âu cổ kính. Yêu cầu visa Schengen.',
+    tour_status: 'last_minute',
+    category: 'Du lịch Châu Âu',
+    hold_duration_hours: 12,
+  }
+];
+
+function sanitizePassengers(rawPassengers: Passenger[], rawOrders: Order[]): Passenger[] {
+  if (!rawPassengers || rawPassengers.length === 0) return [];
+  
+  // Group passengers by order_id
+  const passengersByOrder: { [orderId: string]: Passenger[] } = {};
+  rawPassengers.forEach(p => {
+    if (!p.order_id) return;
+    if (!passengersByOrder[p.order_id]) {
+      passengersByOrder[p.order_id] = [];
+    }
+    passengersByOrder[p.order_id].push(p);
+  });
+
+  const sanitized: Passenger[] = [];
+
+  // For passengers without an order_id (if any)
+  rawPassengers.forEach(p => {
+    if (!p.order_id) {
+      sanitized.push(p);
+    }
+  });
+
+  // For each order's passengers
+  Object.keys(passengersByOrder).forEach(orderId => {
+    const list = passengersByOrder[orderId];
+    const order = rawOrders.find(o => o.id === orderId);
+
+    if (order && order.status === 'sure') {
+      // 1. Identify which passengers are placeholders
+      const isPlaceholder = (p: Passenger) => {
+        const name = (p.full_name || p.name || '').trim();
+        return (
+          name === 'Chưa cung cấp (Giữ chỗ tạm)' ||
+          name === 'Chưa cung cấp' ||
+          name.startsWith('Người lớn #') ||
+          name.startsWith('Trẻ em #') ||
+          name.startsWith('Trẻ nhỏ #')
+        );
+      };
+
+      const realPassengers = list.filter(p => !isPlaceholder(p));
+
+      // If we have real passengers, we should completely discard placeholders
+      let filteredList = list;
+      if (realPassengers.length > 0) {
+        filteredList = realPassengers;
+      }
+
+      // 2. Deduplicate identical passengers
+      // We will keep unique ones based on a key: full_name + dob + passport_number
+      const uniqueMap = new Map<string, Passenger>();
+      filteredList.forEach(p => {
+        const name = (p.full_name || p.name || '').trim().toUpperCase();
+        const dob = (p.dob || '').trim();
+        const passport = (p.passport_number || '').trim().toUpperCase();
+        // Create a unique key
+        const key = `${name}|${dob}|${passport}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, p);
+        }
+      });
+
+      sanitized.push(...Array.from(uniqueMap.values()));
+    } else {
+      // For non-sure orders, just keep them but avoid exact key/ID duplicates if any
+      const uniqueMap = new Map<string, Passenger>();
+      list.forEach(p => {
+        const name = (p.full_name || p.name || '').trim().toUpperCase();
+        const dob = (p.dob || '').trim();
+        const passport = (p.passport_number || '').trim().toUpperCase();
+        const key = `${p.id || ''}|${name}|${dob}|${passport}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, p);
+        }
+      });
+      sanitized.push(...Array.from(uniqueMap.values()));
+    }
+  });
+
+  return sanitized;
+}
+
+export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Role }> = ({ children, initialRole = 'admin' }) => {
+  const { user } = useAuth();
+  const [tours, setTours] = useState<Tour[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [passengers, setPassengers] = useState<Passenger[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [membershipSettings, setMembershipSettings] = useState<MembershipSettings>({
+    silverMin: 20000000,
+    goldMin: 50000000,
+    platinumMin: 100000000
+  });
+  const [currentRole, setCurrentRole] = useState<Role>(initialRole);
+
+  useEffect(() => {
+    setCurrentRole(initialRole);
+  }, [initialRole]);
+
+  // Load Initial Data (either from Supabase or Fallback to LocalStorage)
+  useEffect(() => {
+    const loadCRMData = async () => {
+      if (isSupabaseConfigured()) {
+        console.log('Cấu hình Supabase hợp lệ, đang tải dữ liệu...');
+        
+        // 1. Tours
+        let fetchedTours: Tour[] = [];
+        try {
+          const { data: toursData, error: toursErr } = await supabase.from('tours').select('*');
+          if (toursErr) throw toursErr;
+          
+          if (toursData && toursData.length > 0) {
+            fetchedTours = toursData.map(t => ({
+              id: t.id,
+              code: t.code,
+              name: t.name,
+              duration: t.duration,
+              price: Number(t.price),
+              total_seats: Number(t.total_seats),
+              sold_seats: Number(t.sold_seats || 0),
+              hold_seats: Number(t.hold_seats || 0),
+              available_seats: Number(t.available_seats !== undefined ? t.available_seats : t.total_seats),
+              seat_status: t.seat_status || 'Còn chỗ',
+              departure_time: t.departure_time || t.departure_date,
+              return_time: t.return_time,
+              airline: t.airline,
+              hotel: t.hotel,
+              commission: Number(t.commission || 0),
+              flight_out: t.flight_out,
+              flight_out_transit: t.flight_out_transit,
+              flight_in: t.flight_in,
+              flight_in_transit: t.flight_in_transit,
+              transit_info: t.transit_info,
+              guide_name: t.guide_name,
+              guide_phone: t.guide_phone,
+              ticket_status: t.ticket_status,
+              visa_deadline: t.visa_deadline,
+              description: t.description,
+              tour_status: t.tour_status,
+              category: t.category,
+              hold_duration_hours: Number(t.hold_duration_hours || 48),
+              overbook_limit: Number(t.overbook_limit || 0),
+              price_adult: Number(t.price_adult !== undefined ? t.price_adult : (t.price || 0)),
+              price_child: Number(t.price_child || 0),
+              price_infant: Number(t.price_infant || 0),
+              single_room_surcharge: Number(t.single_room_surcharge || 0),
+              itinerary_pdf_url: t.itinerary_pdf_url,
+              notice_sections: t.notice_sections,
+              tour_type: t.tour_type || 'internal',
+              partner_name: t.partner_name,
+              partner_contact: t.partner_contact,
+              organization_name: t.organization_name,
+              group_leader_contact: t.group_leader_contact,
+              custom_requirements: t.custom_requirements,
+              visa_country: t.visa_country,
+              visa_service_type: t.visa_service_type,
+              visa_speed: t.visa_speed
+            }));
+            setTours(fetchedTours);
+            console.log('Đã nạp thành công Tours từ Supabase');
+          } else {
+            // Seed tours
+            const seeded = INITIAL_TOURS.map(t => ({ ...t, id: toUuid(t.id) }));
+            for (const t of seeded) {
+              try {
+                await supabase.from('tours').insert({
+                  id: t.id,
+                  code: t.code,
+                  name: t.name,
+                  duration: t.duration,
+                  price: Number(t.price),
+                  total_seats: Number(t.total_seats),
+                  available_seats: Number(t.available_seats),
+                  status: t.tour_status || 'available',
+                  departure_date: t.departure_time ? t.departure_time.substring(0, 10) : new Date().toISOString().substring(0, 10),
+                  departure_time: t.departure_time,
+                  return_time: t.return_time,
+                  airline: t.airline,
+                  hotel: t.hotel,
+                  commission: Number(t.commission || 0),
+                  sold_seats: Number(t.sold_seats || 0),
+                  hold_seats: Number(t.hold_seats || 0),
+                  seat_status: t.seat_status || 'Còn chỗ',
+                  flight_out: t.flight_out,
+                  flight_out_transit: t.flight_out_transit,
+                  flight_in: t.flight_in,
+                  flight_in_transit: t.flight_in_transit,
+                  transit_info: t.transit_info,
+                  guide_name: t.guide_name,
+                  guide_phone: t.guide_phone,
+                  ticket_status: t.ticket_status,
+                  visa_deadline: t.visa_deadline,
+                  description: t.description,
+                  category: t.category,
+                  hold_duration_hours: Number(t.hold_duration_hours || 48),
+                  overbook_limit: Number(t.overbook_limit || 0),
+                  price_adult: Number(t.price_adult || t.price || 0),
+                  price_child: Number(t.price_child || 0),
+                  price_infant: Number(t.price_infant || 0),
+                  single_room_surcharge: Number(t.single_room_surcharge || 0),
+                  itinerary_pdf_url: t.itinerary_pdf_url,
+                  notice_sections: t.notice_sections,
+                  tour_status: t.tour_status || 'available'
+                });
+              } catch (seedErr) {
+                console.warn('Lưu ý khi chèn dữ liệu mẫu Tours lên Supabase:', seedErr);
+              }
+            }
+            setTours(seeded);
+            fetchedTours = seeded;
+            console.log('Đã nạp dữ liệu mẫu Tours (do bảng trống trên Supabase)');
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Tours từ Supabase (sử dụng fallback local):', err);
+          const savedTours = localStorage.getItem('crm_tours');
+          fetchedTours = savedTours ? JSON.parse(savedTours) : INITIAL_TOURS;
+          setTours(fetchedTours);
+        }
+
+        // 2. Bookings
+        let fetchedOrders: Order[] = [];
+        try {
+          const { data: bookingsData, error: bookingsErr } = await supabase.from('bookings').select('*');
+          if (bookingsErr) throw bookingsErr;
+
+          if (bookingsData && bookingsData.length > 0) {
+            fetchedOrders = bookingsData.map(b => ({
+              id: b.id,
+              tour_id: b.tour_id,
+              created_by: b.created_by,
+              user_id: b.user_id,
+              status: b.status,
+              hold_expiry: b.hold_expiry,
+              invoice_status: b.invoice_status || 'pending',
+              total_price: Number(b.total_amount),
+              created_at: b.created_at,
+              extension_status: b.extension_status || 'none',
+              extension_hours: Number(b.extension_hours || 0),
+              is_extended: b.is_extended || false,
+              booker_name: b.booker_name,
+              booker_phone: b.booker_phone,
+              adult_count: b.adult_count,
+              child_count: b.child_count,
+              infant_count: b.infant_count,
+              single_room_count: b.single_room_count,
+              room_share_info: b.room_share_info,
+              vat_option: b.vat_option,
+              special_requests: b.special_requests
+            }));
+            setOrders(fetchedOrders);
+            console.log('Đã nạp thành công Bookings từ Supabase');
+          } else {
+            const seededOrders: Order[] = [
+              {
+                id: toUuid('O-1001'),
+                tour_id: toUuid('1'),
+                created_by: 'Sale Nguyễn',
+                status: 'sure',
+                invoice_status: 'pending',
+                total_price: 16980000,
+                created_at: new Date(Date.now() - 2 * 3600000).toISOString()
+              },
+              {
+                id: toUuid('O-1002'),
+                tour_id: toUuid('2'),
+                created_by: 'Đại lý Việt Travel',
+                status: 'hold',
+                hold_expiry: new Date(Date.now() + 18 * 3600000).toISOString(),
+                invoice_status: 'pending',
+                total_price: 27980000,
+                created_at: new Date().toISOString(),
+                extension_status: 'none'
+              }
+            ] as any;
+
+            for (const o of seededOrders) {
+              try {
+                await supabase.from('bookings').insert({
+                  id: o.id,
+                  tour_id: o.tour_id,
+                  booking_date: o.created_at ? o.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
+                  status: o.status,
+                  total_amount: Number(o.total_price),
+                  payment_status: o.status === 'paid' ? 'paid' : 'pending',
+                  seats: Number((o.adult_count || 1) + (o.child_count || 0)),
+                  created_by: o.created_by,
+                  user_id: o.user_id,
+                  hold_expiry: o.hold_expiry,
+                  invoice_status: o.invoice_status || 'pending',
+                  extension_status: o.extension_status || 'none',
+                  extension_hours: Number(o.extension_hours || 0),
+                  is_extended: o.is_extended || false,
+                  booker_name: o.booker_name,
+                  booker_phone: o.booker_phone,
+                  adult_count: o.adult_count || 1,
+                  child_count: o.child_count || 0,
+                  infant_count: o.infant_count || 0,
+                  single_room_count: o.single_room_count || 0,
+                  room_share_info: o.room_share_info,
+                  vat_option: o.vat_option || 'no_vat',
+                  special_requests: o.special_requests
+                });
+              } catch (seedErr) {
+                console.warn('Lưu ý khi chèn dữ liệu mẫu Bookings lên Supabase:', seedErr);
+              }
+            }
+            setOrders(seededOrders);
+            fetchedOrders = seededOrders;
+            console.log('Đã nạp dữ liệu mẫu Bookings (do bảng trống trên Supabase)');
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Bookings từ Supabase (sử dụng fallback local):', err);
+          const savedOrders = localStorage.getItem('crm_orders');
+          fetchedOrders = savedOrders ? JSON.parse(savedOrders) : [
+            {
+              id: 'O-1001',
+              tour_id: '1',
+              created_by: 'Sale Nguyễn',
+              status: 'sure',
+              invoice_status: 'pending',
+              total_price: 16980000,
+              created_at: new Date(Date.now() - 2 * 3600000).toISOString()
+            },
+            {
+              id: 'O-1002',
+              tour_id: '2',
+              created_by: 'Đại lý Việt Travel',
+              status: 'hold',
+              hold_expiry: new Date(Date.now() + 18 * 3600000).toISOString(),
+              invoice_status: 'pending',
+              total_price: 27980000,
+              created_at: new Date().toISOString(),
+              extension_status: 'none'
+            }
+          ];
+          setOrders(fetchedOrders);
+        }
+
+        // 3. Passengers
+        try {
+          const { data: passengersData, error: passengersErr } = await supabase.from('passengers').select('*');
+          if (passengersErr) throw passengersErr;
+
+          if (passengersData && passengersData.length > 0) {
+            const storedReasons = JSON.parse(localStorage.getItem('crm_disqualified_reasons') || '{}');
+            const storedSubmittedAts = JSON.parse(localStorage.getItem('crm_visa_submitted_ats') || '{}');
+            const mapped = passengersData.map(p => ({
+              id: p.id,
+              order_id: p.order_id,
+              is_payer: p.is_payer,
+              full_name: p.full_name,
+              passport_number: p.passport_number,
+              phone: p.phone,
+              dob: p.dob,
+              passport_url: p.passport_url,
+              labor_contract_url: p.labor_contract_url,
+              visa_status: p.visa_status || 'pending',
+              visa_submitted_at: p.visa_submitted_at || storedSubmittedAts[p.id] || undefined,
+              visa_disqualified_reason: p.visa_disqualified_reason || storedReasons[p.id] || undefined
+            }));
+            setPassengers(sanitizePassengers(mapped, fetchedOrders));
+            console.log('Đã nạp thành công Passengers từ Supabase');
+          } else {
+            const seededPassengers: Passenger[] = [
+              {
+                id: toUuid('P-101'),
+                order_id: toUuid('O-1001'),
+                is_payer: true,
+                full_name: 'Nguyễn Văn Nam',
+                phone: '0912345678',
+                dob: '1990-05-15',
+                passport_url: 'passport_nam.pdf',
+                labor_contract_url: 'labor_nam.pdf',
+                visa_status: 'processing'
+              },
+              {
+                id: toUuid('P-102'),
+                order_id: toUuid('O-1001'),
+                is_payer: false,
+                full_name: 'Trần Thị Hoa',
+                dob: '1992-08-20',
+                passport_url: 'passport_hoa.pdf',
+                visa_status: 'pending'
+              },
+              {
+                id: toUuid('P-103'),
+                order_id: toUuid('O-1002'),
+                is_payer: true,
+                full_name: 'Phạm Minh Đức',
+                phone: '0987654321',
+                dob: '1985-11-30',
+                passport_url: 'passport_duc.pdf',
+                labor_contract_url: 'labor_duc.pdf',
+                visa_status: 'pending'
+              }
+            ];
+
+            for (const p of seededPassengers) {
+              try {
+                await supabase.from('passengers').insert({
+                  id: p.id,
+                  order_id: p.order_id,
+                  is_payer: p.is_payer,
+                  full_name: p.full_name,
+                  passport_number: p.passport_number,
+                  phone: p.phone,
+                  dob: p.dob,
+                  passport_url: p.passport_url,
+                  labor_contract_url: p.labor_contract_url,
+                  visa_status: p.visa_status
+                });
+              } catch (seedErr) {
+                console.warn('Lưu ý khi chèn dữ liệu mẫu Passengers lên Supabase:', seedErr);
+              }
+            }
+            setPassengers(sanitizePassengers(seededPassengers, fetchedOrders));
+            console.log('Đã nạp dữ liệu mẫu Passengers (do bảng trống trên Supabase)');
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Passengers từ Supabase (sử dụng fallback local):', err);
+          const savedPassengers = localStorage.getItem('crm_passengers');
+          const parsedPassengers = savedPassengers ? JSON.parse(savedPassengers) : [
+            {
+              id: 'P-101',
+              order_id: 'O-1001',
+              is_payer: true,
+              full_name: 'Nguyễn Văn Nam',
+              phone: '0912345678',
+              dob: '1990-05-15',
+              passport_url: 'passport_nam.pdf',
+              labor_contract_url: 'labor_nam.pdf',
+              visa_status: 'processing'
+            },
+            {
+              id: 'P-102',
+              order_id: 'O-1001',
+              is_payer: false,
+              full_name: 'Trần Thị Hoa',
+              dob: '1992-08-20',
+              passport_url: 'passport_hoa.pdf',
+              visa_status: 'pending'
+            },
+            {
+              id: 'P-103',
+              order_id: 'O-1002',
+              is_payer: true,
+              full_name: 'Phạm Minh Đức',
+              phone: '0987654321',
+              dob: '1985-11-30',
+              passport_url: 'passport_duc.pdf',
+              labor_contract_url: 'labor_duc.pdf',
+              visa_status: 'pending'
+            }
+          ];
+          setPassengers(sanitizePassengers(parsedPassengers, fetchedOrders));
+        }
+
+        // 4. Notifications
+        try {
+          const { data: notifsData, error: notifsErr } = await supabase.from('system_notifications').select('*');
+          if (notifsErr) throw notifsErr;
+
+          if (notifsData && notifsData.length > 0) {
+            setNotifications(notifsData.map(n => ({
+              id: n.id,
+              type: n.type as any,
+              title: n.title,
+              message: n.message,
+              targetId: n.target_id || '',
+              createdAt: n.created_at,
+              read: n.read
+            })));
+            console.log('Đã nạp thành công Notifications từ Supabase');
+          } else {
+            setNotifications([
+              {
+                id: 'N-1',
+                type: 'visa',
+                title: 'Yêu cầu visa mới',
+                message: 'Khách hàng Nguyễn Văn Nam (Đơn hàng O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
+                targetId: 'P-101',
+                createdAt: new Date(Date.now() - 3600000).toISOString(),
+                read: false
+              },
+              {
+                id: 'N-2',
+                type: 'accounting',
+                title: 'Yêu cầu xuất hóa đơn',
+                message: 'Đơn hàng O-1001 đã sure chỗ. Cần xuất hóa đơn VAT.',
+                targetId: 'O-1001',
+                createdAt: new Date().toISOString(),
+                read: false
+              }
+            ]);
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Notifications từ Supabase (sử dụng fallback local):', err);
+          const savedNotifs = localStorage.getItem('crm_notifications');
+          setNotifications(savedNotifs ? JSON.parse(savedNotifs) : [
+            {
+              id: 'N-1',
+              type: 'visa',
+              title: 'Yêu cầu visa mới',
+              message: 'Khách hàng Nguyễn Văn Nam (Đơn hàng O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
+              targetId: 'P-101',
+              createdAt: new Date(Date.now() - 3600000).toISOString(),
+              read: false
+            },
+            {
+              id: 'N-2',
+              type: 'accounting',
+              title: 'Yêu cầu xuất hóa đơn',
+              message: 'Đơn hàng O-1001 đã sure chỗ. Cần xuất hóa đơn VAT.',
+              targetId: 'O-1001',
+              createdAt: new Date().toISOString(),
+              read: false
+            }
+          ]);
+        }
+
+        // 5. Categories
+        try {
+          const { data: catsData, error: catsErr } = await supabase.from('tour_categories').select('name');
+          if (catsErr) throw catsErr;
+
+          if (catsData && catsData.length > 0) {
+            setCategories(catsData.map(c => c.name));
+            console.log('Đã nạp thành công Categories từ Supabase');
+          } else {
+            setCategories(['Du lịch Đông Nam Á', 'Du lịch Châu Âu', 'Du lịch Đông Bắc Á', 'Du lịch Trong Nước']);
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Categories từ Supabase (sử dụng fallback local):', err);
+          const savedCats = localStorage.getItem('crm_categories');
+          setCategories(savedCats ? JSON.parse(savedCats) : ['Du lịch Đông Nam Á', 'Du lịch Châu Âu', 'Du lịch Đông Bắc Á', 'Du lịch Trong Nước']);
+        }
+
+        // 6. Settings
+        try {
+          const { data: settingsData, error: settingsErr } = await supabase.from('app_settings').select('value').eq('key', 'membership_settings').maybeSingle();
+          if (settingsErr) throw settingsErr;
+
+          if (settingsData && settingsData.value) {
+            setMembershipSettings(settingsData.value as MembershipSettings);
+            console.log('Đã nạp thành công Settings từ Supabase');
+          } else {
+            setMembershipSettings({
+              silverMin: 20000000,
+              goldMin: 50000000,
+              platinumMin: 100000000
+            });
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Settings từ Supabase (sử dụng fallback local):', err);
+          const savedSettings = localStorage.getItem('crm_membership_settings');
+          setMembershipSettings(savedSettings ? JSON.parse(savedSettings) : {
+            silverMin: 20000000,
+            goldMin: 50000000,
+            platinumMin: 100000000
+          });
+        }
+      } else {
+        console.log('Không phát hiện cấu hình Supabase thực tế, sử dụng LocalStorage.');
+        loadLocalStorage();
+      }
+    };
+
+    const loadLocalStorage = () => {
+      const savedTours = localStorage.getItem('crm_tours');
+      setTours(savedTours ? JSON.parse(savedTours) : INITIAL_TOURS);
+
+      const savedOrders = localStorage.getItem('crm_orders');
+      const parsedOrders = savedOrders ? JSON.parse(savedOrders) : [
+        {
+          id: 'O-1001',
+          tour_id: '1',
+          created_by: 'Sale Nguyễn',
+          status: 'sure',
+          invoice_status: 'pending',
+          total_price: 16980000,
+          created_at: new Date(Date.now() - 2 * 3600000).toISOString()
+        },
+        {
+          id: 'O-1002',
+          tour_id: '2',
+          created_by: 'Đại lý Việt Travel',
+          status: 'hold',
+          hold_expiry: new Date(Date.now() + 18 * 3600000).toISOString(),
+          invoice_status: 'pending',
+          total_price: 27980000,
+          created_at: new Date().toISOString(),
+          extension_status: 'none'
+        }
+      ];
+      setOrders(parsedOrders);
+
+      const savedPassengers = localStorage.getItem('crm_passengers');
+      const parsedPassengers = savedPassengers ? JSON.parse(savedPassengers) : [
+        {
+          id: 'P-101',
+          order_id: 'O-1001',
+          is_payer: true,
+          full_name: 'Nguyễn Văn Nam',
+          phone: '0912345678',
+          dob: '1990-05-15',
+          passport_url: 'passport_nam.pdf',
+          labor_contract_url: 'labor_nam.pdf',
+          visa_status: 'processing'
+        },
+        {
+          id: 'P-102',
+          order_id: 'O-1001',
+          is_payer: false,
+          full_name: 'Trần Thị Hoa',
+          dob: '1992-08-20',
+          passport_url: 'passport_hoa.pdf',
+          visa_status: 'pending'
+        },
+        {
+          id: 'P-103',
+          order_id: 'O-1002',
+          is_payer: true,
+          full_name: 'Phạm Minh Đức',
+          phone: '0987654321',
+          dob: '1985-11-30',
+          passport_url: 'passport_duc.pdf',
+          labor_contract_url: 'labor_duc.pdf',
+          visa_status: 'pending'
+        }
+      ];
+      setPassengers(sanitizePassengers(parsedPassengers, parsedOrders));
+
+      const savedNotifs = localStorage.getItem('crm_notifications');
+      setNotifications(savedNotifs ? JSON.parse(savedNotifs) : [
+        {
+          id: 'N-1',
+          type: 'visa',
+          title: 'Yêu cầu visa mới',
+          message: 'Khách hàng Nguyễn Văn Nam (Đơn hàng O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
+          targetId: 'P-101',
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+          read: false
+        },
+        {
+          id: 'N-2',
+          type: 'accounting',
+          title: 'Yêu cầu xuất hóa đơn',
+          message: 'Đơn hàng chắc chắn O-1001 đã được xác nhận. Vui lòng kiểm tra và xuất hóa đơn.',
+          targetId: 'O-1001',
+          createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+          read: false
+        }
+      ]);
+
+      const savedCats = localStorage.getItem('crm_categories');
+      setCategories(savedCats ? JSON.parse(savedCats) : [
+        'Du lịch Đông Nam Á',
+        'Du lịch Châu Âu',
+        'Du lịch Đông Bắc Á',
+        'Du lịch Trong Nước'
+      ]);
+
+      const savedSettings = localStorage.getItem('crm_membership_settings');
+      setMembershipSettings(savedSettings ? JSON.parse(savedSettings) : {
+        silverMin: 20000000,
+        goldMin: 50000000,
+        platinumMin: 100000000
+      });
+    };
+
+    loadCRMData();
+  }, [user]);
+
+  // Sync state changes to fallback LocalStorage only (Supabase is handled on action trigger)
+  useEffect(() => {
+    if (!isSupabaseConfigured() && tours.length > 0) {
+      localStorage.setItem('crm_tours', JSON.stringify(tours));
+    }
+  }, [tours]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured() && categories.length > 0) {
+      localStorage.setItem('crm_categories', JSON.stringify(categories));
+    }
+  }, [categories]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured() && orders.length > 0) {
+      localStorage.setItem('crm_orders', JSON.stringify(orders));
+    }
+  }, [orders]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured() && passengers.length > 0) {
+      localStorage.setItem('crm_passengers', JSON.stringify(passengers));
+    }
+  }, [passengers]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured() && notifications.length > 0) {
+      localStorage.setItem('crm_notifications', JSON.stringify(notifications));
+    }
+  }, [notifications]);
+
+  const updateMembershipSettings = async (settings: MembershipSettings) => {
+    setMembershipSettings(settings);
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('app_settings').upsert({
+          key: 'membership_settings',
+          value: settings,
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('Lỗi khi lưu cấu hình thành viên lên Supabase:', err);
+      }
+    } else {
+      localStorage.setItem('crm_membership_settings', JSON.stringify(settings));
+    }
+  };
+
+  // Periodically check expired holds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      releaseExpiredHolds();
+    }, 15000); // Check every 15s
+    return () => clearInterval(interval);
+  }, [orders, tours]); // Include orders and tours here
+
+  const releaseExpiredHolds = () => {
+    const now = new Date();
+    let updatedTours = [...tours];
+    let updatedOrders = [...orders];
+    let toursChanged = false;
+    let ordersChanged = false;
+
+    updatedOrders = updatedOrders.map(order => {
+      if (order.status === 'hold' && order.hold_expiry) {
+        const expiry = new Date(order.hold_expiry);
+        if (now > expiry) {
+          ordersChanged = true;
+          // Update associated tour seats
+          updatedTours = updatedTours.map(t => {
+            if (t.id === order.tour_id) {
+              toursChanged = true;
+              const seatsReleased = order.adult_count !== undefined 
+                ? ((order.adult_count || 0) + (order.child_count || 0)) 
+                : (passengers.filter(p => p.order_id === order.id).length || 1);
+              const newHold = Math.max(0, t.hold_seats - seatsReleased);
+              const newAvail = t.total_seats - t.sold_seats - newHold;
+              const overbook = t.overbook_limit || 0;
+              const totalUsed = t.sold_seats + newHold;
+              let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+              if (totalUsed >= t.total_seats + overbook) {
+                seatStatus = 'Hết chỗ';
+              } else if (totalUsed >= t.total_seats) {
+                seatStatus = 'Overbooked';
+              }
+              return {
+                ...t,
+                hold_seats: newHold,
+                available_seats: newAvail,
+                seat_status: seatStatus
+              };
+            }
+            return t;
+          });
+
+          // Add notification
+          setNotifications(prev => [
+            {
+              id: 'N-' + Date.now(),
+              type: 'accounting',
+              title: 'Huỷ giữ chỗ tự động',
+              message: `Đơn giữ chỗ ${order.id} đã hết hạn ${order.hold_expiry} và tự động giải phóng chỗ.`,
+              targetId: order.id,
+              createdAt: new Date().toISOString(),
+              read: false
+            },
+            ...prev
+          ]);
+
+          return { ...order, status: 'cancelled' };
+        }
+      }
+      return order;
+    });
+
+    if (toursChanged) setTours(updatedTours);
+    if (ordersChanged) setOrders(updatedOrders);
+  };
+
+  const addCategory = async (categoryName: string) => {
+    const trimmed = categoryName.trim();
+    if (trimmed && !categories.includes(trimmed)) {
+      setCategories(prev => {
+        const next = [...prev, trimmed];
+        localStorage.setItem('crm_categories', JSON.stringify(next));
+        return next;
+      });
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.from('tour_categories').insert({ name: trimmed });
+        } catch (err) {
+          console.error('Lỗi khi thêm danh mục lên Supabase:', err);
+        }
+      }
+    }
+  };
+
+  const deleteCategory = async (categoryName: string) => {
+    setCategories(prev => {
+      const next = prev.filter(c => c !== categoryName);
+      localStorage.setItem('crm_categories', JSON.stringify(next));
+      return next;
+    });
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('tour_categories').delete().eq('name', categoryName);
+      } catch (err) {
+        console.error('Lỗi khi xoá danh mục trên Supabase:', err);
+      }
+    }
+  };
+
+  const updateCategory = async (oldCategory: string, newCategory: string) => {
+    const trimmedNew = newCategory.trim();
+    if (!trimmedNew || trimmedNew === oldCategory) return;
+    
+    setCategories(prev => {
+      const next = prev.map(c => c === oldCategory ? trimmedNew : c);
+      localStorage.setItem('crm_categories', JSON.stringify(next));
+      return next;
+    });
+    setTours(prev => prev.map(t => t.category === oldCategory ? { ...t, category: trimmedNew } : t));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('tour_categories').update({ name: trimmedNew }).eq('name', oldCategory);
+        await supabase.from('tours').update({ category: trimmedNew }).eq('category', oldCategory);
+      } catch (err) {
+        console.error('Lỗi khi cập nhật danh mục trên Supabase:', err);
+      }
+    }
+  };
+
+  const addTour = async (tourData: any) => {
+    const id = crypto.randomUUID();
+    const newTour: Tour = {
+      ...tourData,
+      id,
+      sold_seats: 0,
+      hold_seats: 0,
+      available_seats: tourData.total_seats,
+      seat_status: 'Còn chỗ',
+    };
+    setTours(prev => [...prev, newTour]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('tours').insert({
+          id,
+          code: tourData.code,
+          name: tourData.name,
+          duration: tourData.duration,
+          price: Number(tourData.price),
+          total_seats: Number(tourData.total_seats),
+          available_seats: Number(tourData.total_seats),
+          status: tourData.tour_status || 'available',
+          departure_date: tourData.departure_time ? tourData.departure_time.substring(0, 10) : new Date().toISOString().substring(0, 10),
+          departure_time: tourData.departure_time,
+          return_time: tourData.return_time,
+          airline: tourData.airline,
+          hotel: tourData.hotel,
+          commission: Number(tourData.commission || 0),
+          sold_seats: 0,
+          hold_seats: 0,
+          seat_status: 'Còn chỗ',
+          flight_out: tourData.flight_out,
+          flight_out_transit: tourData.flight_out_transit,
+          flight_in: tourData.flight_in,
+          flight_in_transit: tourData.flight_in_transit,
+          transit_info: tourData.transit_info,
+          guide_name: tourData.guide_name,
+          guide_phone: tourData.guide_phone,
+          ticket_status: tourData.ticket_status || 'CHỜ XUẤT VÉ',
+          visa_deadline: tourData.visa_deadline,
+          description: tourData.description,
+          category: tourData.category,
+          hold_duration_hours: Number(tourData.hold_duration_hours || 48),
+          overbook_limit: Number(tourData.overbook_limit || 0),
+          price_adult: Number(tourData.price_adult || 0),
+          price_child: Number(tourData.price_child || 0),
+          price_infant: Number(tourData.price_infant || 0),
+          single_room_surcharge: Number(tourData.single_room_surcharge || 0),
+          itinerary_pdf_url: tourData.itinerary_pdf_url,
+          notice_sections: tourData.notice_sections,
+          tour_status: tourData.tour_status || 'available',
+          tour_type: tourData.tour_type || 'internal',
+          partner_name: tourData.partner_name,
+          partner_contact: tourData.partner_contact,
+          organization_name: tourData.organization_name,
+          group_leader_contact: tourData.group_leader_contact,
+          custom_requirements: tourData.custom_requirements,
+          visa_country: tourData.visa_country,
+          visa_service_type: tourData.visa_service_type,
+          visa_speed: tourData.visa_speed
+        });
+      } catch (err) {
+        console.error('Lỗi khi thêm Tour vào Supabase:', err);
+      }
+    }
+  };
+
+  const updateTour = async (updatedTour: Tour) => {
+    const overbook = updatedTour.overbook_limit || 0;
+    const totalUsed = updatedTour.sold_seats + updatedTour.hold_seats;
+    let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+    if (totalUsed >= updatedTour.total_seats + overbook) {
+      seatStatus = 'Hết chỗ';
+    } else if (totalUsed >= updatedTour.total_seats) {
+      seatStatus = 'Overbooked';
+    }
+
+    const nextTour = {
+      ...updatedTour,
+      available_seats: updatedTour.total_seats - updatedTour.sold_seats - updatedTour.hold_seats,
+      seat_status: seatStatus
+    };
+
+    setTours(prev => prev.map(t => t.id === updatedTour.id ? nextTour : t));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('tours').update({
+          code: updatedTour.code,
+          name: updatedTour.name,
+          duration: updatedTour.duration,
+          price: Number(updatedTour.price),
+          total_seats: Number(updatedTour.total_seats),
+          available_seats: Number(nextTour.available_seats),
+          status: updatedTour.tour_status || 'available',
+          departure_date: updatedTour.departure_time ? updatedTour.departure_time.substring(0, 10) : new Date().toISOString().substring(0, 10),
+          departure_time: updatedTour.departure_time,
+          return_time: updatedTour.return_time,
+          airline: updatedTour.airline,
+          hotel: updatedTour.hotel,
+          commission: Number(updatedTour.commission || 0),
+          sold_seats: Number(updatedTour.sold_seats || 0),
+          hold_seats: Number(updatedTour.hold_seats || 0),
+          seat_status: seatStatus,
+          flight_out: updatedTour.flight_out,
+          flight_out_transit: updatedTour.flight_out_transit,
+          flight_in: updatedTour.flight_in,
+          flight_in_transit: updatedTour.flight_in_transit,
+          transit_info: updatedTour.transit_info,
+          guide_name: updatedTour.guide_name,
+          guide_phone: updatedTour.guide_phone,
+          ticket_status: updatedTour.ticket_status || 'CHỜ XUẤT VÉ',
+          visa_deadline: updatedTour.visa_deadline,
+          description: updatedTour.description,
+          category: updatedTour.category,
+          hold_duration_hours: Number(updatedTour.hold_duration_hours || 48),
+          overbook_limit: Number(updatedTour.overbook_limit || 0),
+          price_adult: Number(updatedTour.price_adult || updatedTour.price || 0),
+          price_child: Number(updatedTour.price_child || 0),
+          price_infant: Number(updatedTour.price_infant || 0),
+          single_room_surcharge: Number(updatedTour.single_room_surcharge || 0),
+          itinerary_pdf_url: updatedTour.itinerary_pdf_url,
+          notice_sections: updatedTour.notice_sections,
+          tour_status: updatedTour.tour_status || 'available',
+          tour_type: updatedTour.tour_type || 'internal',
+          partner_name: updatedTour.partner_name,
+          partner_contact: updatedTour.partner_contact,
+          organization_name: updatedTour.organization_name,
+          group_leader_contact: updatedTour.group_leader_contact,
+          custom_requirements: updatedTour.custom_requirements,
+          visa_country: updatedTour.visa_country,
+          visa_service_type: updatedTour.visa_service_type,
+          visa_speed: updatedTour.visa_speed
+        }).eq('id', updatedTour.id);
+      } catch (err) {
+        console.error('Lỗi khi cập nhật Tour trên Supabase:', err);
+      }
+    }
+  };
+
+  const deleteTour = async (tourId: string) => {
+    setTours(prev => prev.filter(t => t.id !== tourId));
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('tours').delete().eq('id', tourId);
+      } catch (err) {
+        console.error('Lỗi khi xoá Tour trên Supabase:', err);
+      }
+    }
+  };
+
+  const createOrder = async (orderData: {
+    tour_id: string;
+    status: 'hold' | 'sure';
+    total_price?: number;
+    adult_price: number;
+    passengers?: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[];
+    booker_name?: string;
+    booker_phone?: string;
+    created_by?: string;
+    user_id?: string;
+    adult_count?: number;
+    child_count?: number;
+    infant_count?: number;
+    single_room_count?: number;
+    room_share_info?: string;
+    vat_option?: string;
+    special_requests?: string;
+  }) => {
+    const adultPrice = Number(orderData.adult_price || 0);
+    const childPrice = Math.round(adultPrice * 0.9);
+    const infantPrice = Math.round(adultPrice * 0.3);
+    
+    const totalPrice = orderData.total_price || 
+      ((orderData.adult_count || 0) * adultPrice) + 
+      ((orderData.child_count || 0) * childPrice) + 
+      ((orderData.infant_count || 0) * infantPrice);
+
+    const orderId = crypto.randomUUID();
+    const tour = tours.find(t => t.id === orderData.tour_id);
+    if (!tour) return;
+
+    const seatsToLock = orderData.adult_count !== undefined 
+      ? ((orderData.adult_count || 0) + (orderData.child_count || 0)) 
+      : (orderData.passengers?.length || 0);
+
+    const allowedMaxSeats = tour.total_seats + (tour.overbook_limit || 0) - tour.sold_seats - tour.hold_seats;
+
+    if (allowedMaxSeats < seatsToLock) {
+      alert(`Không đủ chỗ trống để đặt tour! (Tối đa khả dụng bao gồm overbooking: ${allowedMaxSeats})`);
+      return;
+    }
+
+    const holdHours = tour.hold_duration_hours || 48;
+    const holdExpiry = orderData.status === 'hold' 
+      ? new Date(Date.now() + holdHours * 3600000).toISOString() 
+      : undefined;
+
+    const creatorName = orderData.created_by || (
+      currentRole === 'CTV' ? 'CTV' :
+      currentRole === 'Đại lý' ? 'Đại lý' :
+      currentRole === 'sale' ? 'Sale' :
+      currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên'
+    );
+
+    const newOrder: Order = {
+      id: orderId,
+      tour_id: orderData.tour_id,
+      created_by: creatorName,
+      user_id: orderData.user_id,
+      status: orderData.status,
+      hold_expiry: holdExpiry,
+      invoice_status: 'pending',
+      total_price: totalPrice,
+      created_at: new Date().toISOString(),
+      extension_status: 'none',
+      booker_name: orderData.booker_name,
+      booker_phone: orderData.booker_phone,
+      adult_count: orderData.adult_count || 0,
+      child_count: orderData.child_count || 0,
+      infant_count: orderData.infant_count || 0,
+      single_room_count: orderData.single_room_count || 0,
+      room_share_info: orderData.room_share_info,
+      vat_option: orderData.vat_option,
+      special_requests: orderData.special_requests,
+    } as any;
+
+    const newPassengers: Passenger[] = (orderData.passengers || []).map((p, index) => ({
+      ...p,
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      visa_status: 'pending'
+    }));
+
+    // Update tour seats locally
+    const updatedTours = tours.map(t => {
+      if (t.id === orderData.tour_id) {
+        const sold_seats = orderData.status === 'sure' ? t.sold_seats + seatsToLock : t.sold_seats;
+        const hold_seats = orderData.status === 'hold' ? t.hold_seats + seatsToLock : t.hold_seats;
+        const available_seats = t.total_seats - sold_seats - hold_seats;
+        const overbook = t.overbook_limit || 0;
+        const totalUsed = sold_seats + hold_seats;
+        let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+        if (totalUsed >= t.total_seats + overbook) {
+          seatStatus = 'Hết chỗ';
+        } else if (totalUsed >= t.total_seats) {
+          seatStatus = 'Overbooked';
+        }
+        return {
+          ...t,
+          sold_seats,
+          hold_seats,
+          available_seats,
+          seat_status: seatStatus
+        } as Tour;
+      }
+      return t;
+    });
+
+    setOrders(prev => [newOrder, ...prev]);
+    setPassengers(prev => [...prev, ...newPassengers]);
+    setTours(updatedTours);
+
+    // Notifications
+    const newNotifs: Notification[] = [];
+    if (orderData.status === 'sure') {
+      newNotifs.push({
+        id: 'N-acc-' + Date.now(),
+        type: 'accounting',
+        title: 'Yêu cầu xuất hóa đơn',
+        message: `Đơn hàng ${orderId} của khách ${orderData.booker_name || (orderData.passengers && orderData.passengers[0] && orderData.passengers[0].full_name) || 'Giữ Chỗ'} đã sure chỗ. Cần xuất hóa đơn.`,
+        targetId: orderId,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+    }
+
+    newPassengers.forEach(p => {
+      if (p.passport_url || p.labor_contract_url) {
+        newNotifs.push({
+          id: 'N-visa-' + Date.now() + '-' + p.id,
+          type: 'visa',
+          title: 'Khách cần làm Visa',
+          message: `Khách hàng ${p.full_name} (${orderId}) đã tải lên hồ sơ visa.`,
+          targetId: p.id,
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+      }
+    });
+
+    if (newNotifs.length > 0) {
+      setNotifications(prev => [...newNotifs, ...prev]);
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('bookings').insert({
+          id: orderId,
+          customer_id: null,
+          tour_id: orderData.tour_id,
+          booking_date: new Date().toISOString().substring(0, 10),
+          status: orderData.status,
+          total_amount: Number(totalPrice),
+          payment_status: orderData.status === 'sure' ? 'pending' : 'hold',
+          seats: Number(seatsToLock),
+          created_by: creatorName,
+          user_id: orderData.user_id || null,
+          hold_expiry: holdExpiry,
+          invoice_status: 'pending',
+          extension_status: 'none',
+          extension_hours: 0,
+          is_extended: false,
+          booker_name: orderData.booker_name,
+          booker_phone: orderData.booker_phone,
+          adult_count: Number(orderData.adult_count || 0),
+          child_count: Number(orderData.child_count || 0),
+          infant_count: Number(orderData.infant_count || 0),
+          single_room_count: Number(orderData.single_room_count || 0),
+          room_share_info: orderData.room_share_info,
+          vat_option: orderData.vat_option || 'no_vat',
+          special_requests: orderData.special_requests
+        });
+
+        for (const p of newPassengers) {
+          await supabase.from('passengers').insert({
+            id: p.id,
+            order_id: orderId,
+            is_payer: p.is_payer,
+            full_name: p.full_name,
+            passport_number: p.passport_number,
+            phone: p.phone,
+            dob: p.dob,
+            passport_url: p.passport_url,
+            labor_contract_url: p.labor_contract_url,
+            visa_status: p.visa_status
+          });
+        }
+
+        const matchingTour = updatedTours.find(t => t.id === orderData.tour_id);
+        if (matchingTour) {
+          await supabase.from('tours').update({
+            sold_seats: Number(matchingTour.sold_seats),
+            hold_seats: Number(matchingTour.hold_seats),
+            available_seats: Number(matchingTour.available_seats),
+            seat_status: matchingTour.seat_status
+          }).eq('id', orderData.tour_id);
+        }
+
+        for (const n of newNotifs) {
+          await supabase.from('system_notifications').insert({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            message: n.message,
+            target_id: n.targetId,
+            read: n.read
+          });
+        }
+      } catch (err) {
+        console.error('Lỗi khi lưu đơn hàng lên Supabase:', err);
+      }
+    }
+  };
+
+  const cancelOrder = async (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const tour = tours.find(t => t.id === order.tour_id);
+    if (!tour) return;
+
+    const seatsToRelease = order.adult_count !== undefined 
+      ? ((order.adult_count || 0) + (order.child_count || 0)) 
+      : passengers.filter(p => p.order_id === orderId).length;
+
+    const updatedTours = tours.map(t => {
+      if (t.id === order.tour_id) {
+        const sold_seats = order.status === 'sure' ? t.sold_seats - seatsToRelease : t.sold_seats;
+        const hold_seats = order.status === 'hold' ? t.hold_seats - seatsToRelease : t.hold_seats;
+        const available_seats = t.total_seats - sold_seats - hold_seats;
+        const overbook = t.overbook_limit || 0;
+        const totalUsed = sold_seats + hold_seats;
+        let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+        if (totalUsed >= t.total_seats + overbook) {
+          seatStatus = 'Hết chỗ';
+        } else if (totalUsed >= t.total_seats) {
+          seatStatus = 'Overbooked';
+        }
+        return {
+          ...t,
+          sold_seats,
+          hold_seats,
+          available_seats,
+          seat_status: seatStatus
+        } as Tour;
+      }
+      return t;
+    });
+
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+    setTours(updatedTours);
+
+    const newNotif = {
+      id: 'N-' + Date.now(),
+      type: 'accounting' as const,
+      title: 'Đơn hàng đã huỷ',
+      message: `Đơn hàng ${orderId} đã được huỷ bỏ bởi Sale/Đại lý.`,
+      targetId: orderId,
+      createdAt: new Date().toISOString(),
+      read: false
+    };
+
+    setNotifications(prev => [newNotif, ...prev]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', orderId);
+        
+        const matchingTour = updatedTours.find(t => t.id === order.tour_id);
+        if (matchingTour) {
+          await supabase.from('tours').update({
+            sold_seats: Number(matchingTour.sold_seats),
+            hold_seats: Number(matchingTour.hold_seats),
+            available_seats: Number(matchingTour.available_seats),
+            seat_status: matchingTour.seat_status
+          }).eq('id', order.tour_id);
+        }
+
+        await supabase.from('system_notifications').insert({
+          id: newNotif.id,
+          type: newNotif.type,
+          title: newNotif.title,
+          message: newNotif.message,
+          target_id: newNotif.targetId,
+          read: newNotif.read
+        });
+      } catch (err) {
+        console.error('Lỗi khi huỷ đơn hàng trên Supabase:', err);
+      }
+    }
+  };
+
+  const confirmOrder = async (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order || order.status !== 'hold') return;
+
+    const tour = tours.find(t => t.id === order.tour_id);
+    if (!tour) return;
+
+    const seatsToMove = order.adult_count !== undefined 
+      ? ((order.adult_count || 0) + (order.child_count || 0)) 
+      : passengers.filter(p => p.order_id === orderId).length;
+
+    const updatedTours = tours.map(t => {
+      if (t.id === order.tour_id) {
+        return {
+          ...t,
+          hold_seats: Math.max(0, t.hold_seats - seatsToMove),
+          sold_seats: t.sold_seats + seatsToMove,
+          available_seats: t.total_seats - (t.sold_seats + seatsToMove) - Math.max(0, t.hold_seats - seatsToMove)
+        };
+      }
+      return t;
+    });
+    setTours(updatedTours);
+
+    const newPassengers: Passenger[] = passengersData.map((p, index) => ({
+      full_name: p.full_name || (p as any).name || 'Hành khách',
+      passport_number: p.passport_number,
+      phone: p.phone,
+      dob: p.dob,
+      passport_url: p.passport_url,
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      visa_status: 'pending',
+      is_payer: p.is_payer !== undefined ? p.is_payer : (index === 0)
+    }));
+
+    setPassengers(prev => {
+      const filtered = prev.filter(p => p.order_id !== orderId);
+      return [...filtered, ...newPassengers];
+    });
+
+    setOrders(prev => prev.map(o => {
+      if (o.id === orderId) {
+        return { ...o, status: 'sure', hold_expiry: undefined };
+      }
+      return o;
+    }));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('bookings').update({ status: 'sure', hold_expiry: null }).eq('id', orderId);
+        await supabase.from('passengers').delete().eq('order_id', orderId);
+
+        for (const p of newPassengers) {
+          await supabase.from('passengers').insert({
+            id: p.id,
+            order_id: orderId,
+            is_payer: p.is_payer,
+            full_name: p.full_name,
+            passport_number: p.passport_number,
+            phone: p.phone,
+            dob: p.dob,
+            passport_url: p.passport_url,
+            labor_contract_url: p.labor_contract_url,
+            visa_status: p.visa_status
+          });
+        }
+
+        const matchingTour = updatedTours.find(t => t.id === order.tour_id);
+        if (matchingTour) {
+          await supabase.from('tours').update({
+            hold_seats: Number(matchingTour.hold_seats),
+            sold_seats: Number(matchingTour.sold_seats),
+            available_seats: Number(matchingTour.available_seats)
+          }).eq('id', order.tour_id);
+        }
+      } catch (err) {
+        console.error('Lỗi khi xác nhận đơn giữ chỗ trên Supabase:', err);
+      }
+    }
+  };
+
+  const requestExtension = async (orderId: string, hours: number) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id === orderId) {
+        return {
+          ...o,
+          extension_status: 'requested',
+          extension_hours: hours
+        };
+      }
+      return o;
+    }));
+
+    const newNotif = {
+      id: 'N-ext-' + Date.now(),
+      type: 'extension' as const,
+      title: 'Yêu cầu gia hạn giữ chỗ',
+      message: `Sale yêu cầu gia hạn giữ chỗ thêm ${hours} tiếng cho đơn hàng ${orderId}.`,
+      targetId: orderId,
+      createdAt: new Date().toISOString(),
+      read: false
+    };
+
+    setNotifications(notifPrev => [newNotif, ...notifPrev]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('bookings').update({
+          extension_status: 'requested',
+          extension_hours: hours
+        }).eq('id', orderId);
+
+        await supabase.from('system_notifications').insert({
+          id: newNotif.id,
+          type: newNotif.type,
+          title: newNotif.title,
+          message: newNotif.message,
+          target_id: newNotif.targetId,
+          read: newNotif.read
+        });
+      } catch (err) {
+        console.error('Lỗi khi gửi yêu cầu gia hạn giữ chỗ trên Supabase:', err);
+      }
+    }
+  };
+
+  const handleExtensionRequest = async (orderId: string, approve: boolean) => {
+    let newExpiry: string | undefined;
+    const extensionStatus = approve ? 'approved' : 'rejected';
+
+    setOrders(prev => prev.map(o => {
+      if (o.id === orderId) {
+        newExpiry = o.hold_expiry;
+        if (approve && o.hold_expiry && o.extension_hours) {
+          const currentExpiryTime = new Date(o.hold_expiry).getTime();
+          newExpiry = new Date(currentExpiryTime + o.extension_hours * 3600000).toISOString();
+        }
+
+        return {
+          ...o,
+          status: approve ? 'hold' : o.status,
+          hold_expiry: newExpiry,
+          extension_status: extensionStatus,
+          is_extended: approve ? true : o.is_extended
+        };
+      }
+      return o;
+    }));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('bookings').update({
+          status: approve ? 'hold' : undefined,
+          hold_expiry: newExpiry || null,
+          extension_status: extensionStatus,
+          is_extended: approve ? true : undefined
+        }).eq('id', orderId);
+      } catch (err) {
+        console.error('Lỗi khi gia hạn đơn hàng trên Supabase:', err);
+      }
+    }
+  };
+
+  const updateVisaStatus = async (passengerId: string, status: Passenger['visa_status'], reason?: string) => {
+    const isDisqualified = status === 'disqualified';
+
+    setPassengers(prev => prev.map(p => {
+      if (p.id === passengerId) {
+        return {
+          ...p,
+          visa_status: status,
+          visa_disqualified_reason: isDisqualified 
+            ? (reason !== undefined ? reason : p.visa_disqualified_reason)
+            : undefined
+        };
+      }
+      return p;
+    }));
+
+    // Save/delete disqualified reason to localStorage for safety backup
+    const disqualifiedReasons = JSON.parse(localStorage.getItem('crm_disqualified_reasons') || '{}');
+    if (isDisqualified && reason !== undefined) {
+      disqualifiedReasons[passengerId] = reason;
+    } else if (!isDisqualified) {
+      delete disqualifiedReasons[passengerId];
+    }
+    localStorage.setItem('crm_disqualified_reasons', JSON.stringify(disqualifiedReasons));
+    
+    if (isSupabaseConfigured()) {
+      try {
+        const finalReason = isDisqualified 
+          ? (reason !== undefined ? reason : null)
+          : null;
+
+        const { error } = await supabase.from('passengers').update({ 
+          visa_status: status,
+          visa_disqualified_reason: finalReason
+        }).eq('id', passengerId);
+        
+        if (error) throw error;
+      } catch (err) {
+        console.warn('Lưu ý: Bảng passengers trên Supabase có thể chưa được cập nhật cột visa_disqualified_reason. Hệ thống tự động chạy chế độ dự phòng.', err);
+        try {
+          await supabase.from('passengers').update({ 
+            visa_status: status
+          }).eq('id', passengerId);
+        } catch (innerErr) {
+          console.error('Lỗi khi cập nhật trạng thái Visa trên Supabase:', innerErr);
+        }
+      }
+    }
+  };
+
+  const updatePassenger = async (passengerId: string, updatedData: Partial<Passenger>) => {
+    const existing = passengers.find(p => p.id === passengerId);
+    let visa_submitted_at = updatedData.visa_submitted_at || existing?.visa_submitted_at;
+    let visa_status = updatedData.visa_status || existing?.visa_status;
+    let visa_disqualified_reason = updatedData.visa_disqualified_reason !== undefined 
+      ? updatedData.visa_disqualified_reason 
+      : existing?.visa_disqualified_reason;
+    
+    // Nếu có passport_url mới hoặc thay đổi, gán ngày giờ nộp hồ sơ
+    const hasNewPassport = updatedData.passport_url && (!existing?.passport_url || updatedData.passport_url !== existing?.passport_url);
+    const hasNewLaborContract = updatedData.labor_contract_url && (!existing?.labor_contract_url || updatedData.labor_contract_url !== existing?.labor_contract_url);
+
+    if (hasNewPassport || hasNewLaborContract) {
+      visa_submitted_at = new Date().toISOString();
+      
+      // Nếu khách hàng bị hồ sơ chưa đạt, sau khi sửa, upload lại hồ sơ thì sẽ cập nhật lại trạng thái là chờ nộp hồ sơ (pending)
+      if (existing?.visa_status === 'disqualified') {
+        visa_status = 'pending';
+        visa_disqualified_reason = undefined;
+
+        // Xóa note khỏi local storage
+        const disqualifiedReasons = JSON.parse(localStorage.getItem('crm_disqualified_reasons') || '{}');
+        delete disqualifiedReasons[passengerId];
+        localStorage.setItem('crm_disqualified_reasons', JSON.stringify(disqualifiedReasons));
+      }
+    }
+
+    const finalData = { 
+      ...existing, 
+      ...updatedData, 
+      visa_submitted_at, 
+      visa_status, 
+      visa_disqualified_reason 
+    };
+
+    // Luôn lưu trữ dự phòng lý do và thời gian nộp vào LocalStorage để tránh mất dữ liệu do bảng Supabase thiếu cột hoặc đồng bộ chậm
+    const disqualifiedReasons = JSON.parse(localStorage.getItem('crm_disqualified_reasons') || '{}');
+    if (visa_disqualified_reason) {
+      disqualifiedReasons[passengerId] = visa_disqualified_reason;
+    } else {
+      delete disqualifiedReasons[passengerId];
+    }
+    localStorage.setItem('crm_disqualified_reasons', JSON.stringify(disqualifiedReasons));
+
+    const submittedAts = JSON.parse(localStorage.getItem('crm_visa_submitted_ats') || '{}');
+    if (visa_submitted_at) {
+      submittedAts[passengerId] = visa_submitted_at;
+    } else {
+      delete submittedAts[passengerId];
+    }
+    localStorage.setItem('crm_visa_submitted_ats', JSON.stringify(submittedAts));
+
+    setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, ...finalData } : p));
+    
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('passengers').update({
+          full_name: finalData.full_name,
+          passport_number: finalData.passport_number,
+          phone: finalData.phone,
+          dob: finalData.dob,
+          passport_url: finalData.passport_url,
+          labor_contract_url: finalData.labor_contract_url,
+          visa_status: finalData.visa_status,
+          visa_submitted_at: finalData.visa_submitted_at,
+          visa_disqualified_reason: finalData.visa_disqualified_reason
+        }).eq('id', passengerId);
+        
+        if (error) throw error;
+      } catch (err: any) {
+        console.warn('Lưu ý: Bảng passengers trên Supabase có thể chưa được cập nhật một số cột mới. Hệ thống sẽ tự động chạy chế độ dự phòng (fallback).', err);
+        try {
+          const { error: fallbackErr } = await supabase.from('passengers').update({
+            full_name: finalData.full_name,
+            passport_number: finalData.passport_number,
+            phone: finalData.phone,
+            dob: finalData.dob,
+            passport_url: finalData.passport_url,
+            labor_contract_url: finalData.labor_contract_url,
+            visa_status: finalData.visa_status
+          }).eq('id', passengerId);
+          
+          if (fallbackErr) throw fallbackErr;
+        } catch (innerErr) {
+          console.warn('Lỗi dự phòng khi cập nhật hành khách:', innerErr);
+        }
+      }
+    }
+  };
+
+  const updateOrder = async (orderId: string, updatedData: Partial<Order>) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedData } : o));
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('bookings').update({
+          single_room_count: updatedData.single_room_count !== undefined ? Number(updatedData.single_room_count) : undefined,
+          room_share_info: updatedData.room_share_info,
+          vat_option: updatedData.vat_option,
+          special_requests: updatedData.special_requests,
+          total_amount: updatedData.total_price !== undefined ? Number(updatedData.total_price) : undefined
+        }).eq('id', orderId);
+      } catch (err) {
+        console.error('Lỗi khi cập nhật đơn hàng trên Supabase:', err);
+      }
+    }
+  };
+
+  const updateInvoiceStatus = async (orderId: string, status: Order['invoice_status']) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, invoice_status: status } : o));
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('bookings').update({ invoice_status: status }).eq('id', orderId);
+      } catch (err) {
+        console.error('Lỗi khi cập nhật trạng thái xuất hóa đơn trên Supabase:', err);
+      }
+    }
+  };
+
+  return (
+    <CRMContext.Provider value={{
+      tours,
+      orders,
+      passengers,
+      notifications,
+      currentRole,
+      setCurrentRole,
+      categories,
+      addCategory,
+      deleteCategory,
+      updateCategory,
+      addTour,
+      updateTour,
+      deleteTour,
+      createOrder,
+      confirmOrder,
+      cancelOrder,
+      requestExtension,
+      handleExtensionRequest,
+      updateVisaStatus,
+      updatePassenger,
+      updateOrder,
+      updateInvoiceStatus,
+      releaseExpiredHolds,
+      membershipSettings,
+      updateMembershipSettings
+    }}>
+      {children}
+    </CRMContext.Provider>
+  );
+};
+
+export const useCRM = () => {
+  const context = useContext(CRMContext);
+  if (!context) {
+    throw new Error('useCRM must be used within a CRMProvider');
+  }
+  return context;
+};
