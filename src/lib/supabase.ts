@@ -1,9 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
+const initialUrl = (import.meta as any).env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const initialAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+let activeClient = createClient(initialUrl, initialAnonKey);
+
+export function updateSupabaseClient(url: string, key: string) {
+  if (url && key && !url.includes('placeholder')) {
+    activeClient = createClient(url, key);
+    console.log('[Supabase] Client updated with dynamic config:', url);
+  }
+}
+
+// Proxy to route calls to the dynamically updated client
+export const supabase = new Proxy({} as any, {
+  get(target, prop, receiver) {
+    return Reflect.get(activeClient, prop, receiver);
+  },
+  set(target, prop, value, receiver) {
+    return Reflect.set(activeClient, prop, value, receiver);
+  }
+});
 
 /**
  * Đảm bảo bucket tồn tại trong Supabase Storage.

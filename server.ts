@@ -308,12 +308,12 @@ async function deleteGoogleDriveFile(fileId: string, token: string): Promise<voi
 
 // Supabase helper
 const getSupabaseClient = (req?: express.Request) => {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   // Cho phép sử dụng SUPABASE_SERVICE_ROLE_KEY nếu có để bypass hoàn toàn RLS trên server-side
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase configuration is missing in environment variables.');
+    throw new Error('Supabase configuration is missing in environment variables. Please check SUPABASE_URL and SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY.');
   }
 
   const options: any = {
@@ -376,6 +376,14 @@ function getPathFromPublicUrl(url: string): string | null {
 }
 
 // --- API ROUTES ---
+
+// Expose Supabase config dynamically to prevent missing VITE_ prefix issues in the client
+app.get('/api/config', (req, res) => {
+  res.json({
+    supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+    supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  });
+});
 
 // Get current storage system status
 app.get('/api/drive-status', (req, res) => {

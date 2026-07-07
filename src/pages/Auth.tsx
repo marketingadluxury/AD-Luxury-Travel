@@ -57,7 +57,8 @@ export default function Auth() {
         setMessage('Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.');
       }
     } catch (err: any) {
-      if (err.message.includes('FetchError') || err.message.includes('placeholder')) {
+      const errMsg = err?.message || (typeof err === 'string' ? err : '') || 'Có lỗi xảy ra, vui lòng thử lại.';
+      if (errMsg.includes('FetchError') || errMsg.includes('placeholder') || errMsg.includes('Failed to fetch')) {
         // Mock success for preview since keys might not be set
         if (isLogin) {
             // we will let the parent handle mock login if needed, or just show error.
@@ -66,7 +67,7 @@ export default function Auth() {
             setError('Tính năng đăng ký yêu cầu cấu hình Supabase. Vui lòng thiết lập biến môi trường.');
         }
       } else {
-        setError(err.message || 'Có lỗi xảy ra, vui lòng thử lại.');
+        setError(errMsg);
       }
     } finally {
       setLoading(false);
