@@ -381,14 +381,11 @@ export default function VisaServices() {
     updateTour, 
     deleteTour, 
     handleExtensionRequest,
-    categories,
-    addCategory,
-    deleteCategory,
-    updateCategory
+    currentRole
   } = useCRM();
 
-  // Navigation tabs: 'tours' | 'categories'
-  const [activeTab, setActiveTab] = useState<'tours' | 'categories'>('tours');
+  const isVisaOrAdmin = currentRole === 'visa' || currentRole === 'admin';
+  const visaTours = tours.filter(t => t.tour_type === 'visa');
 
   // View mode for tour listing: 'grouped' (default) | 'flat'
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
@@ -532,7 +529,7 @@ export default function VisaServices() {
         visa_deadline: generatedVisaDeadline,
         description: bulkBaseTour.description || undefined,
         tour_status: 'available' as TourStatus,
-        category: bulkBaseTour.category || categories[0],
+        category: 'Visa',
         hold_duration_hours: bulkBaseTour.hold_duration_hours || 48,
         price_adult: bulkBaseTour.price_adult ?? bulkBaseTour.price,
         price_child: bulkBaseTour.price_child ?? Math.round(bulkBaseTour.price * 0.8),
@@ -552,11 +549,6 @@ export default function VisaServices() {
   // Form toggles
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
-
-  // Categories form states
-  const [newCatName, setNewCatName] = useState('');
-  const [editingCatOldName, setEditingCatOldName] = useState<string | null>(null);
-  const [editingCatNewName, setEditingCatNewName] = useState('');
 
   // Tour Form State (for both create & edit)
   const [code, setCode] = useState('');
@@ -603,7 +595,7 @@ export default function VisaServices() {
   const [visaDeadline, setVisaDeadline] = useState('');
   const [description, setDescription] = useState('');
   const [tourStatus, setTourStatus] = useState<TourStatus>('available');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState('Visa');
   const [itineraryPdfUrl, setItineraryPdfUrl] = useState('');
   const [isUploadingItinerary, setIsUploadingItinerary] = useState(false);
   const [itineraryUploadError, setItineraryUploadError] = useState<string | null>(null);
@@ -654,7 +646,7 @@ export default function VisaServices() {
   };
 
   // Tour Type fields
-  const [tourType, setTourType] = useState<'internal' | 'partner' | 'private' | 'visa'>('internal');
+  const [tourType, setTourType] = useState<'internal' | 'partner' | 'private' | 'visa'>('visa');
   const [partnerName, setPartnerName] = useState('');
   const [partnerContact, setPartnerContact] = useState('');
   const [organizationName, setOrganizationName] = useState('');
@@ -664,32 +656,15 @@ export default function VisaServices() {
   const [visaServiceType, setVisaServiceType] = useState('');
   const [visaSpeed, setVisaSpeed] = useState<'standard' | 'urgent'>('standard');
 
-  // Inline category creation state
-  const [showInlineCatForm, setShowInlineCatForm] = useState(false);
-  const [inlineCatName, setInlineCatName] = useState('');
-
-  const handleAddInlineCategory = async () => {
-    const trimmed = inlineCatName.trim();
-    if (!trimmed) return;
-    if (categories.includes(trimmed)) {
-      alert('Danh mục này đã tồn tại!');
-      return;
-    }
-    await addCategory(trimmed);
-    setCategory(trimmed);
-    setInlineCatName('');
-    setShowInlineCatForm(false);
-  };
-
   // Travel Notes/Disclaimer Builder state
   const [noticeSections, setNoticeSections] = useState<Array<{ title: string; items: Array<{ key: string; value: string }> }>>(DEFAULT_NOTICE_SECTIONS);
+  const [selectedNoticeTour, setSelectedNoticeTour] = useState<Tour | null>(null);
+  const [showNoticeModal, setShowNoticeModal] = useState(false);
 
-  // Set default category when categories are loaded
-  useEffect(() => {
-    if (categories && categories.length > 0 && !category) {
-      setCategory(categories[0]);
-    }
-  }, [categories, category]);
+  const handleShowNoticeModal = (tour: Tour) => {
+    setSelectedNoticeTour(tour);
+    setShowNoticeModal(true);
+  };
 
   // Auto-format tour code based on selected departure time when creating a new tour or adding departure quick
   useEffect(() => {
@@ -758,7 +733,7 @@ export default function VisaServices() {
     
     setDescription(tour.description || '');
     setTourStatus(tour.tour_status || 'available');
-    setCategory(tour.category || (categories && categories[0]) || '');
+    setCategory(tour.category || 'Visa');
     setItineraryPdfUrl(tour.itinerary_pdf_url || '');
 
     setTourType(tour.tour_type || 'internal');
@@ -818,7 +793,7 @@ export default function VisaServices() {
     setVisaDeadline('');
     setDescription(tour.description || '');
     setTourStatus('available');
-    setCategory(tour.category || (categories && categories[0]) || '');
+    setCategory(tour.category || 'Visa');
     setItineraryPdfUrl(tour.itinerary_pdf_url || '');
 
     setTourType(tour.tour_type || 'internal');
@@ -880,7 +855,7 @@ export default function VisaServices() {
     setVisaDeadline('');
     setDescription(tour.description || '');
     setTourStatus('available');
-    setCategory(tour.category || (categories && categories[0]) || '');
+    setCategory(tour.category || 'Visa');
     setItineraryPdfUrl(tour.itinerary_pdf_url || '');
 
     setTourType(tour.tour_type || 'internal');
@@ -941,10 +916,10 @@ export default function VisaServices() {
     setVisaDeadline('');
     setDescription('');
     setTourStatus('available');
-    setCategory(categories[0] || 'Du lịch Đông Nam Á');
+    setCategory('Visa');
     setItineraryPdfUrl('');
     setNoticeSections(DEFAULT_NOTICE_SECTIONS);
-    setTourType('internal');
+    setTourType('visa');
     setPartnerName('');
     setPartnerContact('');
     setOrganizationName('');
@@ -955,8 +930,6 @@ export default function VisaServices() {
     setVisaSpeed('standard');
     setEditingTour(null);
     setShowAddForm(false);
-    setShowInlineCatForm(false);
-    setInlineCatName('');
   };
 
   // Trigger auto open create form when navigate from Departure Calendar
@@ -979,6 +952,10 @@ export default function VisaServices() {
   // Submit handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCodeDuplicate) {
+      alert('Mã tour/visa này đã tồn tại, vui lòng chọn mã khác!');
+      return;
+    }
     if (tourType !== 'visa' && (!code || !name || !departureTime || !returnTime)) {
       alert('Vui lòng nhập đầy đủ các trường thông tin bắt buộc (Mã tour, Tên tour, Ngày đi, Ngày về)!');
       return;
@@ -1015,7 +992,7 @@ export default function VisaServices() {
       visa_deadline: visaDeadline ? new Date(visaDeadline).toISOString() : undefined,
       description: description || undefined,
       tour_status: tourStatus,
-      category: category || categories[0],
+      category: 'Visa',
       hold_duration_hours: Number(holdDuration),
       price_adult: priceAdult !== '' ? Number(priceAdult) : calculatedPrice,
       price_child: priceChild !== '' ? Number(priceChild) : Math.round(calculatedPrice * 0.8),
@@ -1156,38 +1133,15 @@ export default function VisaServices() {
         </div>
       )}
 
-      {/* Header section with Tabs */}
+      {/* Header section */}
       <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900" style={{ fontSize: '28px' }}>Bảng điều hành Tour & Danh mục</h2>
+          <h2 className="text-2xl font-black text-gray-900" style={{ fontSize: '28px' }}>Bảng điều hành Dịch vụ Visa</h2>
           <p className="text-sm text-gray-500 mt-1">Quản lý danh sách dịch vụ Visa, hồ sơ và các yêu cầu cấp Visa.</p>
         </div>
         
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-            <button
-              onClick={() => setActiveTab('tours')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-                activeTab === 'tours' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Quản lý Dịch vụ Visa ({tours.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('categories')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-                activeTab === 'categories' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Danh mục Tour ({categories.length})
-            </button>
-          </div>
-
-          {activeTab === 'tours' && !showAddForm && !editingTour && (
+          {!showAddForm && !editingTour && isVisaOrAdmin && (
             <button 
               onClick={() => {
                 resetForm();
@@ -1195,126 +1149,14 @@ export default function VisaServices() {
               }}
               className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
             >
-              <Plus className="w-4 h-4 mr-1.5" /> Thêm Tour Mới
+              <Plus className="w-4 h-4 mr-1.5" /> Thêm Dịch vụ Visa mới
             </button>
           )}
         </div>
       </div>
 
-      {activeTab === 'categories' ? (
-        /* CATEGORIES MANAGEMENT TAB */
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit space-y-4">
-            <h3 className="text-sm font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2">Tạo Danh Mục Mới</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Tên danh mục mới *</label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: Du lịch Bắc Mỹ, Tour Cao Cấp..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                  value={newCatName}
-                  onChange={e => setNewCatName(e.target.value)}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newCatName.trim()) return;
-                  addCategory(newCatName);
-                  setNewCatName('');
-                  alert('Đã thêm danh mục mới!');
-                }}
-                className="w-full inline-flex items-center justify-center bg-blue-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Thêm danh mục
-              </button>
-            </div>
-          </div>
-
-          <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-slate-50/50">
-              <h3 className="font-bold text-gray-900 text-sm">Danh sách danh mục đang kích hoạt</h3>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {categories.map(cat => {
-                const tourCount = tours.filter(t => t.category === cat).length;
-                const isEditingThis = editingCatOldName === cat;
-
-                return (
-                  <div key={cat} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                    {isEditingThis ? (
-                      <div className="flex-1 flex gap-2">
-                        <input
-                          type="text"
-                          className="flex-1 px-3 py-1 border border-blue-400 rounded-md text-sm bg-white"
-                          value={editingCatNewName}
-                          onChange={e => setEditingCatNewName(e.target.value)}
-                        />
-                        <button
-                          onClick={() => {
-                            updateCategory(cat, editingCatNewName);
-                            setEditingCatOldName(null);
-                          }}
-                          className="px-3 py-1 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700"
-                        >
-                          Lưu
-                        </button>
-                        <button
-                          onClick={() => setEditingCatOldName(null)}
-                          className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-xs font-bold hover:bg-gray-300"
-                        >
-                          Hủy
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <Tag className="w-4 h-4 text-slate-400" />
-                          <span className="font-semibold text-gray-800 text-sm">{cat}</span>
-                          <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-medium">
-                            {tourCount} tour liên kết
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingCatOldName(cat);
-                              setEditingCatNewName(cat);
-                            }}
-                            className="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded transition-all"
-                            title="Sửa tên danh mục"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (tourCount > 0) {
-                                alert(`Không thể xóa danh mục này vì đang có ${tourCount} tour liên kết. Vui lòng chuyển đổi danh mục của các tour này trước.`);
-                                return;
-                              }
-                              if (confirm(`Xác nhận xóa danh mục "${cat}"?`)) {
-                                deleteCategory(cat);
-                              }
-                            }}
-                            className="p-1 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition-all"
-                            title="Xóa danh mục"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* TOURS MANAGEMENT TAB */
-        <>
+      {/* TOURS MANAGEMENT TAB */}
+      <>
           {/* TOUR FORM SECTION (Both Add & Edit) */}
           {(showAddForm || editingTour) && (
             <div id="tour-form-section" className="bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden animate-in fade-in duration-200">
@@ -1502,57 +1344,6 @@ export default function VisaServices() {
                         onChange={setReturnTime}
                       />
                     )}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-sm font-medium text-gray-700">Danh mục sản phẩm *</label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowInlineCatForm(!showInlineCatForm);
-                            setInlineCatName('');
-                          }}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          {showInlineCatForm ? "Hủy" : "+ Tạo danh mục mới"}
-                        </button>
-                      </div>
-                      
-                      {showInlineCatForm ? (
-                        <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                          <input
-                            type="text"
-                            placeholder="Tên danh mục mới..."
-                            className="flex-1 px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-                            value={inlineCatName}
-                            onChange={e => setInlineCatName(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddInlineCategory();
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={handleAddInlineCategory}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
-                          >
-                            Thêm
-                          </button>
-                        </div>
-                      ) : (
-                        <select 
-                          required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                          value={category}
-                          onChange={e => setCategory(e.target.value)}
-                        >
-                          {categories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
                   </div>
                 </div>
 
@@ -2009,12 +1800,12 @@ export default function VisaServices() {
             </div>
           )}
 
-          {/* SUMMARY DASHBOARD FOR OPERATOR */}
+          {/* SUMMARY DASHBOARD FOR VISA TEAM */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500">Tổng số Tour hoạt động</span>
-                <div className="text-3xl font-extrabold text-gray-900 mt-1">{tours.length}</div>
+                <span className="text-sm font-semibold text-gray-500">Tổng số Dịch vụ Visa</span>
+                <div className="text-3xl font-extrabold text-gray-900 mt-1">{visaTours.length}</div>
               </div>
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                 <FolderOpen className="w-6 h-6 text-blue-600" />
@@ -2025,7 +1816,7 @@ export default function VisaServices() {
               <div>
                 <span className="text-sm font-semibold text-gray-500">Chỗ đã bán (Sure)</span>
                 <div className="text-3xl font-extrabold text-emerald-600 mt-1">
-                  {tours.reduce((sum, t) => sum + t.sold_seats, 0)} chỗ
+                  {visaTours.reduce((sum, t) => sum + t.sold_seats, 0)} chỗ
                 </div>
               </div>
               <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
@@ -2037,7 +1828,7 @@ export default function VisaServices() {
               <div>
                 <span className="text-sm font-semibold text-gray-500">Chỗ đang giữ tạm thời</span>
                 <div className="text-3xl font-extrabold text-amber-600 mt-1">
-                  {tours.reduce((sum, t) => sum + t.hold_seats, 0)} chỗ
+                  {visaTours.reduce((sum, t) => sum + t.hold_seats, 0)} chỗ
                 </div>
               </div>
               <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
@@ -2084,7 +1875,7 @@ export default function VisaServices() {
             {viewMode === 'grouped' ? (
               <div className="p-6 space-y-6">
                 {Object.keys(groupedTours).length === 0 ? (
-                  <div className="text-center py-12 text-sm text-gray-400">Chưa có tour du lịch nào được tạo.</div>
+                  <div className="text-center py-12 text-sm text-gray-400">Chưa có dịch vụ visa nào được tạo.</div>
                 ) : (
                   Object.entries(groupedTours)
                     .sort((entryA, entryB) => {
@@ -2111,16 +1902,8 @@ export default function VisaServices() {
                         >
                           <div className="space-y-1 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[10px] font-black text-blue-700 bg-blue-100/75 border border-blue-200 px-2 py-0.5 rounded uppercase tracking-wider">
-                                {firstTour.category || 'Chưa phân mục'}
-                              </span>
-                              <span className="text-xs font-bold text-gray-500 flex items-center">
-                                <Plane className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                                {firstTour.airline}
-                              </span>
-                              <span className="text-xs font-bold text-gray-500 flex items-center">
-                                <Building className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                                {firstTour.hotel}
+                              <span className="text-[10px] font-black text-purple-700 bg-purple-100/75 border border-purple-200 px-2 py-0.5 rounded uppercase tracking-wider">
+                                🛂 Dịch vụ Visa
                               </span>
                               {firstTour.itinerary_pdf_url && (
                                 <span className="text-[10px] font-black text-emerald-700 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
@@ -2133,38 +1916,36 @@ export default function VisaServices() {
                               {groupName}
                             </h4>
                             <div className="text-xs text-gray-500 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span>Thời lượng: <strong className="text-gray-700 font-bold">{firstTour.duration}</strong></span>
+                              <span>Thời gian xử lý: <strong className="text-gray-700 font-bold">{firstTour.duration}</strong></span>
                               <span className="text-gray-300">|</span>
                               <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} đợt khởi hành</strong></span>
-                              {firstTour.tour_type !== 'visa' && (
-                                <>
-                                  <span className="text-gray-300">|</span>
-                                  <span>Đã bán chuỗi: <strong className="text-emerald-700 font-bold">{totalSold}</strong> — Giữ chỗ: <strong className="text-amber-700 font-bold">{totalHold}</strong> — Trống: <strong className="text-slate-800 font-bold">{totalSeatsSum - totalSold - totalHold}</strong></span>
-                                </>
-                              )}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2.5 self-end md:self-auto" onClick={e => e.stopPropagation()}>
                             {/* Quick Add Departure button */}
-                            <button
-                              type="button"
-                              onClick={() => handleAddDepartureQuick(firstTour)}
-                              className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
-                            >
-                              <Plus className="w-3.5 h-3.5 mr-1.5" />
-                              Thêm ngày đi mới
-                            </button>
+                            {isVisaOrAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddDepartureQuick(firstTour)}
+                                className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
+                              >
+                                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                Thêm ngày đi mới
+                              </button>
+                            )}
 
                             {/* Bulk Create Series button */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenBulkModal(firstTour)}
-                              className="inline-flex items-center px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
-                            >
-                              <Grid className="w-3.5 h-3.5 mr-1.5" />
-                              Tạo hàng loạt (Series)
-                            </button>
+                            {isVisaOrAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenBulkModal(firstTour)}
+                                className="inline-flex items-center px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
+                              >
+                                <Grid className="w-3.5 h-3.5 mr-1.5" />
+                                Tạo hàng loạt (Series)
+                              </button>
+                            )}
 
                             {/* Collapse/Expand indicator */}
                             <button
@@ -2183,12 +1964,11 @@ export default function VisaServices() {
                             <table className="min-w-full divide-y divide-gray-200">
                               <thead className="bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                                 <tr>
-                                  <th className="px-6 py-3 text-left w-36">Mã Tour</th>
-                                  <th className="px-6 py-3 text-left">Khởi hành & Hạn Visa</th>
-                                  <th className="px-6 py-3 text-right">Giá Tour & HH</th>
-                                  <th className="px-6 py-3 text-center">Giờ Giữ & Vé</th>
-                                  <th className="px-6 py-3 text-center">Trạng thái chỗ</th>
-                                  <th className="px-6 py-3 text-center w-28">Hành động</th>
+                                  <th className="px-6 py-3 text-left w-36">Mã Dịch vụ</th>
+                                  <th className="px-6 py-3 text-left">Tên Dịch vụ / Chi tiết</th>
+                                  <th className="px-6 py-3 text-right">Phí dịch vụ & Hoa hồng</th>
+                                  <th className="px-6 py-3 text-center">Thông tin lưu ý</th>
+                                  {isVisaOrAdmin && <th className="px-6 py-3 text-center w-28">Hành động</th>}
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-150 text-xs text-gray-700">
@@ -2200,83 +1980,58 @@ export default function VisaServices() {
                                       </span>
                                     </td>
                                     <td className="px-6 py-3">
-                                      <div className="font-semibold text-gray-800 text-xs">
-                                        {t.tour_type === 'visa' ? t.duration : (t.departure_time ? format(new Date(t.departure_time), 'dd/MM/yyyy HH:mm') : '-')}
+                                      <div className="font-bold text-gray-900 text-xs">
+                                        {t.name}
                                       </div>
-                                      {t.visa_deadline && (
-                                        <div className="text-[9px] text-red-600 font-bold mt-1 uppercase tracking-wide bg-red-50 border border-red-100 px-1.5 py-0.5 rounded inline-block">
-                                          Hạn visa: {format(new Date(t.visa_deadline), 'dd/MM')}
-                                        </div>
-                                      )}
+                                      <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5 font-semibold">
+                                        <div>Quốc gia: <span className="underline">{t.visa_country}</span> | Loại: {t.visa_service_type} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})</div>
+                                        {t.custom_requirements && <div className="text-[10px] text-purple-700">Yêu cầu: {t.custom_requirements}</div>}
+                                      </div>
                                     </td>
                                     <td className="px-6 py-3 text-right font-bold text-rose-600 whitespace-nowrap">
                                       <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
                                       <div className="text-[10px] text-gray-400 font-medium">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
                                     </td>
                                     <td className="px-6 py-3 text-center whitespace-nowrap">
-                                      {t.tour_type === 'visa' ? (
-                                        <span className="text-[10px] text-gray-400 italic">Không áp dụng</span>
-                                      ) : (
-                                        <>
-                                          <div className="text-[11px] font-semibold text-gray-900 bg-gray-100 px-1.5 py-0.5 rounded inline-block">
-                                            {t.hold_duration_hours || 48}h
-                                          </div>
-                                          <div className="text-[10px] text-slate-500 mt-1 italic max-w-[100px] truncate mx-auto" title={t.ticket_status}>
-                                            {t.ticket_status || 'Chờ xuất vé'}
-                                          </div>
-                                        </>
-                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleShowNoticeModal(t)}
+                                        className="inline-flex items-center px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition-all shadow-sm"
+                                      >
+                                        <FileText className="w-3.5 h-3.5 mr-1" />
+                                        Thông tin lưu ý
+                                      </button>
                                     </td>
-                                    <td className="px-6 py-3 text-center whitespace-nowrap">
-                                      {t.tour_type === 'visa' ? (
-                                        <span className="text-[10px] text-gray-400 italic">Không giới hạn</span>
-                                      ) : (
-                                        <div className="inline-flex gap-1.5 font-bold text-[10px] items-center">
-                                          <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100" title="Đã bán chắc chắn">
-                                            {t.sold_seats} Sure
-                                          </span>
-                                          <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title="Đang giữ tạm">
-                                            {t.hold_seats} Hold
-                                          </span>
-                                          <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100" title="Còn trống để đăng ký">
-                                            {t.available_seats} Trống
-                                          </span>
-                                          {t.overbook_limit ? (
-                                            <span className="text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100" title="Overbooking tối đa được cho phép">
-                                              +{t.overbook_limit} OB
-                                            </span>
-                                          ) : null}
+                                    {isVisaOrAdmin && (
+                                      <td className="px-6 py-3 text-center whitespace-nowrap">
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          {/* Duplicate/Clone */}
+                                          <button
+                                            onClick={() => handleCloneTour(t)}
+                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 bg-blue-50/40"
+                                            title="Sao chép ngày khởi hành"
+                                          >
+                                            <Copy className="w-4 h-4" />
+                                          </button>
+                                          {/* Edit */}
+                                          <button
+                                            onClick={() => startEdit(t)}
+                                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-100 bg-amber-50/40"
+                                            title="Sửa chi tiết"
+                                          >
+                                            <Edit3 className="w-4 h-4" />
+                                          </button>
+                                          {/* Delete */}
+                                          <button
+                                            onClick={() => handleDeleteTourClick(t)}
+                                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 bg-rose-50/40"
+                                            title="Xóa"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
                                         </div>
-                                      )}
-                                    </td>
-                                    <td className="px-6 py-3 text-center whitespace-nowrap">
-                                      <div className="flex items-center justify-center gap-1.5">
-                                        {/* Duplicate/Clone */}
-                                        <button
-                                          onClick={() => handleCloneTour(t)}
-                                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 bg-blue-50/40"
-                                          title="Sao chép ngày khởi hành"
-                                        >
-                                          <Copy className="w-4 h-4" />
-                                        </button>
-                                        {/* Edit */}
-                                        <button
-                                          onClick={() => startEdit(t)}
-                                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-100 bg-amber-50/40"
-                                          title="Sửa chi tiết"
-                                        >
-                                          <Edit3 className="w-4 h-4" />
-                                        </button>
-                                        {/* Delete */}
-                                        <button
-                                          onClick={() => handleDeleteTourClick(t)}
-                                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 bg-rose-50/40"
-                                          title="Xóa"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      </div>
-                                    </td>
+                                      </td>
+                                    )}
                                   </tr>
                                 ))}
                               </tbody>
@@ -2293,13 +2048,11 @@ export default function VisaServices() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-slate-50 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                     <tr>
-                      <th className="px-6 py-4 text-left">Mã tour / Danh mục</th>
-                      <th className="px-6 py-4 text-left">Tên Hành Trình</th>
-                      <th className="px-6 py-4 text-center">Khởi Hành</th>
-                      <th className="px-6 py-4 text-center">Giá Tour</th>
-                      <th className="px-6 py-4 text-center">Hold / Vé</th>
-                      <th className="px-6 py-4 text-center">Ghế (Bán / Giữ / Trống)</th>
-                      <th className="px-6 py-4 text-center">Hành động</th>
+                      <th className="px-6 py-4 text-left">Mã dịch vụ</th>
+                      <th className="px-6 py-4 text-left">Tên dịch vụ / Quốc gia</th>
+                      <th className="px-6 py-4 text-right">Phí dịch vụ</th>
+                      <th className="px-6 py-4 text-center">Thông tin lưu ý</th>
+                      {isVisaOrAdmin && <th className="px-6 py-4 text-center">Hành động</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
@@ -2316,27 +2069,11 @@ export default function VisaServices() {
                           <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md inline-block">
                             {t.code}
                           </div>
-                          <div className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-wider">{t.category || 'Chưa phân mục'}</div>
                           {/* Tour Type Badge */}
                           <div className="mt-1.5">
-                            {t.tour_type === 'partner' && (
-                              <span className="text-[9px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
-                                🤝 Gửi khách đối tác
-                              </span>
-                            )}
-                            {t.tour_type === 'private' && (
-                              <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
-                                👑 Tour đoàn riêng
-                              </span>
-                            )}
                             {t.tour_type === 'visa' && (
                               <span className="text-[9px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
                                 🛂 Dịch vụ Visa lẻ
-                              </span>
-                            )}
-                            {(t.tour_type === 'internal' || !t.tour_type) && (
-                              <span className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
-                                🏢 Tour tự chạy
                               </span>
                             )}
                           </div>
@@ -2345,112 +2082,66 @@ export default function VisaServices() {
                           <div className="font-bold text-gray-900 text-xs line-clamp-2" title={t.name}>{t.name}</div>
                           <div className="text-[10px] text-gray-400 mt-1 font-semibold flex flex-col gap-0.5">
                             <div className="flex items-center gap-1.5">
-                              <span>{t.duration}</span>
-                              <span>•</span>
-                              <span>Hotel: {t.hotel}</span>
+                              <span>Thời gian xử lý: {t.duration}</span>
                             </div>
                             
                             {/* Product-Specific Subtext */}
-                            {t.tour_type === 'partner' && (
-                              <div className="text-[10px] text-indigo-700 font-bold bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/30 mt-1">
-                                Đối tác: <span className="underline">{t.partner_name}</span> ({t.partner_contact})
-                              </div>
-                            )}
-                            {t.tour_type === 'private' && (
-                              <div className="text-[10px] text-amber-800 font-bold bg-amber-50/40 px-1.5 py-0.5 rounded border border-amber-100/30 mt-1">
-                                Khách đoàn: <span className="underline">{t.organization_name}</span> | Y/C: {t.custom_requirements || 'Không có'}
-                              </div>
-                            )}
                             {t.tour_type === 'visa' && (
                               <div className="text-[10px] text-purple-800 font-bold bg-purple-50/40 px-1.5 py-0.5 rounded border border-purple-100/30 mt-1">
                                 Quốc gia: <span className="underline">{t.visa_country}</span> | {t.visa_service_type} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
                               </div>
                             )}
+                            {t.custom_requirements && (
+                              <div className="text-[10px] text-purple-700 mt-0.5">Yêu cầu: {t.custom_requirements}</div>
+                            )}
                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-center whitespace-nowrap">
-                          <div className="font-semibold text-gray-800 text-xs">
-                            {t.tour_type === 'visa' 
-                              ? t.duration 
-                              : (t.departure_time ? format(new Date(t.departure_time), 'dd/MM/yyyy HH:mm') : '-')
-                            }
-                          </div>
-                          {t.visa_deadline && (
-                            <div className="text-[9px] text-red-600 font-bold mt-1 uppercase tracking-wide bg-red-50 border border-red-100 px-1.5 py-0.5 rounded inline-block">
-                              Hạn visa: {format(new Date(t.visa_deadline), 'dd/MM')}
-                            </div>
-                          )}
                         </td>
                         <td className="px-6 py-4 text-right whitespace-nowrap font-bold text-rose-600 text-xs">
                           <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
                           <div className="text-[10px] text-gray-400 font-medium">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          {t.tour_type === 'visa' ? (
-                            <span className="text-xs text-gray-400 italic">Không áp dụng</span>
-                          ) : (
-                            <>
-                              <div className="text-xs font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded-md inline-block">
-                                {t.hold_duration_hours || 48}h
-                              </div>
-                              <div className="text-[10px] text-slate-500 mt-1 italic max-w-[100px] truncate" title={t.ticket_status}>
-                                {t.ticket_status || 'Chờ xuất vé'}
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          {t.tour_type === 'visa' ? (
-                            <span className="text-xs text-gray-400 italic">Không giới hạn</span>
-                          ) : (
-                            <div className="inline-flex gap-1.5 text-[11px] font-bold items-center">
-                              <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100" title="Đã bán chắc chắn">
-                                {t.sold_seats} Sure
-                              </span>
-                              <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title="Đang giữ tạm">
-                                {t.hold_seats} Hold
-                              </span>
-                              <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100" title="Còn trống để đăng ký">
-                                {t.available_seats} Trống
-                              </span>
-                              {t.overbook_limit ? (
-                                <span className="text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100" title="Overbooking tối đa được cho phép">
-                                  +{t.overbook_limit} OB
-                                </span>
-                              ) : null}
-                            </div>
-                          )}
-                        </td>
                         <td className="px-6 py-4 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* Duplicate/Clone action */}
-                            <button
-                              onClick={() => handleCloneTour(t)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 bg-blue-50/40"
-                              title="Sao chép tour sang ngày khởi hành khác"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            
-                            {/* Edit action */}
-                            <button
-                              onClick={() => startEdit(t)}
-                              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-100 bg-amber-50/40"
-                              title="Sửa thông tin chi tiết tour"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-
-                            {/* Delete action */}
-                            <button
-                              onClick={() => handleDeleteTourClick(t)}
-                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 bg-rose-50/40"
-                              title="Xóa tour khởi hành này"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleShowNoticeModal(t)}
+                            className="inline-flex items-center px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition-all shadow-sm"
+                          >
+                            <FileText className="w-3.5 h-3.5 mr-1" />
+                            Thông tin lưu ý
+                          </button>
                         </td>
+                        {isVisaOrAdmin && (
+                          <td className="px-6 py-4 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* Duplicate/Clone action */}
+                              <button
+                                onClick={() => handleCloneTour(t)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 bg-blue-50/40"
+                                title="Sao chép ngày khởi hành"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              
+                              {/* Edit action */}
+                              <button
+                                onClick={() => startEdit(t)}
+                                className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-100 bg-amber-50/40"
+                                title="Sửa chi tiết"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+
+                              {/* Delete action */}
+                              <button
+                                onClick={() => handleDeleteTourClick(t)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100 bg-rose-50/40"
+                                title="Xóa"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -2459,7 +2150,6 @@ export default function VisaServices() {
             )}
           </div>
         </>
-      )}
 
       {/* MODAL BỘ TẠO TOUR KHỞI HÀNH HÀNG LOẠT (SERIES) */}
       {showBulkModal && bulkBaseTour && (
@@ -2633,6 +2323,97 @@ export default function VisaServices() {
           </div>
         </div>
       )}
+
+      {/* NOTICE MODAL */}
+      {showNoticeModal && selectedNoticeTour && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-150 shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 rounded-lg text-amber-700 border border-amber-200">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Thông tin Lưu ý / Quy định Dịch vụ</h3>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                    Dịch vụ: <span className="text-blue-700 font-mono font-bold">{selectedNoticeTour.code}</span> — {selectedNoticeTour.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNoticeModal(false);
+                  setSelectedNoticeTour(null);
+                }}
+                className="p-1 hover:bg-slate-200 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {(() => {
+                let sections = DEFAULT_NOTICE_SECTIONS;
+                if (selectedNoticeTour.notice_sections) {
+                  try {
+                    sections = typeof selectedNoticeTour.notice_sections === 'string' 
+                      ? JSON.parse(selectedNoticeTour.notice_sections) 
+                      : selectedNoticeTour.notice_sections;
+                  } catch (e) {
+                    console.error('Error parsing notice sections:', e);
+                  }
+                }
+
+                if (!sections || sections.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-slate-400 text-sm">
+                      Chưa có cấu hình thông tin lưu ý đặc thù nào cho dịch vụ này.
+                    </div>
+                  );
+                }
+
+                return sections.map((sec, secIdx) => (
+                  <div key={secIdx} className="space-y-3">
+                    <h4 className="text-xs font-black text-blue-800 uppercase tracking-wider bg-blue-50 border-l-4 border-blue-600 px-3 py-1.5 rounded-r-md">
+                      {sec.title}
+                    </h4>
+                    <div className="space-y-3 pl-1">
+                      {sec.items.map((row, rowIdx) => (
+                        <div key={rowIdx} className="grid grid-cols-1 md:grid-cols-4 gap-2 bg-slate-50/50 p-3 rounded-lg border border-slate-200/60 hover:bg-slate-50 transition-colors">
+                          <div className="text-xs font-bold text-emerald-800 md:col-span-1">
+                            {row.key}
+                          </div>
+                          <div className="text-xs text-slate-700 md:col-span-3 leading-relaxed whitespace-pre-line">
+                            {row.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-150 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNoticeModal(false);
+                  setSelectedNoticeTour(null);
+                }}
+                className="px-5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-all"
+              >
+                Đồng ý / Đóng lại
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

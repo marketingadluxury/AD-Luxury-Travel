@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useCRM } from '../context/CRMContext';
-import { Settings as SettingsIcon, Award, ShieldAlert, Save, RefreshCw, Sparkles } from 'lucide-react';
+import { Settings as SettingsIcon, Award, ShieldAlert, Save, RefreshCw, Sparkles, Users } from 'lucide-react';
+import UserManagement from '../components/UserManagement';
 
 export default function Settings() {
   const { currentRole, membershipSettings, updateMembershipSettings } = useCRM();
+  const [activeTab, setActiveTab] = useState<'membership' | 'users'>('membership');
   
   const [silver, setSilver] = useState(membershipSettings?.silverMin || 20000000);
   const [gold, setGold] = useState(membershipSettings?.goldMin || 50000000);
@@ -48,7 +50,7 @@ export default function Settings() {
             <span>Cài đặt hệ thống</span>
           </h2>
           <p className="text-xs text-gray-500 mt-1 font-medium">
-            Quản lý các thông số cốt lõi, hạn mức chi tiêu để phân hạng thành viên khách hàng đi tour.
+            Quản lý các cấu hình hệ thống, hạng mức thành viên và phân quyền tài khoản người dùng CRM.
           </p>
         </div>
         <div className="text-xs px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200 font-extrabold uppercase tracking-wider">
@@ -56,7 +58,34 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Navigation Tabs */}
+      <div className="flex bg-slate-100 rounded-2xl p-1 border border-slate-200 shadow-inner gap-1">
+        <button
+          onClick={() => setActiveTab('membership')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            activeTab === 'membership'
+              ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <Award className="w-4 h-4" />
+          <span>Hạng thành viên</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            activeTab === 'users'
+              ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Quản lý người dùng & phân quyền</span>
+        </button>
+      </div>
+
+      {activeTab === 'membership' ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Help & Guide card */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-150 rounded-2xl p-6 space-y-4">
           <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center border border-blue-200 text-blue-600">
@@ -196,6 +225,9 @@ export default function Settings() {
           </form>
         </div>
       </div>
+      ) : (
+        <UserManagement />
+      )}
     </div>
   );
 }

@@ -557,6 +557,8 @@ export default function ToursManagement() {
   const [newCatName, setNewCatName] = useState('');
   const [editingCatOldName, setEditingCatOldName] = useState<string | null>(null);
   const [editingCatNewName, setEditingCatNewName] = useState('');
+  const [catToDelete, setCatToDelete] = useState<string | null>(null);
+  const [catAlertMessage, setCatAlertMessage] = useState<string | null>(null);
 
   // Tour Form State (for both create & edit)
   const [code, setCode] = useState('');
@@ -979,6 +981,10 @@ export default function ToursManagement() {
   // Submit handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCodeDuplicate) {
+      alert('Mã tour/visa này đã tồn tại, vui lòng chọn mã khác!');
+      return;
+    }
     if (tourType !== 'visa' && (!code || !name || !departureTime || !returnTime)) {
       alert('Vui lòng nhập đầy đủ các trường thông tin bắt buộc (Mã tour, Tên tour, Ngày đi, Ngày về)!');
       return;
@@ -1223,7 +1229,6 @@ export default function ToursManagement() {
                   if (!newCatName.trim()) return;
                   addCategory(newCatName);
                   setNewCatName('');
-                  alert('Đã thêm danh mục mới!');
                 }}
                 className="w-full inline-flex items-center justify-center bg-blue-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -1291,12 +1296,10 @@ export default function ToursManagement() {
                           <button
                             onClick={() => {
                               if (tourCount > 0) {
-                                alert(`Không thể xóa danh mục này vì đang có ${tourCount} tour liên kết. Vui lòng chuyển đổi danh mục của các tour này trước.`);
+                                setCatAlertMessage(`Không thể xóa danh mục này vì đang có ${tourCount} tour liên kết. Vui lòng chuyển đổi danh mục của các tour này trước.`);
                                 return;
                               }
-                              if (confirm(`Xác nhận xóa danh mục "${cat}"?`)) {
-                                deleteCategory(cat);
-                              }
+                              setCatToDelete(cat);
                             }}
                             className="p-1 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition-all"
                             title="Xóa danh mục"
@@ -2594,6 +2597,62 @@ export default function ToursManagement() {
               >
                 <Check className="w-4 h-4 mr-1.5" />
                 Xác nhận tạo {bulkDatesList.filter(d => d.selected).length} Tour khởi hành
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {catToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-100 max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-950 mb-2 flex items-center gap-2">
+              <span className="text-rose-500">⚠️</span> Xác nhận xóa danh mục
+            </h3>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              Bạn có chắc chắn muốn xóa danh mục <strong className="text-slate-900">"{catToDelete}"</strong> không? Hành động này không thể hoàn tác.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCatToDelete(null)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteCategory(catToDelete);
+                  setCatToDelete(null);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              >
+                Đồng ý xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Alert Message Modal */}
+      {catAlertMessage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-100 max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-950 mb-2 flex items-center gap-2">
+              <span className="text-amber-500">⚠️</span> Thông báo từ hệ thống
+            </h3>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              {catAlertMessage}
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCatAlertMessage(null)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              >
+                Đã hiểu
               </button>
             </div>
           </div>

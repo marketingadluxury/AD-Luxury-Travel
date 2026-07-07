@@ -975,41 +975,79 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
   const addCategory = async (categoryName: string) => {
     const trimmed = categoryName.trim();
-    if (trimmed && !categories.includes(trimmed)) {
-      setCategories(prev => {
-        const next = [...prev, trimmed];
-        localStorage.setItem('crm_categories', JSON.stringify(next));
-        return next;
-      });
-      if (isSupabaseConfigured()) {
-        try {
-          await supabase.from('tour_categories').insert({ name: trimmed });
-        } catch (err) {
-          console.error('Lỗi khi thêm danh mục lên Supabase:', err);
+    if (!trimmed) return;
+    if (categories.includes(trimmed)) {
+      alert('Danh mục này đã tồn tại!');
+      return;
+    }
+
+    const previousCategories = [...categories];
+    setCategories(prev => {
+      const next = [...prev, trimmed];
+      localStorage.setItem('crm_categories', JSON.stringify(next));
+      return next;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('tour_categories').insert({ name: trimmed });
+        if (error) {
+          console.error('Lỗi Supabase khi thêm danh mục:', error);
+          alert(`Không thể thêm danh mục lên cơ sở dữ liệu: ${error.message}`);
+          setCategories(previousCategories);
+        } else {
+          alert(`Đã thêm danh mục "${trimmed}" thành công!`);
         }
+      } catch (err: any) {
+        console.error('Lỗi hệ thống khi thêm danh mục:', err);
+        alert(`Lỗi hệ thống khi thêm danh mục: ${err.message || err}`);
+        setCategories(previousCategories);
       }
+    } else {
+      alert(`Đã thêm danh mục "${trimmed}" (Chế độ offline)!`);
     }
   };
 
   const deleteCategory = async (categoryName: string) => {
+    const previousCategories = [...categories];
     setCategories(prev => {
       const next = prev.filter(c => c !== categoryName);
       localStorage.setItem('crm_categories', JSON.stringify(next));
       return next;
     });
+
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('tour_categories').delete().eq('name', categoryName);
-      } catch (err) {
-        console.error('Lỗi khi xoá danh mục trên Supabase:', err);
+        const { error } = await supabase.from('tour_categories').delete().eq('name', categoryName);
+        if (error) {
+          console.error('Lỗi Supabase khi xoá danh mục:', error);
+          alert(`Không thể xoá danh mục trên cơ sở dữ liệu: ${error.message}`);
+          setCategories(previousCategories);
+        } else {
+          alert(`Đã xoá danh mục "${categoryName}" thành công!`);
+        }
+      } catch (err: any) {
+        console.error('Lỗi hệ thống khi xoá danh mục:', err);
+        alert(`Lỗi hệ thống khi xoá danh mục: ${err.message || err}`);
+        setCategories(previousCategories);
       }
+    } else {
+      alert(`Đã xoá danh mục "${categoryName}" (Chế độ offline)!`);
     }
   };
 
   const updateCategory = async (oldCategory: string, newCategory: string) => {
     const trimmedNew = newCategory.trim();
     if (!trimmedNew || trimmedNew === oldCategory) return;
-    
+
+    if (categories.includes(trimmedNew)) {
+      alert('Tên danh mục mới đã tồn tại!');
+      return;
+    }
+
+    const previousCategories = [...categories];
+    const previousTours = [...tours];
+
     setCategories(prev => {
       const next = prev.map(c => c === oldCategory ? trimmedNew : c);
       localStorage.setItem('crm_categories', JSON.stringify(next));
@@ -1019,12 +1057,43 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('tour_categories').update({ name: trimmedNew }).eq('name', oldCategory);
-        await supabase.from('tours').update({ category: trimmedNew }).eq('category', oldCategory);
-      } catch (err) {
-        console.error('Lỗi khi cập nhật danh mục trên Supabase:', err);
+        const { error: catError } = await supabase.from('tour_categories').update({ name: trimmedNew }).eq('name', oldCategory);
+        if (catError) {
+          console.error('Lỗi Supabase khi cập nhật danh mục:', catError);
+          alert(`Không thể cập nhật danh mục trên cơ sở dữ liệu: ${catError.message}`);
+          setCategories(previousCategories);
+          setTours(previousTours);
+          return;
+        }
+
+        const { error: tourError } = await supabase.from('tours').update({ category: trimmedNew }).eq('category', oldCategory);
+        if (tourError) {
+          console.error('Lỗi Supabase khi cập nhật danh mục cho các tour liên quan:', tourError);
+          alert(`Cập nhật danh mục thành công nhưng gặp lỗi khi chuyển đổi các Tour liên quan: ${tourError.message}`);
+        } else {
+          alert(`Đã cập nhật danh mục thành "${trimmedNew}" thành công!`);
+        }
+      } catch (err: any) {
+        console.error('Lỗi hệ thống khi cập nhật danh mục:', err);
+        alert(`Lỗi hệ thống khi cập nhật danh mục: ${err.message || err}`);
+        setCategories(previousCategories);
+        setTours(previousTours);
       }
+    } else {
+      alert(`Đã cập nhật danh mục thành "${trimmedNew}" (Chế độ offline)!`);
     }
+  };
+
+  const cleanValueForSupabase = (val: any, isNumeric: boolean = false) => {
+    if (val === undefined || val === null) {
+      return isNumeric ? 0 : null;
+    }
+    if (isNumeric) {
+      if (val === '') return 0;
+      const num = Number(val);
+      return isNaN(num) ? 0 : num;
+    }
+    return val;
   };
 
   const addTour = async (tourData: any) => {
@@ -1037,60 +1106,77 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       available_seats: tourData.total_seats,
       seat_status: 'Còn chỗ',
     };
+    
+    // Add to local state first for instant responsiveness
     setTours(prev => [...prev, newTour]);
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('tours').insert({
-          id,
-          code: tourData.code,
-          name: tourData.name,
-          duration: tourData.duration,
-          price: Number(tourData.price),
-          total_seats: Number(tourData.total_seats),
-          available_seats: Number(tourData.total_seats),
-          status: tourData.tour_status || 'available',
-          departure_date: tourData.departure_time ? tourData.departure_time.substring(0, 10) : new Date().toISOString().substring(0, 10),
-          departure_time: tourData.departure_time,
-          return_time: tourData.return_time,
-          airline: tourData.airline,
-          hotel: tourData.hotel,
-          commission: Number(tourData.commission || 0),
+        const { error } = await supabase.from('tours').insert({
+          id: cleanValueForSupabase(id),
+          code: cleanValueForSupabase(tourData.code),
+          name: cleanValueForSupabase(tourData.name),
+          duration: cleanValueForSupabase(tourData.duration),
+          price: cleanValueForSupabase(tourData.price, true),
+          total_seats: cleanValueForSupabase(tourData.total_seats, true),
+          available_seats: cleanValueForSupabase(tourData.total_seats, true),
+          status: cleanValueForSupabase(tourData.tour_status || 'available'),
+          departure_date: cleanValueForSupabase(tourData.departure_time ? tourData.departure_time.substring(0, 10) : new Date().toISOString().substring(0, 10)),
+          departure_time: cleanValueForSupabase(tourData.departure_time),
+          return_time: cleanValueForSupabase(tourData.return_time),
+          airline: cleanValueForSupabase(tourData.airline),
+          hotel: cleanValueForSupabase(tourData.hotel),
+          commission: cleanValueForSupabase(tourData.commission, true),
           sold_seats: 0,
           hold_seats: 0,
           seat_status: 'Còn chỗ',
-          flight_out: tourData.flight_out,
-          flight_out_transit: tourData.flight_out_transit,
-          flight_in: tourData.flight_in,
-          flight_in_transit: tourData.flight_in_transit,
-          transit_info: tourData.transit_info,
-          guide_name: tourData.guide_name,
-          guide_phone: tourData.guide_phone,
-          ticket_status: tourData.ticket_status || 'CHỜ XUẤT VÉ',
-          visa_deadline: tourData.visa_deadline,
-          description: tourData.description,
-          category: tourData.category,
-          hold_duration_hours: Number(tourData.hold_duration_hours || 48),
-          overbook_limit: Number(tourData.overbook_limit || 0),
-          price_adult: Number(tourData.price_adult || 0),
-          price_child: Number(tourData.price_child || 0),
-          price_infant: Number(tourData.price_infant || 0),
-          single_room_surcharge: Number(tourData.single_room_surcharge || 0),
-          itinerary_pdf_url: tourData.itinerary_pdf_url,
-          notice_sections: tourData.notice_sections,
-          tour_status: tourData.tour_status || 'available',
-          tour_type: tourData.tour_type || 'internal',
-          partner_name: tourData.partner_name,
-          partner_contact: tourData.partner_contact,
-          organization_name: tourData.organization_name,
-          group_leader_contact: tourData.group_leader_contact,
-          custom_requirements: tourData.custom_requirements,
-          visa_country: tourData.visa_country,
-          visa_service_type: tourData.visa_service_type,
-          visa_speed: tourData.visa_speed
+          flight_out: cleanValueForSupabase(tourData.flight_out),
+          flight_out_transit: cleanValueForSupabase(tourData.flight_out_transit),
+          flight_in: cleanValueForSupabase(tourData.flight_in),
+          flight_in_transit: cleanValueForSupabase(tourData.flight_in_transit),
+          transit_info: cleanValueForSupabase(tourData.transit_info),
+          guide_name: cleanValueForSupabase(tourData.guide_name),
+          guide_phone: cleanValueForSupabase(tourData.guide_phone),
+          ticket_status: cleanValueForSupabase(tourData.ticket_status || 'CHỜ XUẤT VÉ'),
+          visa_deadline: cleanValueForSupabase(tourData.visa_deadline),
+          description: cleanValueForSupabase(tourData.description),
+          category: cleanValueForSupabase(tourData.category),
+          hold_duration_hours: cleanValueForSupabase(tourData.hold_duration_hours || 48, true),
+          overbook_limit: cleanValueForSupabase(tourData.overbook_limit, true),
+          price_adult: cleanValueForSupabase(tourData.price_adult, true),
+          price_child: cleanValueForSupabase(tourData.price_child, true),
+          price_infant: cleanValueForSupabase(tourData.price_infant, true),
+          single_room_surcharge: cleanValueForSupabase(tourData.single_room_surcharge, true),
+          itinerary_pdf_url: cleanValueForSupabase(tourData.itinerary_pdf_url),
+          notice_sections: cleanValueForSupabase(tourData.notice_sections),
+          tour_status: cleanValueForSupabase(tourData.tour_status || 'available'),
+          tour_type: cleanValueForSupabase(tourData.tour_type || 'internal'),
+          partner_name: cleanValueForSupabase(tourData.partner_name),
+          partner_contact: cleanValueForSupabase(tourData.partner_contact),
+          organization_name: cleanValueForSupabase(tourData.organization_name),
+          group_leader_contact: cleanValueForSupabase(tourData.group_leader_contact),
+          custom_requirements: cleanValueForSupabase(tourData.custom_requirements),
+          visa_country: cleanValueForSupabase(tourData.visa_country),
+          visa_service_type: cleanValueForSupabase(tourData.visa_service_type),
+          visa_speed: cleanValueForSupabase(tourData.visa_speed)
         });
-      } catch (err) {
-        console.error('Lỗi khi thêm Tour vào Supabase:', err);
+
+        if (error) {
+          console.error('Lỗi khi thêm Tour vào Supabase:', error);
+          if (error.code === '42703') {
+            alert(`Lỗi cấu trúc Database: Bảng 'tours' đang thiếu cột.\n\n=> Vui lòng copy toàn bộ nội dung file 'supabase-update-schema-compact.sql' và chạy trong SQL Editor của Supabase để cập nhật cấu trúc bảng!`);
+          } else if (error.code === '23505') {
+            alert(`Lỗi trùng lặp: Mã tour/visa '${tourData.code}' đã tồn tại trong hệ thống!`);
+          } else {
+            alert(`Lỗi lưu cơ sở dữ liệu: ${error.message} - Chi tiết: ${JSON.stringify(error)}\n(Thẻ vừa tạo sẽ tự động biến mất)`);
+          }
+          // Rollback local state
+          setTours(prev => prev.filter(t => t.id !== id));
+        }
+      } catch (err: any) {
+        console.error('Lỗi hệ thống khi thêm Tour vào Supabase:', err);
+        alert(`Lỗi hệ thống: ${err.message || err}`);
+        setTours(prev => prev.filter(t => t.id !== id));
       }
     }
   };
@@ -1116,54 +1202,61 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     if (isSupabaseConfigured()) {
       try {
         await supabase.from('tours').update({
-          code: updatedTour.code,
-          name: updatedTour.name,
-          duration: updatedTour.duration,
-          price: Number(updatedTour.price),
-          total_seats: Number(updatedTour.total_seats),
-          available_seats: Number(nextTour.available_seats),
-          status: updatedTour.tour_status || 'available',
-          departure_date: updatedTour.departure_time ? updatedTour.departure_time.substring(0, 10) : new Date().toISOString().substring(0, 10),
-          departure_time: updatedTour.departure_time,
-          return_time: updatedTour.return_time,
-          airline: updatedTour.airline,
-          hotel: updatedTour.hotel,
-          commission: Number(updatedTour.commission || 0),
-          sold_seats: Number(updatedTour.sold_seats || 0),
-          hold_seats: Number(updatedTour.hold_seats || 0),
+          code: cleanValueForSupabase(updatedTour.code),
+          name: cleanValueForSupabase(updatedTour.name),
+          duration: cleanValueForSupabase(updatedTour.duration),
+          price: cleanValueForSupabase(updatedTour.price, true),
+          total_seats: cleanValueForSupabase(updatedTour.total_seats, true),
+          available_seats: cleanValueForSupabase(nextTour.available_seats, true),
+          status: cleanValueForSupabase(updatedTour.tour_status || 'available'),
+          departure_date: cleanValueForSupabase(updatedTour.departure_time ? updatedTour.departure_time.substring(0, 10) : new Date().toISOString().substring(0, 10)),
+          departure_time: cleanValueForSupabase(updatedTour.departure_time),
+          return_time: cleanValueForSupabase(updatedTour.return_time),
+          airline: cleanValueForSupabase(updatedTour.airline),
+          hotel: cleanValueForSupabase(updatedTour.hotel),
+          commission: cleanValueForSupabase(updatedTour.commission, true),
+          sold_seats: cleanValueForSupabase(updatedTour.sold_seats, true),
+          hold_seats: cleanValueForSupabase(updatedTour.hold_seats, true),
           seat_status: seatStatus,
-          flight_out: updatedTour.flight_out,
-          flight_out_transit: updatedTour.flight_out_transit,
-          flight_in: updatedTour.flight_in,
-          flight_in_transit: updatedTour.flight_in_transit,
-          transit_info: updatedTour.transit_info,
-          guide_name: updatedTour.guide_name,
-          guide_phone: updatedTour.guide_phone,
-          ticket_status: updatedTour.ticket_status || 'CHỜ XUẤT VÉ',
-          visa_deadline: updatedTour.visa_deadline,
-          description: updatedTour.description,
-          category: updatedTour.category,
-          hold_duration_hours: Number(updatedTour.hold_duration_hours || 48),
-          overbook_limit: Number(updatedTour.overbook_limit || 0),
-          price_adult: Number(updatedTour.price_adult || updatedTour.price || 0),
-          price_child: Number(updatedTour.price_child || 0),
-          price_infant: Number(updatedTour.price_infant || 0),
-          single_room_surcharge: Number(updatedTour.single_room_surcharge || 0),
-          itinerary_pdf_url: updatedTour.itinerary_pdf_url,
-          notice_sections: updatedTour.notice_sections,
-          tour_status: updatedTour.tour_status || 'available',
-          tour_type: updatedTour.tour_type || 'internal',
-          partner_name: updatedTour.partner_name,
-          partner_contact: updatedTour.partner_contact,
-          organization_name: updatedTour.organization_name,
-          group_leader_contact: updatedTour.group_leader_contact,
-          custom_requirements: updatedTour.custom_requirements,
-          visa_country: updatedTour.visa_country,
-          visa_service_type: updatedTour.visa_service_type,
-          visa_speed: updatedTour.visa_speed
+          flight_out: cleanValueForSupabase(updatedTour.flight_out),
+          flight_out_transit: cleanValueForSupabase(updatedTour.flight_out_transit),
+          flight_in: cleanValueForSupabase(updatedTour.flight_in),
+          flight_in_transit: cleanValueForSupabase(updatedTour.flight_in_transit),
+          transit_info: cleanValueForSupabase(updatedTour.transit_info),
+          guide_name: cleanValueForSupabase(updatedTour.guide_name),
+          guide_phone: cleanValueForSupabase(updatedTour.guide_phone),
+          ticket_status: cleanValueForSupabase(updatedTour.ticket_status || 'CHỜ XUẤT VÉ'),
+          visa_deadline: cleanValueForSupabase(updatedTour.visa_deadline),
+          description: cleanValueForSupabase(updatedTour.description),
+          category: cleanValueForSupabase(updatedTour.category),
+          hold_duration_hours: cleanValueForSupabase(updatedTour.hold_duration_hours || 48, true),
+          overbook_limit: cleanValueForSupabase(updatedTour.overbook_limit, true),
+          price_adult: cleanValueForSupabase(updatedTour.price_adult || updatedTour.price, true),
+          price_child: cleanValueForSupabase(updatedTour.price_child, true),
+          price_infant: cleanValueForSupabase(updatedTour.price_infant, true),
+          single_room_surcharge: cleanValueForSupabase(updatedTour.single_room_surcharge, true),
+          itinerary_pdf_url: cleanValueForSupabase(updatedTour.itinerary_pdf_url),
+          notice_sections: cleanValueForSupabase(updatedTour.notice_sections),
+          tour_status: cleanValueForSupabase(updatedTour.tour_status || 'available'),
+          tour_type: cleanValueForSupabase(updatedTour.tour_type || 'internal'),
+          partner_name: cleanValueForSupabase(updatedTour.partner_name),
+          partner_contact: cleanValueForSupabase(updatedTour.partner_contact),
+          organization_name: cleanValueForSupabase(updatedTour.organization_name),
+          group_leader_contact: cleanValueForSupabase(updatedTour.group_leader_contact),
+          custom_requirements: cleanValueForSupabase(updatedTour.custom_requirements),
+          visa_country: cleanValueForSupabase(updatedTour.visa_country),
+          visa_service_type: cleanValueForSupabase(updatedTour.visa_service_type),
+          visa_speed: cleanValueForSupabase(updatedTour.visa_speed)
         }).eq('id', updatedTour.id);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Lỗi khi cập nhật Tour trên Supabase:', err);
+        if (err.code === '42703') {
+          alert(`Lỗi cấu trúc Database: Bảng 'tours' đang thiếu cột.\n\n=> Vui lòng copy toàn bộ nội dung file 'supabase-update-schema-compact.sql' và chạy trong SQL Editor của Supabase để cập nhật cấu trúc bảng!`);
+        } else if (err.code === '23505') {
+          alert(`Lỗi trùng lặp: Mã tour/visa '${updatedTour.code}' đã tồn tại trong hệ thống!`);
+        } else {
+          alert(`Lỗi cập nhật CSDL: ${err.message || 'Không rõ nguyên nhân'} - Chi tiết: ${JSON.stringify(err)}`);
+        }
       }
     }
   };

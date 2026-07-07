@@ -1,10 +1,4 @@
--- SQL MIGRATION: NÂNG CẤP CƠ SỞ DỮ LIỆU TRÊN SUPABASE
--- Hãy sao chép toàn bộ đoạn script này và chạy trong Supabase SQL Editor của bạn.
-
--- Kích hoạt UUID extension nếu chưa có
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- 1. Nâng cấp bảng TOURS (Thêm các trường chi tiết cho Tour du lịch)
+-- Nâng cấp bảng TOURS (thêm từng cột một cách an toàn)
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS airline TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS hotel TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS commission NUMERIC DEFAULT 0;
@@ -30,8 +24,6 @@ ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_infant NUMERIC DEFAULT 0;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS single_room_surcharge NUMERIC DEFAULT 0;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS itinerary_pdf_url TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS notice_sections TEXT;
-
--- Cập nhật kiểu dữ liệu cột departure_date thành TEXT hoặc TIMESTAMP nếu cần, hoặc giữ nguyên cột cũ và thêm cột mới
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_time TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS return_time TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_status TEXT DEFAULT 'available';
@@ -45,7 +37,7 @@ ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_country TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_service_type TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_speed TEXT;
 
--- 2. Nâng cấp bảng BOOKINGS (Đặt chỗ - ánh xạ sang Orders trong React)
+-- Nâng cấp bảng BOOKINGS
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS created_by TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS hold_expiry TEXT;
@@ -63,7 +55,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS room_share_info TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_option TEXT DEFAULT 'no_vat';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS special_requests TEXT;
 
--- 3. Tạo bảng PASSENGERS (Hành khách - mỗi Đơn đặt chỗ có thể có nhiều hành khách)
+-- Bảng PASSENGERS
 CREATE TABLE IF NOT EXISTS passengers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
@@ -79,65 +71,15 @@ CREATE TABLE IF NOT EXISTS passengers (
   visa_disqualified_reason TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
-
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS visa_submitted_at TEXT;
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS visa_disqualified_reason TEXT;
 
--- 4. Tạo bảng SYSTEM_NOTIFICATIONS (Thông báo hệ thống)
-CREATE TABLE IF NOT EXISTS system_notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  target_id TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
-  read BOOLEAN DEFAULT FALSE
-);
+-- Cấp quyền (fix lỗi Insert - RLS Error 42501)
+DROP POLICY IF EXISTS "Allow authenticated access to tours" ON tours;
+CREATE POLICY "Allow authenticated access to tours" ON tours FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- 5. Tạo bảng TOUR_CATEGORIES (Danh mục Tour du lịch)
-CREATE TABLE IF NOT EXISTS tour_categories (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT UNIQUE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
-);
+DROP POLICY IF EXISTS "Allow authenticated access to bookings" ON bookings;
+CREATE POLICY "Allow authenticated access to bookings" ON bookings FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- 6. Tạo bảng APP_SETTINGS (Lưu cấu hình tích điểm hạng thành viên, v.v.)
-CREATE TABLE IF NOT EXISTS app_settings (
-  key TEXT PRIMARY KEY,
-  value JSONB NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
-);
-
--- Kích hoạt RLS (Row Level Security) cho các bảng mới tạo
-ALTER TABLE passengers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE system_notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tour_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
-
--- Cấp quyền truy cập cho tất cả người dùng đã đăng nhập (authenticated)
 DROP POLICY IF EXISTS "Allow authenticated access to passengers" ON passengers;
-CREATE POLICY "Allow authenticated access to passengers" ON passengers FOR ALL TO authenticated USING (true);
-
-DROP POLICY IF EXISTS "Allow authenticated access to system_notifications" ON system_notifications;
-CREATE POLICY "Allow authenticated access to system_notifications" ON system_notifications FOR ALL TO authenticated USING (true);
-
-DROP POLICY IF EXISTS "Allow authenticated access to tour_categories" ON tour_categories;
-CREATE POLICY "Allow authenticated access to tour_categories" ON tour_categories FOR ALL TO authenticated USING (true);
-
-DROP POLICY IF EXISTS "Allow authenticated access to app_settings" ON app_settings;
-CREATE POLICY "Allow authenticated access to app_settings" ON app_settings FOR ALL TO authenticated USING (true);
-
--- Chèn dữ liệu mẫu ban đầu cho danh mục nếu chưa có
-INSERT INTO tour_categories (name) VALUES 
-('Du lịch Đông Nam Á'), 
-('Du lịch Châu Âu'), 
-('Du lịch Đông Bắc Á'), 
-('Du lịch Trong Nước') 
-ON CONFLICT (name) DO NOTHING;
-
--- Chèn dữ liệu mẫu cài đặt hạng thành viên
-INSERT INTO app_settings (key, value) VALUES 
-('membership_settings', '{"silverMin": 20000000, "goldMin": 50000000, "platinumMin": 100000000}'::jsonb)
-ON CONFLICT (key) DO NOTHING;
-
--- =========================================================================
+CREATE POLICY "Allow authenticated access to passengers" ON passengers FOR ALL TO authenticated USING (true) WITH CHECK (true);

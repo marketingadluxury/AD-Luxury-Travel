@@ -608,6 +608,271 @@ app.post('/api/delete', async (req, res) => {
   }
 });
 
+// --- ADMIN USER MANAGEMENT API ENDPOINTS ---
+
+let mockUsers = [
+  {
+    id: 'a809b4db-9ee7-4c07-b352-09419106093d',
+    full_name: 'Quản trị viên hệ thống',
+    email: 'marketing@adluxury.net',
+    phone: '0911832961',
+    company_name: 'AD Luxury Travel',
+    role: 'admin',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: '1a3df3bf-7cf9-42b7-a8a2-f90b9b3df985',
+    full_name: 'Điều hành Tour',
+    email: 'operator@adluxury.net',
+    phone: '0988777666',
+    company_name: 'AD Luxury Travel',
+    role: 'operating',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'f920875c-75b2-4d22-841c-b71524317181',
+    full_name: 'Kế toán Trưởng',
+    email: 'accounting@adluxury.net',
+    phone: '0977666555',
+    company_name: 'AD Luxury Travel',
+    role: 'accounting',
+    created_at: new Date().toISOString()
+  }
+];
+
+// GET list of users/profiles
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+      return res.json(mockUsers);
+    }
+    
+    const client = getSupabaseClient(req);
+    const { data: profiles, error: pError } = await client.from('profiles').select('*').order('created_at', { ascending: false });
+    
+    if (pError) {
+      console.warn('Lỗi khi truy vấn profiles từ Supabase:', pError);
+      return res.json(mockUsers);
+    }
+    
+    // Thử lấy danh sách email từ auth.users bằng Admin API nếu có Service Role Key
+    let authUsers: any[] = [];
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const { data: { users }, error: uError } = await client.auth.admin.listUsers();
+        if (!uError && users) {
+          authUsers = users;
+        }
+      } catch (e: any) {
+        console.warn('Không thể truy vấn danh sách auth users (thiếu Service Role Key hoặc quyền hạn):', e.message || e);
+      }
+    }
+    
+    // Gộp email vào profiles
+    const mergedUsers = (profiles || []).map(p => {
+      const authUser = authUsers.find(u => u.id === p.id);
+      return {
+        id: p.id,
+        full_name: p.full_name || '',
+        phone: p.phone || '',
+        company_name: p.company_name || '',
+        role: p.role || 'CTV',
+        created_at: p.created_at,
+        email: authUser?.email || p.email || ''
+      };
+    });
+    
+    if (mergedUsers.length === 0) {
+      return res.json(mockUsers);
+    }
+    
+    res.json(mergedUsers);
+  } catch (err: any) {
+    console.error('Lỗi API /api/admin/users GET:', err);
+    res.json(mockUsers);
+  }
+});
+
+// CREATE a new user/profile
+app.post('/api/admin/users', express.json(), async (req, res) => {
+  try {
+    const { full_name, phone, company_name, role, email, password } = req.body;
+    
+    if (!email || !full_name) {
+      return res.status(400).json({ error: 'Email và họ tên là bắt buộc.' });
+    }
+    
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+      const newUser = {
+        id: crypto.randomUUID(),
+        full_name,
+        phone: phone || '',
+        company_name: company_name || '',
+        role: role || 'CTV',
+        email,
+        created_at: new Date().toISOString()
+      };
+      mockUsers.unshift(newUser);
+      return res.json({ success: true, user: newUser });
+    }
+    
+    const client = getSupabaseClient(req);
+    let userId: string = crypto.randomUUID();
+    
+    // Tạo auth user nếu có Service Role Key
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const { data: authData, error: authError } = await client.auth.admin.createUser({
+          email,
+          password: password || '12345678a',
+          email_confirm: true,
+          user_metadata: { full_name }
+        });
+        
+        if (authError) throw authError;
+        if (authData && authData.user) {
+          userId = authData.user.id;
+        }
+      } catch (authErr: any) {
+        console.error('Lỗi khi tạo tài khoản Auth:', authErr);
+        return res.status(400).json({ error: `Lỗi đăng ký tài khoản Auth: ${authErr.message}` });
+      }
+    } else {
+      console.warn('Cảnh báo: Thiếu SUPABASE_SERVICE_ROLE_KEY, tạo tài khoản trong profiles trực tiếp.');
+    }
+    
+    const { error: pError } = await client.from('profiles').upsert({
+      id: userId,
+      full_name,
+      phone: phone || '',
+      company_name: company_name || '',
+      role: role || 'CTV'
+    });
+    
+    if (pError) {
+      return res.status(400).json({ error: `Lỗi lưu thông tin profile: ${pError.message}` });
+    }
+    
+    res.json({
+      success: true,
+      user: {
+        id: userId,
+        full_name,
+        phone,
+        company_name,
+        role,
+        email,
+        created_at: new Date().toISOString()
+      }
+    });
+  } catch (err: any) {
+    console.error('Lỗi API /api/admin/users POST:', err);
+    res.status(500).json({ error: err.message || 'Lỗi thêm người dùng mới' });
+  }
+});
+
+// UPDATE user details and role
+app.put('/api/admin/users/:id', express.json(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, phone, company_name, role, email, password } = req.body;
+    
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+      const userIndex = mockUsers.findIndex(u => u.id === id);
+      if (userIndex !== -1) {
+        mockUsers[userIndex] = {
+          ...mockUsers[userIndex],
+          full_name: full_name !== undefined ? full_name : mockUsers[userIndex].full_name,
+          phone: phone !== undefined ? phone : mockUsers[userIndex].phone,
+          company_name: company_name !== undefined ? company_name : mockUsers[userIndex].company_name,
+          role: role !== undefined ? role : mockUsers[userIndex].role,
+          email: email !== undefined ? email : mockUsers[userIndex].email
+        };
+        return res.json({ success: true, user: mockUsers[userIndex] });
+      }
+      return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+    }
+    
+    const client = getSupabaseClient(req);
+    
+    const { error: pError } = await client.from('profiles').update({
+      full_name,
+      phone,
+      company_name,
+      role
+    }).eq('id', id);
+    
+    if (pError) {
+      return res.status(400).json({ error: `Lỗi cập nhật profile: ${pError.message}` });
+    }
+    
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const updateData: any = {};
+        if (email) updateData.email = email;
+        if (password) updateData.password = password;
+        
+        if (Object.keys(updateData).length > 0) {
+          const { error: authError } = await client.auth.admin.updateUserById(id, updateData);
+          if (authError) console.warn('Lưu ý khi cập nhật thông tin Auth:', authError.message);
+        }
+      } catch (authErr: any) {
+        console.warn('Không thể cập nhật thông tin Auth (thiếu quyền):', authErr.message || authErr);
+      }
+    }
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Lỗi API /api/admin/users PUT:', err);
+    res.status(500).json({ error: err.message || 'Lỗi cập nhật thông tin người dùng' });
+  }
+});
+
+// DELETE user
+app.delete('/api/admin/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+      mockUsers = mockUsers.filter(u => u.id !== id);
+      return res.json({ success: true });
+    }
+    
+    const client = getSupabaseClient(req);
+    
+    const { error: pError } = await client.from('profiles').delete().eq('id', id);
+    if (pError) {
+      return res.status(400).json({ error: `Lỗi xóa profile: ${pError.message}` });
+    }
+    
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const { error: authError } = await client.auth.admin.deleteUser(id);
+        if (authError) console.warn('Lưu ý khi xóa tài khoản Auth:', authError.message);
+      } catch (authErr: any) {
+        console.warn('Không thể xóa tài khoản Auth (thiếu quyền):', authErr.message || authErr);
+      }
+    }
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Lỗi API /api/admin/users DELETE:', err);
+    res.status(500).json({ error: err.message || 'Lỗi xóa người dùng' });
+  }
+});
+
 // Global JSON error handler to prevent HTML error responses
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('[Global Error Handler]:', err);

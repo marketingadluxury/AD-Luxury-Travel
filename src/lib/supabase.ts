@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const initialUrl = (import.meta as any).env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-const initialAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
+const initialUrl = (import.meta as any).env.VITE_SUPABASE_URL || (import.meta as any).env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const initialAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || (import.meta as any).env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
 let activeClient = createClient(initialUrl, initialAnonKey);
 
