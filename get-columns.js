@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 import https from 'https';
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = "https://nryzcsyaryjgoyoagygz.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yeXpjc3lhcnlqZ295b2FneWd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4ODU4MzAsImV4cCI6MjA5ODQ2MTgzMH0.Z9YJMDCg5ivN6tYVdYP1VUD_AHj7PDehsI-SprEByk8";
 
 // Use REST API with OPTIONS to get schema
 const url = new URL(supabaseUrl + '/rest/v1/tours');

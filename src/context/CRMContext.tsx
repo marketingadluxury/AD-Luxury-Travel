@@ -1480,8 +1480,38 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             read: n.read
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Lỗi khi lưu đơn hàng lên Supabase:', err);
+        alert(`Lỗi lưu cơ sở dữ liệu: ${err.message || JSON.stringify(err)}\n(Đơn hàng vừa tạo sẽ bị huỷ để đảm bảo đồng bộ)`);
+        
+        // Rollback local state
+        setOrders(prev => prev.filter(o => o.id !== orderId));
+        setPassengers(prev => prev.filter(p => p.order_id !== orderId));
+        
+        // Restore tour seats
+        setTours(prev => prev.map(t => {
+          if (t.id === orderData.tour_id) {
+            const sold_seats = orderData.status === 'sure' ? t.sold_seats - seatsToLock : t.sold_seats;
+            const hold_seats = orderData.status === 'hold' ? t.hold_seats - seatsToLock : t.hold_seats;
+            const available_seats = t.total_seats - sold_seats - hold_seats;
+            const overbook = t.overbook_limit || 0;
+            const totalUsed = sold_seats + hold_seats;
+            let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+            if (totalUsed >= t.total_seats + overbook) {
+              seatStatus = 'Hết chỗ';
+            } else if (totalUsed >= t.total_seats) {
+              seatStatus = 'Overbooked';
+            }
+            return {
+              ...t,
+              sold_seats,
+              hold_seats,
+              available_seats,
+              seat_status: seatStatus
+            };
+          }
+          return t;
+        }));
       }
     }
   };
