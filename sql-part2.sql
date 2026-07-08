@@ -1,70 +1,5 @@
--- =========================================================================
--- SQL MIGRATION: NÂNG CẤP VÀ FIX LỖI SCHEMA - AD LUXURY TRAVEL CRM
--- =========================================================================
 
--- Hãy sao chép toàn bộ đoạn script này và chạy trong Supabase SQL Editor.
--- Script này sẽ đảm bảo tất cả các cột mới đều được thêm vào, KHÔNG làm mất dữ liệu cũ.
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- 1. Bảng TOURS
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS code TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS duration TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS price NUMERIC;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS total_seats INTEGER;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS available_seats INTEGER;
-
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_date DATE;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_time TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS return_time TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS airline TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS hotel TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS commission NUMERIC DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS sold_seats INTEGER DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS hold_seats INTEGER DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS seat_status TEXT DEFAULT 'Còn chỗ';
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS flight_out TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS flight_out_transit TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS flight_in TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS flight_in_transit TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS transit_info TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS guide_name TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS guide_phone TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS ticket_status TEXT DEFAULT 'CHỜ XUẤT VÉ';
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_deadline TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS category TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS hold_duration_hours INTEGER DEFAULT 48;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS overbook_limit INTEGER DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_adult NUMERIC DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_child NUMERIC DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_infant NUMERIC DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS single_room_surcharge NUMERIC DEFAULT 0;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS itinerary_pdf_url TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS notice_sections TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_status TEXT DEFAULT 'available';
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_type TEXT DEFAULT 'internal';
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS partner_name TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS partner_contact TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS organization_name TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS group_leader_contact TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS custom_requirements TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_country TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_service_type TEXT;
-ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_speed TEXT;
-
--- Khắc phục các cột NOT NULL bị thiếu dữ liệu khi chèn
-ALTER TABLE tours ALTER COLUMN title DROP NOT NULL;
-ALTER TABLE tours ALTER COLUMN tour_code DROP NOT NULL;
-ALTER TABLE tours ALTER COLUMN start_date DROP NOT NULL;
-ALTER TABLE tours ALTER COLUMN end_date DROP NOT NULL;
-ALTER TABLE tours ALTER COLUMN price_adult DROP NOT NULL;
-ALTER TABLE tours ALTER COLUMN price_child DROP NOT NULL;
-ALTER TABLE tours ALTER COLUMN slots_total DROP NOT NULL;
-ALTER TABLE tours ALTER COLUMN slots_available DROP NOT NULL;
-
--- 2. Bảng BOOKINGS
+-- 2. Bảng BOOKINGS (Bổ sung tất cả các trường theo form Tạo Booking mới)
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_date DATE;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS seats INTEGER DEFAULT 1;
@@ -86,10 +21,12 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS room_share_info TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_option TEXT DEFAULT 'no_vat';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS special_requests TEXT;
 
--- Bỏ NOT NULL các cột không có trong React Code
+-- Khắc phục lỗi khi UI gửi `customer_id` là null
 ALTER TABLE bookings ALTER COLUMN customer_id DROP NOT NULL;
+ALTER TABLE bookings ALTER COLUMN order_date DROP NOT NULL;
+ALTER TABLE bookings ALTER COLUMN total_price DROP NOT NULL;
 
--- 3. Bảng PASSENGERS
+-- 3. Bảng PASSENGERS (Bổ sung thông tin người đi)
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS dob TEXT;
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS is_payer BOOLEAN DEFAULT FALSE;
@@ -98,7 +35,11 @@ ALTER TABLE passengers ADD COLUMN IF NOT EXISTS labor_contract_url TEXT;
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS visa_submitted_at TEXT;
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS visa_disqualified_reason TEXT;
 
--- SỬA LỖI RLS BỊ CHẶN QUYỀN GHI
+ALTER TABLE passengers ALTER COLUMN name DROP NOT NULL;
+ALTER TABLE passengers ALTER COLUMN gender DROP NOT NULL;
+
+-- 4. SỬA LỖI RLS BỊ CHẶN QUYỀN GHI
+-- (Sử dụng DO BLOCK để chạy an toàn)
 DO $$
 BEGIN
     DROP POLICY IF EXISTS "Allow authenticated access to profiles" ON profiles;
@@ -126,5 +67,5 @@ EXCEPTION
     WHEN undefined_object THEN NULL;
 END $$;
 
--- YÊU CẦU SUPABASE CẬP NHẬT LẠI BỘ NHỚ ĐỆM SCHEMA (BẮT BUỘC ĐỂ HẾT LỖI)
+-- 5. YÊU CẦU SUPABASE CẬP NHẬT LẠI BỘ NHỚ ĐỆM SCHEMA (BẮT BUỘC ĐỂ HẾT LỖI)
 NOTIFY pgrst, 'reload schema';

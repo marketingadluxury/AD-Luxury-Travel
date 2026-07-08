@@ -1418,7 +1418,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').insert({
+        const { error: bookingError } = await supabase.from('bookings').insert({
           id: orderId,
           customer_id: null,
           tour_id: orderData.tour_id,
@@ -1444,9 +1444,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           vat_option: orderData.vat_option || 'no_vat',
           special_requests: orderData.special_requests
         });
+        if (bookingError) throw bookingError;
 
         for (const p of newPassengers) {
-          await supabase.from('passengers').insert({
+          const { error: pError } = await supabase.from('passengers').insert({
             id: p.id,
             order_id: orderId,
             is_payer: p.is_payer,
@@ -1458,16 +1459,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             labor_contract_url: p.labor_contract_url,
             visa_status: p.visa_status
           });
+          if (pError) throw pError;
         }
 
         const matchingTour = updatedTours.find(t => t.id === orderData.tour_id);
         if (matchingTour) {
-          await supabase.from('tours').update({
+          const { error: tError } = await supabase.from('tours').update({
             sold_seats: Number(matchingTour.sold_seats),
             hold_seats: Number(matchingTour.hold_seats),
             available_seats: Number(matchingTour.available_seats),
             seat_status: matchingTour.seat_status
           }).eq('id', orderData.tour_id);
+          if (tError) throw tError;
         }
 
         for (const n of newNotifs) {
@@ -1648,7 +1651,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         await supabase.from('passengers').delete().eq('order_id', orderId);
 
         for (const p of newPassengers) {
-          await supabase.from('passengers').insert({
+          const { error: pError } = await supabase.from('passengers').insert({
             id: p.id,
             order_id: orderId,
             is_payer: p.is_payer,
@@ -1660,6 +1663,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             labor_contract_url: p.labor_contract_url,
             visa_status: p.visa_status
           });
+          if (pError) throw pError;
         }
 
         const matchingTour = updatedTours.find(t => t.id === order.tour_id);
