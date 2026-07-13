@@ -358,6 +358,41 @@ const getSupabaseClient = (req?: express.Request) => {
   return createClient(supabaseUrl, supabaseKey, options);
 };
 
+// Helper to create a privileged admin Supabase client using Service Role Key
+const getAdminSupabaseClient = (req?: express.Request) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  
+  const key = serviceRoleKey || anonKey;
+
+  if (!supabaseUrl || !key) {
+    throw new Error('Supabase configuration is missing in environment variables.');
+  }
+
+  const options: any = {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  };
+
+  // If Service Role Key is missing but user auth headers are available, attach them to the client
+  if (!serviceRoleKey && req) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      options.global = {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      };
+    }
+  }
+
+  return createClient(supabaseUrl, key, options);
+};
+
 // Helper to ensure Supabase Storage bucket exists
 async function ensureSupabaseBucketExists(bucketName: string, supabase: any) {
   try {
@@ -671,27 +706,26 @@ let mockUsers = [
 app.get('/api/admin/users', async (req, res) => {
   try {
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
       return res.json(mockUsers);
     }
     
-    const client = getSupabaseClient(req);
+    const client = getAdminSupabaseClient(req);
     const { data: profiles, error: pError } = await client.from('profiles').select('*').order('created_at', { ascending: false });
     
     if (pError) {
-      console.warn('Lỗi khi truy vấn profiles từ Supabase:', pError);
+      console.warn('Lỗi khi truy vấn profiles từ Supabase:', pError.message || pError);
       return res.json(mockUsers);
     }
     
-    // Thử lấy danh sách email từ auth.users bằng Admin API nếu có Service Role Key
     let authUsers: any[] = [];
-    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (hasServiceRole) {
       try {
-        const { data: { users }, error: uError } = await client.auth.admin.listUsers();
-        if (!uError && users) {
-          authUsers = users;
+        const { data, error: uError } = await client.auth.admin.listUsers();
+        if (!uError && data && data.users) {
+          authUsers = data.users;
         }
       } catch (e: any) {
         console.warn('Không thể truy vấn danh sách auth users (thiếu Service Role Key hoặc quyền hạn):', e.message || e);
@@ -733,9 +767,9 @@ app.post('/api/admin/users', express.json(), async (req, res) => {
     }
     
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
       const newUser = {
         id: crypto.randomUUID(),
         full_name,
@@ -749,29 +783,31 @@ app.post('/api/admin/users', express.json(), async (req, res) => {
       return res.json({ success: true, user: newUser });
     }
     
-    const client = getSupabaseClient(req);
+    if (!hasServiceRole) {
+      return res.status(400).json({ 
+        error: 'Tính năng tạo tài khoản yêu cầu cấu hình biến môi trường SUPABASE_SERVICE_ROLE_KEY trong mục Cài đặt (Settings -> Secrets) trên AI Studio.' 
+      });
+    }
+    
+    const client = getAdminSupabaseClient(req);
     let userId: string = crypto.randomUUID();
     
-    // Tạo auth user nếu có Service Role Key
-    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      try {
-        const { data: authData, error: authError } = await client.auth.admin.createUser({
-          email,
-          password: password || '12345678a',
-          email_confirm: true,
-          user_metadata: { full_name }
-        });
-        
-        if (authError) throw authError;
-        if (authData && authData.user) {
-          userId = authData.user.id;
-        }
-      } catch (authErr: any) {
-        console.error('Lỗi khi tạo tài khoản Auth:', authErr);
-        return res.status(400).json({ error: `Lỗi đăng ký tài khoản Auth: ${authErr.message}` });
+    // Tạo auth user bằng Admin API
+    try {
+      const { data: authData, error: authError } = await client.auth.admin.createUser({
+        email,
+        password: password || '12345678a',
+        email_confirm: true,
+        user_metadata: { full_name }
+      });
+      
+      if (authError) throw authError;
+      if (authData && authData.user) {
+        userId = authData.user.id;
       }
-    } else {
-      console.warn('Cảnh báo: Thiếu SUPABASE_SERVICE_ROLE_KEY, tạo tài khoản trong profiles trực tiếp.');
+    } catch (authErr: any) {
+      console.error('Lỗi khi tạo tài khoản Auth:', authErr);
+      return res.status(400).json({ error: `Lỗi đăng ký tài khoản Auth: ${authErr.message || authErr}` });
     }
     
     const { error: pError } = await client.from('profiles').upsert({
@@ -811,9 +847,9 @@ app.put('/api/admin/users/:id', express.json(), async (req, res) => {
     const { full_name, phone, company_name, role, email, password } = req.body;
     
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
       const userIndex = mockUsers.findIndex(u => u.id === id);
       if (userIndex !== -1) {
         mockUsers[userIndex] = {
@@ -829,7 +865,13 @@ app.put('/api/admin/users/:id', express.json(), async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
     }
     
-    const client = getSupabaseClient(req);
+    if (!hasServiceRole) {
+      return res.status(400).json({ 
+        error: 'Tính năng cập nhật tài khoản yêu cầu cấu hình biến môi trường SUPABASE_SERVICE_ROLE_KEY trong mục Cài đặt (Settings -> Secrets) trên AI Studio.' 
+      });
+    }
+    
+    const client = getAdminSupabaseClient(req);
     
     const { error: pError } = await client.from('profiles').update({
       full_name,
@@ -842,19 +884,17 @@ app.put('/api/admin/users/:id', express.json(), async (req, res) => {
       return res.status(400).json({ error: `Lỗi cập nhật profile: ${pError.message}` });
     }
     
-    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      try {
-        const updateData: any = {};
-        if (email) updateData.email = email;
-        if (password) updateData.password = password;
-        
-        if (Object.keys(updateData).length > 0) {
-          const { error: authError } = await client.auth.admin.updateUserById(id, updateData);
-          if (authError) console.warn('Lưu ý khi cập nhật thông tin Auth:', authError.message);
-        }
-      } catch (authErr: any) {
-        console.warn('Không thể cập nhật thông tin Auth (thiếu quyền):', authErr.message || authErr);
+    try {
+      const updateData: any = {};
+      if (email) updateData.email = email;
+      if (password) updateData.password = password;
+      
+      if (Object.keys(updateData).length > 0) {
+        const { error: authError } = await client.auth.admin.updateUserById(id, updateData);
+        if (authError) console.warn('Lưu ý khi cập nhật thông tin Auth:', authError.message);
       }
+    } catch (authErr: any) {
+      console.warn('Không thể cập nhật thông tin Auth (thiếu quyền):', authErr.message || authErr);
     }
     
     res.json({ success: true });
@@ -870,27 +910,31 @@ app.delete('/api/admin/users/:id', async (req, res) => {
     const { id } = req.params;
     
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
       mockUsers = mockUsers.filter(u => u.id !== id);
       return res.json({ success: true });
     }
     
-    const client = getSupabaseClient(req);
+    if (!hasServiceRole) {
+      return res.status(400).json({ 
+        error: 'Tính năng xóa tài khoản yêu cầu cấu hình biến môi trường SUPABASE_SERVICE_ROLE_KEY trong mục Cài đặt (Settings -> Secrets) trên AI Studio.' 
+      });
+    }
+    
+    const client = getAdminSupabaseClient(req);
     
     const { error: pError } = await client.from('profiles').delete().eq('id', id);
     if (pError) {
       return res.status(400).json({ error: `Lỗi xóa profile: ${pError.message}` });
     }
     
-    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      try {
-        const { error: authError } = await client.auth.admin.deleteUser(id);
-        if (authError) console.warn('Lưu ý khi xóa tài khoản Auth:', authError.message);
-      } catch (authErr: any) {
-        console.warn('Không thể xóa tài khoản Auth (thiếu quyền):', authErr.message || authErr);
-      }
+    try {
+      const { error: authError } = await client.auth.admin.deleteUser(id);
+      if (authError) console.warn('Lưu ý khi xóa tài khoản Auth:', authError.message);
+    } catch (authErr: any) {
+      console.warn('Không thể xóa tài khoản Auth (thiếu quyền):', authErr.message || authErr);
     }
     
     res.json({ success: true });
