@@ -12,7 +12,7 @@ import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
 
 export default function OrdersManagement() {
-  const { tours, orders: allOrders, passengers, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, updateOrder, currentRole } = useCRM();
+  const { tours, orders: allOrders, passengers, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, currentRole } = useCRM();
   const { profile, user } = useAuth();
 
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
@@ -133,6 +133,7 @@ export default function OrdersManagement() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isPassengerModalOpen, setIsPassengerModalOpen] = useState(false);
   const [orderToConfirm, setOrderToConfirm] = useState<string | null>(null);
+  const [orderToAddPassengers, setOrderToAddPassengers] = useState<string | null>(null);
   const [editingPassenger, setEditingPassenger] = useState<Passenger | null>(null);
   const [isEditPassengerOpen, setIsEditPassengerOpen] = useState(false);
   const [disqualifiedReasonModal, setDisqualifiedReasonModal] = useState<{ name: string; reason: string } | null>(null);
@@ -1014,7 +1015,7 @@ export default function OrdersManagement() {
           <select
             value={orderFilterStatus}
             onChange={e => setOrderFilterStatus(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-3 pr-10 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tất cả trạng thái</option>
             <option value="hold">Giữ chỗ (Hold)</option>
@@ -1026,7 +1027,7 @@ export default function OrdersManagement() {
           <select
             value={orderFilterTimeRange}
             onChange={e => setOrderFilterTimeRange(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-3 pr-10 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Mọi thời gian</option>
             <option value="today">Hôm nay</option>
@@ -1038,7 +1039,7 @@ export default function OrdersManagement() {
           <select
             value={orderSortBy}
             onChange={e => setOrderSortBy(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+            className="w-full pl-3 pr-10 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
           >
             <option value="newest">Sắp xếp: Mới nhất</option>
             <option value="oldest">Sắp xếp: Cũ nhất</option>
@@ -1312,12 +1313,24 @@ export default function OrdersManagement() {
                           </div>
                         ) : (
                           <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5 lg:col-span-2">
-                            <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center gap-1.5">
-                              <Users className="w-4 h-4 text-emerald-600" />
-                              Bản khai hành khách & Visa ({orderPassengers.length} khách)
-                            </h4>
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                                <Users className="w-4 h-4 text-emerald-600" />
+                                Bản khai hành khách & Visa ({orderPassengers.length} / {(order.adult_count || 0) + (order.child_count || 0) + (order.infant_count || 0)} khách)
+                              </h4>
+                              {((order.adult_count || 0) + (order.child_count || 0) + (order.infant_count || 0) - orderPassengers.length) > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOrderToAddPassengers(order.id)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold transition-colors"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  Nhập thông tin {(order.adult_count || 0) + (order.child_count || 0) + (order.infant_count || 0) - orderPassengers.length} khách còn thiếu
+                                </button>
+                              )}
+                            </div>
                             {orderPassengers.length === 0 ? (
-                              <p className="text-xs text-gray-500 italic py-4 text-center">Chưa có thông tin chi tiết từng hành khách.</p>
+                              <p className="text-xs text-gray-500 italic py-4 text-center">Chưa có thông tin chi tiết từng hành khách. Vui lòng thêm khách hàng.</p>
                             ) : (
                               <div className="overflow-x-auto">
                                 <table className="min-w-full text-xs text-left text-gray-700 table-auto">
@@ -1579,6 +1592,19 @@ export default function OrdersManagement() {
             confirmOrder(orderToConfirm, passengers);
             setIsPassengerModalOpen(false);
             setOrderToConfirm(null);
+          }
+        }}
+      />
+      <PassengerInputModal 
+        isOpen={!!orderToAddPassengers} 
+        onClose={() => setOrderToAddPassengers(null)}
+        adultCount={orderToAddPassengers ? (allOrders.find(o => o.id === orderToAddPassengers)?.adult_count || 0) + (allOrders.find(o => o.id === orderToAddPassengers)?.child_count || 0) + (allOrders.find(o => o.id === orderToAddPassengers)?.infant_count || 0) - passengers.filter(p => p.order_id === orderToAddPassengers).length : 1}
+        childCount={0}
+        infantCount={0}
+        onConfirm={(passengersData) => {
+          if (orderToAddPassengers) {
+            addPassengersToOrder(orderToAddPassengers, passengersData);
+            setOrderToAddPassengers(null);
           }
         }}
       />

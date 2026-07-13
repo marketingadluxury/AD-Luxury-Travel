@@ -19,12 +19,14 @@ import {
   Key,
   ShieldAlert,
   History,
-  Briefcase
+  Briefcase,
+  Trash2
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { Passenger, Order } from '../types';
 import EditPassengerModal from '../components/EditPassengerModal';
+import ActionModal from '../components/ActionModal';
 
 interface BookingInfo {
   passenger_id: string;
@@ -57,6 +59,7 @@ export default function PassengersManagement() {
     tours, 
     currentRole, 
     updatePassenger,
+    deletePassenger,
     membershipSettings
   } = useCRM();
   
@@ -112,6 +115,9 @@ export default function PassengersManagement() {
   const [editingPassenger, setEditingPassenger] = useState<Passenger | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [disqualifiedReasonModal, setDisqualifiedReasonModal] = useState<{ name: string; reason: string } | null>(null);
+  
+  // Passenger Delete Modal
+  const [passengerToDelete, setPassengerToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // 1. Filter orders based on user permissions
   const myOrders = useMemo(() => {
@@ -435,7 +441,7 @@ export default function PassengersManagement() {
             <select
               value={selectedTier}
               onChange={e => setSelectedTier(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white text-slate-700 outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white text-slate-700 outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             >
               <option value="all">👑 Mọi Hạng thành viên</option>
               <option value="Hạng Đồng">🟤 Hạng Đồng</option>
@@ -450,7 +456,7 @@ export default function PassengersManagement() {
             <select
               value={selectedVisaStatus}
               onChange={e => setSelectedVisaStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white text-slate-700 outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white text-slate-700 outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             >
               <option value="all">🛂 Mọi Visa status (Mới nhất)</option>
               <option value="pending">⏳ Chờ nộp hồ sơ</option>
@@ -466,7 +472,7 @@ export default function PassengersManagement() {
             <select
               value={selectedTourId}
               onChange={e => setSelectedTourId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white text-slate-700 outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white text-slate-700 outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             >
               <option value="all">🗺️ Khách từng đi bất kỳ Tour nào</option>
               {tours.map(t => (
@@ -705,6 +711,22 @@ export default function PassengersManagement() {
                                               <Edit className="w-3 h-3" />
                                               Sửa hồ sơ
                                             </button>
+                                            {currentRole === 'admin' && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const realP = passengers.find(rp => rp.id === b.passenger_id);
+                                                  setPassengerToDelete({
+                                                    id: b.passenger_id,
+                                                    name: realP?.full_name || 'Khách hàng'
+                                                  });
+                                                }}
+                                                className="px-2.5 py-1 inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 border border-rose-200 rounded transition-all ml-2"
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                                Xóa
+                                              </button>
+                                            )}
                                           </td>
                                         </tr>
                                       );
@@ -841,6 +863,20 @@ export default function PassengersManagement() {
           </table>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ActionModal
+        isOpen={!!passengerToDelete}
+        onClose={() => setPassengerToDelete(null)}
+        title="Xóa khách hàng"
+        message={`Bạn có chắc chắn muốn xóa khách hàng "${passengerToDelete?.name}" khỏi hệ thống không? Hành động này không thể hoàn tác.`}
+        onConfirm={() => {
+          if (passengerToDelete) {
+            deletePassenger(passengerToDelete.id);
+            setPassengerToDelete(null);
+          }
+        }}
+      />
 
       {/* Edit Passenger Dialog Modal */}
       {isEditModalOpen && editingPassenger && (

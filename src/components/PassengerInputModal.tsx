@@ -218,11 +218,12 @@ export default function PassengerInputModal({
 
     setIsUploading(true);
     try {
-      const passengersWithFiles = await Promise.all(passengers.map(async (p) => {
+      const passengersWithFiles = [];
+      for (const p of passengers) {
         let passportUrls: string[] = [];
 
         if (p.full_name && p.files && p.files.length > 0) {
-          // Upload each file for this passenger
+          // Upload each file for this passenger sequentially to avoid Google Drive folder creation race conditions
           for (const file of p.files) {
             try {
               const formData = new FormData();
@@ -235,45 +236,48 @@ export default function PassengerInputModal({
                 body: formData
               });
 
-              if (response.ok) {
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                  const resData = await response.json();
-                  if (resData.success && resData.url) {
-                    passportUrls.push(resData.url);
-                  }
-                } else {
-                  console.warn('Backend returned non-JSON response for upload');
-                }
-              } else {
-                let errorMsg = 'Lỗi khi gọi API upload file';
+              if (!response.ok) {
+                let errorMsg = `Lỗi khi tải file ${file.name} lên`;
                 const contentType = response.headers.get('content-type');
                 if (contentType && contentType.includes('application/json')) {
                   const errJson = await response.json();
                   errorMsg = errJson.error || errorMsg;
                 }
-                console.error(errorMsg);
+                throw new Error(errorMsg);
               }
-            } catch (err) {
+
+              const contentType = response.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                const resData = await response.json();
+                if (resData.success && resData.url) {
+                  passportUrls.push(resData.url);
+                } else {
+                  throw new Error(resData.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
+                }
+              } else {
+                throw new Error(`Đã có lỗi từ máy chủ khi tải file ${file.name}`);
+              }
+            } catch (err: any) {
               console.error('Exception khi gọi API upload file:', err);
+              throw new Error(err.message || `Không thể tải file ${file.name}`);
             }
           }
         }
 
-        return {
+        passengersWithFiles.push({
           full_name: p.full_name.trim().toUpperCase(),
           name: p.full_name.trim().toUpperCase(), // legacy
           passport_number: p.passport_number.trim().toUpperCase(),
           dob: p.dob,
           passport_url: passportUrls.length > 0 ? passportUrls.join(',') : undefined,
           is_payer: p.isPayer
-        };
-      }));
+        });
+      }
 
       onConfirm(passengersWithFiles);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Đã xảy ra lỗi trong quá trình xử lý hồ sơ hành khách.');
+      toast.error(err.message || 'Đã xảy ra lỗi trong quá trình xử lý hồ sơ hành khách.');
     } finally {
       setIsUploading(false);
     }

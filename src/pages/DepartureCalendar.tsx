@@ -716,7 +716,7 @@ export default function DepartureCalendar() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="inline-flex items-center px-4 py-2.5 border text-sm font-medium rounded-lg transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="inline-flex items-center pl-4 pr-10 py-2.5 border text-sm font-medium rounded-lg transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="date_asc">Khởi hành gần nhất</option>
               <option value="date_desc">Khởi hành xa nhất</option>
@@ -751,7 +751,7 @@ export default function DepartureCalendar() {
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Thời gian khởi hành</label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
                 value={selectedTimeRange}
                 onChange={e => setSelectedTimeRange(e.target.value)}
               >
@@ -768,7 +768,7 @@ export default function DepartureCalendar() {
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Danh mục sản phẩm</label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
                 value={selectedCategory}
                 onChange={e => setSelectedCategory(e.target.value)}
               >
@@ -783,7 +783,7 @@ export default function DepartureCalendar() {
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tình trạng tour</label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
                 value={selectedTourStatus}
                 onChange={e => setSelectedTourStatus(e.target.value)}
               >

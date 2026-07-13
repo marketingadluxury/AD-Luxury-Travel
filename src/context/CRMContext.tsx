@@ -85,6 +85,8 @@ interface CRMContextType {
   handleExtensionRequest: (orderId: string, approve: boolean) => void;
   updateVisaStatus: (passengerId: string, status: Passenger['visa_status'], reason?: string) => void;
   updatePassenger: (passengerId: string, updatedData: Partial<Passenger>) => void;
+  deletePassenger: (passengerId: string) => void;
+  addPassengersToOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
   updateOrder: (orderId: string, updatedData: Partial<Order>) => void;
   updateInvoiceStatus: (orderId: string, status: Order['invoice_status']) => void;
   releaseExpiredHolds: () => void;
@@ -1732,6 +1734,56 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const addPassengersToOrder = async (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const newPassengers: Passenger[] = passengersData.map((p, index) => ({
+      ...p,
+      full_name: p.full_name || (p as any).name || 'Hành khách',
+      passport_number: p.passport_number,
+      phone: p.phone,
+      dob: p.dob,
+      passport_url: p.passport_url,
+      labor_contract_url: (p as any).labor_contract_url,
+      id: generateSafeUUID(),
+      order_id: orderId,
+      visa_status: 'pending',
+      visa_submitted_at: (p.passport_url || (p as any).labor_contract_url) ? new Date().toISOString() : undefined,
+      is_payer: false
+    }));
+
+    setPassengers(prev => [...prev, ...newPassengers]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        for (const p of newPassengers) {
+          const { error: pError } = await supabase.from('passengers').insert({
+            id: p.id,
+            order_id: orderId,
+            is_payer: p.is_payer,
+            full_name: p.full_name,
+            passport_number: p.passport_number,
+            phone: p.phone,
+            dob: p.dob,
+            passport_url: p.passport_url,
+            labor_contract_url: p.labor_contract_url,
+            visa_status: p.visa_status,
+            visa_submitted_at: p.visa_submitted_at,
+            visa_disqualified_reason: p.visa_disqualified_reason
+          });
+          if (pError) throw pError;
+        }
+        toast.success('Đã thêm hành khách thành công!');
+      } catch (err) {
+        console.error('Lỗi khi thêm hành khách trên Supabase:', err);
+        toast.error('Lỗi khi thêm hành khách trên máy chủ!');
+      }
+    } else {
+      toast.success('Đã thêm hành khách (Offline)!');
+    }
+  };
+
   const cancelOrder = async (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -2131,6 +2183,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const deletePassenger = async (passengerId: string) => {
+    // Optimistic update
+    setPassengers(prev => prev.filter(p => p.id !== passengerId));
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('passengers').delete().eq('id', passengerId);
+        if (error) throw error;
+        toast.success('Đã xóa hành khách thành công!');
+      } catch (err) {
+        console.error('Lỗi khi xóa hành khách trên Supabase:', err);
+        toast.error('Lỗi khi xóa hành khách trên máy chủ!');
+      }
+    } else {
+      toast.success('Đã xóa hành khách (Chế độ Offline)!');
+    }
+  };
+
   const updateOrder = async (orderId: string, updatedData: Partial<Order>) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedData } : o));
     if (isSupabaseConfigured()) {
@@ -2181,6 +2251,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       handleExtensionRequest,
       updateVisaStatus,
       updatePassenger,
+      deletePassenger,
+      addPassengersToOrder,
       updateOrder,
       updateInvoiceStatus,
       releaseExpiredHolds,
