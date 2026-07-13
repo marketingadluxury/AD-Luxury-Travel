@@ -21,6 +21,7 @@ const navigation = [
   { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'Đại lý', 'operator', 'sale', 'visa', 'accounting', 'admin'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin'] },
   { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'visa'] },
+  { name: 'Đơn hàng Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'visa', 'admin'] },
   { name: 'Quản lý Đơn hàng', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'operator', 'admin'] },
   { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin'] },
   { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin'] },

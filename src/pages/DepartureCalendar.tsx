@@ -11,8 +11,13 @@ const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('vi-VN').format(amount);
 };
 
-const formatDate = (dateString: string) => {
-  return format(new Date(dateString), 'dd/MM/yyyy');
+const formatDate = (dateString: string | undefined | null) => {
+  if (!dateString) return 'Chưa xác định';
+  try {
+    return format(new Date(dateString), 'dd/MM/yyyy');
+  } catch (e) {
+    return 'Lỗi ngày';
+  }
 };
 
 const SeatStatusBadge = ({ status }: { status: Tour['seat_status'] }) => {
@@ -119,11 +124,17 @@ const TourCard: React.FC<{
               <Tag className="w-4 h-4 mr-1.5" />
               {tour.code}
             </div>
+            {tour.destination && (
+              <div className="flex items-center font-bold text-slate-900">
+                <Building className="w-4 h-4 mr-1.5 text-blue-500" />
+                {tour.destination}
+              </div>
+            )}
             {tour.tour_type !== 'visa' && (
               <>
                 <div className="flex items-center font-medium text-gray-900">
                   <CalendarIcon className="w-4 h-4 mr-1.5 text-gray-400" />
-                  Ngày đi: {formatDate(tour.departure_time)}
+                  Ngày đi: {formatDate(tour.departure_time || tour.start_date)}
                 </div>
                 <div className="flex items-center">
                   <CalendarIcon className="w-4 h-4 mr-1.5 text-gray-400" />
@@ -366,11 +377,12 @@ export default function DepartureCalendar() {
   const [noticeTour, setNoticeTour] = useState<Tour | null>(null);
   
   // Dynamic filter states
-  const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedTourStatus, setSelectedTourStatus] = useState('all');
+  const [selectedTimeRange, setSelectedTimeRange] = useState('all');
   const [selectedDate, setSelectedDate] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [sortBy, setSortBy] = useState('date_asc');
 
   // States for Booking Modal Popup
   const [selectedTourForBooking, setSelectedTourForBooking] = useState<Tour | null>(null);
@@ -603,8 +615,8 @@ export default function DepartureCalendar() {
 
   // Filter application
   const filteredTours = tours.filter(tour => {
-    // Exclude partner tours, private tours, and visa services from departure calendar
-    if (tour.tour_type === 'partner' || tour.tour_type === 'private' || tour.tour_type === 'visa') {
+    // Separation: Only exclude visa services from the main departure calendar. Partner and Private tours are still tours.
+    if (tour.tour_type === 'visa') {
       return false;
     }
 
@@ -623,20 +635,62 @@ export default function DepartureCalendar() {
     // 3. Tour Status match
     if (selectedTourStatus !== 'all' && tour.tour_status !== selectedTourStatus) return false;
 
-    // 4. Month match
-    if (selectedMonth !== 'all') {
+    // 4. Time Range match
+    if (selectedTimeRange !== 'all') {
       const departureDate = new Date(tour.departure_time);
-      const monthIndex = departureDate.getMonth() + 1; // 1-indexed
-      if (monthIndex.toString() !== selectedMonth) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const tourDate = new Date(departureDate);
+      tourDate.setHours(0, 0, 0, 0);
+
+      if (selectedTimeRange === 'today') {
+        if (tourDate.getTime() !== today.getTime()) return false;
+      } else if (selectedTimeRange === 'this_week') {
+        const firstDayOfWeek = new Date(today);
+        firstDayOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+        const lastDayOfWeek = new Date(firstDayOfWeek);
+        lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 6); // Sunday
+        
+        if (tourDate < firstDayOfWeek || tourDate > lastDayOfWeek) return false;
+      } else if (selectedTimeRange === 'this_month') {
+        if (tourDate.getMonth() !== today.getMonth() || tourDate.getFullYear() !== today.getFullYear()) return false;
+      } else if (selectedTimeRange === 'next_month') {
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        if (tourDate.getMonth() !== nextMonth.getMonth() || tourDate.getFullYear() !== nextMonth.getFullYear()) return false;
+      } else if (selectedTimeRange === 'next_3_months') {
+        const next3Months = new Date(today.getFullYear(), today.getMonth() + 3, 0);
+        if (tourDate < today || tourDate > next3Months) return false;
+      }
     }
 
-    // 5. Date match
+    // 5. Specific Date match (Calendar picker)
     if (selectedDate) {
-      const departureDateStr = format(new Date(tour.departure_time), 'yyyy-MM-dd');
-      if (departureDateStr !== selectedDate) return false;
+      try {
+        const depDateStr = tour.departure_time ? format(new Date(tour.departure_time), 'yyyy-MM-dd') : '';
+        const startDateStr = tour.start_date ? format(new Date(tour.start_date), 'yyyy-MM-dd') : '';
+        if (depDateStr !== selectedDate && startDateStr !== selectedDate) return false;
+      } catch (e) {
+        // Fallback or ignore parse errors
+      }
     }
 
     return true;
+  });
+
+  const sortedFilteredTours = [...filteredTours].sort((a, b) => {
+    switch (sortBy) {
+      case 'date_asc':
+        return new Date(a.departure_time).getTime() - new Date(b.departure_time).getTime();
+      case 'date_desc':
+        return new Date(b.departure_time).getTime() - new Date(a.departure_time).getTime();
+      case 'price_asc':
+        return (a.price_adult || a.price) - (b.price_adult || b.price);
+      case 'price_desc':
+        return (b.price_adult || b.price) - (a.price_adult || a.price);
+      default:
+        return 0;
+    }
   });
 
   return (
@@ -658,6 +712,16 @@ export default function DepartureCalendar() {
           </div>
           
           <div className="flex items-center gap-3 w-full lg:w-auto shrink-0 justify-end">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="inline-flex items-center px-4 py-2.5 border text-sm font-medium rounded-lg transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="date_asc">Khởi hành gần nhất</option>
+              <option value="date_desc">Khởi hành xa nhất</option>
+              <option value="price_asc">Giá tăng dần</option>
+              <option value="price_desc">Giá giảm dần</option>
+            </select>
             <button 
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               className={`inline-flex items-center px-4 py-2.5 border text-sm font-medium rounded-lg transition-colors ${
@@ -682,18 +746,20 @@ export default function DepartureCalendar() {
         {/* Advanced Filters section */}
         {showAdvancedFilters && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-150 animate-in fade-in duration-150">
-            {/* Filter by Month */}
+            {/* Filter by Time */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Chọn tháng</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Thời gian khởi hành</label>
               <select
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
+                value={selectedTimeRange}
+                onChange={e => setSelectedTimeRange(e.target.value)}
               >
-                <option value="all">Tất cả các tháng</option>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                  <option key={m} value={m}>Tháng {m}</option>
-                ))}
+                <option value="all">Tất cả thời gian</option>
+                <option value="today">Hôm nay</option>
+                <option value="this_week">Tuần này</option>
+                <option value="this_month">Tháng này</option>
+                <option value="next_month">Tháng sau</option>
+                <option value="next_3_months">3 tháng tới</option>
               </select>
             </div>
 
@@ -730,10 +796,10 @@ export default function DepartureCalendar() {
               </select>
             </div>
 
-            {/* Filter by Date */}
+            {/* Filter by Calendar Date */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Ngày khởi hành</label>
-              <DatePicker 
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Chọn ngày khởi hành (Lịch)</label>
+              <DatePicker
                 value={selectedDate}
                 onChange={val => setSelectedDate(val)}
               />
@@ -743,7 +809,7 @@ export default function DepartureCalendar() {
             <div className="md:col-span-4 flex justify-end">
               <button
                 onClick={() => {
-                  setSelectedMonth('all');
+                  setSelectedTimeRange('all');
                   setSelectedCategory('all');
                   setSelectedTourStatus('all');
                   setSelectedDate('');
@@ -760,13 +826,13 @@ export default function DepartureCalendar() {
 
       {/* Tour List */}
       <div className="space-y-4">
-        {filteredTours.length === 0 ? (
+        {sortedFilteredTours.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-16 text-center shadow-sm">
             <CalendarIcon className="w-14 h-14 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 text-sm font-medium">Không tìm thấy tour du lịch phù hợp.</p>
           </div>
         ) : (
-          filteredTours.map((tour) => (
+          sortedFilteredTours.map((tour) => (
             <TourCard key={tour.id} tour={tour} onBookClick={setSelectedTourForBooking} onShowNotice={setNoticeTour} />
           ))
         )}

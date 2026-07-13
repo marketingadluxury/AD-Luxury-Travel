@@ -1,7 +1,7 @@
--- 4. SỬA LỖI RLS BỊ CHẶN QUYỀN GHI
--- (Sử dụng DO BLOCK để chạy an toàn)
+-- Cập nhật quyền truy cập đầy đủ (Đọc & Ghi) cho các bảng
 DO $$
 BEGIN
+    -- Xóa các policy cũ
     DROP POLICY IF EXISTS "Allow authenticated access to profiles" ON profiles;
     DROP POLICY IF EXISTS "Allow authenticated access to tours" ON tours;
     DROP POLICY IF EXISTS "Allow authenticated access to customers" ON customers;
@@ -13,6 +13,7 @@ BEGIN
     DROP POLICY IF EXISTS "Allow authenticated access to tour_categories" ON tour_categories;
     DROP POLICY IF EXISTS "Allow authenticated access to app_settings" ON app_settings;
 
+    -- Tạo policy mới có cả USING (cho SELECT/UPDATE/DELETE) và WITH CHECK (cho INSERT)
     CREATE POLICY "Allow authenticated access to profiles" ON profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
     CREATE POLICY "Allow authenticated access to tours" ON tours FOR ALL TO authenticated USING (true) WITH CHECK (true);
     CREATE POLICY "Allow authenticated access to customers" ON customers FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -26,6 +27,3 @@ BEGIN
 EXCEPTION
     WHEN undefined_object THEN NULL;
 END $$;
-
--- 5. YÊU CẦU SUPABASE CẬP NHẬT LẠI BỘ NHỚ ĐỆM SCHEMA (BẮT BUỘC ĐỂ HẾT LỖI)
-NOTIFY pgrst, 'reload schema';

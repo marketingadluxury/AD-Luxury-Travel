@@ -19,6 +19,9 @@ export interface Tour {
   airline: string; // Hãng bay
   hotel: string; // Khách sạn
   price: number; // Giá tour
+  destination: string; // Điểm đến
+  start_date: string; // Ngày khởi hành (ISO Date)
+  end_date: string; // Ngày kết thúc (ISO Date)
   commission: number; // Hoa hồng
   
   // Tình trạng chỗ
@@ -42,6 +45,7 @@ export interface Tour {
   visa_deadline?: string; // Hạn nhận hồ sơ visa
   description?: string; // Thông tin đi tour / Link chi tiết
   tour_status?: TourStatus; // Trạng thái: còn chỗ, noshop, giờ chót, lễ tết, đang giảm giá
+  status?: string; // Trạng thái vòng đời (Planning, Active, etc.)
   category?: string; // Danh mục sản phẩm (VD: Du lịch Đông Nam Á, Châu Âu, v.v.)
   hold_duration_hours?: number; // Thời gian giữ chỗ tối đa tính bằng tiếng
   overbook_limit?: number; // Số overbooking tối đa được phép bán vượt mức total_seats
@@ -63,13 +67,16 @@ export interface Tour {
   visa_country?: string;
   visa_service_type?: string;
   visa_speed?: 'standard' | 'urgent';
+  price_visa_tour?: number;
   created_at?: string;
 }
 
 export interface Order {
   id: string;
   tour_id: string;
-  created_by: string; // User ID của Sale
+  customer_id?: string;
+  salesperson_id?: string;
+  created_by: string; // Tên người tạo
   user_id?: string;
   status: 'hold' | 'sure' | 'paid' | 'cancelled';
   hold_expiry?: string; // Thời gian hết hạn hold

@@ -143,4 +143,61 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
     - Nếu là liên kết Google Drive, backend sẽ gọi API Google Drive để **xóa vĩnh viễn** file đó khỏi Drive.
     - Nếu là liên kết Supabase, backend thực hiện xóa file trong Supabase Storage như thông thường.
 
+---
+
+## 9. Cấu Trúc Thư Mục & Vai Trò Hệ Thống Hóa các File (Hỗ trợ Quản lý & Nâng cấp)
+Để giúp quá trình quản lý, sửa chữa và nâng cấp hệ thống sau này diễn ra trơn tru nhất, cấu trúc mã nguồn được quy định và mô tả chi tiết như sau:
+
+### 9.1 Sơ đồ cấu trúc thư mục chính
+```bash
+/
+├── server.ts               # Core Backend (Express, Google Drive API, Supabase Proxy, Dev Server)
+├── supabase-schema.sql     # Database Schema (Mã SQL khởi tạo bảng, quyền, trigger đồng bộ profile)
+├── metadata.json           # Metadata ứng dụng AI Studio (Tên, mô tả, quyền thiết bị)
+├── package.json            # Quản lý các thư viện dependencies và lệnh build/run
+├── .env.example            # Bản mẫu cấu hình biến môi trường (Supabase, Google Drive)
+├── src/
+│   ├── main.tsx            # Điểm khởi chạy Client-side React
+│   ├── App.tsx             # Cấu hình Routing chính và phân chia Layout theo quyền truy cập
+│   ├── types.ts            # Định nghĩa toàn bộ kiểu dữ liệu (Tour, Order, Passenger, Role...)
+│   ├── index.css           # Global CSS sử dụng Tailwind CSS v4
+│   ├── lib/
+│   │   ├── supabase.ts     # Client kết nối Supabase, Proxy thông minh, kiểm tra Auto-create Bucket
+│   │   └── utils.ts        # Các hàm tiện ích dùng chung
+│   ├── context/
+│   │   ├── AuthContext.tsx # Quản lý phiên đăng nhập (Supabase Auth) và đồng bộ Profile người dùng
+│   │   └── CRMContext.tsx  # Bộ não quản lý trạng thái CRM (Đồng bộ offline/online, CRUD Tour, Đơn hàng)
+│   ├── components/
+│   │   ├── Layout.tsx      # Sidebar, Header, thanh chọn Vai trò (Role Switcher), thông báo đẩy (Real-time)
+│   │   ├── DatePicker.tsx  # Component chọn ngày chuẩn hóa giao diện và trải nghiệm
+│   │   ├── ActionModal.tsx # Hộp thoại thông báo xác nhận hành động nguy hiểm (Xóa, Hủy)
+│   │   ├── UserManagement.tsx # Trình quản lý tài khoản thành viên (Chỉ Admin mới truy cập được)
+│   │   ├── EditOrderModal.tsx # Form cập nhật thông tin Booking / Đơn hàng
+│   │   └── EditPassengerModal.tsx # Form cập nhật hồ sơ hành khách, tải lên Visa / Hộ chiếu
+│   └── pages/
+│       ├── DepartureCalendar.tsx # Lịch khởi hành (Bộ lọc danh mục, hiển thị trực quan dạng lịch & danh sách)
+│       ├── ToursManagement.tsx   # Quản lý Tour & Lịch trình (Form tạo Tour, Tab Danh mục sản phẩm)
+│       ├── OrdersManagement.tsx  # Quản lý Booking (Form đặt chỗ, theo dõi trạng thái hold/sure, gia hạn giữ chỗ)
+│       ├── VisaServices.tsx      # Quản lý các dịch vụ Visa lẻ của đại lý
+│       ├── VisaProcessing.tsx    # Xử lý Visa (Dành cho bộ phận Visa duyệt, cập nhật trạng thái hồ sơ hành khách)
+│       ├── AccountingInvoice.tsx # Kế toán & Hóa đơn (Duyệt Thu/Chi hóa đơn, thống kê doanh thu lữ hành)
+│       ├── CustomersManagement.tsx # Quản lý Đại lý & CTV (Thống kê xếp hạng thành viên: Bạc, Vàng, Kim cương)
+│       ├── PassengersManagement.tsx # Quản lý danh sách Khách hàng đi tour
+│       ├── Profile.tsx           # Trang thông tin tài khoản cá nhân, đổi mật khẩu
+│       └── Settings.tsx          # Trang cài đặt cấu hình hệ thống chuyên sâu
+```
+
+### 9.2 Nguyên tắc bảo trì & Tránh phá vỡ Logic cũ
+Khi thực hiện nâng cấp hoặc sửa đổi bất kỳ file nào trong hệ thống, bắt buộc tuân thủ các nguyên tắc vàng sau:
+1. **Kiến trúc Offline-First Dự phòng (Hybrid Mode):** 
+   - `CRMContext.tsx` được thiết kế để tự động đồng bộ dữ liệu với Supabase khi online, và lưu tạm vào `localStorage` làm phương án dự phòng khi offline hoặc khi Supabase chưa cấu hình. 
+   - **Tuyệt đối không** loại bỏ phần dự phòng `localStorage` khi sửa code fetch dữ liệu.
+2. **Đồng bộ File an toàn qua Backend:**
+   - Client tuyệt đối không gọi trực tiếp API Google Drive. Mọi thao tác tải lên và xóa file hộ chiếu/visa phải thông qua API trung gian ở `server.ts` để bảo mật API key và Service Account.
+3. **Phân Quyền ở cả 2 đầu (Client & Database):**
+   - Không được tắt tính năng RLS (Row Level Security) trên các bảng Supabase. Mọi thay đổi về phân quyền ở frontend (`Layout.tsx`) phải đồng nhất với logic phân vai trò tại `AuthContext.tsx`.
+4. **Nhất quán Ngôn ngữ:**
+   - Toàn bộ giao diện người dùng, thông báo thành công, lỗi và hướng dẫn cài đặt phải viết bằng **Tiếng Việt** chuẩn xác, chuyên nghiệp.
+
+
 

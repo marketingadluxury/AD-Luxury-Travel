@@ -14,20 +14,21 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 -- 2. Bảng Tours (Quản lý các Tour du lịch)
 CREATE TABLE IF NOT EXISTS tours (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  code TEXT UNIQUE NOT NULL,
+  id UUID NOT NULL DEFAULT uuid_generate_v4(),
+  code TEXT NOT NULL,
   name TEXT NOT NULL,
-  duration TEXT NOT NULL,
-  price NUMERIC NOT NULL,
-  total_seats INTEGER NOT NULL,
-  available_seats INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  departure_date DATE NOT NULL,
-  vehicle TEXT,
-  guide TEXT,
+  destination TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  duration TEXT,
+  price NUMERIC NOT NULL DEFAULT 0,
+  cost NUMERIC NOT NULL DEFAULT 0,
+  total_seats INTEGER NOT NULL DEFAULT 0,
+  available_seats INTEGER NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'Planning',
+  operator_id UUID REFERENCES profiles(id),
+  guide_name TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
-  
-  -- Các cột mở rộng từ React Tour model
   airline TEXT,
   hotel TEXT,
   commission NUMERIC DEFAULT 0,
@@ -39,7 +40,6 @@ CREATE TABLE IF NOT EXISTS tours (
   flight_in TEXT,
   flight_in_transit TEXT,
   transit_info TEXT,
-  guide_name TEXT,
   guide_phone TEXT,
   ticket_status TEXT DEFAULT 'CHỜ XUẤT VÉ',
   visa_deadline TEXT,
@@ -64,16 +64,41 @@ CREATE TABLE IF NOT EXISTS tours (
   custom_requirements TEXT,
   visa_country TEXT,
   visa_service_type TEXT,
-  visa_speed TEXT
+  visa_speed TEXT,
+  departure_date DATE,
+  price_visa_tour NUMERIC DEFAULT 0,
+  CONSTRAINT tours_pkey PRIMARY KEY (id),
+  CONSTRAINT tours_code_key UNIQUE (code)
 );
 
--- 3. Bảng Customers (Quản lý khách hàng - Booker chính)
+-- Cuối file: Các câu lệnh cập nhật schema bổ sung cho database cũ
+-- Chạy đoạn này nếu bạn gặp lỗi "Could not find column price_visa_tour"
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_visa_tour NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_date DATE;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_infant NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS single_room_surcharge NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS airline TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS hotel TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS itinerary_pdf_url TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS notice_sections TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_time TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS return_time TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_status TEXT DEFAULT 'available';
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_type TEXT DEFAULT 'internal';
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS partner_name TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS partner_contact TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS organization_name TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS group_leader_contact TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS custom_requirements TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_country TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_service_type TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_speed TEXT;
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   phone TEXT NOT NULL,
   email TEXT,
-  type TEXT NOT NULL,
+  type TEXT NOT NULL, -- 'agency', 'collaborator', 'individual'
   address TEXT,
   total_bookings INTEGER DEFAULT 0,
   total_spent NUMERIC DEFAULT 0,
@@ -82,33 +107,41 @@ CREATE TABLE IF NOT EXISTS customers (
 
 -- 4. Bảng Bookings (Quản lý đặt chỗ - Ánh xạ sang Orders trong React)
 CREATE TABLE IF NOT EXISTS bookings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
-  tour_id UUID REFERENCES tours(id) ON DELETE CASCADE,
-  booking_date DATE NOT NULL,
-  status TEXT NOT NULL,
-  total_amount NUMERIC NOT NULL,
-  payment_status TEXT NOT NULL,
-  seats INTEGER NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
-  
-  -- Các cột mở rộng từ React Order model
-  created_by TEXT,
-  user_id UUID REFERENCES auth.users(id),
-  hold_expiry TEXT,
-  invoice_status TEXT DEFAULT 'pending',
-  extension_status TEXT DEFAULT 'none',
-  extension_hours INTEGER DEFAULT 0,
-  is_extended BOOLEAN DEFAULT FALSE,
-  booker_name TEXT,
-  booker_phone TEXT,
-  adult_count INTEGER DEFAULT 1,
-  child_count INTEGER DEFAULT 0,
-  infant_count INTEGER DEFAULT 0,
-  single_room_count INTEGER DEFAULT 0,
-  room_share_info TEXT,
-  vat_option TEXT DEFAULT 'no_vat',
-  special_requests TEXT
+  id uuid NOT NULL DEFAULT uuid_generate_v4 (),
+  code text NULL,
+  tour_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  passengers integer NOT NULL DEFAULT 1,
+  total_amount numeric NOT NULL DEFAULT 0,
+  paid_amount numeric NOT NULL DEFAULT 0,
+  status text NULL DEFAULT 'Pending'::text,
+  salesperson_id uuid NOT NULL,
+  created_at timestamp WITH TIME ZONE NOT NULL DEFAULT timezone ('utc'::text, now()),
+  created_by text NULL,
+  user_id uuid NULL,
+  hold_expiry text NULL,
+  invoice_status text NULL DEFAULT 'pending'::text,
+  extension_status text NULL DEFAULT 'none'::text,
+  extension_hours integer NULL DEFAULT 0,
+  is_extended boolean NULL DEFAULT false,
+  booker_name text NULL,
+  booker_phone text NULL,
+  adult_count integer NULL DEFAULT 1,
+  child_count integer NULL DEFAULT 0,
+  infant_count integer NULL DEFAULT 0,
+  single_room_count integer NULL DEFAULT 0,
+  room_share_info text NULL,
+  vat_option text NULL DEFAULT 'no_vat'::text,
+  special_requests text NULL,
+  booking_date date NULL DEFAULT CURRENT_DATE,
+  payment_status text NULL DEFAULT 'pending'::text,
+  seats integer NULL DEFAULT 1,
+  CONSTRAINT bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT bookings_code_key UNIQUE (code),
+  CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id),
+  CONSTRAINT bookings_salesperson_id_fkey FOREIGN KEY (salesperson_id) REFERENCES profiles (id),
+  CONSTRAINT bookings_tour_id_fkey FOREIGN KEY (tour_id) REFERENCES tours (id),
+  CONSTRAINT bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users (id)
 );
 
 -- 5. Bảng Visas (Quản lý hồ sơ Visa)
@@ -156,7 +189,7 @@ CREATE TABLE IF NOT EXISTS passengers (
 
 -- 8. Bảng System Notifications (Thông báo hệ thống)
 CREATE TABLE IF NOT EXISTS system_notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
   title TEXT NOT NULL,
   message TEXT NOT NULL,

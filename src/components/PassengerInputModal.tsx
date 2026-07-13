@@ -225,9 +225,9 @@ export default function PassengerInputModal({
           for (const file of p.files) {
             try {
               const formData = new FormData();
-              formData.append('file', file);
               formData.append('passportNumber', p.passport_number || 'CHUA_CO_HC');
               formData.append('fullName', p.full_name || 'KHACH_HANG');
+              formData.append('file', file);
 
               const response = await fetch('/api/upload', {
                 method: 'POST',
@@ -235,12 +235,23 @@ export default function PassengerInputModal({
               });
 
               if (response.ok) {
-                const resData = await response.json();
-                if (resData.success && resData.url) {
-                  passportUrls.push(resData.url);
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                  const resData = await response.json();
+                  if (resData.success && resData.url) {
+                    passportUrls.push(resData.url);
+                  }
+                } else {
+                  console.warn('Backend returned non-JSON response for upload');
                 }
               } else {
-                console.error('Lỗi khi gọi API upload file:', await response.text());
+                let errorMsg = 'Lỗi khi gọi API upload file';
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                  const errJson = await response.json();
+                  errorMsg = errJson.error || errorMsg;
+                }
+                console.error(errorMsg);
               }
             } catch (err) {
               console.error('Exception khi gọi API upload file:', err);

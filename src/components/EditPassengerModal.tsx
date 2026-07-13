@@ -75,9 +75,9 @@ export default function EditPassengerModal({
 
       for (const file of filesArray) {
         const formData = new FormData();
-        formData.append('file', file);
         formData.append('passportNumber', passportNumber || 'CHUA_CO_HC');
         formData.append('fullName', fullName || 'KHACH_HANG');
+        formData.append('file', file);
 
         const res = await fetch('/api/upload', {
           method: 'POST',
@@ -85,15 +85,26 @@ export default function EditPassengerModal({
         });
 
         if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(errorText || `Không thể tải file ${file.name} lên`);
+          let errorMsg = `Không thể tải file ${file.name} lên`;
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errJson = await res.json();
+            errorMsg = errJson.error || errorMsg;
+          }
+          throw new Error(errorMsg);
         }
 
-        const data = await res.json();
-        if (data.success && data.url) {
-          newUrls.push(data.url);
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.success && data.url) {
+            newUrls.push(data.url);
+          } else {
+            throw new Error(data.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
+          }
         } else {
-          throw new Error(data.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
+          console.warn('Backend returned non-JSON response for upload');
+          throw new Error(`Định dạng phản hồi không hợp lệ khi tải file ${file.name}`);
         }
       }
 
@@ -120,8 +131,13 @@ export default function EditPassengerModal({
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        console.warn('Xóa file thất bại hoặc file không tồn tại:', errText);
+        let errorMsg = 'Xóa file thất bại';
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errJson = await res.json();
+          errorMsg = errJson.error || errorMsg;
+        }
+        console.warn('Xóa file thất bại hoặc file không tồn tại:', errorMsg);
       }
 
       setUploadedUrls(prev => prev.filter(url => url !== urlToDelete));

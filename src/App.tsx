@@ -4,6 +4,7 @@ import DepartureCalendar from './pages/DepartureCalendar';
 import ToursManagement from './pages/ToursManagement';
 import OrdersManagement from './pages/OrdersManagement';
 import VisaProcessing from './pages/VisaProcessing';
+import VisaOrders from './pages/VisaOrders';
 import VisaServices from './pages/VisaServices';
 import AccountingInvoice from './pages/AccountingInvoice';
 import CustomersManagement from './pages/CustomersManagement';
@@ -33,6 +34,7 @@ function AppContent() {
             <Route path="/" element={<DepartureCalendar />} />
             <Route path="/tours" element={<ToursManagement />} />
             <Route path="/visa-services" element={<VisaServices />} />
+            <Route path="/visa-orders" element={<VisaOrders />} />
             <Route path="/orders" element={<OrdersManagement />} />
             <Route path="/visa" element={<VisaProcessing />} />
             <Route path="/accounting" element={<AccountingInvoice />} />

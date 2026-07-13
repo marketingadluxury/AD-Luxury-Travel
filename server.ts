@@ -5,6 +5,7 @@ import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import cors from 'cors';
 
 // Load environment variables
 dotenv.config();
@@ -13,9 +14,28 @@ const app = express();
 const PORT = 3000;
 
 // Configure multer for memory storage
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB limit
+  }
+});
 
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Log all requests for debugging
+app.use((req, res, next) => {
+  console.log(`[Request]: ${req.method} ${req.url}`);
+  next();
+});
+
+// Log all API requests for debugging
+app.use('/api/*', (req, res, next) => {
+  console.log(`[API Request]: ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // Google Drive Authorization & Helpers
 async function getGoogleDriveAccessToken(): Promise<string> {
@@ -56,7 +76,8 @@ async function getGoogleDriveAccessToken(): Promise<string> {
 }
 
 async function searchFolder(folderName: string, parentId?: string, token?: string): Promise<string | null> {
-  let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${folderName}' and trashed = false`;
+  const safeName = folderName.replace(/'/g, "\\'");
+  let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${safeName}' and trashed = false`;
   if (parentId) {
     query += ` and '${parentId}' in parents`;
   }
@@ -361,6 +382,7 @@ function getPathFromPublicUrl(url: string): string | null {
   if (!url) return null;
   const prefixes = [
     '/storage/v1/object/public/crm-attachments/',
+    '/storage/v1/object/public/AD-Luxury-Travel/',
     '/storage/v1/object/public/AD%20Luxury%20Travel/',
     '/storage/v1/object/public/AD Luxury Travel/'
   ];
@@ -438,11 +460,16 @@ app.post('/api/create-folder', async (req, res) => {
 
 // Unified File Upload API (Google Drive with Supabase Storage fallback)
 app.post('/api/upload', upload.single('file'), async (req, res) => {
+  console.log('[API] /api/upload - Start processing');
   try {
     if (!req.file) {
+      console.warn('[API] /api/upload - No file received');
       res.status(400).json({ error: 'Không tìm thấy file nào được gửi lên.' });
       return;
     }
+
+    console.log('[API] /api/upload - File received:', req.file.originalname, 'Size:', req.file.size);
+    console.log('[API] /api/upload - Body:', req.body);
 
     const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
     const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
@@ -472,7 +499,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         console.log(`[Supabase Fallback] Đang tải file lịch trình tour lên Supabase: Tour/${category}/${fileName}`);
         const supabase = getSupabaseClient(req);
         const publicUrl = await uploadFileToSupabase(
-          'AD Luxury Travel',
+          'crm-attachments',
           `Tour/${category}/${fileName}`,
           file.buffer,
           file.mimetype,
@@ -522,7 +549,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       console.log(`[Supabase Fallback] Đang tải file khách hàng lên Supabase: Khách hàng/${cleanPassport}-${initials}/${fileName}`);
       const supabase = getSupabaseClient(req);
       const publicUrl = await uploadFileToSupabase(
-        'AD Luxury Travel',
+        'crm-attachments',
         `Khách hàng/${cleanPassport}-${initials}/${fileName}`,
         file.buffer,
         file.mimetype,
@@ -874,11 +901,23 @@ app.delete('/api/admin/users/:id', async (req, res) => {
 });
 
 // Global JSON error handler to prevent HTML error responses
+app.use('/api/*', (req, res, next) => {
+  console.warn(`[404] API Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ error: `API route ${req.originalUrl} không tồn tại trên máy chủ.` });
+});
+
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('[Global Error Handler]:', err);
-  res.status(err.status || err.statusCode || 500).json({
-    error: err.message || 'Đã xảy ra lỗi hệ thống'
-  });
+  const status = err.status || err.statusCode || 500;
+  
+  if (req.path.startsWith('/api/')) {
+    return res.status(status).json({
+      error: err.message || 'Đã xảy ra lỗi hệ thống trên API',
+      status
+    });
+  }
+  
+  next(err);
 });
 
 // Serve frontend assets & mount Vite dev server middleware

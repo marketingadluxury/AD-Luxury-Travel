@@ -24,7 +24,8 @@ import {
   DollarSign,
   ChevronDown,
   ChevronUp,
-  UploadCloud
+  UploadCloud,
+  Search
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -391,6 +392,57 @@ export default function VisaServices() {
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
 
+  // Filters and Sorting States for Visa Services
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCountry, setFilterCountry] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+
+  const visaCountries = React.useMemo(() => {
+    const countries = tours
+      .filter(t => t.tour_type === 'visa' && (t.visa_country || t.destination))
+      .map(t => t.visa_country || t.destination);
+    return Array.from(new Set(countries)) as string[];
+  }, [tours]);
+
+  const filteredVisaTours = React.useMemo(() => {
+    let list = tours.filter(t => t.tour_type === 'visa');
+
+    // 1. Search Filter
+    if (searchTerm.trim() !== '') {
+      const q = searchTerm.toLowerCase().trim();
+      list = list.filter(t => {
+        const nameMatch = t.name && t.name.toLowerCase().includes(q);
+        const codeMatch = t.code && t.code.toLowerCase().includes(q);
+        const countryMatch = (t.visa_country || t.destination) && (t.visa_country || t.destination)!.toLowerCase().includes(q);
+        const typeMatch = t.visa_service_type && t.visa_service_type.toLowerCase().includes(q);
+        return nameMatch || codeMatch || countryMatch || typeMatch;
+      });
+    }
+
+    // 2. Country Filter
+    if (filterCountry !== 'all') {
+      list = list.filter(t => (t.visa_country || t.destination) === filterCountry);
+    }
+
+    // 3. Sorting
+    return [...list].sort((a, b) => {
+      if (sortBy === 'newest') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      } else if (sortBy === 'oldest') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateA - dateB;
+      } else if (sortBy === 'highest_price') {
+        return (b.price || 0) - (a.price || 0);
+      } else if (sortBy === 'lowest_price') {
+        return (a.price || 0) - (b.price || 0);
+      }
+      return 0;
+    });
+  }, [tours, searchTerm, filterCountry, sortBy]);
+
   const toggleGroup = (groupName: string) => {
     setExpandedGroups(prev => {
       const isCurrentlyExpanded = prev[groupName];
@@ -405,24 +457,15 @@ export default function VisaServices() {
   // Group tours by name for easier bulk management
   const groupedTours = React.useMemo<Record<string, Tour[]>>(() => {
     const groups: { [key: string]: Tour[] } = {};
-    const displayTours = tours.filter(t => t.tour_type === 'visa');
-    displayTours.forEach(tour => {
+    filteredVisaTours.forEach(tour => {
       const key = tour.name || 'Hành trình chưa đặt tên';
       if (!groups[key]) {
         groups[key] = [];
       }
       groups[key].push(tour);
     });
-    // Sort departures within each group by created_at descending (newest first)
-    Object.keys(groups).forEach(key => {
-      groups[key].sort((a, b) => {
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return dateB - dateA;
-      });
-    });
     return groups;
-  }, [tours]);
+  }, [filteredVisaTours]);
 
   // Handle auto-expanding new groups
   useEffect(() => {
@@ -510,6 +553,9 @@ export default function VisaServices() {
       const newTourData = {
         code: generatedCode,
         name: bulkBaseTour.name,
+        destination: bulkBaseTour.destination || 'Visa',
+        start_date: date.toISOString().substring(0, 10),
+        end_date: generatedReturnTime.toISOString().substring(0, 10),
         duration: bulkBaseTour.duration,
         departure_time: date.toISOString(),
         return_time: generatedReturnTime.toISOString(),
@@ -569,6 +615,7 @@ export default function VisaServices() {
     setIsCodeDuplicate(isDuplicate);
   }, [code, tours, editingTour]);
   const [name, setName] = useState('');
+  const [destination, setDestination] = useState('');
   const [duration, setDuration] = useState('5 ngày 4 đêm');
   const [departureTime, setDepartureTime] = useState('');
   const [returnTime, setReturnTime] = useState('');
@@ -615,10 +662,10 @@ export default function VisaServices() {
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
       formData.append('uploadType', 'tour');
       formData.append('tourCode', code.trim());
       formData.append('category', category || 'Chung');
+      formData.append('file', file);
 
       const res = await fetch('/api/upload', {
         method: 'POST',
@@ -626,15 +673,30 @@ export default function VisaServices() {
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || 'Không thể tải file lên hệ thống');
+        let errorMsg = 'Không thể tải file lên hệ thống';
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errJson = await res.json();
+          errorMsg = errJson.error || errorMsg;
+        } else {
+          const text = await res.text();
+          errorMsg = text.substring(0, 100) || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
-      const data = await res.json();
-      if (data.success && data.url) {
-        setItineraryPdfUrl(data.url);
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success && data.url) {
+          setItineraryPdfUrl(data.url);
+        } else {
+          throw new Error(data.error || 'Lỗi từ máy chủ khi lưu file');
+        }
       } else {
-        throw new Error(data.error || 'Lỗi từ máy chủ khi lưu file');
+        const text = await res.text();
+        console.error('Phản hồi không phải JSON từ máy chủ:', text.substring(0, 200));
+        throw new Error('Định dạng phản hồi không hợp lệ từ máy chủ (có thể là trang HTML lỗi)');
       }
     } catch (err: any) {
       console.error(err);
@@ -684,6 +746,7 @@ export default function VisaServices() {
     setEditingTour(tour);
     setCode(tour.code);
     setName(tour.name);
+    setDestination(tour.destination || '');
     setDuration(tour.duration);
     
     // Format dates to YYYY-MM-DDTHH:MM for inputs
@@ -768,6 +831,7 @@ export default function VisaServices() {
   const handleCloneTour = (tour: Tour) => {
     setCode(`${tour.code}-CLONE`);
     setName(`[Sao chép] ${tour.name}`);
+    setDestination(tour.destination || '');
     setDuration(tour.duration);
     setDepartureTime('');
     setReturnTime('');
@@ -830,6 +894,7 @@ export default function VisaServices() {
     const baseCode = tour.code.replace(/-CLONE/g, '').replace(/-\d{6}$/g, '');
     setCode(baseCode);
     setName(tour.name);
+    setDestination(tour.destination || '');
     setDuration(tour.duration);
     setDepartureTime('');
     setReturnTime('');
@@ -890,6 +955,7 @@ export default function VisaServices() {
   const resetForm = () => {
     setCode('');
     setName('');
+    setDestination('');
     setDuration('5 ngày 4 đêm');
     setDepartureTime('');
     setReturnTime('');
@@ -971,6 +1037,9 @@ export default function VisaServices() {
     const tourData = {
       code,
       name,
+      destination: destination || visaCountry || 'Dịch vụ Visa',
+      start_date: (tourType !== 'visa' && departureTime) ? departureTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
+      end_date: (tourType !== 'visa' && returnTime) ? returnTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
       duration,
       departure_time: (tourType !== 'visa' && departureTime) ? new Date(departureTime).toISOString() : null,
       return_time: (tourType !== 'visa' && returnTime) ? new Date(returnTime).toISOString() : null,
@@ -1006,7 +1075,7 @@ export default function VisaServices() {
       organization_name: organizationName || undefined,
       group_leader_contact: groupLeaderContact || undefined,
       custom_requirements: customRequirements || undefined,
-      visa_country: visaCountry || undefined,
+      visa_country: visaCountry || destination || undefined,
       visa_service_type: visaServiceType || undefined,
       visa_speed: visaSpeed || undefined,
     };
@@ -1191,7 +1260,7 @@ export default function VisaServices() {
                       />
                       {isCodeDuplicate && <p className="text-red-500 text-xs mt-1 font-semibold">{tourType === 'visa' ? 'Mã visa này đã tồn tại!' : 'Mã tour này đã tồn tại!'}</p>}
                     </div>
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1">{tourType === 'visa' ? 'Tên visa *' : 'Tên tour *'}</label>
                       <input 
                         type="text" 
@@ -1200,6 +1269,22 @@ export default function VisaServices() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={name}
                         onChange={e => setName(e.target.value)}
+                      />
+                    </div>
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Điểm đến / Quốc gia *</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Ví dụ: Thái Lan, Châu Âu..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={destination}
+                        onChange={e => {
+                          setDestination(e.target.value);
+                          if (tourType === 'visa') {
+                            setVisaCountry(e.target.value);
+                          }
+                        }}
                       />
                     </div>
                     <div>
@@ -1287,7 +1372,7 @@ export default function VisaServices() {
                       )}
 
                       {tourType === 'visa' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div>
                             <label className="block text-xs font-semibold text-slate-700 mb-1">Loại visa lẻ (Du lịch, Công tác, Thăm thân...) *</label>
                             <input
@@ -1298,6 +1383,17 @@ export default function VisaServices() {
                               value={visaServiceType}
                               onChange={e => setVisaServiceType(e.target.value)}
                             />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Độ khẩn *</label>
+                            <select
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
+                              value={visaSpeed}
+                              onChange={e => setVisaSpeed(e.target.value as any)}
+                            >
+                              <option value="standard">⏳ Thường</option>
+                              <option value="urgent">⚡ Khẩn</option>
+                            </select>
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-slate-700 mb-1">Yêu cầu hồ sơ đính kèm (Hoặc lưu ý cần chuẩn bị)</label>
@@ -1347,112 +1443,113 @@ export default function VisaServices() {
                   </div>
                 </div>
 
-                {/* 2. Airline, Hotel, PDF Itinerary */}
+                {/* 2. Airline, Hotel, PDF Itinerary - Hidden for Visa services */}
                 {tourType !== 'visa' && (
                   <div className="space-y-4 pt-4 border-t border-slate-100">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
-                    <Plane className="w-4 h-4 text-emerald-600" /> Logistics & Lịch Trình PDF
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Hãng hàng không</label>
-                      <input 
-                        type="text" 
-                        placeholder="Vietnam Airlines, Vietjet..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={airline}
-                        onChange={e => setAirline(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu chuẩn Khách sạn</label>
-                      <input 
-                        type="text" 
-                        placeholder="Khách sạn 4 sao, Resort 5 sao..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        value={hotel}
-                        onChange={e => setHotel(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                        📂 Lịch trình chi tiết (File PDF)
-                        <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                      </label>
-                      
-                      {isUploadingItinerary ? (
-                        <div className="flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/30 rounded-xl p-4 text-center">
-                          <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin mb-2" />
-                          <p className="text-xs font-semibold text-blue-700">Đang tải file lên hệ thống...</p>
-                          <p className="text-[10px] text-blue-500 mt-1">Đang đồng bộ và sắp xếp vào thư mục Drive...</p>
-                        </div>
-                      ) : itineraryPdfUrl ? (
-                        <div className="p-3 border border-emerald-200 bg-emerald-50/40 rounded-xl flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="p-1.5 bg-emerald-100 rounded-lg text-emerald-700">
-                              <FileText className="w-5 h-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-emerald-800 truncate" title={itineraryPdfUrl}>
-                                {code ? `${code.trim().toUpperCase()}.pdf` : 'Lich_trinh.pdf'}
-                              </p>
-                              <a 
-                                href={itineraryPdfUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="text-[11px] text-blue-600 hover:underline font-semibold flex items-center gap-1 mt-0.5"
-                              >
-                                Xem tài liệu <ExternalLink className="w-3 h-3" />
-                              </a>
-                            </div>
-                          </div>
-                          
-                          <label className="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-                            Thay đổi
-                            <input 
-                              type="file" 
-                              accept=".pdf,application/pdf" 
-                              className="hidden" 
-                              onChange={handleItineraryUpload}
-                            />
-                          </label>
-                        </div>
-                      ) : (
-                        <label className={`group cursor-pointer flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center transition-all ${
-                          code.trim() 
-                            ? 'border-gray-300 bg-white hover:border-blue-500 hover:bg-blue-50/10' 
-                            : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                        }`}>
-                          <UploadCloud className={`w-8 h-8 mb-2 transition-colors ${
-                            code.trim() ? 'text-gray-400 group-hover:text-blue-500' : 'text-gray-300'
-                          }`} />
-                          <p className="text-xs font-bold text-gray-700">
-                            {code.trim() ? 'Kéo thả hoặc click để tải lên tệp PDF' : 'Vui lòng nhập Mã Tour trước'}
-                          </p>
-                          <p className="text-[10px] text-gray-400 mt-1">
-                            {code.trim() ? 'Chỉ chấp nhận file định dạng PDF' : 'Để hệ thống đặt tên file theo mã tour'}
-                          </p>
-                          {code.trim() && (
-                            <input 
-                              type="file" 
-                              accept=".pdf,application/pdf" 
-                              className="hidden" 
-                              onChange={handleItineraryUpload}
-                            />
-                          )}
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
+                      <Plane className="w-4 h-4 text-emerald-600" /> Logistics & Lịch Trình PDF
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Hãng hàng không</label>
+                        <input 
+                          type="text" 
+                          placeholder="Vietnam Airlines, Vietjet..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          value={airline}
+                          onChange={e => setAirline(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu chuẩn Khách sạn</label>
+                        <input 
+                          type="text" 
+                          placeholder="Khách sạn 4 sao, Resort 5 sao..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          value={hotel}
+                          onChange={e => setHotel(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                          📂 Lịch trình chi tiết (File PDF)
+                          <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
                         </label>
-                      )}
-                      
-                      {itineraryUploadError && (
-                        <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 bg-rose-50 border border-rose-100 p-2 rounded-lg">
-                          ⚠️ {itineraryUploadError}
-                        </p>
-                      )}
+                        
+                        {isUploadingItinerary ? (
+                          <div className="flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/30 rounded-xl p-4 text-center">
+                            <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin mb-2" />
+                            <p className="text-xs font-semibold text-blue-700">Đang tải file lên hệ thống...</p>
+                            <p className="text-[10px] text-blue-500 mt-1">Đang đồng bộ và sắp xếp vào thư mục Drive...</p>
+                          </div>
+                        ) : itineraryPdfUrl ? (
+                          <div className="p-3 border border-emerald-200 bg-emerald-50/40 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="p-1.5 bg-emerald-100 rounded-lg text-emerald-700">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-emerald-800 truncate" title={itineraryPdfUrl}>
+                                  {code ? `${code.trim().toUpperCase()}.pdf` : 'Lich_trinh.pdf'}
+                                </p>
+                                <a 
+                                  href={itineraryPdfUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="text-[11px] text-blue-600 hover:underline font-semibold flex items-center gap-1 mt-0.5"
+                                >
+                                  Xem tài liệu <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                            </div>
+                            
+                            <label className="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
+                              Thay đổi
+                              <input 
+                                type="file" 
+                                accept=".pdf,application/pdf" 
+                                className="hidden" 
+                                onChange={handleItineraryUpload}
+                              />
+                            </label>
+                          </div>
+                        ) : (
+                          <label className={`group cursor-pointer flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center transition-all ${
+                            code.trim() 
+                              ? 'border-gray-300 bg-white hover:border-blue-500 hover:bg-blue-50/10' 
+                              : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                          }`}>
+                            <UploadCloud className={`w-8 h-8 mb-2 transition-colors ${
+                              code.trim() ? 'text-gray-400 group-hover:text-blue-500' : 'text-gray-300'
+                            }`} />
+                            <p className="text-xs font-bold text-gray-700">
+                              {code.trim() ? 'Kéo thả hoặc click để tải lên tệp PDF' : 'Vui lòng nhập Mã Tour trước'}
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-1">
+                              {code.trim() ? 'Chỉ chấp nhận file định dạng PDF' : 'Để hệ thống đặt tên file theo mã tour'}
+                            </p>
+                            {code.trim() && (
+                              <input 
+                                type="file" 
+                                accept=".pdf,application/pdf" 
+                                className="hidden" 
+                                onChange={handleItineraryUpload}
+                              />
+                            )}
+                          </label>
+                        )}
+                        
+                        {itineraryUploadError && (
+                          <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 bg-rose-50 border border-rose-100 p-2 rounded-lg">
+                            ⚠️ {itineraryUploadError}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
                 )}
 
+                
                 {/* 3. Numeric inputs with dynamic thousands separator formatting */}
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
@@ -1872,10 +1969,51 @@ export default function VisaServices() {
               </div>
             </div>
 
+            {/* Filters and Sorting Controls */}
+            <div className="bg-slate-50 border-b border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Ô tìm kiếm */}
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Tìm mã, tên dịch vụ..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Lọc quốc gia */}
+              <select
+                value={filterCountry}
+                onChange={e => setFilterCountry(e.target.value)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Tất cả quốc gia</option>
+                {visaCountries.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              {/* Sắp xếp */}
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+              >
+                <option value="newest">Sắp xếp: Mới nhất</option>
+                <option value="oldest">Sắp xếp: Cũ nhất</option>
+                <option value="highest_price">Sắp xếp: Phí dịch vụ giảm dần</option>
+                <option value="lowest_price">Sắp xếp: Phí dịch vụ tăng dần</option>
+              </select>
+            </div>
+
             {viewMode === 'grouped' ? (
               <div className="p-6 space-y-6">
                 {Object.keys(groupedTours).length === 0 ? (
-                  <div className="text-center py-12 text-sm text-gray-400">Chưa có dịch vụ visa nào được tạo.</div>
+                  <div className="text-center py-12 text-sm text-gray-400">Không tìm thấy dịch vụ visa nào phù hợp với bộ lọc.</div>
                 ) : (
                   Object.entries(groupedTours)
                     .sort((entryA, entryB) => {
@@ -1918,35 +2056,11 @@ export default function VisaServices() {
                             <div className="text-xs text-gray-500 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
                               <span>Thời gian xử lý: <strong className="text-gray-700 font-bold">{firstTour.duration}</strong></span>
                               <span className="text-gray-300">|</span>
-                              <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} đợt khởi hành</strong></span>
+                              <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} phiên bản</strong></span>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2.5 self-end md:self-auto" onClick={e => e.stopPropagation()}>
-                            {/* Quick Add Departure button */}
-                            {isVisaOrAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => handleAddDepartureQuick(firstTour)}
-                                className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
-                              >
-                                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                                Thêm ngày đi mới
-                              </button>
-                            )}
-
-                            {/* Bulk Create Series button */}
-                            {isVisaOrAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenBulkModal(firstTour)}
-                                className="inline-flex items-center px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
-                              >
-                                <Grid className="w-3.5 h-3.5 mr-1.5" />
-                                Tạo hàng loạt (Series)
-                              </button>
-                            )}
-
                             {/* Collapse/Expand indicator */}
                             <button
                               type="button"
@@ -1984,7 +2098,7 @@ export default function VisaServices() {
                                         {t.name}
                                       </div>
                                       <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5 font-semibold">
-                                        <div>Quốc gia: <span className="underline">{t.visa_country}</span> | Loại: {t.visa_service_type} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})</div>
+                                        <div>Quốc gia: <span className="underline">{t.visa_country || t.destination || 'Chưa xác định'}</span> | Loại: {t.visa_service_type || 'Dịch vụ'} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})</div>
                                         {t.custom_requirements && <div className="text-[10px] text-purple-700">Yêu cầu: {t.custom_requirements}</div>}
                                       </div>
                                     </td>
@@ -2056,14 +2170,7 @@ export default function VisaServices() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
-                    {tours
-                      .filter(t => t.tour_type === 'visa')
-                      .sort((a, b) => {
-                        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-                        return dateB - dateA;
-                      })
-                      .map(t => (
+                    {filteredVisaTours.map(t => (
                       <tr key={t.id} className="hover:bg-slate-50/40 transition-colors">
                         <td className="px-6 py-4">
                           <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md inline-block">
@@ -2088,7 +2195,7 @@ export default function VisaServices() {
                             {/* Product-Specific Subtext */}
                             {t.tour_type === 'visa' && (
                               <div className="text-[10px] text-purple-800 font-bold bg-purple-50/40 px-1.5 py-0.5 rounded border border-purple-100/30 mt-1">
-                                Quốc gia: <span className="underline">{t.visa_country}</span> | {t.visa_service_type} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
+                                Quốc gia: <span className="underline">{t.visa_country || t.destination || 'Chưa xác định'}</span> | {t.visa_service_type || 'Dịch vụ'} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
                               </div>
                             )}
                             {t.custom_requirements && (

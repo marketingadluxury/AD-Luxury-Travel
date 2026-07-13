@@ -3,7 +3,7 @@ import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search } from 'lucide-react';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
@@ -13,19 +13,90 @@ import EditOrderModal from '../components/EditOrderModal';
 export default function OrdersManagement() {
   const { tours, orders: allOrders, passengers, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, updateOrder, currentRole } = useCRM();
   const { profile, user } = useAuth();
+
+  const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [orderFilterStatus, setOrderFilterStatus] = useState('all');
+  const [orderFilterTimeRange, setOrderFilterTimeRange] = useState('all');
+  const [orderSortBy, setOrderSortBy] = useState('newest');
   
   const orders = React.useMemo(() => {
-    const filtered = ['admin', 'operator'].includes(currentRole)
+    // 1. Filter by role/ownership
+    let filtered = ['admin', 'operator'].includes(currentRole)
       ? allOrders
       : allOrders.filter(o => o.user_id === profile?.id);
     
-    // Sort by created_at descending (newest first)
-    return [...filtered].sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
+    // 2. Filter out Visa-only service orders (separation of concerns)
+    filtered = filtered.filter(o => {
+      const tour = tours.find(t => t.id === o.tour_id);
+      return tour?.tour_type !== 'visa';
     });
-  }, [allOrders, currentRole, profile]);
+
+    // 3. Search term filter (code, booker_name, booker_phone, tour code, tour name)
+    if (orderSearchTerm.trim() !== '') {
+      const q = orderSearchTerm.toLowerCase().trim();
+      filtered = filtered.filter(o => {
+        const tour = tours.find(t => t.id === o.tour_id);
+        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(q);
+        const phoneMatch = o.booker_phone && o.booker_phone.includes(q);
+        const codeMatch = o.id && o.id.toLowerCase().includes(q);
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
+        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(q);
+        return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch;
+      });
+    }
+
+    // 4. Status filter
+    if (orderFilterStatus !== 'all') {
+      filtered = filtered.filter(o => o.status === orderFilterStatus);
+    }
+
+    // 5. Time range filter
+    if (orderFilterTimeRange !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      filtered = filtered.filter(o => {
+        if (!o.created_at) return false;
+        const orderDate = new Date(o.created_at);
+        orderDate.setHours(0, 0, 0, 0);
+
+        if (orderFilterTimeRange === 'today') {
+          return orderDate.getTime() === today.getTime();
+        } else if (orderFilterTimeRange === 'this_week') {
+          const firstDay = new Date(today);
+          firstDay.setDate(today.getDate() - today.getDay() + 1);
+          const lastDay = new Date(firstDay);
+          lastDay.setDate(firstDay.getDate() + 6);
+          return orderDate >= firstDay && orderDate <= lastDay;
+        } else if (orderFilterTimeRange === 'this_month') {
+          return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
+        }
+        return true;
+      });
+    }
+    
+    // Sort logic
+    return [...filtered].sort((a, b) => {
+      if (orderSortBy === 'newest') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      } else if (orderSortBy === 'oldest') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateA - dateB;
+      } else if (orderSortBy === 'highest_price') {
+        return (b.total_price || 0) - (a.total_price || 0);
+      } else if (orderSortBy === 'lowest_price') {
+        return (a.total_price || 0) - (b.total_price || 0);
+      } else if (orderSortBy === 'hold_expiry') {
+        const expA = a.hold_expiry ? new Date(a.hold_expiry).getTime() : Infinity;
+        const expB = b.hold_expiry ? new Date(b.hold_expiry).getTime() : Infinity;
+        return expA - expB;
+      }
+      return 0;
+    });
+  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterStatus, orderFilterTimeRange, orderSortBy]);
 
   const holdStatistics = React.useMemo(() => {
     const stats: Record<string, { orderCount: number; seatsHold: number; detailTours: Record<string, number> }> = {};
@@ -454,14 +525,16 @@ export default function OrdersManagement() {
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Chọn Tour du lịch *</label>
                 <Select 
                   placeholder="-- Chọn Tour khởi hành --"
-                  options={tours.map(t => {
-                    const maxAllowed = Math.max(0, t.total_seats + (t.overbook_limit || 0) - t.sold_seats - t.hold_seats);
-                    return {
-                      value: t.id,
-                      label: `[${t.code}] ${t.name} (Còn ${t.available_seats} chỗ${t.overbook_limit ? `, OB tối đa: +${t.overbook_limit}` : ''})`,
-                      isDisabled: maxAllowed <= 0
-                    };
-                  })}
+                  options={tours
+                    .filter(t => t.tour_type !== 'visa')
+                    .map(t => {
+                      const maxAllowed = Math.max(0, t.total_seats + (t.overbook_limit || 0) - t.sold_seats - t.hold_seats);
+                      return {
+                        value: t.id,
+                        label: `[${t.code}] ${t.name} (Còn ${t.available_seats} chỗ${t.overbook_limit ? `, OB tối đa: +${t.overbook_limit}` : ''})`,
+                        isDisabled: maxAllowed <= 0
+                      };
+                    })}
                   value={tours.find(t => t.id === selectedTourId) ? {
                     value: selectedTourId,
                     label: `[${tours.find(t => t.id === selectedTourId)?.code}] ${tours.find(t => t.id === selectedTourId)?.name} (Còn ${tours.find(t => t.id === selectedTourId)?.available_seats} chỗ${tours.find(t => t.id === selectedTourId)?.overbook_limit ? `, OB tối đa: +${tours.find(t => t.id === selectedTourId)?.overbook_limit}` : ''})`
@@ -913,14 +986,71 @@ export default function OrdersManagement() {
 
       {/* Orders list and monitoring */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h3 className="text-lg font-bold text-gray-900">Danh sách Đơn hàng của bạn</h3>
+          <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-250 shrink-0">
+            Tổng cộng: {orders.length} đơn hàng
+          </span>
+        </div>
+
+        {/* Filters and Sorting Controls */}
+        <div className="bg-slate-50 border-b border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Tìm kiếm */}
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </span>
+            <input
+              type="text"
+              placeholder="Tìm mã, khách, tour..."
+              value={orderSearchTerm}
+              onChange={e => setOrderSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Lọc trạng thái */}
+          <select
+            value={orderFilterStatus}
+            onChange={e => setOrderFilterStatus(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="hold">Giữ chỗ (Hold)</option>
+            <option value="sure">Chắc chắn (Sure)</option>
+            <option value="cancelled">Đã hủy</option>
+          </select>
+
+          {/* Lọc thời gian tạo */}
+          <select
+            value={orderFilterTimeRange}
+            onChange={e => setOrderFilterTimeRange(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Mọi thời gian</option>
+            <option value="today">Hôm nay</option>
+            <option value="this_week">Tuần này</option>
+            <option value="this_month">Tháng này</option>
+          </select>
+
+          {/* Sắp xếp */}
+          <select
+            value={orderSortBy}
+            onChange={e => setOrderSortBy(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+          >
+            <option value="newest">Sắp xếp: Mới nhất</option>
+            <option value="oldest">Sắp xếp: Cũ nhất</option>
+            <option value="highest_price">Sắp xếp: Tổng tiền giảm dần</option>
+            <option value="lowest_price">Sắp xếp: Tổng tiền tăng dần</option>
+            <option value="hold_expiry">Sắp xếp: Hạn giữ chỗ gần nhất</option>
+          </select>
         </div>
         
         {orders.length === 0 ? (
           <div className="text-center py-12">
             <ShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm font-medium">Bạn chưa có đơn đặt chỗ nào.</p>
+            <p className="text-gray-500 text-sm font-medium">Bạn chưa có đơn đặt chỗ nào hoặc không tìm thấy kết quả phù hợp với bộ lọc.</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-150">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useCRM } from '@/context/CRMContext';
 import { Passenger } from '@/types';
-import { FileText, Download, Check, X, Clock, HelpCircle, AlertCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { FileText, Download, Check, X, Clock, HelpCircle, AlertCircle, RefreshCw, ExternalLink, Search } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DisqualifiedReasonInputProps {
@@ -67,18 +67,87 @@ export default function VisaProcessing() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [disqualifiedReasonModal, setDisqualifiedReasonModal] = useState<{ name: string; reason: string } | null>(null);
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterTimeRange, setFilterTimeRange] = useState('all');
+  const [sortBy, setSortBy] = useState('newest_created');
+
   // Filter passengers who have uploaded documents (passport or labor contract)
   const visaPassengers = passengers
     .filter(p => {
       const hasDocs = p.passport_url || p.labor_contract_url;
       if (!hasDocs) return false;
-      if (filterStatus === 'all') return true;
-      return p.visa_status === filterStatus;
+      
+      // 1. Status Filter
+      if (filterStatus !== 'all' && p.visa_status !== filterStatus) return false;
+
+      // 2. Search Term Filter
+      if (searchTerm.trim() !== '') {
+        const q = searchTerm.toLowerCase().trim();
+        const order = orders.find(o => o.id === p.order_id);
+        const tour = tours.find(t => t.id === order?.tour_id);
+
+        const nameMatch = p.full_name && p.full_name.toLowerCase().includes(q);
+        const passportMatch = p.passport_number && p.passport_number.toLowerCase().includes(q);
+        const phoneMatch = p.phone && p.phone.includes(q);
+        const orderMatch = p.order_id && p.order_id.toLowerCase().includes(q);
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
+        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(q);
+        const countryMatch = tour && tour.visa_country && tour.visa_country.toLowerCase().includes(q);
+
+        if (!nameMatch && !passportMatch && !phoneMatch && !orderMatch && !tourCodeMatch && !tourNameMatch && !countryMatch) {
+          return false;
+        }
+      }
+
+      // 3. Time Range Filter (based on visa_submitted_at or created_at)
+      if (filterTimeRange !== 'all') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dateToCheckStr = p.visa_submitted_at || p.created_at;
+        if (!dateToCheckStr) return false;
+        
+        const dateToCheck = new Date(dateToCheckStr);
+        dateToCheck.setHours(0, 0, 0, 0);
+
+        if (filterTimeRange === 'today') {
+          return dateToCheck.getTime() === today.getTime();
+        } else if (filterTimeRange === 'this_week') {
+          const firstDay = new Date(today);
+          firstDay.setDate(today.getDate() - today.getDay() + 1);
+          const lastDay = new Date(firstDay);
+          lastDay.setDate(firstDay.getDate() + 6);
+          return dateToCheck >= firstDay && dateToCheck <= lastDay;
+        } else if (filterTimeRange === 'this_month') {
+          return dateToCheck.getMonth() === today.getMonth() && dateToCheck.getFullYear() === today.getFullYear();
+        }
+      }
+
+      return true;
     })
     .sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
+      if (sortBy === 'newest_created') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      } else if (sortBy === 'oldest_created') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateA - dateB;
+      } else if (sortBy === 'newest_submitted') {
+        const dateA = a.visa_submitted_at ? new Date(a.visa_submitted_at).getTime() : 0;
+        const dateB = b.visa_submitted_at ? new Date(b.visa_submitted_at).getTime() : 0;
+        return dateB - dateA;
+      } else if (sortBy === 'deadline_asc') {
+        const orderA = orders.find(o => o.id === a.order_id);
+        const tourA = tours.find(t => t.id === orderA?.tour_id);
+        const orderB = orders.find(o => o.id === b.order_id);
+        const tourB = tours.find(t => t.id === orderB?.tour_id);
+
+        const dlA = tourA?.visa_deadline ? new Date(tourA.visa_deadline).getTime() : Infinity;
+        const dlB = tourB?.visa_deadline ? new Date(tourB.visa_deadline).getTime() : Infinity;
+        return dlA - dlB;
+      }
+      return 0;
     });
 
   const getStatusBadge = (status: Passenger['visa_status'], reason?: string) => {
@@ -132,33 +201,77 @@ export default function VisaProcessing() {
       </div>
 
       {/* Filter and Overview tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm font-semibold text-gray-700">Bộ lọc trạng thái:</span>
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-            {['all', 'pending', 'processing', 'approved', 'rejected', 'disqualified'].map(status => {
-              const label = status === 'all' ? 'Tất cả' :
-                            status === 'pending' ? 'Chờ duyệt' :
-                            status === 'processing' ? 'Đang làm' :
-                            status === 'approved' ? 'Đã có Visa' : 
-                            status === 'disqualified' ? 'Chưa đạt' : 'Từ chối';
-              return (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                    filterStatus === status ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-0">
+        {/* Hàng 1: Bộ lọc trạng thái */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-gray-100 bg-white">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Trạng thái Visa:</span>
+            <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg">
+              {['all', 'pending', 'processing', 'approved', 'rejected', 'disqualified'].map(status => {
+                const label = status === 'all' ? 'Tất cả' :
+                              status === 'pending' ? 'Chờ duyệt' :
+                              status === 'processing' ? 'Đang làm' :
+                              status === 'approved' ? 'Đã có Visa' : 
+                              status === 'disqualified' ? 'Chưa đạt' : 'Từ chối';
+                return (
+                  <button
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                      filterStatus === status ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-500 font-medium shrink-0">
+            Hiển thị <span className="font-semibold text-gray-900">{visaPassengers.length}</span> hồ sơ khách hàng.
           </div>
         </div>
 
-        <div className="text-xs text-gray-500 font-medium">
-          Hiển thị <span className="font-semibold text-gray-900">{visaPassengers.length}</span> hồ sơ khách hàng cần Visa.
+        {/* Hàng 2: Tìm kiếm, lọc thời gian và sắp xếp */}
+        <div className="p-4 bg-slate-50 border-t border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Ô tìm kiếm */}
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </span>
+            <input
+              type="text"
+              placeholder="Tìm tên khách, hộ chiếu, tour..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Lọc thời gian nộp */}
+          <select
+            value={filterTimeRange}
+            onChange={e => setFilterTimeRange(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Mọi thời gian nộp/tạo</option>
+            <option value="today">Nộp/Tạo hôm nay</option>
+            <option value="this_week">Nộp/Tạo tuần này</option>
+            <option value="this_month">Nộp/Tạo tháng này</option>
+          </select>
+
+          {/* Sắp xếp */}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+          >
+            <option value="newest_created">Sắp xếp: Khách mới nhất</option>
+            <option value="oldest_created">Sắp xếp: Khách cũ nhất</option>
+            <option value="newest_submitted">Sắp xếp: Ngày nộp mới nhất</option>
+            <option value="deadline_asc">Sắp xếp: Hạn nộp Visa gần nhất</option>
+          </select>
         </div>
       </div>
 

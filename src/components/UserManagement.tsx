@@ -67,10 +67,23 @@ export default function UserManagement() {
       
       const response = await fetch('/api/admin/users', { headers });
       if (!response.ok) {
-        throw new Error('Không thể tải danh sách người dùng từ hệ thống.');
+        let errorMsg = 'Không thể tải danh sách người dùng từ hệ thống.';
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errData = await response.json();
+          errorMsg = errData.error || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
-      const data = await response.json();
-      setUsers(data);
+      
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        console.warn('Backend returned non-JSON response for users list');
+        // If the server is restarting, we might get HTML. We'll just wait.
+      }
     } catch (err: any) {
       console.error('Error fetching users:', err);
       setError(err.message || 'Đã xảy ra lỗi khi tải danh sách người dùng.');
@@ -154,8 +167,13 @@ export default function UserManagement() {
       });
 
       if (!response.ok) {
-        const errJson = await response.json();
-        throw new Error(errJson.error || 'Gặp lỗi trong quá trình xử lý yêu cầu.');
+        let errorMsg = 'Gặp lỗi trong quá trình xử lý yêu cầu.';
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errJson = await response.json();
+          errorMsg = errJson.error || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
       setActionSuccess(editingUser ? 'Cập nhật thông tin tài khoản thành công!' : 'Thêm tài khoản người dùng mới thành công!');
@@ -185,8 +203,13 @@ export default function UserManagement() {
       });
 
       if (!response.ok) {
-        const errJson = await response.json();
-        throw new Error(errJson.error || 'Lỗi khi xóa người dùng.');
+        let errorMsg = 'Lỗi khi xóa người dùng.';
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errJson = await response.json();
+          errorMsg = errJson.error || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
       setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));

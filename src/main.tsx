@@ -8,9 +8,14 @@ async function bootstrap() {
   try {
     const res = await fetch('/api/config');
     if (res.ok) {
-      const data = await res.json();
-      if (data.supabaseUrl && data.supabaseAnonKey) {
-        updateSupabaseClient(data.supabaseUrl, data.supabaseAnonKey);
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.supabaseUrl && data.supabaseAnonKey) {
+          updateSupabaseClient(data.supabaseUrl, data.supabaseAnonKey);
+        }
+      } else {
+        console.warn('Backend trả về cấu hình không phải định dạng JSON (có thể do server đang khởi động).');
       }
     }
   } catch (err) {

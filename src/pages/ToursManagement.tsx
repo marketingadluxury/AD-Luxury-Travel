@@ -395,14 +395,10 @@ export default function ToursManagement() {
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
 
   const toggleGroup = (groupName: string) => {
-    setExpandedGroups(prev => {
-      const isCurrentlyExpanded = prev[groupName];
-      const newExpanded: { [key: string]: boolean } = {};
-      if (!isCurrentlyExpanded) {
-        newExpanded[groupName] = true;
-      }
-      return newExpanded;
-    });
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
   };
 
   // Group tours by name for easier bulk management
@@ -513,6 +509,9 @@ export default function ToursManagement() {
       const newTourData = {
         code: generatedCode,
         name: bulkBaseTour.name,
+        destination: bulkBaseTour.destination || 'Chưa xác định',
+        start_date: date.toISOString().substring(0, 10),
+        end_date: generatedReturnTime.toISOString().substring(0, 10),
         duration: bulkBaseTour.duration,
         departure_time: date.toISOString(),
         return_time: generatedReturnTime.toISOString(),
@@ -579,6 +578,7 @@ export default function ToursManagement() {
     setIsCodeDuplicate(isDuplicate);
   }, [code, tours, editingTour]);
   const [name, setName] = useState('');
+  const [destination, setDestination] = useState('');
   const [duration, setDuration] = useState('5 ngày 4 đêm');
   const [departureTime, setDepartureTime] = useState('');
   const [returnTime, setReturnTime] = useState('');
@@ -625,10 +625,10 @@ export default function ToursManagement() {
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
       formData.append('uploadType', 'tour');
       formData.append('tourCode', code.trim());
       formData.append('category', category || 'Chung');
+      formData.append('file', file);
 
       const res = await fetch('/api/upload', {
         method: 'POST',
@@ -636,15 +636,27 @@ export default function ToursManagement() {
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || 'Không thể tải file lên hệ thống');
+        let errorMsg = 'Không thể tải file lên hệ thống';
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errJson = await res.json();
+          errorMsg = errJson.error || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
-      const data = await res.json();
-      if (data.success && data.url) {
-        setItineraryPdfUrl(data.url);
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success && data.url) {
+          setItineraryPdfUrl(data.url);
+        } else {
+          throw new Error(data.error || 'Lỗi từ máy chủ khi lưu file');
+        }
       } else {
-        throw new Error(data.error || 'Lỗi từ máy chủ khi lưu file');
+        const text = await res.text();
+        console.error('Phản hồi không phải JSON từ máy chủ:', text.substring(0, 200));
+        throw new Error('Định dạng phản hồi không hợp lệ từ máy chủ (có thể là trang HTML lỗi)');
       }
     } catch (err: any) {
       console.error(err);
@@ -711,6 +723,7 @@ export default function ToursManagement() {
     setEditingTour(tour);
     setCode(tour.code);
     setName(tour.name);
+    setDestination(tour.destination || '');
     setDuration(tour.duration);
     
     // Format dates to YYYY-MM-DDTHH:MM for inputs
@@ -736,6 +749,7 @@ export default function ToursManagement() {
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
     setCommission(tour.commission);
+    setPriceVisaTour(tour.price_visa_tour ?? '');
     setPriceAdult(tour.price_adult ?? '');
     setPriceChild(tour.price_child ?? '');
     setPriceInfant(tour.price_infant ?? '');
@@ -795,6 +809,7 @@ export default function ToursManagement() {
   const handleCloneTour = (tour: Tour) => {
     setCode(`${tour.code}-CLONE`);
     setName(`[Sao chép] ${tour.name}`);
+    setDestination(tour.destination || '');
     setDuration(tour.duration);
     setDepartureTime('');
     setReturnTime('');
@@ -802,6 +817,7 @@ export default function ToursManagement() {
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
     setCommission(tour.commission);
+    setPriceVisaTour(tour.price_visa_tour ?? '');
     setPriceAdult(tour.price_adult ?? '');
     setPriceChild(tour.price_child ?? '');
     setPriceInfant(tour.price_infant ?? '');
@@ -857,6 +873,7 @@ export default function ToursManagement() {
     const baseCode = tour.code.replace(/-CLONE/g, '').replace(/-\d{6}$/g, '');
     setCode(baseCode);
     setName(tour.name);
+    setDestination(tour.destination || '');
     setDuration(tour.duration);
     setDepartureTime('');
     setReturnTime('');
@@ -864,6 +881,7 @@ export default function ToursManagement() {
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
     setCommission(tour.commission);
+    setPriceVisaTour(tour.price_visa_tour ?? '');
     setPriceAdult(tour.price_adult ?? '');
     setPriceChild(tour.price_child ?? '');
     setPriceInfant(tour.price_infant ?? '');
@@ -917,6 +935,7 @@ export default function ToursManagement() {
   const resetForm = () => {
     setCode('');
     setName('');
+    setDestination('');
     setDuration('5 ngày 4 đêm');
     setDepartureTime('');
     setReturnTime('');
@@ -1000,6 +1019,9 @@ export default function ToursManagement() {
     const tourData = {
       code,
       name,
+      destination: destination || category || 'Chưa xác định',
+      start_date: (tourType !== 'visa' && departureTime) ? departureTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
+      end_date: (tourType !== 'visa' && returnTime) ? returnTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
       duration,
       departure_time: (tourType !== 'visa' && departureTime) ? new Date(departureTime).toISOString() : null,
       return_time: (tourType !== 'visa' && returnTime) ? new Date(returnTime).toISOString() : null,
@@ -1035,7 +1057,7 @@ export default function ToursManagement() {
       organization_name: organizationName || undefined,
       group_leader_contact: groupLeaderContact || undefined,
       custom_requirements: customRequirements || undefined,
-      visa_country: visaCountry || undefined,
+      visa_country: visaCountry || (tourType === 'visa' ? destination : undefined),
       visa_service_type: visaServiceType || undefined,
       visa_speed: visaSpeed || undefined,
     };
@@ -1352,7 +1374,7 @@ export default function ToursManagement() {
                       />
                       {isCodeDuplicate && <p className="text-red-500 text-xs mt-1 font-semibold">{tourType === 'visa' ? 'Mã visa này đã tồn tại!' : 'Mã tour này đã tồn tại!'}</p>}
                     </div>
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1">{tourType === 'visa' ? 'Tên visa *' : 'Tên tour *'}</label>
                       <input 
                         type="text" 
@@ -1361,6 +1383,17 @@ export default function ToursManagement() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={name}
                         onChange={e => setName(e.target.value)}
+                      />
+                    </div>
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Điểm đến / Quốc gia *</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Ví dụ: Thái Lan, Châu Âu..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={destination}
+                        onChange={e => setDestination(e.target.value)}
                       />
                     </div>
                     <div>
@@ -1998,7 +2031,7 @@ export default function ToursManagement() {
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
               <div>
                 <span className="text-sm font-semibold text-gray-500">Tổng số Tour hoạt động</span>
-                <div className="text-3xl font-extrabold text-gray-900 mt-1">{tours.length}</div>
+                <div className="text-3xl font-extrabold text-gray-900 mt-1">{tours.filter(t => t.tour_type !== 'visa').length}</div>
               </div>
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                 <FolderOpen className="w-6 h-6 text-blue-600" />
@@ -2009,7 +2042,7 @@ export default function ToursManagement() {
               <div>
                 <span className="text-sm font-semibold text-gray-500">Chỗ đã bán (Sure)</span>
                 <div className="text-3xl font-extrabold text-emerald-600 mt-1">
-                  {tours.reduce((sum, t) => sum + t.sold_seats, 0)} chỗ
+                  {tours.filter(t => t.tour_type !== 'visa').reduce((sum, t) => sum + t.sold_seats, 0)} chỗ
                 </div>
               </div>
               <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
@@ -2021,7 +2054,7 @@ export default function ToursManagement() {
               <div>
                 <span className="text-sm font-semibold text-gray-500">Chỗ đang giữ tạm thời</span>
                 <div className="text-3xl font-extrabold text-amber-600 mt-1">
-                  {tours.reduce((sum, t) => sum + t.hold_seats, 0)} chỗ
+                  {tours.filter(t => t.tour_type !== 'visa').reduce((sum, t) => sum + t.hold_seats, 0)} chỗ
                 </div>
               </div>
               <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
@@ -2111,7 +2144,7 @@ export default function ToursManagement() {
                             <div className="text-xs text-gray-500 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
                               <span>Thời lượng: <strong className="text-gray-700 font-bold">{firstTour.duration}</strong></span>
                               <span className="text-gray-300">|</span>
-                              <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} đợt khởi hành</strong></span>
+                              <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} {firstTour.tour_type === 'visa' ? 'phiên bản' : 'đợt khởi hành'}</strong></span>
                               {firstTour.tour_type !== 'visa' && (
                                 <>
                                   <span className="text-gray-300">|</span>
@@ -2123,24 +2156,28 @@ export default function ToursManagement() {
 
                           <div className="flex items-center gap-2.5 self-end md:self-auto" onClick={e => e.stopPropagation()}>
                             {/* Quick Add Departure button */}
-                            <button
-                              type="button"
-                              onClick={() => handleAddDepartureQuick(firstTour)}
-                              className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
-                            >
-                              <Plus className="w-3.5 h-3.5 mr-1.5" />
-                              Thêm ngày đi mới
-                            </button>
+                            {firstTour.tour_type !== 'visa' && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddDepartureQuick(firstTour)}
+                                className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
+                              >
+                                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                Thêm ngày đi mới
+                              </button>
+                            )}
 
                             {/* Bulk Create Series button */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenBulkModal(firstTour)}
-                              className="inline-flex items-center px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
-                            >
-                              <Grid className="w-3.5 h-3.5 mr-1.5" />
-                              Tạo hàng loạt (Series)
-                            </button>
+                            {firstTour.tour_type !== 'visa' && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenBulkModal(firstTour)}
+                                className="inline-flex items-center px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
+                              >
+                                <Grid className="w-3.5 h-3.5 mr-1.5" />
+                                Tạo hàng loạt (Series)
+                              </button>
+                            )}
 
                             {/* Collapse/Expand indicator */}
                             <button
@@ -2279,7 +2316,7 @@ export default function ToursManagement() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
-                    {tours.map(t => (
+                    {tours.filter(t => t.tour_type !== 'visa').map(t => (
                       <tr key={t.id} className="hover:bg-slate-50/40 transition-colors">
                         <td className="px-6 py-4">
                           <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md inline-block">
