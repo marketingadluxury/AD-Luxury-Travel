@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 import { useCRM } from '@/context/CRMContext';
 import { Passenger } from '@/types';
@@ -186,7 +187,7 @@ export default function VisaProcessing() {
     if (fileName.startsWith('http://') || fileName.startsWith('https://')) {
       window.open(fileName, '_blank');
     } else {
-      alert(`Đang tải xuống tài liệu giả lập: ${fileName}`);
+      toast(`Đang tải xuống tài liệu giả lập: ${fileName}`);
     }
   };
 

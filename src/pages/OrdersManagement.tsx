@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
@@ -250,7 +251,7 @@ export default function OrdersManagement() {
         if (prev <= 1) {
           clearInterval(interval);
           setShowCreateForm(false);
-          alert('Thời hạn nhập thông tin giữ chỗ (5 phút) đã hết! Form đặt chỗ đã tự động đóng để nhường tài nguyên hệ thống.');
+          toast('Thời hạn nhập thông tin giữ chỗ (5 phút) đã hết! Form đặt chỗ đã tự động đóng để nhường tài nguyên hệ thống.');
           return 0;
         }
         return prev - 1;
@@ -283,7 +284,7 @@ export default function OrdersManagement() {
       setAdultCount(newAdult);
       setChildCount(newChild);
 
-      alert(`Tour mới chọn chỉ cho phép tối đa ${maxAllowed} chỗ (bao gồm cả overbooking được phê duyệt)! Số lượng khách đã được điều chỉnh về mức tối đa: ${newAdult} người lớn, ${newChild} trẻ em.`);
+      toast(`Tour mới chọn chỉ cho phép tối đa ${maxAllowed} chỗ (bao gồm cả overbooking được phê duyệt)! Số lượng khách đã được điều chỉnh về mức tối đa: ${newAdult} người lớn, ${newChild} trẻ em.`);
     }
   };
 
@@ -294,7 +295,7 @@ export default function OrdersManagement() {
     if (potentialTotal > maxAllowed) {
       const allowedAdult = Math.max(1, maxAllowed - childCount);
       setAdultCount(allowedAdult);
-      alert(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedAdult} người lớn (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
+      toast.error(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedAdult} người lớn (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
     } else {
       setAdultCount(Math.max(1, val));
     }
@@ -307,7 +308,7 @@ export default function OrdersManagement() {
     if (potentialTotal > maxAllowed) {
       const allowedChild = Math.max(0, maxAllowed - adultCount);
       setChildCount(allowedChild);
-      alert(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedChild} trẻ em (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
+      toast.error(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedChild} trẻ em (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
     } else {
       setChildCount(Math.max(0, val));
     }
@@ -325,12 +326,12 @@ export default function OrdersManagement() {
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTourId) {
-      alert('Vui lòng chọn Tour khởi hành!');
+      toast.error('Vui lòng chọn Tour khởi hành!');
       return;
     }
 
     if (orderStatus === 'sure' && (!bookerName.trim() || !bookerPhone.trim())) {
-      alert('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách trưởng nhóm khi Đặt chắc chắn!');
+      toast.error('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách trưởng nhóm khi Đặt chắc chắn!');
       return;
     }
 

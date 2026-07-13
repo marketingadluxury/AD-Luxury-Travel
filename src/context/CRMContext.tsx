@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Tour, Order, Passenger, Role, User, TourStatus, MembershipSettings } from '../types';
 import { supabase } from '../lib/supabase';
@@ -1016,7 +1017,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     const trimmed = categoryName.trim();
     if (!trimmed) return;
     if (categories.includes(trimmed)) {
-      alert('Danh mục này đã tồn tại!');
+      toast.error('Danh mục này đã tồn tại!');
       return;
     }
 
@@ -1041,13 +1042,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           console.error('Lỗi Supabase khi thêm danh mục:', error);
           
           if (error.code === '42P01') {
-            alert(`Lỗi: Bảng 'tour_categories' không tồn tại trên Supabase. Vui lòng báo quản trị viên kiểm tra lại Database!`);
+            toast.error(`Lỗi: Bảng 'tour_categories' không tồn tại trên Supabase. Vui lòng báo quản trị viên kiểm tra lại Database!`);
           } else if (error.code === '23505' || error.message?.toLowerCase().includes('unique') || error.message?.toLowerCase().includes('duplicate')) {
             console.log(`Danh mục "${trimmed}" đã có sẵn trên máy chủ.`);
           } else if (error.code === '42703') {
-            alert(`Lỗi cấu trúc Database: Bảng 'tour_categories' thiếu cột hoặc sai tên cột. Vui lòng kiểm tra lại schema.`);
+            toast.error(`Lỗi cấu trúc Database: Bảng 'tour_categories' thiếu cột hoặc sai tên cột. Vui lòng kiểm tra lại schema.`);
           } else {
-            alert(`Lưu ý: Không thể lưu danh mục "${trimmed}" lên máy chủ: ${error.message}. Danh mục đã được lưu tạm ở trình duyệt.`);
+            toast.error(`Lưu ý: Không thể lưu danh mục "${trimmed}" lên máy chủ: ${error.message}. Danh mục đã được lưu tạm ở trình duyệt.`);
           }
         } else {
           console.log(`Đã lưu danh mục "${trimmed}" lên Supabase thành công.`);
@@ -1071,17 +1072,17 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         const { error } = await supabase.from('tour_categories').delete().eq('name', categoryName);
         if (error) {
           console.error('Lỗi Supabase khi xoá danh mục:', error);
-          alert(`Lưu ý: Không thể xoá danh mục trên máy chủ: ${error.message}. Danh mục đã được xoá tạm ở trình duyệt của bạn.`);
+          toast.error(`Lưu ý: Không thể xoá danh mục trên máy chủ: ${error.message}. Danh mục đã được xoá tạm ở trình duyệt của bạn.`);
           // Không rollback để tránh lỗi DB chặn UI làm phiền người dùng
         } else {
-          alert(`Đã xoá danh mục "${categoryName}" thành công!`);
+          toast.success(`Đã xoá danh mục "${categoryName}" thành công!`);
         }
       } catch (err: any) {
         console.error('Lỗi hệ thống khi xoá danh mục:', err);
-        alert(`Lưu ý: Gặp lỗi hệ thống khi xoá danh mục trên máy chủ. Danh mục đã được xoá tạm ở trình duyệt.`);
+        toast.error(`Lưu ý: Gặp lỗi hệ thống khi xoá danh mục trên máy chủ. Danh mục đã được xoá tạm ở trình duyệt.`);
       }
     } else {
-      alert(`Đã xoá danh mục "${categoryName}" (Chế độ offline)!`);
+      toast.success(`Đã xoá danh mục "${categoryName}" (Chế độ offline)!`);
     }
   };
 
@@ -1090,7 +1091,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     if (!trimmedNew || trimmedNew === oldCategory) return;
 
     if (categories.includes(trimmedNew)) {
-      alert('Tên danh mục mới đã tồn tại!');
+      toast.error('Tên danh mục mới đã tồn tại!');
       return;
     }
 
@@ -1109,7 +1110,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         const { error: catError } = await supabase.from('tour_categories').update({ name: trimmedNew }).eq('name', oldCategory);
         if (catError) {
           console.error('Lỗi Supabase khi cập nhật danh mục:', catError);
-          alert(`Lưu ý: Không thể cập nhật danh mục trên máy chủ: ${catError.message}. Thay đổi đã được cập nhật tạm thời ở trình duyệt.`);
+          toast.error(`Lưu ý: Không thể cập nhật danh mục trên máy chủ: ${catError.message}. Thay đổi đã được cập nhật tạm thời ở trình duyệt.`);
           // Không rollback để tránh gián đoạn trải nghiệm
           return;
         }
@@ -1117,16 +1118,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         const { error: tourError } = await supabase.from('tours').update({ category: trimmedNew }).eq('category', oldCategory);
         if (tourError) {
           console.error('Lỗi Supabase khi cập nhật danh mục cho các tour liên quan:', tourError);
-          alert(`Cập nhật danh mục thành công nhưng gặp lỗi khi chuyển đổi các Tour liên quan trên máy chủ.`);
+          toast.success(`Cập nhật danh mục thành công nhưng gặp lỗi khi chuyển đổi các Tour liên quan trên máy chủ.`);
         } else {
-          alert(`Đã cập nhật danh mục thành "${trimmedNew}" thành công!`);
+          toast.success(`Đã cập nhật danh mục thành "${trimmedNew}" thành công!`);
         }
       } catch (err: any) {
         console.error('Lỗi hệ thống khi cập nhật danh mục:', err);
-        alert(`Lưu ý: Gặp lỗi hệ thống khi cập nhật danh mục trên máy chủ. Thay đổi đã được áp dụng tạm thời ở trình duyệt.`);
+        toast.error(`Lưu ý: Gặp lỗi hệ thống khi cập nhật danh mục trên máy chủ. Thay đổi đã được áp dụng tạm thời ở trình duyệt.`);
       }
     } else {
-      alert(`Đã cập nhật danh mục thành "${trimmedNew}" (Chế độ offline)!`);
+      toast.success(`Đã cập nhật danh mục thành "${trimmedNew}" (Chế độ offline)!`);
     }
   };
 
@@ -1267,13 +1268,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           if (lastError.hint) msg += `\nGợi ý: ${lastError.hint}`;
 
           if (lastError.code === '42703' || lastError.code === 'PGRST204' || (msg && msg.includes('Could not find the'))) {
-            alert(`Lỗi cấu trúc Database: Bảng 'tours' đang thiếu cột. \n\nVui lòng copy và chạy các câu lệnh ALTER TABLE ở cuối file supabase-schema.sql trong SQL Editor của Supabase để cập nhật database.\n\n${msg}`);
+            toast.error(`Lỗi cấu trúc Database: Bảng 'tours' đang thiếu cột. \n\nVui lòng copy và chạy các câu lệnh ALTER TABLE ở cuối file supabase-schema.sql trong SQL Editor của Supabase để cập nhật database.\n\n${msg}`);
           } else if (lastError.code === '23505') {
-            alert(`Lỗi trùng lặp: Mã tour/visa '${tourData.code}' đã tồn tại!\n\n${msg}`);
+            toast.error(`Lỗi trùng lặp: Mã tour/visa '${tourData.code}' đã tồn tại!\n\n${msg}`);
           } else if (lastError.code === '23502') {
-             alert(`Lỗi dữ liệu: Có trường bắt buộc đang bị để trống.\n\n${msg}`);
+             toast.error(`Lỗi dữ liệu: Có trường bắt buộc đang bị để trống.\n\n${msg}`);
           } else {
-            alert(msg);
+            toast.error(msg);
           }
           // Rollback local state nếu lỗi nghiêm trọng
           setTours(prev => prev.filter(t => t.id !== id));
@@ -1410,9 +1411,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           console.error('Lỗi khi cập nhật Tour trên Supabase:', lastError);
           const errorMsg = lastError.message || (typeof lastError === 'object' ? JSON.stringify(lastError) : String(lastError));
           if (lastError.code === '42703' || lastError.code === 'PGRST204' || (errorMsg && errorMsg.includes('Could not find the'))) {
-            alert(`Lỗi cấu trúc Database: Bảng 'tours' đang thiếu cột. \n\nVui lòng copy và chạy các câu lệnh ALTER TABLE ở cuối file supabase-schema.sql trong SQL Editor của Supabase để cập nhật database.\n\nChi tiết: ${errorMsg}`);
+            toast.error(`Lỗi cấu trúc Database: Bảng 'tours' đang thiếu cột. \n\nVui lòng copy và chạy các câu lệnh ALTER TABLE ở cuối file supabase-schema.sql trong SQL Editor của Supabase để cập nhật database.\n\nChi tiết: ${errorMsg}`);
           } else {
-            alert(`Lỗi cập nhật CSDL: ${errorMsg}`);
+            toast.error(`Lỗi cập nhật CSDL: ${errorMsg}`);
           }
           throw new Error(`Lỗi khi cập nhật Tour trên Supabase: ${errorMsg}`);
         }
@@ -1471,7 +1472,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     const allowedMaxSeats = tour.total_seats + (tour.overbook_limit || 0) - tour.sold_seats - tour.hold_seats;
 
     if (allowedMaxSeats < seatsToLock) {
-      alert(`Không đủ chỗ trống để đặt tour! (Tối đa khả dụng bao gồm overbooking: ${allowedMaxSeats})`);
+      toast.error(`Không đủ chỗ trống để đặt tour! (Tối đa khả dụng bao gồm overbooking: ${allowedMaxSeats})`);
       return;
     }
 
@@ -1697,7 +1698,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         }
       } catch (err: any) {
         console.error('Lỗi khi lưu đơn hàng lên Supabase:', err);
-        alert(`Lỗi lưu cơ sở dữ liệu: ${err.message || JSON.stringify(err)}\n(Đơn hàng vừa tạo sẽ bị huỷ để đảm bảo đồng bộ)`);
+        toast.error(`Lỗi lưu cơ sở dữ liệu: ${err.message || JSON.stringify(err)}\n(Đơn hàng vừa tạo sẽ bị huỷ để đảm bảo đồng bộ)`);
         
         // Rollback local state
         setOrders(prev => prev.filter(o => o.id !== orderId));

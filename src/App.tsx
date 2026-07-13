@@ -1,3 +1,4 @@
+import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import DepartureCalendar from './pages/DepartureCalendar';
@@ -49,10 +50,12 @@ function AppContent() {
   );
 }
 
+
 export default function App() {
   return (
     <AuthProvider>
       <AppContent />
+      <Toaster position="top-right" />
     </AuthProvider>
   );
 }

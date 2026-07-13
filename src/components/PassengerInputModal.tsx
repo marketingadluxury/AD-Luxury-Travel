@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { X, Upload, CheckCircle2, FileText, Trash2 } from 'lucide-react';
 import { Passenger } from '../types';
@@ -211,7 +212,7 @@ export default function PassengerInputModal({
   const handleConfirm = async () => {
     // Validate that at least the first passenger (payer/booker) has a name
     if (passengers.length > 0 && !passengers[0].full_name.trim()) {
-      alert('Vui lòng nhập Họ tên cho hành khách đầu tiên (Người trưởng nhóm/đại diện)!');
+      toast.error('Vui lòng nhập Họ tên cho hành khách đầu tiên (Người trưởng nhóm/đại diện)!');
       return;
     }
 
@@ -272,7 +273,7 @@ export default function PassengerInputModal({
       onConfirm(passengersWithFiles);
     } catch (err) {
       console.error(err);
-      alert('Đã xảy ra lỗi trong quá trình xử lý hồ sơ hành khách.');
+      toast.error('Đã xảy ra lỗi trong quá trình xử lý hồ sơ hành khách.');
     } finally {
       setIsUploading(false);
     }

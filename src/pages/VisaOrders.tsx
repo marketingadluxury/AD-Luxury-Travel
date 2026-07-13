@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
@@ -137,12 +138,12 @@ export default function VisaOrders() {
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTourId) {
-      alert('Vui lòng chọn Dịch vụ Visa!');
+      toast.error('Vui lòng chọn Dịch vụ Visa!');
       return;
     }
 
     if (!bookerName.trim() || !bookerPhone.trim()) {
-      alert('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách đại diện!');
+      toast.error('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách đại diện!');
       return;
     }
 
@@ -195,7 +196,7 @@ export default function VisaOrders() {
     setAdultCount(1);
     setSpecialRequests('');
     setShowCreateForm(false);
-    alert('Đặt dịch vụ visa thành công!');
+    toast.success('Đặt dịch vụ visa thành công!');
   };
 
   const filteredOrders = orders.filter(o => {

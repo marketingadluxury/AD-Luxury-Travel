@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { X, Bed, DollarSign, FileText, Percent, Info, ShieldAlert, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Order } from '../types';
@@ -94,11 +95,11 @@ export default function EditOrderModal({
         special_requests: specialRequests.trim(),
         total_price: Number(totalPrice),
       });
-      alert('Cập nhật thông tin đơn hàng thành công!');
+      toast.success('Cập nhật thông tin đơn hàng thành công!');
       onClose();
     } catch (err) {
       console.error(err);
-      alert('Đã xảy ra lỗi khi cập nhật đơn hàng.');
+      toast.error('Đã xảy ra lỗi khi cập nhật đơn hàng.');
     } finally {
       setIsSaving(false);
     }

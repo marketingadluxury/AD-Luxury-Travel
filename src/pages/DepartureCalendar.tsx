@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
@@ -62,7 +63,7 @@ const TourCard: React.FC<{
                 </a>
               ) : (
                 <button
-                  onClick={() => alert("File PDF lịch trình chi tiết đang được cập nhật bởi Điều hành. Vui lòng kiểm tra lại sau!")}
+                  onClick={() => toast.error("File PDF lịch trình chi tiết đang được cập nhật bởi Điều hành. Vui lòng kiểm tra lại sau!")}
                   className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-gray-400 bg-gray-50 border border-gray-200 rounded-md cursor-not-allowed"
                 >
                   <FileText className="w-3.5 h-3.5 mr-1 shrink-0" />
@@ -471,7 +472,7 @@ export default function DepartureCalendar() {
     if (potentialTotal > maxAllowed) {
       const allowedAdult = Math.max(1, maxAllowed - childCount);
       setAdultCount(allowedAdult);
-      alert(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedAdult} người lớn (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
+      toast.error(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedAdult} người lớn (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
     } else {
       setAdultCount(Math.max(1, val));
     }
@@ -484,7 +485,7 @@ export default function DepartureCalendar() {
     if (potentialTotal > maxAllowed) {
       const allowedChild = Math.max(0, maxAllowed - adultCount);
       setChildCount(allowedChild);
-      alert(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedChild} trẻ em (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
+      toast.error(`Số lượng khách vượt quá số chỗ trống và overbooking cho phép! Hệ thống tự động giới hạn tối đa ${allowedChild} trẻ em (trong tổng số ${maxAllowed} chỗ khả dụng còn lại).`);
     } else {
       setChildCount(Math.max(0, val));
     }
@@ -499,7 +500,7 @@ export default function DepartureCalendar() {
         if (prev <= 1) {
           clearInterval(interval);
           setSelectedTourForBooking(null);
-          alert('Hết giờ! Phiếu giữ chỗ đã tự động đóng để nhường tài nguyên hệ thống.');
+          toast.error('Hết giờ! Phiếu giữ chỗ đã tự động đóng để nhường tài nguyên hệ thống.');
           return 0;
         }
         return prev - 1;
@@ -533,7 +534,7 @@ export default function DepartureCalendar() {
     if (!selectedTourForBooking) return;
 
     if (orderStatus === 'sure' && (!bookerName.trim() || !bookerPhone.trim())) {
-      alert('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách trưởng nhóm khi Đặt chắc chắn!');
+      toast.error('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách trưởng nhóm khi Đặt chắc chắn!');
       return;
     }
 
@@ -610,7 +611,7 @@ export default function DepartureCalendar() {
     setSpecialRequests('');
     setVatOption('Không xuất VAT');
     setSelectedTourForBooking(null);
-    alert('Đặt giữ chỗ tour thành công!');
+    toast.success('Đặt giữ chỗ tour thành công!');
   };
 
   // Filter application

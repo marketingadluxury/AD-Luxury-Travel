@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
@@ -495,7 +496,7 @@ export default function VisaServices() {
 
   const handleAddBulkDate = () => {
     if (!bulkCustomDate || !bulkBaseTour) {
-      alert('Vui lòng chọn ngày khởi hành trước!');
+      toast.error('Vui lòng chọn ngày khởi hành trước!');
       return;
     }
     const baseDep = new Date(bulkBaseTour.departure_time);
@@ -505,7 +506,7 @@ export default function VisaServices() {
 
     const isDuplicate = bulkDatesList.some(item => item.date.getTime() === dateToAdd.getTime());
     if (isDuplicate) {
-      alert('Ngày khởi hành này đã tồn tại trong danh sách!');
+      toast.error('Ngày khởi hành này đã tồn tại trong danh sách!');
       return;
     }
     setBulkDatesList(prev => [...prev, { date: dateToAdd, selected: true }].sort((a, b) => a.date.getTime() - b.date.getTime()));
@@ -516,7 +517,7 @@ export default function VisaServices() {
     if (!bulkBaseTour) return;
     const selectedDates = bulkDatesList.filter(d => d.selected);
     if (selectedDates.length === 0) {
-      alert('Vui lòng chọn hoặc thêm ít nhất một ngày khởi hành hợp lệ!');
+      toast.error('Vui lòng chọn hoặc thêm ít nhất một ngày khởi hành hợp lệ!');
       return;
     }
 
@@ -588,7 +589,7 @@ export default function VisaServices() {
       addTour(newTourData);
     });
 
-    alert(`Đã khởi tạo thành công chuỗi gồm ${selectedDates.length} ngày khởi hành cho Tour series này!`);
+    toast.success(`Đã khởi tạo thành công chuỗi gồm ${selectedDates.length} ngày khởi hành cho Tour series này!`);
     setShowBulkModal(false);
   };
 
@@ -652,7 +653,7 @@ export default function VisaServices() {
     if (!file) return;
 
     if (!code.trim()) {
-      alert('Vui lòng nhập Mã Tour trước khi tải file lịch trình lên để hệ thống đặt tên file chính xác!');
+      toast.error('Vui lòng nhập Mã Tour trước khi tải file lịch trình lên để hệ thống đặt tên file chính xác!');
       e.target.value = '';
       return;
     }
@@ -1019,15 +1020,15 @@ export default function VisaServices() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isCodeDuplicate) {
-      alert('Mã tour/visa này đã tồn tại, vui lòng chọn mã khác!');
+      toast.error('Mã tour/visa này đã tồn tại, vui lòng chọn mã khác!');
       return;
     }
     if (tourType !== 'visa' && (!code || !name || !departureTime || !returnTime)) {
-      alert('Vui lòng nhập đầy đủ các trường thông tin bắt buộc (Mã tour, Tên tour, Ngày đi, Ngày về)!');
+      toast.error('Vui lòng nhập đầy đủ các trường thông tin bắt buộc (Mã tour, Tên tour, Ngày đi, Ngày về)!');
       return;
     }
     if (tourType === 'visa' && (!code || !name)) {
-      alert('Vui lòng nhập Mã visa và Tên visa!');
+      toast.error('Vui lòng nhập Mã visa và Tên visa!');
       return;
     }
 
@@ -1086,11 +1087,11 @@ export default function VisaServices() {
         ...editingTour,
         ...tourData,
       } as Tour);
-      alert(`Đã cập nhật thông tin tour ${code} thành công!`);
+      toast.success(`Đã cập nhật thông tin tour ${code} thành công!`);
     } else {
       // Logic add
       addTour(tourData);
-      alert(`Đã thêm tour ${code} khởi hành mới thành công!`);
+      toast.success(`Đã thêm tour ${code} khởi hành mới thành công!`);
     }
 
     resetForm();
@@ -1149,7 +1150,7 @@ export default function VisaServices() {
   const handleDeleteTourClick = (tour: Tour) => {
     if (confirm(`Bạn có chắc chắn muốn XÓA vĩnh viễn tour ${tour.code}? Các đơn đặt giữ chỗ liên quan có thể bị ảnh hưởng.`)) {
       deleteTour(tour.id);
-      alert(`Đã xóa tour ${tour.code} ra khỏi cơ sở dữ liệu.`);
+      toast.success(`Đã xóa tour ${tour.code} ra khỏi cơ sở dữ liệu.`);
     }
   };
 
