@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import { JWT, OAuth2Client } from 'google-auth-library';
 import multer from 'multer';
-import { createServer as createViteServer } from 'vite';
+// Vite will be imported dynamically in development mode only
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -967,6 +967,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Serve frontend assets & mount Vite dev server middleware
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
