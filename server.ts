@@ -980,10 +980,16 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] Khởi động thành công tại http://localhost:${PORT}`);
-    console.log(`[Server] Đang sử dụng Supabase Storage`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Server] Khởi động thành công tại http://localhost:${PORT}`);
+      console.log(`[Server] Đang sử dụng Supabase Storage`);
+    });
+  }
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
