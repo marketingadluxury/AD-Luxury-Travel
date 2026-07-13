@@ -18,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signOut: async () => {},
   updateProfile: async () => {},
+  updatePassword: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -117,8 +119,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setProfile(prev => prev ? { ...prev, ...newProfile } : null);
   };
 
+  const updatePassword = async (password: string) => {
+    const isPlaceholder = (import.meta as any).env.VITE_SUPABASE_URL?.includes('placeholder') || !(import.meta as any).env.VITE_SUPABASE_URL;
+    if (isPlaceholder) {
+      console.log('Mật khẩu mới (Offline Mock):', password);
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, session, loading, signOut, updateProfile }}>
+    <AuthContext.Provider value={{ user, profile, session, loading, signOut, updateProfile, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
