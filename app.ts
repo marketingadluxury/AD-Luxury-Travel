@@ -435,7 +435,7 @@ function getPathFromPublicUrl(url: string): string | null {
 // --- API ROUTES ---
 
 // Expose Supabase config dynamically to prevent missing VITE_ prefix issues in the client
-app.get('/api/config', (req, res) => {
+app.get(['/api/config', '/config'], (req, res) => {
   res.json({
     supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
     supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
@@ -443,7 +443,7 @@ app.get('/api/config', (req, res) => {
 });
 
 // Get current storage system status
-app.get('/api/drive-status', (req, res) => {
+app.get(['/api/drive-status', '/drive-status'], (req, res) => {
   const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
   const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
   
@@ -463,7 +463,7 @@ app.get('/api/drive-status', (req, res) => {
 });
 
 // Create Google Drive passenger folder
-app.post('/api/create-folder', async (req, res) => {
+app.post(['/api/create-folder', '/create-folder'], async (req, res) => {
   try {
     const { passportNumber, fullName } = req.body;
     
@@ -494,7 +494,7 @@ app.post('/api/create-folder', async (req, res) => {
 });
 
 // Unified File Upload API (Google Drive with Supabase Storage fallback)
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => {
   console.log('[API] /api/upload - Start processing');
   try {
     if (!req.file) {
@@ -604,7 +604,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 });
 
 // Unified File Deletion API (Google Drive with legacy Supabase Support)
-app.post('/api/delete', async (req, res) => {
+app.post(['/api/delete', '/delete'], async (req, res) => {
   try {
     const { url } = req.body;
     
@@ -703,7 +703,7 @@ let mockUsers = [
 ];
 
 // GET list of users/profiles
-app.get('/api/admin/users', async (req, res) => {
+app.get(['/api/admin/users', '/admin/users'], async (req, res) => {
   try {
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -758,7 +758,7 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // CREATE a new user/profile
-app.post('/api/admin/users', express.json(), async (req, res) => {
+app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) => {
   try {
     const { full_name, phone, company_name, role, email, password } = req.body;
     
@@ -841,7 +841,7 @@ app.post('/api/admin/users', express.json(), async (req, res) => {
 });
 
 // UPDATE user details and role
-app.put('/api/admin/users/:id', express.json(), async (req, res) => {
+app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req, res) => {
   try {
     const { id } = req.params;
     const { full_name, phone, company_name, role, email, password } = req.body;
@@ -905,7 +905,7 @@ app.put('/api/admin/users/:id', express.json(), async (req, res) => {
 });
 
 // DELETE user
-app.delete('/api/admin/users/:id', async (req, res) => {
+app.delete(['/api/admin/users/:id', '/admin/users/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     
