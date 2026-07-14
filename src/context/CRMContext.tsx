@@ -18,9 +18,18 @@ const idMap: { [key: string]: string } = {
 };
 
 const generateSafeUUID = () => {
-  return (typeof crypto !== 'undefined' && crypto.randomUUID) 
-    ? crypto.randomUUID() 
-    : Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9);
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try {
+      return crypto.randomUUID();
+    } catch (e) {
+      // fallback
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 };
 
 function toUuid(id: string): string {
@@ -28,7 +37,9 @@ function toUuid(id: string): string {
   if (idMap[id]) return idMap[id];
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(id)) return id;
-  return generateSafeUUID();
+  const newUuid = generateSafeUUID();
+  idMap[id] = newUuid;
+  return newUuid;
 }
 
 function isSupabaseConfigured(): boolean {
@@ -571,6 +582,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               passport_url: p.passport_url,
               labor_contract_url: p.labor_contract_url,
               visa_status: p.visa_status || 'pending',
+              needs_visa_service: (p.needs_visa_service !== undefined && p.needs_visa_service !== null)
+                ? p.needs_visa_service
+                : (p.visa_status && p.visa_status !== 'not_required'),
               visa_submitted_at: p.visa_submitted_at || storedSubmittedAts[p.id] || undefined,
               visa_disqualified_reason: p.visa_disqualified_reason || storedReasons[p.id] || undefined
             }));
@@ -623,7 +637,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
                   dob: p.dob,
                   passport_url: p.passport_url,
                   labor_contract_url: p.labor_contract_url,
-                  visa_status: p.visa_status
+                  visa_status: p.visa_status,
+                  needs_visa_service: p.needs_visa_service || false
                 });
               } catch (seedErr) {
                 console.warn('Lưu ý khi chèn dữ liệu mẫu Passengers lên Supabase:', seedErr);
@@ -1441,7 +1456,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     status: 'hold' | 'sure';
     total_price?: number;
     adult_price: number;
-    passengers?: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[];
+    passengers?: (Omit<Passenger, 'id' | 'order_id' | 'visa_status'> & { needs_visa_service?: boolean })[];
     booker_name?: string;
     booker_phone?: string;
     created_by?: string;
@@ -1454,18 +1469,19 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     vat_option?: string;
     special_requests?: string;
   }) => {
+    const tour = tours.find(t => t.id === orderData.tour_id);
+    if (!tour) return;
+
     const adultPrice = Number(orderData.adult_price || 0);
     const childPrice = Math.round(adultPrice * 0.9);
     const infantPrice = Math.round(adultPrice * 0.3);
     
-    const totalPrice = orderData.total_price || 
+    const totalPrice = orderData.total_price || (
       ((orderData.adult_count || 0) * adultPrice) + 
       ((orderData.child_count || 0) * childPrice) + 
-      ((orderData.infant_count || 0) * infantPrice);
-
-    const orderId = generateSafeUUID();
-    const tour = tours.find(t => t.id === orderData.tour_id);
-    if (!tour) return;
+      ((orderData.infant_count || 0) * infantPrice) +
+      (orderData.passengers?.reduce((sum, p) => sum + (p.needs_visa_service ? (tour?.price_visa_tour || 0) : 0), 0) || 0)
+    );
 
     const seatsToLock = orderData.adult_count !== undefined 
       ? ((orderData.adult_count || 0) + (orderData.child_count || 0)) 
@@ -1533,6 +1549,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
     }
 
+    const orderId = generateSafeUUID();
     const newOrder: Order = {
       id: orderId,
       tour_id: orderData.tour_id,
@@ -1561,7 +1578,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       ...p,
       id: generateSafeUUID(),
       order_id: orderId,
-      visa_status: 'pending',
+      visa_status: p.needs_visa_service ? 'pending' : 'not_required',
+      needs_visa_service: p.needs_visa_service || false,
       visa_submitted_at: (p.passport_url || p.labor_contract_url) ? new Date().toISOString() : undefined
     }));
 
@@ -1660,21 +1678,39 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         if (bookingError) throw bookingError;
 
         for (const p of newPassengers) {
-          const { error: pError } = await supabase.from('passengers').insert({
-            id: p.id,
-            order_id: orderId,
-            is_payer: p.is_payer,
-            full_name: p.full_name,
-            passport_number: p.passport_number,
-            phone: p.phone,
-            dob: p.dob,
-            passport_url: p.passport_url,
-            labor_contract_url: p.labor_contract_url,
-            visa_status: p.visa_status,
-            visa_submitted_at: p.visa_submitted_at,
-            visa_disqualified_reason: p.visa_disqualified_reason
-          });
-          if (pError) throw pError;
+          try {
+            const { error: pError } = await supabase.from('passengers').insert({
+              id: p.id,
+              order_id: orderId,
+              is_payer: p.is_payer,
+              full_name: p.full_name,
+              passport_number: p.passport_number,
+              phone: p.phone,
+              dob: p.dob,
+              passport_url: p.passport_url,
+              labor_contract_url: p.labor_contract_url,
+              visa_status: p.visa_status,
+              needs_visa_service: p.needs_visa_service,
+              visa_submitted_at: p.visa_submitted_at,
+              visa_disqualified_reason: p.visa_disqualified_reason
+            });
+            if (pError) throw pError;
+          } catch (insertErr) {
+            console.warn('Lưu ý: Không thể chèn đầy đủ cột cho passenger. Đang thử chèn fallback:', insertErr);
+            const { error: fallbackInsertErr } = await supabase.from('passengers').insert({
+              id: p.id,
+              order_id: orderId,
+              is_payer: p.is_payer,
+              full_name: p.full_name,
+              passport_number: p.passport_number,
+              phone: p.phone,
+              dob: p.dob,
+              passport_url: p.passport_url,
+              labor_contract_url: p.labor_contract_url,
+              visa_status: p.visa_status
+            });
+            if (fallbackInsertErr) throw fallbackInsertErr;
+          }
         }
 
         const matchingTour = updatedTours.find(t => t.id === orderData.tour_id);
@@ -1734,7 +1770,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
-  const addPassengersToOrder = async (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => {
+  const addPassengersToOrder = async (orderId: string, passengersData: (Omit<Passenger, 'id' | 'order_id' | 'visa_status'> & { needs_visa_service?: boolean })[]) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
@@ -1748,31 +1784,67 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       labor_contract_url: (p as any).labor_contract_url,
       id: generateSafeUUID(),
       order_id: orderId,
-      visa_status: 'pending',
+      visa_status: p.needs_visa_service ? 'pending' : 'not_required',
+      needs_visa_service: p.needs_visa_service || false,
       visa_submitted_at: (p.passport_url || (p as any).labor_contract_url) ? new Date().toISOString() : undefined,
       is_payer: false
     }));
+
+    // Calculate additional visa costs
+    const tour = tours.find(t => t.id === order.tour_id);
+    if (tour && tour.price_visa_tour) {
+      const extraVisaCost = newPassengers.reduce((sum, p) => sum + (p.needs_visa_service ? (tour.price_visa_tour || 0) : 0), 0);
+      if (extraVisaCost > 0) {
+        const newTotal = order.total_price + extraVisaCost;
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, total_price: newTotal } : o));
+        
+        if (isSupabaseConfigured()) {
+          supabase.from('bookings').update({ total_amount: newTotal }).eq('id', toUuid(orderId))
+            .then(({ error }) => {
+              if (error) console.error('Lỗi khi cập nhật tổng tiền đơn hàng sau khi thêm khách:', error);
+            });
+        }
+      }
+    }
 
     setPassengers(prev => [...prev, ...newPassengers]);
 
     if (isSupabaseConfigured()) {
       try {
         for (const p of newPassengers) {
-          const { error: pError } = await supabase.from('passengers').insert({
-            id: p.id,
-            order_id: orderId,
-            is_payer: p.is_payer,
-            full_name: p.full_name,
-            passport_number: p.passport_number,
-            phone: p.phone,
-            dob: p.dob,
-            passport_url: p.passport_url,
-            labor_contract_url: p.labor_contract_url,
-            visa_status: p.visa_status,
-            visa_submitted_at: p.visa_submitted_at,
-            visa_disqualified_reason: p.visa_disqualified_reason
-          });
-          if (pError) throw pError;
+          try {
+            const { error: pError } = await supabase.from('passengers').insert({
+              id: p.id,
+              order_id: toUuid(orderId),
+              is_payer: p.is_payer,
+              full_name: p.full_name,
+              passport_number: p.passport_number,
+              phone: p.phone,
+              dob: p.dob,
+              passport_url: p.passport_url,
+              labor_contract_url: p.labor_contract_url,
+              visa_status: p.visa_status,
+              needs_visa_service: p.needs_visa_service,
+              visa_submitted_at: p.visa_submitted_at,
+              visa_disqualified_reason: p.visa_disqualified_reason
+            });
+            if (pError) throw pError;
+          } catch (insertErr) {
+            console.warn('Lưu ý: Không thể thêm hành khách với đầy đủ cột mới. Đang thử fallback:', insertErr);
+            const { error: fallbackInsertErr } = await supabase.from('passengers').insert({
+              id: p.id,
+              order_id: toUuid(orderId),
+              is_payer: p.is_payer,
+              full_name: p.full_name,
+              passport_number: p.passport_number,
+              phone: p.phone,
+              dob: p.dob,
+              passport_url: p.passport_url,
+              labor_contract_url: p.labor_contract_url,
+              visa_status: p.visa_status
+            });
+            if (fallbackInsertErr) throw fallbackInsertErr;
+          }
         }
         toast.success('Đã thêm hành khách thành công!');
       } catch (err) {
@@ -1836,7 +1908,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', orderId);
+        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', toUuid(orderId));
         
         const matchingTour = updatedTours.find(t => t.id === order.tour_id);
         if (matchingTour) {
@@ -1862,7 +1934,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
-  const confirmOrder = async (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => {
+  const confirmOrder = async (orderId: string, passengersData: (Omit<Passenger, 'id' | 'order_id' | 'visa_status'> & { needs_visa_service?: boolean })[]) => {
     const order = orders.find(o => o.id === orderId);
     if (!order || order.status !== 'hold') return;
 
@@ -1896,10 +1968,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       labor_contract_url: (p as any).labor_contract_url,
       id: generateSafeUUID(),
       order_id: orderId,
-      visa_status: 'pending',
+      visa_status: p.needs_visa_service ? 'pending' : 'not_required',
+      needs_visa_service: p.needs_visa_service || false,
       visa_submitted_at: (p.passport_url || (p as any).labor_contract_url) ? new Date().toISOString() : undefined,
       is_payer: p.is_payer !== undefined ? p.is_payer : (index === 0)
     }));
+
+    // Recalculate total price including visa services
+    let extraVisaCost = 0;
+    if (tour.price_visa_tour) {
+      extraVisaCost = newPassengers.reduce((sum, p) => sum + (p.needs_visa_service ? (tour.price_visa_tour || 0) : 0), 0);
+    }
+    const newTotal = order.total_price + extraVisaCost;
 
     setPassengers(prev => {
       const filtered = prev.filter(p => p.order_id !== orderId);
@@ -1908,32 +1988,50 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     setOrders(prev => prev.map(o => {
       if (o.id === orderId) {
-        return { ...o, status: 'sure', hold_expiry: undefined };
+        return { ...o, status: 'sure', hold_expiry: undefined, total_price: newTotal };
       }
       return o;
     }));
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ status: 'sure', hold_expiry: null }).eq('id', orderId);
-        await supabase.from('passengers').delete().eq('order_id', orderId);
+        await supabase.from('bookings').update({ status: 'sure', hold_expiry: null, total_amount: newTotal }).eq('id', toUuid(orderId));
+        await supabase.from('passengers').delete().eq('order_id', toUuid(orderId));
 
         for (const p of newPassengers) {
-          const { error: pError } = await supabase.from('passengers').insert({
-            id: p.id,
-            order_id: orderId,
-            is_payer: p.is_payer,
-            full_name: p.full_name,
-            passport_number: p.passport_number,
-            phone: p.phone,
-            dob: p.dob,
-            passport_url: p.passport_url,
-            labor_contract_url: p.labor_contract_url,
-            visa_status: p.visa_status,
-            visa_submitted_at: p.visa_submitted_at,
-            visa_disqualified_reason: p.visa_disqualified_reason
-          });
-          if (pError) throw pError;
+          try {
+            const { error: pError } = await supabase.from('passengers').insert({
+              id: p.id,
+              order_id: toUuid(orderId),
+              is_payer: p.is_payer,
+              full_name: p.full_name,
+              passport_number: p.passport_number,
+              phone: p.phone,
+              dob: p.dob,
+              passport_url: p.passport_url,
+              labor_contract_url: p.labor_contract_url,
+              visa_status: p.visa_status,
+              needs_visa_service: p.needs_visa_service,
+              visa_submitted_at: p.visa_submitted_at,
+              visa_disqualified_reason: p.visa_disqualified_reason
+            });
+            if (pError) throw pError;
+          } catch (insertErr) {
+            console.warn('Lưu ý: Không thể xác nhận hành khách với đầy đủ cột mới. Đang thử fallback:', insertErr);
+            const { error: fallbackInsertErr } = await supabase.from('passengers').insert({
+              id: p.id,
+              order_id: toUuid(orderId),
+              is_payer: p.is_payer,
+              full_name: p.full_name,
+              passport_number: p.passport_number,
+              phone: p.phone,
+              dob: p.dob,
+              passport_url: p.passport_url,
+              labor_contract_url: p.labor_contract_url,
+              visa_status: p.visa_status
+            });
+            if (fallbackInsertErr) throw fallbackInsertErr;
+          }
         }
 
         const matchingTour = updatedTours.find(t => t.id === order.tour_id);
@@ -1979,7 +2077,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         await supabase.from('bookings').update({
           extension_status: 'requested',
           extension_hours: hours
-        }).eq('id', orderId);
+        }).eq('id', toUuid(orderId));
 
         await supabase.from('system_notifications').insert({
           id: newNotif.id,
@@ -2025,7 +2123,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           hold_expiry: newExpiry || null,
           extension_status: extensionStatus,
           is_extended: approve ? true : undefined
-        }).eq('id', orderId);
+        }).eq('id', toUuid(orderId));
       } catch (err) {
         console.error('Lỗi khi gia hạn đơn hàng trên Supabase:', err);
       }
@@ -2073,7 +2171,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           visa_status: status,
           visa_disqualified_reason: finalReason,
           visa_submitted_at: submittedAt
-        }).eq('id', passengerId);
+        }).eq('id', toUuid(passengerId));
         
         if (error) throw error;
       } catch (err) {
@@ -2085,7 +2183,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           await supabase.from('passengers').update({ 
             visa_status: status,
             visa_submitted_at: submittedAt
-          }).eq('id', passengerId);
+          }).eq('id', toUuid(passengerId));
         } catch (innerErr) {
           console.error('Lỗi khi cập nhật trạng thái Visa trên Supabase:', innerErr);
         }
@@ -2097,6 +2195,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     const existing = passengers.find(p => p.id === passengerId);
     let visa_submitted_at = updatedData.visa_submitted_at || existing?.visa_submitted_at;
     let visa_status = updatedData.visa_status || existing?.visa_status;
+
+    // Cập nhật trạng thái visa dựa trên lựa chọn dịch vụ làm visa qua tour
+    if (updatedData.needs_visa_service !== undefined) {
+      if (updatedData.needs_visa_service === false) {
+        // Nếu khách "Đã có visa" -> không cần xử lý visa qua tour
+        visa_status = 'not_required';
+      } else if (updatedData.needs_visa_service === true && (visa_status === 'not_required' || !visa_status)) {
+        // Nếu khách "Chưa có visa" -> chuyển về trạng thái chờ nộp hồ sơ (trừ khi đang xử lý/duyệt rồi)
+        visa_status = 'pending';
+      }
+    }
+
     let visa_disqualified_reason = updatedData.visa_disqualified_reason !== undefined 
       ? updatedData.visa_disqualified_reason 
       : existing?.visa_disqualified_reason;
@@ -2125,8 +2235,30 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       ...updatedData, 
       visa_submitted_at, 
       visa_status, 
-      visa_disqualified_reason 
+      visa_disqualified_reason,
+      needs_visa_service: updatedData.needs_visa_service !== undefined ? updatedData.needs_visa_service : existing?.needs_visa_service
     };
+
+    // Recalculate order total if needs_visa_service changed
+    if (updatedData.needs_visa_service !== undefined && updatedData.needs_visa_service !== existing?.needs_visa_service && existing?.order_id) {
+      const order = orders.find(o => o.id === existing.order_id);
+      const tour = tours.find(t => t.id === order?.tour_id);
+      if (order && tour && tour.price_visa_tour) {
+        const diff = updatedData.needs_visa_service ? tour.price_visa_tour : -tour.price_visa_tour;
+        const newTotal = order.total_price + diff;
+        
+        // Update order in state
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, total_price: newTotal } : o));
+        
+        // Update order in Supabase
+        if (isSupabaseConfigured()) {
+          supabase.from('bookings').update({ total_amount: newTotal }).eq('id', toUuid(order.id))
+            .then(({ error }) => {
+              if (error) console.error('Lỗi khi cập nhật tổng tiền đơn hàng:', error);
+            });
+        }
+      }
+    }
 
     // Luôn lưu trữ dự phòng lý do và thời gian nộp vào LocalStorage để tránh mất dữ liệu do bảng Supabase thiếu cột hoặc đồng bộ chậm
     const disqualifiedReasons = JSON.parse(localStorage.getItem('crm_disqualified_reasons') || '{}');
@@ -2157,9 +2289,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           passport_url: finalData.passport_url,
           labor_contract_url: finalData.labor_contract_url,
           visa_status: finalData.visa_status,
+          needs_visa_service: finalData.needs_visa_service,
           visa_submitted_at: finalData.visa_submitted_at,
           visa_disqualified_reason: finalData.visa_disqualified_reason
-        }).eq('id', passengerId);
+        }).eq('id', toUuid(passengerId));
         
         if (error) throw error;
       } catch (err: any) {
@@ -2173,7 +2306,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             passport_url: finalData.passport_url,
             labor_contract_url: finalData.labor_contract_url,
             visa_status: finalData.visa_status
-          }).eq('id', passengerId);
+          }).eq('id', toUuid(passengerId));
           
           if (fallbackErr) throw fallbackErr;
         } catch (innerErr) {
@@ -2189,7 +2322,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.from('passengers').delete().eq('id', passengerId);
+        const { error } = await supabase.from('passengers').delete().eq('id', toUuid(passengerId));
         if (error) throw error;
         toast.success('Đã xóa hành khách thành công!');
       } catch (err) {
@@ -2211,7 +2344,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           vat_option: updatedData.vat_option,
           special_requests: updatedData.special_requests,
           total_amount: updatedData.total_price !== undefined ? Number(updatedData.total_price) : undefined
-        }).eq('id', orderId);
+        }).eq('id', toUuid(orderId));
       } catch (err) {
         console.error('Lỗi khi cập nhật đơn hàng trên Supabase:', err);
       }
@@ -2222,7 +2355,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, invoice_status: status } : o));
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ invoice_status: status }).eq('id', orderId);
+        await supabase.from('bookings').update({ invoice_status: status }).eq('id', toUuid(orderId));
       } catch (err) {
         console.error('Lỗi khi cập nhật trạng thái xuất hóa đơn trên Supabase:', err);
       }

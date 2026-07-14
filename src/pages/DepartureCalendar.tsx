@@ -173,10 +173,17 @@ const TourCard: React.FC<{
           )}
 
           {/* Pricing */}
-          <div className="text-right min-w-[140px]">
-            <div className="text-xl font-bold text-red-600">{formatCurrency(tour.price)}</div>
-            <div className="text-xs text-gray-500 font-medium">
-              HH: <span className="font-semibold text-gray-900">{formatCurrency(tour.commission)}</span>
+          <div className="text-right min-w-[150px]">
+            <div className="text-xl font-black text-red-600 tracking-tight">{formatCurrency(tour.price)} đ</div>
+            {tour.price_visa_tour && tour.price_visa_tour > 0 && (
+              <div className="mt-1">
+                <span className="text-[10px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 shadow-sm inline-flex items-center uppercase">
+                  🛂 Phí Visa: +{formatCurrency(tour.price_visa_tour)} đ
+                </span>
+              </div>
+            )}
+            <div className="text-xs text-gray-500 font-bold mt-1 tracking-wide">
+              HH: <span className="text-gray-900">{formatCurrency(tour.commission)} đ</span>
             </div>
           </div>
 
@@ -197,7 +204,7 @@ const TourCard: React.FC<{
                 <span className="w-1.5 h-3 bg-blue-600 rounded mr-2 inline-block"></span>
                 Biểu giá tour chi tiết theo độ tuổi & dịch vụ
               </h4>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-center">
                 <div className="bg-blue-50/30 p-3 rounded-lg border border-blue-100/50">
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Người lớn (≥ 10 tuổi)</div>
                   <div className="text-base font-bold text-gray-900">{formatCurrency(tour.price_adult ?? tour.price)} VND</div>
@@ -209,6 +216,10 @@ const TourCard: React.FC<{
                 <div className="bg-purple-50/30 p-3 rounded-lg border border-purple-100/50">
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Trẻ nhỏ (&lt; 2 tuổi)</div>
                   <div className="text-base font-bold text-gray-900">{formatCurrency(tour.price_infant ?? Math.round(tour.price * 0.3))} VND</div>
+                </div>
+                <div className="bg-orange-50/30 p-3 rounded-lg border border-orange-100/50">
+                  <div className="text-xs text-orange-600 mb-1 font-bold">Dịch vụ Visa (Nếu cần)</div>
+                  <div className="text-base font-black text-orange-700">{tour.price_visa_tour ? formatCurrency(tour.price_visa_tour) : 'Miễn phí'} VND</div>
                 </div>
                 <div className="bg-red-50/30 p-3 rounded-lg border border-red-100/50">
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Phụ thu phòng đơn</div>

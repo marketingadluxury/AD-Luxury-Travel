@@ -2435,7 +2435,8 @@ export default function VisaServices() {
                                       <button
                                         type="button"
                                         onClick={() => handleShowNoticeModal(t)}
-                                        className="inline-flex items-center px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition-all shadow-sm"
+                                        style={{ backgroundColor: '#ff0000', color: '#ffffff' }}
+                                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm hover:opacity-90"
                                       >
                                         <FileText className="w-3.5 h-3.5 mr-1" />
                                         Thông tin lưu ý

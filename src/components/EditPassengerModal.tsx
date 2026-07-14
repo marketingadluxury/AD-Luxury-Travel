@@ -9,6 +9,7 @@ interface EditPassengerModalProps {
   onClose: () => void;
   passenger: Passenger | null;
   onSave: (passengerId: string, updatedData: Partial<Passenger>) => void;
+  tourPriceVisa?: number; // Giá visa đi tour
 }
 
 const getInitials = (fullName: string): string => {
@@ -28,6 +29,7 @@ export default function EditPassengerModal({
   onClose,
   passenger,
   onSave,
+  tourPriceVisa,
 }: EditPassengerModalProps) {
   const [fullName, setFullName] = useState('');
   const [passportNumber, setPassportNumber] = useState('');
@@ -37,6 +39,7 @@ export default function EditPassengerModal({
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [needsVisaService, setNeedsVisaService] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
   const [deletingState, setDeletingState] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -48,6 +51,7 @@ export default function EditPassengerModal({
       setPassportNumber(passenger.passport_number || '');
       setDob(passenger.dob || '');
       setPhone(passenger.phone || '');
+      setNeedsVisaService(passenger.needs_visa_service || false);
       setUploadedUrls(passenger.passport_url ? passenger.passport_url.split(',').filter(Boolean) : []);
       setActiveId(passenger.id);
       setErrorMsg(null);
@@ -168,6 +172,7 @@ export default function EditPassengerModal({
         dob,
         phone: phone.trim(),
         passport_url: uploadedUrls.join(','),
+        needs_visa_service: needsVisaService,
       });
 
       onClose();
@@ -273,6 +278,35 @@ export default function EditPassengerModal({
                 align="left"
               />
             </div>
+          </div>
+
+          {/* Visa Service Option */}
+          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className={`w-4 h-4 ${needsVisaService ? 'text-blue-600' : 'text-slate-400'}`} />
+                <span className="text-xs font-bold text-slate-700">Đăng ký dịch vụ làm Visa qua Tour</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer"
+                  checked={needsVisaService}
+                  onChange={e => setNeedsVisaService(e.target.checked)}
+                />
+                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+            
+            {needsVisaService ? (
+              <div className="text-[11px] text-blue-700 font-medium bg-white/60 p-2.5 rounded-lg border border-blue-50 animate-fade-in">
+                Hành khách <strong>CHƯA CÓ VISA</strong>. Hệ thống sẽ tự động cộng thêm phí làm visa đi tour (<strong>{tourPriceVisa?.toLocaleString('vi-VN')}đ</strong>) vào tổng giá trị đơn hàng.
+              </div>
+            ) : (
+              <div className="text-[11px] text-slate-500 font-medium p-1">
+                Hành khách <strong>ĐÃ CÓ VISA</strong> hoặc không cần làm visa qua tour. Không phát sinh thêm phí.
+              </div>
+            )}
           </div>
 
           {/* Document Section */}

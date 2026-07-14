@@ -9,10 +9,11 @@ import { supabase } from '../lib/supabase';
 interface PassengerInputModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (passengers: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
+  onConfirm: (passengers: (Omit<Passenger, 'id' | 'order_id' | 'visa_status'> & { needs_visa_service?: boolean })[]) => void;
   adultCount: number;
   childCount: number;
   infantCount: number;
+  tourPriceVisa?: number;
 }
 
 interface PassengerInputState {
@@ -24,6 +25,7 @@ interface PassengerInputState {
   files: File[];
   passport_url?: string;
   isPayer: boolean;
+  needs_visa_service: boolean;
 }
 
 const getInitials = (fullName: string): string => {
@@ -44,7 +46,8 @@ export default function PassengerInputModal({
   onConfirm, 
   adultCount = 1, 
   childCount = 0, 
-  infantCount = 0 
+  infantCount = 0,
+  tourPriceVisa = 0
 }: PassengerInputModalProps) {
   const [passengers, setPassengers] = useState<PassengerInputState[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -145,6 +148,7 @@ export default function PassengerInputModal({
           dob: '',
           files: [],
           isPayer: isFirst,
+          needs_visa_service: false,
         });
         isFirst = false;
       }
@@ -159,6 +163,7 @@ export default function PassengerInputModal({
           dob: '',
           files: [],
           isPayer: false,
+          needs_visa_service: false,
         });
       }
 
@@ -172,6 +177,7 @@ export default function PassengerInputModal({
           dob: '',
           files: [],
           isPayer: false,
+          needs_visa_service: false,
         });
       }
 
@@ -270,7 +276,8 @@ export default function PassengerInputModal({
           passport_number: p.passport_number.trim().toUpperCase(),
           dob: p.dob,
           passport_url: passportUrls.length > 0 ? passportUrls.join(',') : undefined,
-          is_payer: p.isPayer
+          is_payer: p.isPayer,
+          needs_visa_service: p.needs_visa_service
         });
       }
 
@@ -443,6 +450,30 @@ export default function PassengerInputModal({
                     />
                   </div>
                 </div>
+
+                {/* Visa Service Option */}
+                {tourPriceVisa > 0 && (
+                  <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white p-2 rounded-lg border border-blue-100 shadow-sm">
+                        <CheckCircle2 className={`w-5 h-5 ${p.needs_visa_service ? 'text-blue-600' : 'text-gray-300'}`} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-blue-800">Đăng ký làm Visa qua Tour</div>
+                        <div className="text-[10px] text-blue-600 font-bold">Phí dịch vụ: +{tourPriceVisa.toLocaleString('vi-VN')} đ</div>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer"
+                        checked={p.needs_visa_service}
+                        onChange={e => updatePassenger(index, 'needs_visa_service', e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                )}
 
                 {/* Document Upload Area */}
                 <div className="border-t border-slate-200/60 pt-3 space-y-3">

@@ -251,11 +251,11 @@ async function getOrCreateVisaFolder(token: string): Promise<string> {
   return visaFolderId;
 }
 
-async function getOrCreateVisaServiceFolder(serviceName: string, visaFolderId: string, token: string): Promise<string> {
-  const cleanServiceName = (serviceName || 'Dich_vu_Visa').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_'); // Loại bỏ ký tự đặc biệt không hợp lệ trong tên folder
-  let serviceFolderId = await searchFolder(cleanServiceName, visaFolderId, token);
+async function getOrCreateVisaServiceFolder(visaCode: string, visaFolderId: string, token: string): Promise<string> {
+  const cleanVisaCode = (visaCode || 'Dich_vu_Visa').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_'); // Loại bỏ ký tự đặc biệt không hợp lệ trong tên folder
+  let serviceFolderId = await searchFolder(cleanVisaCode, visaFolderId, token);
   if (!serviceFolderId) {
-    serviceFolderId = await createFolder(cleanServiceName, visaFolderId, token);
+    serviceFolderId = await createFolder(cleanVisaCode, visaFolderId, token);
     await makeFolderPublic(serviceFolderId, token);
   }
   return serviceFolderId;

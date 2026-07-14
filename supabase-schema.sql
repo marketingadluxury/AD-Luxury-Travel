@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS tours (
 -- Cuối file: Các câu lệnh cập nhật schema bổ sung cho database cũ
 -- Chạy đoạn này nếu bạn gặp lỗi "Could not find column price_visa_tour"
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_visa_tour NUMERIC DEFAULT 0;
+ALTER TABLE passengers ADD COLUMN IF NOT EXISTS needs_visa_service BOOLEAN DEFAULT FALSE;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_date DATE;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_infant NUMERIC DEFAULT 0;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS single_room_surcharge NUMERIC DEFAULT 0;
@@ -182,6 +183,7 @@ CREATE TABLE IF NOT EXISTS passengers (
   passport_url TEXT,
   labor_contract_url TEXT,
   visa_status TEXT DEFAULT 'pending',
+  needs_visa_service BOOLEAN DEFAULT FALSE,
   visa_submitted_at TEXT,
   visa_disqualified_reason TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())

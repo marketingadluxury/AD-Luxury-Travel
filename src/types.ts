@@ -109,6 +109,7 @@ export interface Passenger {
   passport_url?: string;
   labor_contract_url?: string;
   visa_status: 'pending' | 'processing' | 'approved' | 'rejected' | 'not_required' | 'disqualified';
+  needs_visa_service?: boolean; // Tùy chọn làm visa thông qua tour
   visa_submitted_at?: string;
   visa_disqualified_reason?: string;
   created_at?: string;

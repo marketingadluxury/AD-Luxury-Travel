@@ -4,7 +4,7 @@ import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard } from 'lucide-react';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
@@ -320,9 +320,12 @@ export default function OrdersManagement() {
   const priceInfant = selectedTour ? (selectedTour.price_infant ?? Math.round(selectedTour.price * 0.3)) : 0;
   const singleRoomSurcharge = selectedTour ? (selectedTour.single_room_surcharge ?? 7500000) : 0;
 
-  const calculatedTotalPrice = selectedTour 
+  const subtotalPrice = selectedTour 
     ? (priceAdult * adultCount) + (priceChild * childCount) + (priceInfant * infantCount) + (singleRoomSurcharge * singleRoomCount)
     : 0;
+
+  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(subtotalPrice * 0.1) : 0;
+  const calculatedTotalPrice = subtotalPrice + vatAmount;
 
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -938,6 +941,12 @@ export default function OrdersManagement() {
                       <div className="font-semibold text-red-600">{new Intl.NumberFormat('vi-VN').format(singleRoomSurcharge * singleRoomCount)} VND</div>
                     </>
                   )}
+                  {vatOption === 'Xuất VAT' && (
+                    <>
+                      <div>• Thuế VAT (10%):</div>
+                      <div className="font-semibold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(vatAmount)} VND</div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="text-right sm:border-l sm:border-gray-200 sm:pl-6 shrink-0 w-full sm:w-auto">
@@ -1064,6 +1073,22 @@ export default function OrdersManagement() {
               const remainingTime = getRemainingHoldTime(order.hold_expiry);
               const isExpanded = expandedOrderId === order.id;
 
+              const visaPassengersCount = orderPassengers.filter(p => p.needs_visa_service).length;
+              const priceAdult = tour?.price_adult || tour?.price || 0;
+              const priceChild = tour?.price_child || Math.round(priceAdult * 0.9);
+              const priceInfant = tour?.price_infant || Math.round(priceAdult * 0.3);
+              const singleRoomSurcharge = tour?.single_room_surcharge || 0;
+              const priceVisaTour = tour?.price_visa_tour || 0;
+
+              const totalAdult = (order.adult_count || 0) * priceAdult;
+              const totalChild = (order.child_count || 0) * priceChild;
+              const totalInfant = (order.infant_count || 0) * priceInfant;
+              const totalSingleRoom = (order.single_room_count || 0) * singleRoomSurcharge;
+              const totalVisa = visaPassengersCount * priceVisaTour;
+
+              const totalSubtotal = totalAdult + totalChild + totalInfant + totalSingleRoom + totalVisa;
+              const computedVat = order.vat_option === 'Xuất VAT' ? Math.round(totalSubtotal * 0.1) : 0;
+
               return (
                 <div 
                   key={order.id} 
@@ -1186,13 +1211,13 @@ export default function OrdersManagement() {
                   {/* Expandable Details Container */}
                   {isExpanded && (
                     <div className="px-5 pb-6 pt-2 bg-slate-50/40 border-t border-gray-100 space-y-5 animate-in fade-in duration-150">
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
                         {/* Box 1: Surcharges & Room config */}
                         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5">
                           <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center justify-between">
                             <span className="flex items-center gap-1.5">
                               <FileText className="w-4 h-4 text-blue-600" />
-                              Phụ thu & Dịch vụ nâng cao
+                              Phụ thu & Dịch vụ
                             </span>
                             {/* Nút sửa đơn hàng */}
                             {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
@@ -1211,29 +1236,77 @@ export default function OrdersManagement() {
                           </h4>
                           <div className="space-y-2 text-xs">
                             <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                              <span className="text-gray-500">Phòng đơn (Surcharge):</span>
+                              <span className="text-gray-500">Phòng đơn:</span>
                               <span className="font-bold text-gray-900">
-                                {order.single_room_count ? `${order.single_room_count} phòng` : 'Không đăng ký'}
+                                {order.single_room_count ? `${order.single_room_count} phòng` : 'Không'}
                               </span>
                             </div>
                             <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                              <span className="text-gray-500">Yêu cầu ghép giường:</span>
-                              <span className="font-semibold text-gray-800">{order.room_share_info || 'Không có'}</span>
+                              <span className="text-gray-500">Ghép giường:</span>
+                              <span className="font-semibold text-gray-800">{order.room_share_info || 'Không'}</span>
                             </div>
                             <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                              <span className="text-gray-500">Hoá đơn VAT (10%):</span>
+                              <span className="text-gray-500">VAT:</span>
                               <span className={`font-bold ${order.vat_option === 'Xuất VAT' ? 'text-blue-600' : 'text-gray-500'}`}>
-                                {order.vat_option || 'Không xuất VAT'}
+                                {order.vat_option || 'Không'}
                               </span>
                             </div>
                             {order.special_requests && (
                               <div className="pt-2">
-                                <span className="text-gray-500 block mb-1">Ghi chú đặc biệt (Ăn uống, sức khoẻ...):</span>
+                                <span className="text-gray-500 block mb-1">Ghi chú đặc biệt:</span>
                                 <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 text-amber-900 italic leading-relaxed text-[11px]">
                                   "{order.special_requests}"
                                 </div>
                               </div>
                             )}
+                          </div>
+                        </div>
+
+                        {/* Box 1.5: Detailed Pricing Breakdown */}
+                        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center gap-1.5">
+                            <CreditCard className="w-4 h-4 text-rose-500" />
+                            Chi tiết bảng tính giá
+                          </h4>
+                          <div className="space-y-2 text-xs">
+                            <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                              <span className="text-gray-500">NL ({order.adult_count}):</span>
+                              <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalAdult)} đ</span>
+                            </div>
+                            {order.child_count > 0 && (
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-500">TE ({order.child_count}):</span>
+                                <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalChild)} đ</span>
+                              </div>
+                            )}
+                            {order.infant_count > 0 && (
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-500">TN ({order.infant_count}):</span>
+                                <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalInfant)} đ</span>
+                              </div>
+                            )}
+                            {totalSingleRoom > 0 && (
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-500">Phòng đơn:</span>
+                                <span className="font-bold text-red-600">{new Intl.NumberFormat('vi-VN').format(totalSingleRoom)} đ</span>
+                              </div>
+                            )}
+                            {totalVisa > 0 && (
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-500">Visa ({visaPassengersCount}):</span>
+                                <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(totalVisa)} đ</span>
+                              </div>
+                            )}
+                            {order.vat_option === 'Xuất VAT' && (
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-500">Thuế VAT (10%):</span>
+                                <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(computedVat)} đ</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between py-2 mt-1 bg-slate-50 px-2 rounded border border-slate-100">
+                              <span className="font-black text-gray-900 uppercase text-[10px]">Tổng cộng:</span>
+                              <span className="font-black text-rose-600">{new Intl.NumberFormat('vi-VN').format(order.total_price)} đ</span>
+                            </div>
                           </div>
                         </div>
 
@@ -1587,6 +1660,7 @@ export default function OrdersManagement() {
         adultCount={orderToConfirm ? allOrders.find(o => o.id === orderToConfirm)?.adult_count || 1 : 1}
         childCount={orderToConfirm ? allOrders.find(o => o.id === orderToConfirm)?.child_count || 0 : 0}
         infantCount={orderToConfirm ? allOrders.find(o => o.id === orderToConfirm)?.infant_count || 0 : 0}
+        tourPriceVisa={orderToConfirm ? tours.find(t => t.id === allOrders.find(o => o.id === orderToConfirm)?.tour_id)?.price_visa_tour : 0}
         onConfirm={(passengers) => {
           if (orderToConfirm) {
             confirmOrder(orderToConfirm, passengers);
@@ -1601,6 +1675,7 @@ export default function OrdersManagement() {
         adultCount={orderToAddPassengers ? (allOrders.find(o => o.id === orderToAddPassengers)?.adult_count || 0) + (allOrders.find(o => o.id === orderToAddPassengers)?.child_count || 0) + (allOrders.find(o => o.id === orderToAddPassengers)?.infant_count || 0) - passengers.filter(p => p.order_id === orderToAddPassengers).length : 1}
         childCount={0}
         infantCount={0}
+        tourPriceVisa={orderToAddPassengers ? tours.find(t => t.id === allOrders.find(o => o.id === orderToAddPassengers)?.tour_id)?.price_visa_tour : 0}
         onConfirm={(passengersData) => {
           if (orderToAddPassengers) {
             addPassengersToOrder(orderToAddPassengers, passengersData);
@@ -1615,6 +1690,7 @@ export default function OrdersManagement() {
           setEditingPassenger(null);
         }}
         passenger={editingPassenger}
+        tourPriceVisa={editingPassenger ? tours.find(t => t.id === allOrders.find(o => o.id === editingPassenger.order_id)?.tour_id)?.price_visa_tour : undefined}
         onSave={(passengerId, updatedData) => {
           updatePassenger(passengerId, updatedData);
         }}

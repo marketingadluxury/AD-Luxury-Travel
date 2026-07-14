@@ -887,6 +887,7 @@ export default function PassengersManagement() {
             setEditingPassenger(null);
           }}
           passenger={editingPassenger}
+          tourPriceVisa={editingPassenger ? tours.find(t => t.id === allOrders.find(o => o.id === editingPassenger.order_id)?.tour_id)?.price_visa_tour : undefined}
           onSave={(passengerId, updatedData) => {
             updatePassenger(passengerId, updatedData);
             setIsEditModalOpen(false);
