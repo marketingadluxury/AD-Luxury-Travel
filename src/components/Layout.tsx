@@ -10,7 +10,8 @@ import {
   Settings,
   Bell,
   UserCheck,
-  User
+  User,
+  LayoutDashboard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -18,6 +19,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Role } from '@/types';
 
 const navigation = [
+  { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin'] },
   { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'Đại lý', 'operator', 'sale', 'visa', 'accounting', 'admin'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin'] },
   { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'visa'] },

@@ -227,6 +227,40 @@ async function getOrCreateTourFolder(category: string, token: string): Promise<s
   return categoryFolderId;
 }
 
+async function getOrCreateVisaFolder(token: string): Promise<string> {
+  // 1. Get or create AD Luxury Travel root folder
+  let rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  if (!rootId) {
+    rootId = await createFolder('AD Luxury Travel', undefined, token);
+    await makeFolderPublic(rootId, token);
+  }
+
+  // 2. Search for existing "Visa" folder in AD Luxury Travel first
+  let visaFolderId = await searchFolder('Visa', rootId, token);
+  if (!visaFolderId) {
+    // Search for any existing "Visa" folder globally, in case user created it at root level
+    visaFolderId = await searchFolder('Visa', undefined, token);
+  }
+  
+  if (!visaFolderId) {
+    // If not found anywhere, create under AD Luxury Travel
+    visaFolderId = await createFolder('Visa', rootId, token);
+    await makeFolderPublic(visaFolderId, token);
+  }
+
+  return visaFolderId;
+}
+
+async function getOrCreateVisaServiceFolder(serviceName: string, visaFolderId: string, token: string): Promise<string> {
+  const cleanServiceName = (serviceName || 'Dich_vu_Visa').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_'); // Loại bỏ ký tự đặc biệt không hợp lệ trong tên folder
+  let serviceFolderId = await searchFolder(cleanServiceName, visaFolderId, token);
+  if (!serviceFolderId) {
+    serviceFolderId = await createFolder(cleanServiceName, visaFolderId, token);
+    await makeFolderPublic(serviceFolderId, token);
+  }
+  return serviceFolderId;
+}
+
 async function uploadFileToSupabase(
   bucketName: string,
   filePath: string,
@@ -299,8 +333,21 @@ async function uploadFileToGoogleDrive(
 }
 
 function getGoogleDriveFileId(url: string): string | null {
-  const match = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/) || url.match(/[?&]id=([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : null;
+  // Hỗ trợ các định dạng URL Google Drive phổ biến bao gồm cả các tham số query
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9-_]+)/,
+    /\/folders\/([a-zA-Z0-9-_]+)/,
+    /\/d\/([a-zA-Z0-9-_]+)/,
+    /[?&]id=([a-zA-Z0-9-_]+)/,
+    /\/open\?id=([a-zA-Z0-9-_]+)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  
+  return null;
 }
 
 async function deleteGoogleDriveFile(fileId: string, token: string): Promise<void> {
@@ -506,16 +553,77 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
     console.log('[API] /api/upload - File received:', req.file.originalname, 'Size:', req.file.size);
     console.log('[API] /api/upload - Body:', req.body);
 
+    // Decode UTF-8 for filename and body fields (Multer defaults to latin1 for multipart forms)
+    const decodeUTF8 = (str: string | undefined) => {
+      if (!str) return str;
+      try {
+        // Multer/busboy interprets UTF-8 as Latin1. Convert back to buffer and decode correctly.
+        return Buffer.from(str, 'latin1').toString('utf8');
+      } catch (e) {
+        return str;
+      }
+    };
+
+    if (req.file) {
+      req.file.originalname = decodeUTF8(req.file.originalname) || req.file.originalname;
+    }
+
+    // Decode relevant body fields
+    const body = { ...req.body };
+    const fieldsToDecode = ['fullName', 'visaName', 'tourTitle', 'category', 'visaCode', 'tourCode'];
+    fieldsToDecode.forEach(field => {
+      if (body[field]) body[field] = decodeUTF8(body[field]);
+    });
+
     const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
     const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
     const driveActive = hasServiceAccount || hasOAuth;
 
     const file = req.file;
-    const isTourUpload = req.body.uploadType === 'tour' || !!req.body.tourCode;
+    const isTourUpload = body.uploadType === 'tour' || !!body.tourCode;
+    const isVisaUpload = body.uploadType === 'visa';
+
+    if (isVisaUpload) {
+      const visaCode = (body.visaCode || body.tourCode || 'VISA_CODE').trim().toUpperCase();
+      const visaName = body.visaName || body.tourTitle || 'Dich_vu_Visa';
+      const fileName = file.originalname.trim(); // Giữ nguyên tên file gốc theo yêu cầu người dùng
+
+      if (driveActive) {
+        // Sử dụng visaCode để đặt tên thư mục thay vì visaName để tránh lỗi font và trùng lặp
+        console.log(`[Drive] Đang tải file mẫu visa lên Google Drive cho Visa: ${visaCode}`);
+        const token = await getGoogleDriveAccessToken();
+        const visaFolderId = await getOrCreateVisaFolder(token);
+        const visaServiceFolderId = await getOrCreateVisaServiceFolder(visaCode, visaFolderId, token);
+        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, visaServiceFolderId, token);
+        res.json({
+          success: true,
+          url: result.webViewLink,
+          fileName: fileName,
+          storage: 'drive'
+        });
+      } else {
+        console.log(`[Supabase Fallback] Đang tải file mẫu visa lên Supabase: Visa/${visaCode}/${fileName}`);
+        const supabase = getSupabaseClient(req);
+        const publicUrl = await uploadFileToSupabase(
+          'crm-attachments',
+          `Visa/${visaCode}/${fileName}`,
+          file.buffer,
+          file.mimetype,
+          supabase
+        );
+        res.json({
+          success: true,
+          url: publicUrl,
+          fileName: fileName,
+          storage: 'supabase'
+        });
+      }
+      return;
+    }
 
     if (isTourUpload) {
-      const tourCode = req.body.tourCode || 'TOUR_CODE';
-      const category = req.body.category || 'Chung';
+      const tourCode = body.tourCode || 'TOUR_CODE';
+      const category = body.category || 'Chung';
       const ext = path.extname(file.originalname) || '.pdf';
       const fileName = `${tourCode.trim().toUpperCase()}${ext}`;
 
@@ -551,8 +659,8 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
     }
 
     // Passenger profile upload
-    const passportNumber = req.body.passportNumber || '';
-    const fullName = req.body.fullName || '';
+    const passportNumber = body.passportNumber || '';
+    const fullName = body.fullName || '';
 
     const cleanPassport = (passportNumber || 'CHUA_CO_HC').trim().toUpperCase();
     
@@ -607,20 +715,35 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
 app.post(['/api/delete', '/delete'], async (req, res) => {
   try {
     const { url } = req.body;
+    console.log(`[Delete] Nhận yêu cầu xóa URL: ${url}`);
     
     if (!url) {
+      console.error('[Delete] Thiếu URL.');
       res.status(400).json({ error: 'Thiếu URL của file cần xóa.' });
       return;
     }
     
-    const isGoogleDrive = url.includes('drive.google.com');
+    const isGoogleDrive = url.includes('drive.google.com') || 
+                         url.includes('docs.google.com') || 
+                         url.includes('ouid=') || 
+                         url.includes('usp=drivesdk') ||
+                         url.includes('/file/d/');
     const isSupabase = url.includes('supabase.com/dashboard/project') || url.includes('supabase.co');
+    
+    console.log(`[Delete] isGoogleDrive: ${isGoogleDrive}, isSupabase: ${isSupabase}`);
+    
+    if (isGoogleDrive) {
+        const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
+        const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+        console.log(`[Delete] Google Drive Config: hasServiceAccount: ${hasServiceAccount}, hasOAuth: ${hasOAuth}`);
+    }
 
     if (isGoogleDrive) {
       console.log(`[Drive] Đang xóa file trên Google Drive: ${url}`);
       const fileId = getGoogleDriveFileId(url);
       if (!fileId) {
-        res.status(400).json({ error: 'Không thể trích xuất ID file Google Drive từ URL.' });
+        console.warn(`[Drive] Không thể trích xuất ID file từ URL: ${url}. Chỉ gỡ bỏ liên kết.`);
+        res.json({ success: true, message: 'Không thể xóa file vật lý (ID không hợp lệ), đã gỡ liên kết trong database.', storage: 'drive' });
         return;
       }
       
@@ -662,11 +785,12 @@ app.post(['/api/delete', '/delete'], async (req, res) => {
         res.status(400).json({ error: 'URL Supabase Storage không hợp lệ.' });
       }
     } else {
-      res.status(400).json({ error: 'Đường dẫn file không được hỗ trợ để xóa.' });
+      console.log(`[Delete] Đường dẫn không được hỗ trợ để xóa vật lý, chỉ gỡ bỏ liên kết: ${url}`);
+      res.json({ success: true, message: 'Đường dẫn file không được hỗ trợ để xóa vật lý, đã gỡ liên kết trong hệ thống.', storage: 'unknown' });
     }
   } catch (error: any) {
     console.error('Lỗi API /api/delete:', error);
-    res.status(500).json({ error: error.message || 'Lỗi xóa file' });
+    res.status(500).json({ error: 'Lỗi xóa file: ' + (error.message || 'Unknown error') });
   }
 });
 

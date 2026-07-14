@@ -13,6 +13,7 @@ import PassengersManagement from './pages/PassengersManagement';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Auth from './pages/Auth';
+import Dashboard from './pages/Dashboard';
 import { CRMProvider } from './context/CRMContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -33,6 +34,7 @@ function AppContent() {
         <Layout>
           <Routes>
             <Route path="/" element={<DepartureCalendar />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tours" element={<ToursManagement />} />
             <Route path="/visa-services" element={<VisaServices />} />
             <Route path="/visa-orders" element={<VisaOrders />} />
