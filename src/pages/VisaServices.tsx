@@ -3103,7 +3103,7 @@ export default function VisaServices() {
         isOpen={!!tourToDelete}
         onClose={() => setTourToDelete(null)}
         title="Xác nhận xóa Dịch vụ"
-        message={`Bạn có chắc chắn muốn XÓA vĩnh viễn ${tourToDelete?.code || 'dịch vụ này'}? Các đơn đặt giữ chỗ liên quan có thể bị ảnh hưởng.`}
+        message={`Bạn có chắc chắn muốn XÓA vĩnh viễn ${tourToDelete?.code || 'dịch vụ này'}? HÀNH ĐỘNG NÀY SẼ XÓA TẤT CẢ CÁC ĐƠN BOOKING LIÊN QUAN VÀ KHÔNG THỂ KHÔI PHỤC.`}
         onConfirm={() => {
           if (tourToDelete) {
             deleteTour(tourToDelete.id);

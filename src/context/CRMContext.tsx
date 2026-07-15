@@ -1490,9 +1490,19 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     setTours(prev => prev.filter(t => t.id !== tourId));
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('tours').delete().eq('id', tourId);
+        // Xóa các booking liên quan trước để tránh lỗi khóa ngoại
+        await supabase.from('bookings').delete().eq('tour_id', tourId);
+        
+        const { error } = await supabase.from('tours').delete().eq('id', tourId);
+        if (error) {
+          console.error('Lỗi khi xoá Tour trên Supabase:', error);
+          toast.error('Lỗi khi xoá trên server: ' + error.message);
+        } else {
+          toast.success('Đã xóa thành công trên server!');
+        }
       } catch (err) {
         console.error('Lỗi khi xoá Tour trên Supabase:', err);
+        toast.error('Lỗi không xác định khi xoá trên server');
       }
     }
   };
