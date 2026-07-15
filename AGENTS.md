@@ -138,6 +138,9 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
     2. Tự động kiểm tra hoặc tạo thư mục con đặt tên theo Số hộ chiếu (`passport_number` hoặc `CHUA_CO_HC`).
     3. Tải file lên và đổi tên file theo định dạng chuẩn hóa: `{SO_HO_CHIEU}-{CHU_CAI_VIET_TAT_TEN}.{ten_file_goc}`.
     4. Cấp quyền xem cho "bất kỳ ai có liên kết" (role: reader, type: anyone) và trả về liên kết xem trực tuyến (`webViewLink`) của Google Drive để lưu vào trường `passport_url` trong database. Khi người dùng click vào liên kết, file sẽ mở trên giao diện xem trước chính thức của Google Drive (hỗ trợ phóng to, tải xuống, in ấn cực kỳ tiện lợi).
+  - **Quy tắc lưu trữ tài liệu Visa và File hướng dẫn mẫu:**
+    - **File mẫu của từng dịch vụ visa lẻ:** Được tổ chức lưu trữ riêng biệt trong thư mục của từng mã dịch vụ visa tương ứng (Ví dụ trên Google Drive: `AD Luxury Travel > Visa > VIAU`, hoặc trên Supabase Storage: thư mục `Visa/VIAU/`).
+    - **Hồ sơ, file mẫu chung của tất cả các loại visa:** Lưu trữ trực tiếp tại thư mục Visa gốc (Ví dụ trên Google Drive: `AD Luxury Travel > Visa`, hoặc trên Supabase Storage: thư mục `Visa/`).
 - **Quy trình xóa file:**
   - Khi người dùng xóa file đính kèm cũ khỏi hồ sơ hành khách, hệ thống gửi yêu cầu đến backend tự động kiểm tra liên kết của file:
     - Nếu là liên kết Google Drive, backend sẽ gọi API Google Drive để **xóa vĩnh viễn** file đó khỏi Drive.

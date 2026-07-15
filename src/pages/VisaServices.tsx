@@ -28,9 +28,47 @@ import {
   ChevronUp,
   UploadCloud,
   Search,
-  Paperclip
+  Paperclip,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+const getFileExtensionFromUrl = (url: string) => {
+  if (!url) return '';
+  try {
+    const cleanUrl = url.split('?')[0];
+    const filename = cleanUrl.split('/').pop() || '';
+    if (filename.includes('.')) {
+      return '.' + filename.split('.').pop()?.toLowerCase();
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return '';
+};
+
+const getItineraryFiles = (urlStr: string): { name: string; url: string }[] => {
+  if (!urlStr) return [];
+  try {
+    if (urlStr.startsWith('[')) {
+      const parsed = JSON.parse(urlStr);
+      return parsed.map((item: any) => {
+        if (typeof item === 'string') {
+          const decoded = decodeURIComponent(item.split('/').pop() || 'Tài liệu');
+          return { name: decoded, url: item };
+        }
+        return item;
+      });
+    } else {
+      const decoded = decodeURIComponent(urlStr.split('/').pop() || 'Tài liệu');
+      return [{ name: decoded, url: urlStr }];
+    }
+  } catch (e) {
+    const decoded = decodeURIComponent(urlStr.split('/').pop() || 'Tài liệu');
+    return [{ name: decoded, url: urlStr }];
+  }
+};
 
 // Formatted numeric input component with thousands separators on input
 const NumericFormatInput: React.FC<{
@@ -385,7 +423,9 @@ export default function VisaServices() {
     updateTour, 
     deleteTour, 
     handleExtensionRequest,
-    currentRole
+    currentRole,
+    visaCommonFiles,
+    updateVisaCommonFiles
   } = useCRM();
 
   const isVisaOrAdmin = currentRole === 'visa' || currentRole === 'admin';
@@ -394,6 +434,20 @@ export default function VisaServices() {
   // View mode for tour listing: 'grouped' (default) | 'flat'
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
+  const [commonFilesExpanded, setCommonFilesExpanded] = useState<boolean>(true);
+  const [commonFilesPage, setCommonFilesPage] = useState<number>(1);
+
+  useEffect(() => {
+    const totalPages = Math.ceil(visaCommonFiles.length / 10);
+    if (commonFilesPage > totalPages && totalPages > 0) {
+      setCommonFilesPage(totalPages);
+    }
+  }, [visaCommonFiles, commonFilesPage]);
+
+  const ITEMS_PER_PAGE = 10;
+  const commonFilesTotalPages = Math.ceil(visaCommonFiles.length / ITEMS_PER_PAGE);
+  const commonFilesStartIndex = (commonFilesPage - 1) * ITEMS_PER_PAGE;
+  const currentPageFiles = visaCommonFiles.slice(commonFilesStartIndex, commonFilesStartIndex + ITEMS_PER_PAGE);
 
   // Filters and Sorting States for Visa Services
   const [searchTerm, setSearchTerm] = useState('');
@@ -650,21 +704,13 @@ export default function VisaServices() {
   const [isUploadingItinerary, setIsUploadingItinerary] = useState(false);
   const [itineraryUploadError, setItineraryUploadError] = useState<string | null>(null);
 
-  const [visaSampleFiles, setVisaSampleFiles] = useState<{ name: string; url: string }[]>([]);
   const [isUploadingVisaSample, setIsUploadingVisaSample] = useState(false);
   const [visaSampleUploadError, setVisaSampleUploadError] = useState<string | null>(null);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [tourToDelete, setTourToDelete] = useState<Tour | null>(null);
 
-  const handleVisaSampleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const processVisaSampleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-
-    if (!code.trim()) {
-      toast.error('Vui lòng nhập Mã visa trước khi tải file mẫu lên!');
-      e.target.value = '';
-      return;
-    }
 
     setIsUploadingVisaSample(true);
     setVisaSampleUploadError(null);
@@ -676,8 +722,6 @@ export default function VisaServices() {
         const file = files[i];
         const formData = new FormData();
         formData.append('uploadType', 'visa');
-        formData.append('visaCode', code.trim());
-        formData.append('visaName', name.trim() || 'Dich_vu_Visa'); // Gửi tên dịch vụ Visa lên backend để tạo folder con
         formData.append('file', file);
 
         const res = await fetch('/api/upload', {
@@ -701,16 +745,21 @@ export default function VisaServices() {
         }
       }
 
-      setVisaSampleFiles(prev => [...prev, ...uploadedFiles]);
-      toast.success(`Đã tải lên thành công ${uploadedFiles.length} file mẫu!`);
+      const newFiles = [...visaCommonFiles, ...uploadedFiles];
+      await updateVisaCommonFiles(newFiles);
+      toast.success(`Đã tải lên thành công ${uploadedFiles.length} file mẫu visa chung!`);
     } catch (err: any) {
       console.error(err);
       setVisaSampleUploadError(err.message || 'Lỗi tải file mẫu lên');
       toast.error(err.message || 'Lỗi tải file mẫu lên');
     } finally {
       setIsUploadingVisaSample(false);
-      e.target.value = '';
     }
+  };
+
+  const handleVisaSampleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processVisaSampleUpload(e.target.files);
+    e.target.value = '';
   };
 
   const handleRemoveVisaSampleFile = async (urlToRemove: string) => {
@@ -729,72 +778,103 @@ export default function VisaServices() {
         throw new Error(errorData.error || 'Lỗi từ máy chủ khi xóa file');
       }
       
-      setVisaSampleFiles(prev => prev.filter(f => f.url !== urlToRemove));
+      const newFiles = visaCommonFiles.filter(f => f.url !== urlToRemove);
+      await updateVisaCommonFiles(newFiles);
       toast.success('Đã xóa file mẫu thành công!');
     } catch (err: any) {
       console.error(err);
       toast.error('Không thể xóa file mẫu: ' + err.message);
+    } finally {
+      setFileToDelete(null);
     }
   };
 
-  const handleItineraryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processItineraryUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
 
     if (!code.trim()) {
-      toast.error('Vui lòng nhập Mã Tour trước khi tải file lịch trình lên để hệ thống đặt tên file chính xác!');
-      e.target.value = '';
+      toast.error(tourType === 'visa' 
+        ? 'Vui lòng nhập Mã Visa trước khi tải file hồ sơ mẫu lên để hệ thống đặt tên file chính xác!' 
+        : 'Vui lòng nhập Mã Tour trước khi tải file lịch trình lên để hệ thống đặt tên file chính xác!'
+      );
       return;
     }
 
     setIsUploadingItinerary(true);
     setItineraryUploadError(null);
 
+    const uploadedFiles: { name: string; url: string }[] = [];
+
     try {
-      const formData = new FormData();
-      formData.append('uploadType', 'tour');
-      formData.append('tourCode', code.trim());
-      formData.append('category', category || 'Chung');
-      formData.append('file', file);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append('uploadType', 'tour');
+        formData.append('tourCode', code.trim());
+        formData.append('category', category || 'Chung');
+        formData.append('file', file);
 
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
 
-      if (!res.ok) {
-        let errorMsg = 'Không thể tải file lên hệ thống';
+        if (!res.ok) {
+          let errorMsg = 'Không thể tải file lên hệ thống';
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errJson = await res.json();
+            errorMsg = errJson.error || errorMsg;
+          } else {
+            const text = await res.text();
+            errorMsg = text.substring(0, 100) || errorMsg;
+          }
+          throw new Error(`Lỗi tải file ${file.name}: ${errorMsg}`);
+        }
+
         const contentType = res.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
-          const errJson = await res.json();
-          errorMsg = errJson.error || errorMsg;
+          const data = await res.json();
+          if (data.success && data.url) {
+            uploadedFiles.push({
+              name: data.fileName || file.name,
+              url: data.url
+            });
+          } else {
+            throw new Error(data.error || `Lỗi tải file ${file.name}`);
+          }
         } else {
-          const text = await res.text();
-          errorMsg = text.substring(0, 100) || errorMsg;
+          throw new Error(`Định dạng phản hồi không hợp lệ cho file ${file.name}`);
         }
-        throw new Error(errorMsg);
       }
 
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.success && data.url) {
-          setItineraryPdfUrl(data.url);
-        } else {
-          throw new Error(data.error || 'Lỗi từ máy chủ khi lưu file');
-        }
-      } else {
-        const text = await res.text();
-        console.error('Phản hồi không phải JSON từ máy chủ:', text.substring(0, 200));
-        throw new Error('Định dạng phản hồi không hợp lệ từ máy chủ (có thể là trang HTML lỗi)');
-      }
+      // Merge with existing files
+      const existingFiles = getItineraryFiles(itineraryPdfUrl);
+      const newFilesList = [...existingFiles, ...uploadedFiles];
+      setItineraryPdfUrl(JSON.stringify(newFilesList));
+      toast.success(`Đã tải lên thành công ${uploadedFiles.length} file tài liệu!`);
     } catch (err: any) {
       console.error(err);
       setItineraryUploadError(err.message || 'Lỗi tải file lên');
     } finally {
       setIsUploadingItinerary(false);
-      e.target.value = '';
     }
+  };
+
+  const handleItineraryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processItineraryUpload(e.target.files);
+    e.target.value = '';
+  };
+
+  const handleRemoveItineraryFile = (urlToRemove: string) => {
+    const existingFiles = getItineraryFiles(itineraryPdfUrl);
+    const newFilesList = existingFiles.filter(f => f.url !== urlToRemove);
+    if (newFilesList.length === 0) {
+      setItineraryPdfUrl('');
+    } else {
+      setItineraryPdfUrl(JSON.stringify(newFilesList));
+    }
+    toast.success('Đã gỡ file tài liệu ra khỏi danh sách!');
   };
 
   // Tour Type fields
@@ -888,33 +968,6 @@ export default function VisaServices() {
     setTourStatus(tour.tour_status || 'available');
     setCategory(tour.category || 'Visa');
     setItineraryPdfUrl(tour.itinerary_pdf_url || '');
-    if (tour.tour_type === 'visa') {
-      if (tour.itinerary_pdf_url) {
-        try {
-          if (tour.itinerary_pdf_url.startsWith('[')) {
-            const parsed = JSON.parse(tour.itinerary_pdf_url);
-            const formatted = parsed.map((item: any) => {
-              if (typeof item === 'string') {
-                const decoded = decodeURIComponent(item.split('/').pop() || 'File mẫu');
-                return { name: decoded, url: item };
-              }
-              return item;
-            });
-            setVisaSampleFiles(formatted);
-          } else {
-            const decoded = decodeURIComponent(tour.itinerary_pdf_url.split('/').pop() || 'File mẫu');
-            setVisaSampleFiles([{ name: decoded, url: tour.itinerary_pdf_url }]);
-          }
-        } catch (e) {
-          const decoded = decodeURIComponent(tour.itinerary_pdf_url.split('/').pop() || 'File mẫu');
-          setVisaSampleFiles([{ name: decoded, url: tour.itinerary_pdf_url }]);
-        }
-      } else {
-        setVisaSampleFiles([]);
-      }
-    } else {
-      setVisaSampleFiles([]);
-    }
 
     setTourType(tour.tour_type || 'internal');
     setPartnerName(tour.partner_name || '');
@@ -976,33 +1029,6 @@ export default function VisaServices() {
     setTourStatus('available');
     setCategory(tour.category || 'Visa');
     setItineraryPdfUrl(tour.itinerary_pdf_url || '');
-    if (tour.tour_type === 'visa') {
-      if (tour.itinerary_pdf_url) {
-        try {
-          if (tour.itinerary_pdf_url.startsWith('[')) {
-            const parsed = JSON.parse(tour.itinerary_pdf_url);
-            const formatted = parsed.map((item: any) => {
-              if (typeof item === 'string') {
-                const decoded = decodeURIComponent(item.split('/').pop() || 'File mẫu');
-                return { name: decoded, url: item };
-              }
-              return item;
-            });
-            setVisaSampleFiles(formatted);
-          } else {
-            const decoded = decodeURIComponent(tour.itinerary_pdf_url.split('/').pop() || 'File mẫu');
-            setVisaSampleFiles([{ name: decoded, url: tour.itinerary_pdf_url }]);
-          }
-        } catch (e) {
-          const decoded = decodeURIComponent(tour.itinerary_pdf_url.split('/').pop() || 'File mẫu');
-          setVisaSampleFiles([{ name: decoded, url: tour.itinerary_pdf_url }]);
-        }
-      } else {
-        setVisaSampleFiles([]);
-      }
-    } else {
-      setVisaSampleFiles([]);
-    }
 
     setTourType(tour.tour_type || 'internal');
     setPartnerName(tour.partner_name || '');
@@ -1066,33 +1092,6 @@ export default function VisaServices() {
     setTourStatus('available');
     setCategory(tour.category || 'Visa');
     setItineraryPdfUrl(tour.itinerary_pdf_url || '');
-    if (tour.tour_type === 'visa') {
-      if (tour.itinerary_pdf_url) {
-        try {
-          if (tour.itinerary_pdf_url.startsWith('[')) {
-            const parsed = JSON.parse(tour.itinerary_pdf_url);
-            const formatted = parsed.map((item: any) => {
-              if (typeof item === 'string') {
-                const decoded = decodeURIComponent(item.split('/').pop() || 'File mẫu');
-                return { name: decoded, url: item };
-              }
-              return item;
-            });
-            setVisaSampleFiles(formatted);
-          } else {
-            const decoded = decodeURIComponent(tour.itinerary_pdf_url.split('/').pop() || 'File mẫu');
-            setVisaSampleFiles([{ name: decoded, url: tour.itinerary_pdf_url }]);
-          }
-        } catch (e) {
-          const decoded = decodeURIComponent(tour.itinerary_pdf_url.split('/').pop() || 'File mẫu');
-          setVisaSampleFiles([{ name: decoded, url: tour.itinerary_pdf_url }]);
-        }
-      } else {
-        setVisaSampleFiles([]);
-      }
-    } else {
-      setVisaSampleFiles([]);
-    }
 
     setTourType(tour.tour_type || 'internal');
     setPartnerName(tour.partner_name || '');
@@ -1155,7 +1154,6 @@ export default function VisaServices() {
     setTourStatus('available');
     setCategory('Visa');
     setItineraryPdfUrl('');
-    setVisaSampleFiles([]);
     setVisaSampleUploadError(null);
     setNoticeSections(DEFAULT_NOTICE_SECTIONS);
     setTourType('visa');
@@ -1240,9 +1238,7 @@ export default function VisaServices() {
       price_child: priceChild !== '' ? Number(priceChild) : Math.round(calculatedPrice * 0.8),
       price_infant: priceInfant !== '' ? Number(priceInfant) : Math.round(calculatedPrice * 0.3),
       single_room_surcharge: singleRoomSurcharge !== '' ? Number(singleRoomSurcharge) : 7500000,
-      itinerary_pdf_url: tourType === 'visa' 
-        ? (visaSampleFiles.length > 0 ? JSON.stringify(visaSampleFiles) : undefined) 
-        : (itineraryPdfUrl || undefined),
+      itinerary_pdf_url: itineraryPdfUrl || undefined,
       notice_sections: JSON.stringify(noticeSections),
       tour_type: tourType,
       partner_name: partnerName || undefined,
@@ -1394,6 +1390,173 @@ export default function VisaServices() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* SECTION HỒ SƠ & FILE MẪU VISA CHUNG */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200">
+        <button 
+          type="button"
+          onClick={() => setCommonFilesExpanded(!commonFilesExpanded)}
+          className="w-full px-6 py-4 bg-slate-50/50 hover:bg-slate-50 border-b border-gray-100 flex items-center justify-between transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-purple-100 rounded-lg text-purple-700">
+              <FolderOpen className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-base font-black text-gray-900">📁 Hồ Sơ & File Mẫu Visa Chung</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Kho tài liệu hướng dẫn, tờ khai mẫu dùng chung cho tất cả các loại Visa.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-100">
+              {visaCommonFiles.length} tài liệu
+            </span>
+            {commonFilesExpanded ? (
+              <ChevronUp className="w-5 h-5 text-gray-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-gray-400" />
+            )}
+          </div>
+        </button>
+
+        {commonFilesExpanded && (
+          <div className="p-6 space-y-6 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              {/* Cột Trái: Tải lên file mới (Chỉ hiển thị cho admin / visa có quyền) */}
+              {isVisaOrAdmin && (
+                <div className="md:col-span-5 space-y-4">
+                  <div className="bg-purple-50/35 border border-purple-100/50 p-4 rounded-xl">
+                    <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                      <Paperclip className="w-3.5 h-3.5" /> Thêm file mẫu mới
+                    </h4>
+                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                      Tải lên các file mẫu hướng dẫn, tờ khai, quy chuẩn hồ sơ. Các file này sẽ tự động được đồng bộ và lưu trữ an toàn trong thư mục <strong className="text-purple-700">"Visa"</strong>.
+                    </p>
+                  </div>
+
+                  <div className="relative">
+                    {isUploadingVisaSample ? (
+                      <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-purple-200 bg-purple-50/50 rounded-xl text-center min-h-[160px]">
+                        <div className="w-8 h-8 rounded-full border-4 border-purple-500 border-t-transparent animate-spin mb-3" />
+                        <p className="text-sm font-semibold text-purple-700">Đang tải tài liệu lên hệ thống lưu trữ...</p>
+                      </div>
+                    ) : (
+                      <label 
+                        className="group cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-purple-200 bg-white hover:border-purple-500 hover:bg-purple-50/5 rounded-xl p-6 text-center transition-all"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          processVisaSampleUpload(e.dataTransfer.files);
+                        }}
+                      >
+                        <UploadCloud className="w-10 h-10 mb-2 text-purple-400 group-hover:text-purple-500 transition-colors" />
+                        <p className="text-xs font-bold text-gray-700">Kéo thả hoặc click để tải lên</p>
+                        <p className="text-[10px] text-gray-400 mt-1">Hỗ trợ PDF, Word, Excel, hình ảnh...</p>
+                        <input 
+                          type="file" 
+                          multiple
+                          className="hidden" 
+                          onChange={handleVisaSampleUpload}
+                        />
+                      </label>
+                    )}
+                    
+                    {visaSampleUploadError && (
+                      <p className="text-xs font-semibold text-rose-600 flex items-center gap-1 bg-rose-50 border border-rose-100 p-2.5 rounded-lg mt-2">
+                        ⚠️ {visaSampleUploadError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Cột Phải: Danh sách file đã tải lên (Tự động kéo giãn nếu không có quyền tải lên) */}
+              <div className={`${isVisaOrAdmin ? 'md:col-span-7' : 'md:col-span-12'} space-y-3`}>
+                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  Danh sách file tài liệu ({visaCommonFiles.length})
+                </h4>
+
+                {visaCommonFiles.length === 0 ? (
+                  <div className="h-[180px] flex flex-col items-center justify-center border border-dashed border-gray-200 rounded-xl bg-gray-50/50 text-gray-400 gap-2">
+                    <FileText className="w-8 h-8 text-gray-300" />
+                    <span className="text-xs font-semibold">Chưa có file mẫu nào được tải lên</span>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Render 2 cột: sắp xếp theo thứ tự hàng ngang (Z-pattern) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {currentPageFiles.map((fileObj, idx) => {
+                        const globalIndex = commonFilesStartIndex + idx;
+                        const url = fileObj.url;
+                        const displayFileName = fileObj.name || `Tài liệu Visa ${globalIndex + 1}`;
+
+                        return (
+                          <div key={url} className="p-3.5 border border-purple-100 bg-purple-50/10 hover:bg-purple-50/25 rounded-xl flex items-center justify-between gap-4 animate-in fade-in duration-200 transition-colors">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="p-2 bg-purple-50 rounded-lg text-purple-600 shrink-0">
+                                <FileText className="w-4.5 h-4.5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-purple-950 truncate" title={displayFileName}>
+                                  {displayFileName}
+                                </p>
+                                <a 
+                                  href={url} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="text-[10px] text-blue-600 hover:underline font-bold inline-flex items-center gap-0.5 mt-1"
+                                >
+                                  Xem tài liệu / Tải về <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                            </div>
+                            
+                            {isVisaOrAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => setFileToDelete(url)}
+                                className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-100 shrink-0"
+                                title="Xóa tài liệu này"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {commonFilesTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-2">
+                        <button
+                          type="button"
+                          disabled={commonFilesPage === 1}
+                          onClick={() => setCommonFilesPage(prev => Math.max(prev - 1, 1))}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all"
+                        >
+                          <ChevronLeft className="w-4 h-4" /> Trang trước
+                        </button>
+                        <span className="text-xs font-bold text-slate-500">
+                          Trang {commonFilesPage} / {commonFilesTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={commonFilesPage === commonFilesTotalPages}
+                          onClick={() => setCommonFilesPage(prev => Math.min(prev + 1, commonFilesTotalPages))}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all"
+                        >
+                          Trang sau <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* TOURS MANAGEMENT TAB */}
@@ -1615,8 +1778,8 @@ export default function VisaServices() {
                   </div>
                 </div>
 
-                {/* 2. Airline, Hotel, PDF Itinerary - Hidden for Visa services */}
-                {tourType !== 'visa' && (
+                {/* 2. Airline, Hotel, PDF Itinerary - Conditional for Visa services */}
+                {tourType !== 'visa' ? (
                   <div className="space-y-4 pt-4 border-t border-slate-100">
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
                       <Plane className="w-4 h-4 text-emerald-600" /> Logistics & Lịch Trình PDF
@@ -1644,72 +1807,106 @@ export default function VisaServices() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                          📂 Lịch trình chi tiết (File PDF)
+                          📂 File tài liệu hoặc lịch trình chi tiết (Hỗ trợ nhiều file, mọi định dạng)
                           <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
                         </label>
                         
-                        {isUploadingItinerary ? (
-                          <div className="flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/30 rounded-xl p-4 text-center">
+                        {isUploadingItinerary && (
+                          <div className="mb-3 flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/30 rounded-xl p-4 text-center">
                             <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin mb-2" />
                             <p className="text-xs font-semibold text-blue-700">Đang tải file lên hệ thống...</p>
                             <p className="text-[10px] text-blue-500 mt-1">Đang đồng bộ và sắp xếp vào thư mục Drive...</p>
                           </div>
-                        ) : itineraryPdfUrl ? (
-                          <div className="p-3 border border-emerald-200 bg-emerald-50/40 rounded-xl flex items-center justify-between">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="p-1.5 bg-emerald-100 rounded-lg text-emerald-700">
-                                <FileText className="w-5 h-5" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-emerald-800 truncate" title={itineraryPdfUrl}>
-                                  {code ? `${code.trim().toUpperCase()}.pdf` : 'Lich_trinh.pdf'}
-                                </p>
-                                <a 
-                                  href={itineraryPdfUrl} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
-                                  className="text-[11px] text-blue-600 hover:underline font-semibold flex items-center gap-1 mt-0.5"
-                                >
-                                  Xem tài liệu <ExternalLink className="w-3 h-3" />
-                                </a>
-                              </div>
-                            </div>
-                            
-                            <label className="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-                              Thay đổi
-                              <input 
-                                type="file" 
-                                accept=".pdf,application/pdf" 
-                                className="hidden" 
-                                onChange={handleItineraryUpload}
-                              />
-                            </label>
-                          </div>
-                        ) : (
-                          <label className={`group cursor-pointer flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center transition-all ${
-                            code.trim() 
-                              ? 'border-gray-300 bg-white hover:border-blue-500 hover:bg-blue-50/10' 
-                              : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                          }`}>
-                            <UploadCloud className={`w-8 h-8 mb-2 transition-colors ${
-                              code.trim() ? 'text-gray-400 group-hover:text-blue-500' : 'text-gray-300'
-                            }`} />
-                            <p className="text-xs font-bold text-gray-700">
-                              {code.trim() ? 'Kéo thả hoặc click để tải lên tệp PDF' : 'Vui lòng nhập Mã Tour trước'}
-                            </p>
-                            <p className="text-[10px] text-gray-400 mt-1">
-                              {code.trim() ? 'Chỉ chấp nhận file định dạng PDF' : 'Để hệ thống đặt tên file theo mã tour'}
-                            </p>
-                            {code.trim() && (
-                              <input 
-                                type="file" 
-                                accept=".pdf,application/pdf" 
-                                className="hidden" 
-                                onChange={handleItineraryUpload}
-                              />
-                            )}
-                          </label>
                         )}
+
+                        {/* Danh sách file đã tải lên */}
+                        {(() => {
+                          const currentFiles = getItineraryFiles(itineraryPdfUrl);
+                          if (currentFiles.length === 0) return null;
+                          return (
+                            <div className="space-y-2 mb-3">
+                              {currentFiles.map((fileObj, fIdx) => (
+                                <div key={fileObj.url + '-' + fIdx} className="p-2.5 border border-slate-200 bg-slate-50/50 rounded-xl flex items-center justify-between gap-2 shadow-xs">
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600 shrink-0">
+                                      <FileText className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-bold text-slate-800 truncate" title={fileObj.name}>
+                                        {fileObj.name}
+                                      </p>
+                                      <a 
+                                        href={fileObj.url} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="text-[10px] text-blue-600 hover:underline font-semibold inline-flex items-center gap-0.5 mt-0.5"
+                                      >
+                                        Xem trực tuyến <ExternalLink className="w-2.5 h-2.5" />
+                                      </a>
+                                    </div>
+                                  </div>
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveItineraryFile(fileObj.url)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                                    title="Xóa tài liệu này"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Dropzone hoặc nút Tải thêm file */}
+                        {(() => {
+                          const currentFiles = getItineraryFiles(itineraryPdfUrl);
+                          const isDisabled = !code.trim();
+                          
+                          if (currentFiles.length > 0) {
+                            return (
+                              <label className={`inline-flex items-center gap-1.5 cursor-pointer bg-white border border-gray-300 hover:bg-slate-50 text-slate-700 font-bold text-xs px-3 py-2 rounded-lg transition-colors shadow-sm ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <Plus className="w-4 h-4 text-slate-500" /> Tải thêm tài liệu mới
+                                {!isDisabled && (
+                                  <input 
+                                    type="file" 
+                                    multiple
+                                    className="hidden" 
+                                    onChange={handleItineraryUpload}
+                                  />
+                                )}
+                              </label>
+                            );
+                          }
+
+                          return (
+                            <label className={`group cursor-pointer flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center transition-all ${
+                              code.trim() 
+                                ? 'border-gray-300 bg-white hover:border-blue-500 hover:bg-blue-50/10' 
+                                : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                            }`}>
+                              <UploadCloud className={`w-8 h-8 mb-2 transition-colors ${
+                                code.trim() ? 'text-gray-400 group-hover:text-blue-500' : 'text-gray-300'
+                              }`} />
+                              <p className="text-xs font-bold text-gray-700">
+                                {code.trim() ? 'Kéo thả hoặc click để tải lên các tài liệu' : 'Vui lòng nhập Mã Tour trước'}
+                              </p>
+                              <p className="text-[10px] text-gray-400 mt-1">
+                                {code.trim() ? 'Hỗ trợ tải lên nhiều file, mọi định dạng' : 'Để hệ thống đặt tên file theo mã tour'}
+                              </p>
+                              {code.trim() && (
+                                <input 
+                                  type="file" 
+                                  multiple
+                                  className="hidden" 
+                                  onChange={handleItineraryUpload}
+                                />
+                              )}
+                            </label>
+                          );
+                        })()}
                         
                         {itineraryUploadError && (
                           <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 bg-rose-50 border border-rose-100 p-2 rounded-lg">
@@ -1719,116 +1916,113 @@ export default function VisaServices() {
                       </div>
                     </div>
                   </div>
-                )}
-
-                {/* File mẫu Visa (Chỉ dành cho tourType === 'visa') */}
-                {tourType === 'visa' && (
-                  <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in duration-250">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-purple-800 pb-1.5 flex items-center gap-1.5">
-                      <Paperclip className="w-4 h-4 text-purple-600" /> Hồ sơ & File mẫu Visa (Tải lên nhiều file)
+                ) : (
+                  <div className="space-y-4 pt-4 border-t border-slate-100">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
+                      <Paperclip className="w-4 h-4 text-purple-600" /> Hồ sơ yêu cầu & Tài liệu hướng dẫn
                     </h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1 flex items-center gap-1.5 uppercase">
-                          📂 File mẫu / Tài liệu hướng dẫn Visa
-                          <span title="Các file mẫu tờ khai, hướng dẫn điền form, quy cách chuẩn bị hồ sơ...">
-                            <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                          </span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                          📂 File hồ sơ mẫu, tờ khai hoặc checklist (Hỗ trợ nhiều file, mọi định dạng)
+                          <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
                         </label>
                         
-                        <label className={`group cursor-pointer flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 text-center transition-all ${
-                          code.trim() 
-                            ? 'border-purple-200 bg-white hover:border-purple-500 hover:bg-purple-50/10' 
-                            : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                        }`}>
-                          <UploadCloud className={`w-10 h-10 mb-2 transition-colors ${
-                            code.trim() ? 'text-purple-400 group-hover:text-purple-500' : 'text-gray-300'
-                          }`} />
-                          <p className="text-xs font-bold text-gray-700">
-                            {code.trim() ? 'Kéo thả hoặc click để tải lên nhiều file mẫu' : 'Vui lòng nhập Mã Visa trước'}
-                          </p>
-                          <p className="text-[10px] text-gray-400 mt-1">
-                            Hỗ trợ tải lên nhiều file ảnh, PDF, tài liệu hướng dẫn...
-                          </p>
-                          {code.trim() && (
-                            <input 
-                              type="file" 
-                              multiple
-                              className="hidden" 
-                              onChange={handleVisaSampleUpload}
-                            />
-                          )}
-                        </label>
-                        
-                        {isUploadingVisaSample && (
-                          <div className="flex flex-col items-center justify-center mt-3 p-4 border border-purple-100 bg-purple-50/20 rounded-xl text-center">
-                            <div className="w-6 h-6 rounded-full border-3 border-purple-500 border-t-transparent animate-spin mb-2" />
-                            <p className="text-xs font-semibold text-purple-700">Đang tải các file mẫu lên Google Drive...</p>
-                          </div>
-                        )}
-                        
-                        {visaSampleUploadError && (
-                          <p className="text-xs font-semibold text-rose-600 mt-2 flex items-center gap-1 bg-rose-50 border border-rose-100 p-2 rounded-lg">
-                            ⚠️ {visaSampleUploadError}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Danh sách file mẫu đã tải lên */}
-                      <div className="space-y-3">
-                        <label className="block text-xs font-bold text-gray-600 uppercase">
-                          Danh sách file mẫu đã đính kèm ({visaSampleFiles.length})
-                        </label>
-                        
-                        {visaSampleFiles.length === 0 ? (
-                          <div className="h-[120px] flex items-center justify-center border border-dashed border-gray-200 rounded-xl bg-gray-50/50 text-xs text-gray-400 font-semibold">
-                            Chưa có file mẫu nào được tải lên
-                          </div>
-                        ) : (
-                          <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
-                            {visaSampleFiles.map((fileObj, index) => {
-                              const url = fileObj.url;
-                              const displayFileName = fileObj.name || `File_mau_${index + 1}`;
-
-                              return (
-                                <div key={url} className="p-3 border border-purple-100 bg-purple-50/20 rounded-xl flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                        {/* Danh sách file đã tải lên */}
+                        {(() => {
+                          const currentFiles = getItineraryFiles(itineraryPdfUrl);
+                          if (currentFiles.length === 0) return null;
+                          return (
+                            <div className="space-y-2 mb-3">
+                              {currentFiles.map((fileObj, fIdx) => (
+                                <div key={fileObj.url + '-' + fIdx} className="p-2.5 border border-slate-200 bg-slate-50/50 rounded-xl flex items-center justify-between gap-2 shadow-xs">
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <div className="p-1.5 bg-purple-100 rounded-lg text-purple-700 shrink-0">
+                                    <div className="p-1.5 bg-purple-50 rounded-lg text-purple-600 shrink-0">
                                       <FileText className="w-4 h-4" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-bold text-purple-900 truncate" title={displayFileName}>
-                                        {displayFileName}
+                                      <p className="text-xs font-bold text-slate-800 truncate" title={fileObj.name}>
+                                        {fileObj.name}
                                       </p>
                                       <a 
-                                        href={url} 
+                                        href={fileObj.url} 
                                         target="_blank" 
                                         rel="noreferrer" 
-                                        className="text-[10px] text-blue-600 hover:underline font-semibold flex items-center gap-0.5 mt-0.5"
+                                        className="text-[10px] text-purple-600 hover:underline font-semibold inline-flex items-center gap-0.5 mt-0.5"
                                       >
-                                        Xem tài liệu <ExternalLink className="w-3 h-3" />
+                                        Xem trực tuyến <ExternalLink className="w-2.5 h-2.5" />
                                       </a>
                                     </div>
                                   </div>
                                   
                                   <button
                                     type="button"
-                                    onClick={() => setFileToDelete(url)}
-                                    className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                                    title="Xóa file mẫu này"
+                                    onClick={() => handleRemoveItineraryFile(fileObj.url)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                                    title="Xóa tài liệu này"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                              ))}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Dropzone hoặc nút Tải tài liệu */}
+                        <div className="relative mt-3">
+                          {isUploadingItinerary ? (
+                            <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-purple-200 bg-purple-50/50 rounded-xl text-center min-h-[160px]">
+                              <div className="w-8 h-8 rounded-full border-4 border-purple-500 border-t-transparent animate-spin mb-3" />
+                              <p className="text-sm font-semibold text-purple-700">Đang tải tài liệu lên hệ thống lưu trữ...</p>
+                            </div>
+                          ) : (
+                            <label 
+                              className={`group cursor-pointer flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+                                code.trim() 
+                                  ? 'border-gray-300 bg-white hover:border-purple-500 hover:bg-purple-50/10' 
+                                  : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                              }`}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                if (code.trim()) {
+                                  processItineraryUpload(e.dataTransfer.files);
+                                }
+                              }}
+                            >
+                              <UploadCloud className={`w-10 h-10 mb-2 transition-colors ${
+                                code.trim() ? 'text-gray-400 group-hover:text-purple-500' : 'text-gray-300'
+                              }`} />
+                              <p className="text-xs font-bold text-gray-700">
+                                {code.trim() ? 'Kéo thả hoặc click để tải lên các tài liệu' : 'Vui lòng nhập Mã Visa trước'}
+                              </p>
+                              <p className="text-[10px] text-gray-400 mt-1">
+                                {code.trim() ? 'Hỗ trợ tải lên nhiều file, mọi định dạng' : 'Để hệ thống đặt tên file theo mã visa'}
+                              </p>
+                              {code.trim() && (
+                                <input 
+                                  type="file" 
+                                  multiple
+                                  className="hidden" 
+                                  onChange={handleItineraryUpload}
+                                />
+                              )}
+                            </label>
+                          )}
+                          
+                          {itineraryUploadError && (
+                            <p className="text-xs font-semibold text-rose-600 flex items-center gap-1 bg-rose-50 border border-rose-100 p-2.5 rounded-lg mt-2">
+                              ⚠️ {itineraryUploadError}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
+
+
 
                 
                 {/* 3. Numeric inputs with dynamic thousands separator formatting */}

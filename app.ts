@@ -584,17 +584,13 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
     const isVisaUpload = body.uploadType === 'visa';
 
     if (isVisaUpload) {
-      const visaCode = (body.visaCode || body.tourCode || 'VISA_CODE').trim().toUpperCase();
-      const visaName = body.visaName || body.tourTitle || 'Dich_vu_Visa';
       const fileName = file.originalname.trim(); // Giữ nguyên tên file gốc theo yêu cầu người dùng
 
       if (driveActive) {
-        // Sử dụng visaCode để đặt tên thư mục thay vì visaName để tránh lỗi font và trùng lặp
-        console.log(`[Drive] Đang tải file mẫu visa lên Google Drive cho Visa: ${visaCode}`);
+        console.log(`[Drive] Đang tải file mẫu visa lên Google Drive vào thư mục Visa chung`);
         const token = await getGoogleDriveAccessToken();
         const visaFolderId = await getOrCreateVisaFolder(token);
-        const visaServiceFolderId = await getOrCreateVisaServiceFolder(visaCode, visaFolderId, token);
-        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, visaServiceFolderId, token);
+        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, visaFolderId, token);
         res.json({
           success: true,
           url: result.webViewLink,
@@ -602,11 +598,11 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
           storage: 'drive'
         });
       } else {
-        console.log(`[Supabase Fallback] Đang tải file mẫu visa lên Supabase: Visa/${visaCode}/${fileName}`);
+        console.log(`[Supabase Fallback] Đang tải file mẫu visa lên Supabase: Visa/${fileName}`);
         const supabase = getSupabaseClient(req);
         const publicUrl = await uploadFileToSupabase(
           'crm-attachments',
-          `Visa/${visaCode}/${fileName}`,
+          `Visa/${fileName}`,
           file.buffer,
           file.mimetype,
           supabase
@@ -624,6 +620,43 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
     if (isTourUpload) {
       const tourCode = body.tourCode || 'TOUR_CODE';
       const category = body.category || 'Chung';
+
+      if (category === 'Visa') {
+        // File mẫu của từng dịch vụ visa: Lưu trong thư mục của visa đó, với tên thư mục là mã visa (ví dụ: AD Luxury Travel > Visa > VIAU)
+        const fileName = file.originalname.trim();
+
+        if (driveActive) {
+          console.log(`[Drive] Đang tải file mẫu visa của từng dịch vụ lên Google Drive: AD Luxury Travel > Visa > ${tourCode}`);
+          const token = await getGoogleDriveAccessToken();
+          const visaFolderId = await getOrCreateVisaFolder(token);
+          const serviceFolderId = await getOrCreateVisaServiceFolder(tourCode, visaFolderId, token);
+          const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, serviceFolderId, token);
+          res.json({
+            success: true,
+            url: result.webViewLink,
+            fileName: fileName,
+            storage: 'drive'
+          });
+        } else {
+          console.log(`[Supabase Fallback] Đang tải file mẫu visa của từng dịch vụ lên Supabase: Visa/${tourCode}/${fileName}`);
+          const supabase = getSupabaseClient(req);
+          const publicUrl = await uploadFileToSupabase(
+            'crm-attachments',
+            `Visa/${tourCode.trim().toUpperCase()}/${fileName}`,
+            file.buffer,
+            file.mimetype,
+            supabase
+          );
+          res.json({
+            success: true,
+            url: publicUrl,
+            fileName: fileName,
+            storage: 'supabase'
+          });
+        }
+        return;
+      }
+
       const ext = path.extname(file.originalname) || '.pdf';
       const fileName = `${tourCode.trim().toUpperCase()}${ext}`;
 

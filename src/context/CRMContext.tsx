@@ -103,6 +103,8 @@ interface CRMContextType {
   releaseExpiredHolds: () => void;
   membershipSettings: MembershipSettings;
   updateMembershipSettings: (settings: MembershipSettings) => void;
+  visaCommonFiles: { name: string; url: string }[];
+  updateVisaCommonFiles: (files: { name: string; url: string }[]) => Promise<void>;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -304,6 +306,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     platinumMin: 100000000
   });
   const [currentRole, setCurrentRole] = useState<Role>(initialRole);
+  const [visaCommonFiles, setVisaCommonFiles] = useState<{ name: string; url: string }[]>([]);
 
   useEffect(() => {
     setCurrentRole(initialRole);
@@ -794,6 +797,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             platinumMin: 100000000
           });
         }
+
+        // 7. Visa Common Files
+        try {
+          const { data: visaFilesData, error: visaFilesErr } = await supabase.from('app_settings').select('value').eq('key', 'visa_common_files').maybeSingle();
+          if (visaFilesErr) throw visaFilesErr;
+
+          if (visaFilesData && visaFilesData.value) {
+            setVisaCommonFiles(visaFilesData.value as { name: string; url: string }[]);
+            console.log('Đã nạp thành công Visa Common Files từ Supabase');
+          } else {
+            setVisaCommonFiles([]);
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Visa Common Files từ Supabase (sử dụng fallback local):', err);
+          const savedVisaFiles = localStorage.getItem('crm_visa_common_files');
+          setVisaCommonFiles(savedVisaFiles ? JSON.parse(savedVisaFiles) : []);
+        }
       } else {
         console.log('Không phát hiện cấu hình Supabase thực tế, sử dụng LocalStorage.');
         loadLocalStorage();
@@ -901,6 +921,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         goldMin: 50000000,
         platinumMin: 100000000
       });
+
+      const savedVisaFiles = localStorage.getItem('crm_visa_common_files');
+      setVisaCommonFiles(savedVisaFiles ? JSON.parse(savedVisaFiles) : []);
     };
 
     loadCRMData();
@@ -937,6 +960,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   }, [notifications]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured() && visaCommonFiles.length > 0) {
+      localStorage.setItem('crm_visa_common_files', JSON.stringify(visaCommonFiles));
+    }
+  }, [visaCommonFiles]);
+
   const updateMembershipSettings = async (settings: MembershipSettings) => {
     setMembershipSettings(settings);
     if (isSupabaseConfigured()) {
@@ -951,6 +980,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
     } else {
       localStorage.setItem('crm_membership_settings', JSON.stringify(settings));
+    }
+  };
+
+  const updateVisaCommonFiles = async (files: { name: string; url: string }[]) => {
+    setVisaCommonFiles(files);
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('app_settings').upsert({
+          key: 'visa_common_files',
+          value: files,
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('Lỗi khi lưu danh sách file mẫu visa chung lên Supabase:', err);
+      }
+    } else {
+      localStorage.setItem('crm_visa_common_files', JSON.stringify(files));
     }
   };
 
@@ -2390,7 +2436,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       updateInvoiceStatus,
       releaseExpiredHolds,
       membershipSettings,
-      updateMembershipSettings
+      updateMembershipSettings,
+      visaCommonFiles,
+      updateVisaCommonFiles
     }}>
       {children}
     </CRMContext.Provider>

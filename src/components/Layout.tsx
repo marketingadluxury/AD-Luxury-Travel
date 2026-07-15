@@ -33,11 +33,45 @@ const navigation = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { currentRole, setCurrentRole, notifications } = useCRM();
+  const { currentRole, setCurrentRole, notifications: allNotifications, orders, passengers } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const unreadNotifications = notifications.filter(n => !n.read);
+  const notifications = React.useMemo(() => {
+    if (currentRole === 'admin') {
+      return allNotifications;
+    }
+    
+    if (currentRole === 'visa') {
+      return allNotifications.filter(n => n.type === 'visa');
+    }
+    if (currentRole === 'accounting') {
+      return allNotifications.filter(n => n.type === 'accounting');
+    }
+    if (currentRole === 'operator') {
+      return allNotifications.filter(n => n.type === 'extension');
+    }
+    
+    if (['sale', 'CTV', 'Đại lý'].includes(currentRole)) {
+      const myOrderIds = orders
+        .filter(o => o.user_id === profile?.id || o.created_by === profile?.full_name)
+        .map(o => o.id);
+        
+      const myPassengerIds = passengers
+        .filter(p => myOrderIds.includes(p.order_id))
+        .map(p => p.id);
+        
+      return allNotifications.filter(n => {
+        return myOrderIds.includes(n.targetId) || myPassengerIds.includes(n.targetId);
+      });
+    }
+    
+    return [];
+  }, [allNotifications, currentRole, orders, passengers, profile]);
+
+  const unreadNotifications = React.useMemo(() => {
+    return notifications.filter(n => !n.read);
+  }, [notifications]);
 
   const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCurrentRole(e.target.value as Role);
