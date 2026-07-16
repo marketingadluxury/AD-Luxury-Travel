@@ -35,6 +35,10 @@ export default function EditPassengerModal({
   const [passportNumber, setPassportNumber] = useState('');
   const [dob, setDob] = useState('');
   const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState('');
+  const [nationality, setNationality] = useState('VN');
+  const [passportIssueDate, setPassportIssueDate] = useState('');
+  const [passportExpiryDate, setPassportExpiryDate] = useState('');
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -51,6 +55,10 @@ export default function EditPassengerModal({
       setPassportNumber(passenger.passport_number || '');
       setDob(passenger.dob || '');
       setPhone(passenger.phone || '');
+      setGender(passenger.gender || '');
+      setNationality(passenger.nationality || 'VN');
+      setPassportIssueDate(passenger.passport_issue_date || '');
+      setPassportExpiryDate(passenger.passport_expiry_date || '');
       setNeedsVisaService(passenger.needs_visa_service || false);
       setUploadedUrls(passenger.passport_url ? passenger.passport_url.split(',').filter(Boolean) : []);
       setActiveId(passenger.id);
@@ -173,6 +181,10 @@ export default function EditPassengerModal({
         phone: phone.trim(),
         passport_url: uploadedUrls.join(','),
         needs_visa_service: needsVisaService,
+        gender,
+        nationality: nationality.trim().toUpperCase(),
+        passport_issue_date: passportIssueDate,
+        passport_expiry_date: passportExpiryDate,
       });
 
       onClose();
@@ -222,25 +234,69 @@ export default function EditPassengerModal({
             </div>
           )}
 
-          {/* Full Name */}
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-              Họ và tên khách <span className="text-rose-500">*</span>
-            </label>
-            <input 
-              type="text" 
-              placeholder="NGUYEN VAN A" 
-              required
-              value={fullName} 
-              onChange={e => setFullName(e.target.value.toUpperCase())} 
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase" 
-            />
+          {/* Full Name & Gender */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div className="md:col-span-8">
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Họ và tên khách <span className="text-rose-500">*</span>
+              </label>
+              <input 
+                type="text" 
+                placeholder="NGUYEN VAN A" 
+                required
+                value={fullName} 
+                onChange={e => setFullName(e.target.value.toUpperCase())} 
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase" 
+              />
+            </div>
+            
+            <div className="md:col-span-4">
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Giới tính (Sex)
+              </label>
+              <select
+                value={gender}
+                onChange={e => setGender(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+              >
+                <option value="">Chọn</option>
+                <option value="Mr">Mr (Nam)</option>
+                <option value="Mrs">Mrs (Bà)</option>
+                <option value="Ms">Ms (Cô)</option>
+              </select>
+            </div>
           </div>
 
-          {/* Passport, Phone & DOB Grid */}
+          {/* Personal Info Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Phone Number */}
+            {/* Date of Birth */}
             <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Ngày sinh (DOB)
+              </label>
+              <DatePicker 
+                value={dob} 
+                onChange={val => setDob(val)} 
+                align="left"
+              />
+            </div>
+
+            {/* Nationality */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                Quốc tịch
+              </label>
+              <input 
+                type="text" 
+                placeholder="VN" 
+                value={nationality} 
+                onChange={e => setNationality(e.target.value.toUpperCase())} 
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase" 
+              />
+            </div>
+
+            {/* Phone Number */}
+            <div className="md:col-span-2">
               <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
                 Số điện thoại
               </label>
@@ -252,31 +308,50 @@ export default function EditPassengerModal({
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-semibold text-slate-800" 
               />
             </div>
+          </div>
 
-            {/* Passport Number */}
-            <div>
-              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Số hộ chiếu (Passport)
-              </label>
-              <input 
-                type="text" 
-                placeholder="Nhập số hộ chiếu" 
-                value={passportNumber} 
-                onChange={e => setPassportNumber(e.target.value.toUpperCase())} 
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase font-semibold text-slate-800" 
-              />
-            </div>
+          {/* Passport Info Grid */}
+          <div className="border-t border-slate-100 pt-4 space-y-4">
+            <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Thông tin hộ chiếu (Passport)</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Passport Number */}
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Số hộ chiếu (Passport No.)
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Nhập số hộ chiếu" 
+                  value={passportNumber} 
+                  onChange={e => setPassportNumber(e.target.value.toUpperCase())} 
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase font-semibold text-slate-800" 
+                />
+              </div>
 
-            {/* Date of Birth */}
-            <div className="md:col-span-2">
-              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                Ngày tháng năm sinh
-              </label>
-              <DatePicker 
-                value={dob} 
-                onChange={val => setDob(val)} 
-                align="left"
-              />
+              {/* Passport Issue Date */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Ngày cấp (DOI)
+                </label>
+                <DatePicker 
+                  value={passportIssueDate} 
+                  onChange={val => setPassportIssueDate(val)} 
+                  align="left"
+                />
+              </div>
+
+              {/* Passport Expiry Date */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Ngày hết hạn (DOE)
+                </label>
+                <DatePicker 
+                  value={passportExpiryDate} 
+                  onChange={val => setPassportExpiryDate(val)} 
+                  align="left"
+                />
+              </div>
             </div>
           </div>
 

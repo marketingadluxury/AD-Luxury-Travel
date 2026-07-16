@@ -42,6 +42,7 @@ export interface Tour {
   guide_name?: string; // Tên HDV
   guide_phone?: string; // SĐT HDV
   ticket_status?: string; // Tình trạng vé
+  ticket_deadline?: string; // Hạn xuất vé
   visa_deadline?: string; // Hạn nhận hồ sơ visa
   description?: string; // Thông tin đi tour / Link chi tiết
   tour_status?: TourStatus; // Trạng thái: còn chỗ, noshop, giờ chót, lễ tết, đang giảm giá
@@ -81,6 +82,8 @@ export interface Order {
   status: 'hold' | 'sure' | 'paid' | 'cancelled';
   hold_expiry?: string; // Thời gian hết hạn hold
   invoice_status: 'pending' | 'issued';
+  payment_status?: 'unpaid' | 'partially_paid' | 'paid';
+  paid_amount?: number;
   total_price: number;
   created_at: string;
   extension_status?: 'none' | 'requested' | 'approved' | 'rejected';
@@ -94,7 +97,13 @@ export interface Order {
   single_room_count?: number;
   room_share_info?: string;
   vat_option?: string;
+  vat_company_name?: string;
+  vat_tax_code?: string;
+  vat_address?: string;
+  vat_email?: string;
   special_requests?: string;
+  discount_type?: 'percent' | 'amount';
+  discount_value?: number;
 }
 
 export interface Passenger {
@@ -108,6 +117,10 @@ export interface Passenger {
   dob?: string;
   passport_url?: string;
   labor_contract_url?: string;
+  gender?: string; // Giới tính (Mr, Mrs, Ms...)
+  nationality?: string; // Quốc tịch
+  passport_issue_date?: string; // Ngày cấp hộ chiếu
+  passport_expiry_date?: string; // Ngày hết hạn hộ chiếu
   visa_status: 'pending' | 'processing' | 'approved' | 'rejected' | 'not_required' | 'disqualified';
   needs_visa_service?: boolean; // Tùy chọn làm visa thông qua tour
   visa_submitted_at?: string;
@@ -119,5 +132,21 @@ export interface MembershipSettings {
   silverMin: number;
   goldMin: number;
   platinumMin: number;
+}
+
+export interface Invoice {
+  id: string;
+  order_id: string | null;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  type: 'receipt' | 'payment';
+  payment_method?: string;
+  description?: string;
+  invoice_code?: string;
+  file_url?: string;
+  created_by?: string;
+  verified_by?: string;
+  verified_at?: string;
+  created_at?: string;
 }
 

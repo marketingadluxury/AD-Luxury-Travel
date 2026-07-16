@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, User, TourStatus, MembershipSettings } from '../types';
+import { Tour, Order, Passenger, Role, User, TourStatus, MembershipSettings, Invoice } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -88,6 +88,10 @@ interface CRMContextType {
     single_room_count?: number;
     room_share_info?: string;
     vat_option?: string;
+    vat_company_name?: string;
+    vat_tax_code?: string;
+    vat_address?: string;
+    vat_email?: string;
     special_requests?: string;
   }) => void;
   confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
@@ -105,6 +109,10 @@ interface CRMContextType {
   updateMembershipSettings: (settings: MembershipSettings) => void;
   visaCommonFiles: { name: string; url: string }[];
   updateVisaCommonFiles: (files: { name: string; url: string }[]) => Promise<void>;
+  invoices: Invoice[];
+  createInvoiceReceipt: (invoiceData: Omit<Invoice, 'id' | 'status' | 'created_at'>) => Promise<Invoice>;
+  approveInvoiceReceipt: (invoiceId: string, verifierName: string) => Promise<void>;
+  rejectInvoiceReceipt: (invoiceId: string, verifierName: string) => Promise<void>;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -307,6 +315,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   });
   const [currentRole, setCurrentRole] = useState<Role>(initialRole);
   const [visaCommonFiles, setVisaCommonFiles] = useState<{ name: string; url: string }[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   useEffect(() => {
     setCurrentRole(initialRole);
@@ -350,6 +359,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               guide_phone: t.guide_phone,
               ticket_status: t.ticket_status,
               visa_deadline: t.visa_deadline,
+              ticket_deadline: t.ticket_deadline,
               description: t.description,
               tour_status: t.tour_status,
               category: t.category,
@@ -410,6 +420,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
                   guide_phone: t.guide_phone,
                   ticket_status: t.ticket_status,
                   visa_deadline: t.visa_deadline,
+                  ticket_deadline: t.ticket_deadline,
                   description: t.description,
                   category: t.category,
                   hold_duration_hours: Number(t.hold_duration_hours || 48),
@@ -475,7 +486,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               single_room_count: b.single_room_count,
               room_share_info: b.room_share_info,
               vat_option: b.vat_option,
-              special_requests: b.special_requests
+              vat_company_name: b.vat_company_name,
+              vat_tax_code: b.vat_tax_code,
+              vat_address: b.vat_address,
+              vat_email: b.vat_email,
+              special_requests: b.special_requests,
+              discount_type: b.discount_type,
+              discount_value: Number(b.discount_value || 0)
             }));
             setOrders(fetchedOrders);
             console.log('Đã nạp thành công Bookings từ Supabase');
@@ -589,7 +606,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
                 ? p.needs_visa_service
                 : (p.visa_status && p.visa_status !== 'not_required'),
               visa_submitted_at: p.visa_submitted_at || storedSubmittedAts[p.id] || undefined,
-              visa_disqualified_reason: p.visa_disqualified_reason || storedReasons[p.id] || undefined
+              visa_disqualified_reason: p.visa_disqualified_reason || storedReasons[p.id] || undefined,
+              gender: p.gender,
+              nationality: p.nationality,
+              passport_issue_date: p.passport_issue_date,
+              passport_expiry_date: p.passport_expiry_date
             }));
             setPassengers(sanitizePassengers(mapped, fetchedOrders));
             console.log('Đã nạp thành công Passengers từ Supabase');
@@ -687,6 +708,39 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             }
           ];
           setPassengers(sanitizePassengers(parsedPassengers, fetchedOrders));
+        }
+
+        // 3.5. Invoices
+        let fetchedInvoices: Invoice[] = [];
+        try {
+          const { data: invoicesData, error: invoicesErr } = await supabase.from('invoices').select('*');
+          if (invoicesErr) throw invoicesErr;
+          if (invoicesData && invoicesData.length > 0) {
+            fetchedInvoices = invoicesData.map(inv => ({
+              id: inv.id,
+              order_id: inv.order_id,
+              amount: Number(inv.amount),
+              status: inv.status as any,
+              type: inv.type as any,
+              payment_method: inv.payment_method,
+              description: inv.description,
+              invoice_code: inv.invoice_code,
+              file_url: inv.file_url,
+              created_by: inv.created_by,
+              verified_by: inv.verified_by,
+              verified_at: inv.verified_at,
+              created_at: inv.created_at
+            }));
+            setInvoices(fetchedInvoices);
+            console.log('Đã nạp thành công Invoices từ Supabase');
+          } else {
+            setInvoices([]);
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Invoices từ Supabase (sử dụng fallback local):', err);
+          const savedInvoices = localStorage.getItem('crm_invoices');
+          fetchedInvoices = savedInvoices ? JSON.parse(savedInvoices) : [];
+          setInvoices(fetchedInvoices);
         }
 
         // 4. Notifications
@@ -924,12 +978,21 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
       const savedVisaFiles = localStorage.getItem('crm_visa_common_files');
       setVisaCommonFiles(savedVisaFiles ? JSON.parse(savedVisaFiles) : []);
+
+      const savedInvoices = localStorage.getItem('crm_invoices');
+      setInvoices(savedInvoices ? JSON.parse(savedInvoices) : []);
     };
 
     loadCRMData();
   }, [user?.id]);
 
   // Sync state changes to fallback LocalStorage only (Supabase is handled on action trigger)
+  useEffect(() => {
+    if (!isSupabaseConfigured() && invoices.length > 0) {
+      localStorage.setItem('crm_invoices', JSON.stringify(invoices));
+    }
+  }, [invoices]);
+
   useEffect(() => {
     if (!isSupabaseConfigured() && tours.length > 0) {
       localStorage.setItem('crm_tours', JSON.stringify(tours));
@@ -1273,6 +1336,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           guide_phone: cleanValueForSupabase(tourData.guide_phone),
           ticket_status: cleanValueForSupabase(tourData.ticket_status || 'CHỜ XUẤT VÉ'),
           visa_deadline: cleanValueForSupabase(tourData.visa_deadline),
+          ticket_deadline: cleanValueForSupabase(tourData.ticket_deadline),
           description: cleanValueForSupabase(tourData.description),
           category: cleanValueForSupabase(tourData.category),
           hold_duration_hours: cleanValueForSupabase(tourData.hold_duration_hours || 48, true),
@@ -1412,6 +1476,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           guide_phone: cleanValueForSupabase(updatedTour.guide_phone),
           ticket_status: cleanValueForSupabase(updatedTour.ticket_status || 'CHỜ XUẤT VÉ'),
           visa_deadline: cleanValueForSupabase(updatedTour.visa_deadline),
+          ticket_deadline: cleanValueForSupabase(updatedTour.ticket_deadline),
           description: cleanValueForSupabase(updatedTour.description),
           category: cleanValueForSupabase(updatedTour.category),
           hold_duration_hours: cleanValueForSupabase(updatedTour.hold_duration_hours || 48, true),
@@ -1523,7 +1588,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     single_room_count?: number;
     room_share_info?: string;
     vat_option?: string;
+    vat_company_name?: string;
+    vat_tax_code?: string;
+    vat_address?: string;
+    vat_email?: string;
     special_requests?: string;
+    discount_type?: 'percent' | 'amount';
+    discount_value?: number;
   }) => {
     const tour = tours.find(t => t.id === orderData.tour_id);
     if (!tour) return;
@@ -1627,7 +1698,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       single_room_count: orderData.single_room_count || 0,
       room_share_info: orderData.room_share_info,
       vat_option: orderData.vat_option,
+      vat_company_name: orderData.vat_company_name,
+      vat_tax_code: orderData.vat_tax_code,
+      vat_address: orderData.vat_address,
+      vat_email: orderData.vat_email,
       special_requests: orderData.special_requests,
+      discount_type: orderData.discount_type || 'amount',
+      discount_value: orderData.discount_value || 0,
     } as any;
 
     const newPassengers: Passenger[] = (orderData.passengers || []).map((p, index) => ({
@@ -1729,7 +1806,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           single_room_count: Number(orderData.single_room_count || 0),
           room_share_info: orderData.room_share_info,
           vat_option: orderData.vat_option || 'no_vat',
-          special_requests: orderData.special_requests
+          vat_company_name: orderData.vat_company_name,
+          vat_tax_code: orderData.vat_tax_code,
+          vat_address: orderData.vat_address,
+          vat_email: orderData.vat_email,
+          special_requests: orderData.special_requests,
+          discount_type: orderData.discount_type || 'amount',
+          discount_value: Number(orderData.discount_value || 0)
         });
         if (bookingError) throw bookingError;
 
@@ -1748,7 +1831,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               visa_status: p.visa_status,
               needs_visa_service: p.needs_visa_service,
               visa_submitted_at: p.visa_submitted_at,
-              visa_disqualified_reason: p.visa_disqualified_reason
+              visa_disqualified_reason: p.visa_disqualified_reason,
+              gender: p.gender,
+              nationality: p.nationality,
+              passport_issue_date: p.passport_issue_date,
+              passport_expiry_date: p.passport_expiry_date
             });
             if (pError) throw pError;
           } catch (insertErr) {
@@ -1882,7 +1969,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               visa_status: p.visa_status,
               needs_visa_service: p.needs_visa_service,
               visa_submitted_at: p.visa_submitted_at,
-              visa_disqualified_reason: p.visa_disqualified_reason
+              visa_disqualified_reason: p.visa_disqualified_reason,
+              gender: p.gender,
+              nationality: p.nationality,
+              passport_issue_date: p.passport_issue_date,
+              passport_expiry_date: p.passport_expiry_date
             });
             if (pError) throw pError;
           } catch (insertErr) {
@@ -2069,7 +2160,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               visa_status: p.visa_status,
               needs_visa_service: p.needs_visa_service,
               visa_submitted_at: p.visa_submitted_at,
-              visa_disqualified_reason: p.visa_disqualified_reason
+              visa_disqualified_reason: p.visa_disqualified_reason,
+              gender: p.gender,
+              nationality: p.nationality,
+              passport_issue_date: p.passport_issue_date,
+              passport_expiry_date: p.passport_expiry_date
             });
             if (pError) throw pError;
           } catch (insertErr) {
@@ -2347,7 +2442,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           visa_status: finalData.visa_status,
           needs_visa_service: finalData.needs_visa_service,
           visa_submitted_at: finalData.visa_submitted_at,
-          visa_disqualified_reason: finalData.visa_disqualified_reason
+          visa_disqualified_reason: finalData.visa_disqualified_reason,
+          gender: finalData.gender,
+          nationality: finalData.nationality,
+          passport_issue_date: finalData.passport_issue_date,
+          passport_expiry_date: finalData.passport_expiry_date
         }).eq('id', toUuid(passengerId));
         
         if (error) throw error;
@@ -2394,13 +2493,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedData } : o));
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({
+        const updatePayload = {
           single_room_count: updatedData.single_room_count !== undefined ? Number(updatedData.single_room_count) : undefined,
           room_share_info: updatedData.room_share_info,
           vat_option: updatedData.vat_option,
+          vat_company_name: updatedData.vat_company_name,
+          vat_tax_code: updatedData.vat_tax_code,
+          vat_address: updatedData.vat_address,
+          vat_email: updatedData.vat_email,
           special_requests: updatedData.special_requests,
+          discount_type: updatedData.discount_type,
+          discount_value: updatedData.discount_value !== undefined ? Number(updatedData.discount_value) : undefined,
           total_amount: updatedData.total_price !== undefined ? Number(updatedData.total_price) : undefined
-        }).eq('id', toUuid(orderId));
+        };
+        console.log('CRMContext: Updating booking with payload:', updatePayload);
+        const { error } = await supabase.from('bookings').update(updatePayload).eq('id', toUuid(orderId));
+        if (error) throw error;
+        console.log('CRMContext: Successfully updated booking');
       } catch (err) {
         console.error('Lỗi khi cập nhật đơn hàng trên Supabase:', err);
       }
@@ -2414,6 +2523,289 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         await supabase.from('bookings').update({ invoice_status: status }).eq('id', toUuid(orderId));
       } catch (err) {
         console.error('Lỗi khi cập nhật trạng thái xuất hóa đơn trên Supabase:', err);
+      }
+    }
+  };
+
+  const createInvoiceReceipt = async (invoiceData: Omit<Invoice, 'id' | 'status' | 'created_at'>) => {
+    const newId = generateSafeUUID();
+    const nowStr = new Date().toISOString();
+    
+    const newInvoice: Invoice = {
+      ...invoiceData,
+      id: newId,
+      status: 'pending',
+      created_at: nowStr
+    };
+
+    setInvoices(prev => [newInvoice, ...prev]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        const insertData: any = {
+          id: newId,
+          order_id: invoiceData.order_id ? toUuid(invoiceData.order_id) : null,
+          amount: Number(invoiceData.amount),
+          status: 'pending',
+          type: invoiceData.type,
+          payment_method: invoiceData.payment_method || 'Chuyển khoản',
+          description: invoiceData.description || '',
+          invoice_code: invoiceData.invoice_code || '',
+          file_url: invoiceData.file_url || '',
+          created_by: invoiceData.created_by || ''
+        };
+
+        let currentInsertData = { ...insertData };
+        let { error } = await supabase.from('invoices').insert(currentInsertData);
+        
+        if (error) {
+          let attempts = 0;
+          while (error && attempts < 4) {
+            const errMsg = error.message || '';
+            
+            const missingColMatch = errMsg.match(/Could not find the '([^']+)' column/i);
+            const uuidMatch = errMsg.match(/invalid input syntax for type uuid: "([^"]+)"/i);
+            if (missingColMatch && missingColMatch[1]) {
+              const col = missingColMatch[1];
+              console.warn(`Column '${col}' not found in Supabase, removing and retrying...`);
+              delete currentInsertData[col];
+            } else if (uuidMatch && uuidMatch[1]) {
+              console.warn(`Invalid UUID syntax for value '${uuidMatch[1]}', trying to find and remove the offending field...`);
+              // Find which field has this value and delete it
+              for (const key in currentInsertData) {
+                if (currentInsertData[key] === uuidMatch[1]) {
+                  delete currentInsertData[key];
+                }
+              }
+            } else if (errMsg.includes('customer_id') || errMsg.includes('foreign key constraint')) {
+              console.warn('customer_id foreign key failed, removing customer_id and retrying...');
+              delete currentInsertData.customer_id;
+            } else if ((error as any).code === '23505' || errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('invoices_invoice_code_key')) {
+              const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+              const originalCode = currentInsertData.invoice_code || 'INV';
+              const newCode = `${originalCode}-${randomSuffix}`;
+              console.warn(`Duplicate invoice_code detected. Changing '${originalCode}' to '${newCode}' and retrying...`);
+              currentInsertData.invoice_code = newCode;
+              
+              // Cập nhật lại state danh sách hóa đơn với mã mới để tránh sai lệch
+              setInvoices(prev => prev.map(inv => inv.id === newId ? { ...inv, invoice_code: newCode } : inv));
+            } else {
+              throw error;
+            }
+            
+            const retryRes = await supabase.from('invoices').insert(currentInsertData);
+            error = retryRes.error;
+            attempts++;
+          }
+          
+          if (error) throw error;
+        }
+        toast.success('Đã tải hóa đơn lên hệ thống thành công và đang chờ kế toán duyệt!');
+      } catch (err: any) {
+        console.error('Lỗi khi chèn invoice vào Supabase:', err.message || err);
+        toast.error(`Lỗi DB: ${err.message || 'Lỗi không xác định'}`);
+      }
+    } else {
+      toast.success('Đã nộp hóa đơn (Chế độ ngoại tuyến, chờ duyệt)!');
+    }
+
+    // Trigger notification to accounting team (Kế toán)
+    const order = orders.find(o => o.id === (invoiceData as any).order_id);
+    const bookingCode = order ? order.id.substring(0, 8) : 'Chưa rõ';
+    const amountStr = new Intl.NumberFormat('vi-VN').format(invoiceData.amount);
+    
+    const newNotif: Notification = {
+      id: generateSafeUUID(),
+      type: 'accounting',
+      title: 'Hóa đơn thanh toán mới',
+      message: `Nhân viên ${invoiceData.created_by || 'Sale'} đã tải hóa đơn chuyển khoản ${amountStr}đ cho đơn hàng #${bookingCode}. Vui lòng kiểm tra và duyệt.`,
+      targetId: (invoiceData as any).order_id || '',
+      createdAt: nowStr,
+      read: false
+    };
+
+    setNotifications(prev => [newNotif, ...prev]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('system_notifications').insert({
+          id: newNotif.id,
+          type: 'accounting',
+          title: newNotif.title,
+          message: newNotif.message,
+          target_id: newNotif.targetId,
+          created_at: newNotif.createdAt,
+          read: false
+        });
+      } catch (err) {
+        console.warn('Lỗi lưu thông báo kế toán vào Supabase:', err);
+      }
+    }
+
+    return newInvoice;
+  };
+
+  const approveInvoiceReceipt = async (invoiceId: string, verifierName: string) => {
+    const nowStr = new Date().toISOString();
+    
+    // Update local invoices state
+    setInvoices(prev => prev.map(inv => 
+      inv.id === invoiceId 
+        ? { ...inv, status: 'approved', verified_by: verifierName, verified_at: nowStr } 
+        : inv
+    ));
+
+    const targetInvoice = invoices.find(inv => inv.id === invoiceId);
+    if (!targetInvoice) return;
+
+    const bookingId = targetInvoice.order_id;
+    if (bookingId) {
+      const order = orders.find(o => o.id === bookingId);
+      if (order) {
+        const approvedSum = targetInvoice.amount + (order.paid_amount || 0);
+        let newPaymentStatus: Order['payment_status'] = 'partially_paid';
+        if (approvedSum >= order.total_price) {
+          newPaymentStatus = 'paid';
+        } else if (approvedSum === 0) {
+          newPaymentStatus = 'unpaid';
+        }
+
+        let newOrderStatus = order.status;
+        if (newPaymentStatus === 'paid') {
+          newOrderStatus = 'paid';
+        } else if (order.status === 'hold' || order.status === 'cancelled') {
+          newOrderStatus = 'sure';
+        }
+
+        setOrders(prev => prev.map(o => 
+          o.id === bookingId 
+            ? { ...o, paid_amount: approvedSum, payment_status: newPaymentStatus, status: newOrderStatus } 
+            : o
+        ));
+
+        if (isSupabaseConfigured()) {
+          try {
+            await supabase.from('bookings').update({
+              paid_amount: approvedSum,
+              payment_status: newPaymentStatus,
+              status: newOrderStatus,
+              hold_expiry: newOrderStatus === 'sure' || newOrderStatus === 'paid' ? null : order.hold_expiry
+            }).eq('id', toUuid(bookingId));
+          } catch (err) {
+            console.error('Lỗi khi cập nhật trạng thái thanh toán đơn hàng:', err);
+          }
+        }
+      }
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('invoices').update({
+          status: 'approved',
+          verified_by: verifierName,
+          verified_at: nowStr
+        }).eq('id', toUuid(invoiceId));
+        toast.success('Duyệt phiếu thu thành công! Đã lưu trữ trong mục "Công ty đã nhận".');
+      } catch (err) {
+        console.error('Lỗi khi duyệt invoice trên Supabase:', err);
+        toast.error('Gặp sự cố khi duyệt trên máy chủ!');
+      }
+    } else {
+      toast.success('Duyệt phiếu thu thành công (Chế độ ngoại tuyến)! Đã lưu trữ trong mục "Công ty đã nhận".');
+    }
+
+    const orderObj = bookingId ? orders.find(o => o.id === bookingId) : null;
+    const bookingCode = orderObj ? orderObj.id.substring(0, 8) : 'Chưa rõ';
+    const amountStr = new Intl.NumberFormat('vi-VN').format(targetInvoice.amount);
+
+    const salesNotif: Notification = {
+      id: generateSafeUUID(),
+      type: 'extension',
+      title: 'Hóa đơn thanh toán được duyệt',
+      message: `Kế toán ${verifierName} đã duyệt phiếu thu ${amountStr}đ cho đơn hàng #${bookingCode}.`,
+      targetId: bookingId || '',
+      createdAt: nowStr,
+      read: false
+    };
+
+    setNotifications(prev => [salesNotif, ...prev]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('system_notifications').insert({
+          id: salesNotif.id,
+          type: 'extension',
+          title: salesNotif.title,
+          message: salesNotif.message,
+          target_id: salesNotif.targetId,
+          created_at: salesNotif.createdAt,
+          read: false
+        });
+      } catch (err) {
+        console.warn('Lỗi lưu thông báo duyệt thanh toán vào Supabase:', err);
+      }
+    }
+  };
+
+  const rejectInvoiceReceipt = async (invoiceId: string, verifierName: string) => {
+    const nowStr = new Date().toISOString();
+
+    setInvoices(prev => prev.map(inv => 
+      inv.id === invoiceId 
+        ? { ...inv, status: 'rejected', verified_by: verifierName, verified_at: nowStr } 
+        : inv
+    ));
+
+    const targetInvoice = invoices.find(inv => inv.id === invoiceId);
+    if (!targetInvoice) return;
+
+    const bookingId = targetInvoice.order_id;
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('invoices').update({
+          status: 'rejected',
+          verified_by: verifierName,
+          verified_at: nowStr
+        }).eq('id', toUuid(invoiceId));
+        toast.success('Từ chối phiếu thu thành công! Bản ghi được lưu trong mục "Bị từ chối".');
+      } catch (err) {
+        console.error('Lỗi khi từ chối invoice trên Supabase:', err);
+        toast.error('Gặp sự cố khi từ chối hóa đơn trên máy chủ!');
+      }
+    } else {
+      toast.success('Từ chối phiếu thu thành công (Chế độ ngoại tuyến)! Bản ghi được lưu trong mục "Bị từ chối".');
+    }
+
+    const orderObj = bookingId ? orders.find(o => o.id === bookingId) : null;
+    const bookingCode = orderObj ? orderObj.id.substring(0, 8) : 'Chưa rõ';
+    const amountStr = new Intl.NumberFormat('vi-VN').format(targetInvoice.amount);
+
+    const salesNotif: Notification = {
+      id: generateSafeUUID(),
+      type: 'extension',
+      title: 'Hóa đơn thanh toán bị từ chối',
+      message: `Phiếu thu ${amountStr}đ cho đơn hàng #${bookingCode} đã bị kế toán từ chối. Vui lòng kiểm tra lại.`,
+      targetId: bookingId || '',
+      createdAt: nowStr,
+      read: false
+    };
+
+    setNotifications(prev => [salesNotif, ...prev]);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('system_notifications').insert({
+          id: salesNotif.id,
+          type: 'extension',
+          title: salesNotif.title,
+          message: salesNotif.message,
+          target_id: salesNotif.targetId,
+          created_at: salesNotif.createdAt,
+          read: false
+        });
+      } catch (err) {
+        console.warn('Lỗi lưu thông báo từ chối thanh toán vào Supabase:', err);
       }
     }
   };
@@ -2448,7 +2840,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       membershipSettings,
       updateMembershipSettings,
       visaCommonFiles,
-      updateVisaCommonFiles
+      updateVisaCommonFiles,
+      invoices,
+      createInvoiceReceipt,
+      approveInvoiceReceipt,
+      rejectInvoiceReceipt
     }}>
       {children}
     </CRMContext.Provider>

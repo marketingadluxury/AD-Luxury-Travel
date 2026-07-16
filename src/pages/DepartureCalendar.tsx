@@ -408,6 +408,10 @@ export default function DepartureCalendar() {
   const [singleRoomCount, setSingleRoomCount] = useState(0);
   const [roomShareInfo, setRoomShareInfo] = useState('Không ghép');
   const [vatOption, setVatOption] = useState('Không xuất VAT');
+  const [vatCompanyName, setVatCompanyName] = useState('');
+  const [vatTaxCode, setVatTaxCode] = useState('');
+  const [vatAddress, setVatAddress] = useState('');
+  const [vatEmail, setVatEmail] = useState('');
   const [specialRequests, setSpecialRequests] = useState('');
   const [countdown, setCountdown] = useState(300);
 
@@ -608,6 +612,10 @@ export default function DepartureCalendar() {
       single_room_count: singleRoomCount,
       room_share_info: roomShareInfo,
       vat_option: vatOption,
+        vat_company_name: vatCompanyName,
+        vat_tax_code: vatTaxCode,
+        vat_address: vatAddress,
+        vat_email: vatEmail,
       special_requests: specialRequests,
     });
 
@@ -621,6 +629,14 @@ export default function DepartureCalendar() {
     setRoomShareInfo('Không ghép');
     setSpecialRequests('');
     setVatOption('Không xuất VAT');
+    setVatCompanyName('');
+    setVatTaxCode('');
+    setVatAddress('');
+    setVatEmail('');
+    setVatCompanyName('');
+    setVatTaxCode('');
+    setVatAddress('');
+    setVatEmail('');
     setSelectedTourForBooking(null);
     toast.success('Đặt giữ chỗ tour thành công!');
   };
@@ -1226,6 +1242,29 @@ export default function DepartureCalendar() {
                       </label>
                     </div>
                   </div>
+                  {vatOption === 'Xuất VAT' && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3 mb-4">
+                      <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Thông tin xuất hóa đơn</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Tên công ty <span className="text-red-500">*</span></label>
+                          <input type="text" value={vatCompanyName} onChange={e => setVatCompanyName(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="CÔNG TY TNHH..." required />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Mã số thuế <span className="text-red-500">*</span></label>
+                          <input type="text" value={vatTaxCode} onChange={e => setVatTaxCode(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Nhập mã số thuế..." required />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Địa chỉ xuất hóa đơn <span className="text-red-500">*</span></label>
+                          <input type="text" value={vatAddress} onChange={e => setVatAddress(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Địa chỉ đăng ký kinh doanh..." required />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Email nhận hóa đơn <span className="text-red-500">*</span></label>
+                          <input type="email" value={vatEmail} onChange={e => setVatEmail(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Email nhận hóa đơn điện tử..." required />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-gray-600">Yêu cầu đặc biệt (Ghi chú thêm)</label>
                     <textarea 
@@ -1297,6 +1336,14 @@ export default function DepartureCalendar() {
                     setRoomShareInfo('Không ghép');
                     setSpecialRequests('');
                     setVatOption('Không xuất VAT');
+    setVatCompanyName('');
+    setVatTaxCode('');
+    setVatAddress('');
+    setVatEmail('');
+    setVatCompanyName('');
+    setVatTaxCode('');
+    setVatAddress('');
+    setVatEmail('');
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 bg-white transition-colors"
                 >

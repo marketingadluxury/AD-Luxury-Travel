@@ -143,11 +143,12 @@ export default function Settings() {
               </div>
               <div className="relative">
                 <input
-                  type="number"
-                  min="1000000"
-                  step="1000000"
-                  value={silver}
-                  onChange={(e) => setSilver(Number(e.target.value))}
+                  type="text"
+                  value={silver ? new Intl.NumberFormat('vi-VN').format(silver) : '0'}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setSilver(val ? Number(val) : 0);
+                  }}
                   className="w-full pl-4 pr-12 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   required
                 />
@@ -167,11 +168,12 @@ export default function Settings() {
               </div>
               <div className="relative">
                 <input
-                  type="number"
-                  min={silver}
-                  step="1000000"
-                  value={gold}
-                  onChange={(e) => setGold(Number(e.target.value))}
+                  type="text"
+                  value={gold ? new Intl.NumberFormat('vi-VN').format(gold) : '0'}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setGold(val ? Number(val) : 0);
+                  }}
                   className="w-full pl-4 pr-12 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   required
                 />
@@ -191,11 +193,12 @@ export default function Settings() {
               </div>
               <div className="relative">
                 <input
-                  type="number"
-                  min={gold}
-                  step="1000000"
-                  value={platinum}
-                  onChange={(e) => setPlatinum(Number(e.target.value))}
+                  type="text"
+                  value={platinum ? new Intl.NumberFormat('vi-VN').format(platinum) : '0'}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setPlatinum(val ? Number(val) : 0);
+                  }}
                   className="w-full pl-4 pr-12 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   required
                 />

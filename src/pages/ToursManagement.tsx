@@ -28,6 +28,7 @@ import {
   UploadCloud
 } from 'lucide-react';
 import { format } from 'date-fns';
+import DashboardOperator from '@/components/DashboardOperator';
 
 // Formatted numeric input component with thousands separators on input
 const NumericFormatInput: React.FC<{
@@ -385,7 +386,8 @@ export default function ToursManagement() {
     categories,
     addCategory,
     deleteCategory,
-    updateCategory
+    updateCategory,
+    currentRole
   } = useCRM();
 
   // Navigation tabs: 'tours' | 'categories'
@@ -603,12 +605,31 @@ export default function ToursManagement() {
   const [guideName, setGuideName] = useState('');
   const [guidePhone, setGuidePhone] = useState('');
   const [ticketStatus, setTicketStatus] = useState('CHỜ XUẤT VÉ');
+  const [ticketDeadline, setTicketDeadline] = useState('');
   const [visaDeadline, setVisaDeadline] = useState('');
   const [description, setDescription] = useState('');
   const [tourStatus, setTourStatus] = useState<TourStatus>('available');
   const [category, setCategory] = useState('');
   const [itineraryPdfUrl, setItineraryPdfUrl] = useState('');
   const [isUploadingItinerary, setIsUploadingItinerary] = useState(false);
+
+  useEffect(() => {
+    if (!ticketDeadline) {
+      setTicketStatus('CHỜ XUẤT VÉ');
+      return;
+    }
+    const deadline = new Date(ticketDeadline);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    deadline.setHours(0, 0, 0, 0);
+    
+    if (today > deadline) {
+      setTicketStatus('ĐÃ XUẤT VÉ');
+    } else {
+      setTicketStatus('CHỜ XUẤT VÉ');
+    }
+  }, [ticketDeadline]);
+
   const [itineraryUploadError, setItineraryUploadError] = useState<string | null>(null);
 
   const handleItineraryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -766,6 +787,11 @@ export default function ToursManagement() {
     setGuideName(tour.guide_name || '');
     setGuidePhone(tour.guide_phone || '');
     setTicketStatus(tour.ticket_status || 'CHỜ XUẤT VÉ');
+    if (tour.ticket_deadline) {
+      setTicketDeadline(tour.ticket_deadline.split('T')[0]);
+    } else {
+      setTicketDeadline('');
+    }
     
     if (tour.visa_deadline) {
       setVisaDeadline(tour.visa_deadline.split('T')[0]);
@@ -809,7 +835,7 @@ export default function ToursManagement() {
   // Trigger duplicate/clone and populate form
   const handleCloneTour = (tour: Tour) => {
     setCode(`${tour.code}-CLONE`);
-    setName(`[Sao chép] ${tour.name}`);
+    setName(`[SAO CHÉP] ${tour.name.toUpperCase()}`);
     setDestination(tour.destination || '');
     setDuration(tour.duration);
     setDepartureTime('');
@@ -834,6 +860,11 @@ export default function ToursManagement() {
     setGuideName(tour.guide_name || '');
     setGuidePhone(tour.guide_phone || '');
     setTicketStatus(tour.ticket_status || 'CHỜ XUẤT VÉ');
+    if (tour.ticket_deadline) {
+      setTicketDeadline(tour.ticket_deadline.split('T')[0]);
+    } else {
+      setTicketDeadline('');
+    }
     setVisaDeadline('');
     setDescription(tour.description || '');
     setTourStatus('available');
@@ -898,6 +929,11 @@ export default function ToursManagement() {
     setGuideName(tour.guide_name || '');
     setGuidePhone(tour.guide_phone || '');
     setTicketStatus(tour.ticket_status || 'CHỜ XUẤT VÉ');
+    if (tour.ticket_deadline) {
+      setTicketDeadline(tour.ticket_deadline.split('T')[0]);
+    } else {
+      setTicketDeadline('');
+    }
     setVisaDeadline('');
     setDescription(tour.description || '');
     setTourStatus('available');
@@ -960,6 +996,7 @@ export default function ToursManagement() {
     setGuideName('');
     setGuidePhone('');
     setTicketStatus('CHỜ XUẤT VÉ');
+    setTicketDeadline('');
     setVisaDeadline('');
     setDescription('');
     setTourStatus('available');
@@ -1042,6 +1079,7 @@ export default function ToursManagement() {
       guide_phone: guidePhone || undefined,
       ticket_status: ticketStatus || undefined,
       visa_deadline: visaDeadline ? new Date(visaDeadline).toISOString() : undefined,
+      ticket_deadline: ticketDeadline ? new Date(ticketDeadline).toISOString() : undefined,
       description: description || undefined,
       tour_status: tourStatus,
       category: category || categories[0],
@@ -1138,6 +1176,10 @@ export default function ToursManagement() {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-16">
+      {(currentRole === 'admin' || currentRole === 'operator') && (
+        <DashboardOperator />
+      )}
+
       {/* Extension Requests Pending Operator approval */}
       {extensionRequests.length > 0 && (
         <div className="bg-orange-50 border border-orange-200 rounded-xl p-6 shadow-sm">
@@ -1202,7 +1244,7 @@ export default function ToursManagement() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Quản lý Tour ({tours.length})
+              Quản lý Tour ({tours.filter(t => t.tour_type !== 'visa').length})
             </button>
             <button
               onClick={() => setActiveTab('categories')}
@@ -1381,9 +1423,9 @@ export default function ToursManagement() {
                         type="text" 
                         required
                         placeholder="Ví dụ: [SÀI GÒN] THÁI LAN: BANGKOK - PATTAYA..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold"
                         value={name}
-                        onChange={e => setName(e.target.value)}
+                        onChange={e => setName(e.target.value.toUpperCase())}
                       />
                     </div>
                     <div className="md:col-span-1">
@@ -1791,6 +1833,12 @@ export default function ToursManagement() {
                       value={visaDeadline}
                       onChange={setVisaDeadline}
                     />
+                    <VietnameseDateTimePicker
+                      label="Hạn xuất vé"
+                      showTime={false}
+                      value={ticketDeadline}
+                      onChange={setTicketDeadline}
+                    />
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái mở bán</label>
                       <select 
@@ -1878,9 +1926,10 @@ export default function ToursManagement() {
                       <input 
                         type="text" 
                         placeholder="CHỜ XUẤT VÉ, ĐÃ CHỐT XUẤT VÉ..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
                         value={ticketStatus}
-                        onChange={e => setTicketStatus(e.target.value)}
+                        readOnly
+                        title="Tình trạng vé được cập nhật tự động dựa trên hạn xuất vé"
                       />
                     </div>
                   </div>

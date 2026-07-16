@@ -4,11 +4,12 @@ import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, MapPin, Search, Phone, Tag } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, MapPin, Search, Phone, Tag, CreditCard } from 'lucide-react';
 import { format, differenceInHours } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
+import PaymentModal from '../components/PaymentModal';
 
 export default function VisaOrders() {
   const { tours, orders: allOrders, passengers, createOrder, cancelOrder, updatePassenger, updateOrder, currentRole } = useCRM();
@@ -71,6 +72,8 @@ export default function VisaOrders() {
   const [isEditPassengerOpen, setIsEditPassengerOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isEditOrderOpen, setIsEditOrderOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmModalData, setConfirmModalData] = useState<{
     isOpen: boolean;
@@ -574,13 +577,25 @@ export default function VisaOrders() {
                             <span className="font-medium text-gray-800">{order.special_requests || 'Không có'}</span>
                           </div>
                           
-                          <div className="pt-4 flex gap-3">
+                          <div className="pt-4 flex gap-3 flex-wrap">
+                            {order.status !== 'cancelled' && (
+                              <button 
+                                onClick={() => {
+                                  setPaymentOrder(order);
+                                  setIsPaymentModalOpen(true);
+                                }}
+                                className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-blue-200 shadow-sm text-xs font-bold rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 transition-all min-w-[120px]"
+                              >
+                                <CreditCard className="w-3.5 h-3.5 mr-2" />
+                                Nộp biên lai
+                              </button>
+                            )}
                             <button 
                               onClick={() => {
                                 setEditingOrder(order);
                                 setIsEditOrderOpen(true);
                               }}
-                              className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-xs font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-all"
+                              className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-xs font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-all min-w-[100px]"
                             >
                               <Edit className="w-3.5 h-3.5 mr-2" />
                               Sửa đơn
@@ -642,6 +657,15 @@ export default function VisaOrders() {
         title={confirmModalData.title}
         message={confirmModalData.message}
         onConfirm={confirmModalData.onConfirm}
+      />
+
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setPaymentOrder(null);
+        }}
+        order={paymentOrder}
       />
     </div>
   );

@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS tours (
   transit_info TEXT,
   guide_phone TEXT,
   ticket_status TEXT DEFAULT 'CHỜ XUẤT VÉ',
+  ticket_deadline TEXT,
   visa_deadline TEXT,
   description TEXT,
   category TEXT,
@@ -75,6 +76,10 @@ CREATE TABLE IF NOT EXISTS tours (
 -- Chạy đoạn này nếu bạn gặp lỗi "Could not find column price_visa_tour"
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_visa_tour NUMERIC DEFAULT 0;
 ALTER TABLE passengers ADD COLUMN IF NOT EXISTS needs_visa_service BOOLEAN DEFAULT FALSE;
+ALTER TABLE passengers ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE passengers ADD COLUMN IF NOT EXISTS nationality TEXT;
+ALTER TABLE passengers ADD COLUMN IF NOT EXISTS passport_issue_date TEXT;
+ALTER TABLE passengers ADD COLUMN IF NOT EXISTS passport_expiry_date TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_date DATE;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_infant NUMERIC DEFAULT 0;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS single_room_surcharge NUMERIC DEFAULT 0;
@@ -94,6 +99,11 @@ ALTER TABLE tours ADD COLUMN IF NOT EXISTS custom_requirements TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_country TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_service_type TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_speed TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_company_name TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_tax_code TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_address TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_email TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE CASCADE;
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
@@ -134,6 +144,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   room_share_info text NULL,
   vat_option text NULL DEFAULT 'no_vat'::text,
   special_requests text NULL,
+  discount_type text NULL,
+  discount_value numeric DEFAULT 0,
   booking_date date NULL DEFAULT CURRENT_DATE,
   payment_status text NULL DEFAULT 'pending'::text,
   seats integer NULL DEFAULT 1,
@@ -161,13 +173,17 @@ CREATE TABLE IF NOT EXISTS visas (
 -- 6. Bảng Invoices (Quản lý hóa đơn - Thu/Chi)
 CREATE TABLE IF NOT EXISTS invoices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
-  customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
+  order_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+  invoice_code TEXT UNIQUE,
+  type TEXT NOT NULL CHECK (type IN ('receipt', 'payment')),
   amount NUMERIC NOT NULL,
-  status TEXT NOT NULL,
-  due_date DATE NOT NULL,
-  type TEXT NOT NULL,
+  payment_method TEXT,
   description TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
+  file_url TEXT,
+  created_by TEXT,
+  verified_by TEXT,
+  verified_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
@@ -186,6 +202,10 @@ CREATE TABLE IF NOT EXISTS passengers (
   needs_visa_service BOOLEAN DEFAULT FALSE,
   visa_submitted_at TEXT,
   visa_disqualified_reason TEXT,
+  gender TEXT,
+  nationality TEXT,
+  passport_issue_date TEXT,
+  passport_expiry_date TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 

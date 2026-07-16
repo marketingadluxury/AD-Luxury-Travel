@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { Role } from '../types';
 
@@ -78,6 +78,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      // Offline mode: Simulate a default admin user session so they can play around easily
+      const mockUser = {
+        id: 'offline-admin-id',
+        email: 'marketing@adluxury.net',
+        user_metadata: {},
+        app_metadata: {},
+        aud: 'authenticated',
+        created_at: new Date().toISOString()
+      };
+      setSession({
+        access_token: 'offline-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+        refresh_token: 'offline-refresh',
+        user: mockUser as any
+      });
+      setUser(mockUser as any);
+      setProfile({
+        id: 'offline-admin-id',
+        full_name: 'Quản trị viên (Offline)',
+        phone: '0987654321',
+        company_name: 'AD Luxury Travel',
+        role: 'admin'
+      });
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!error) {
         setSession(session);
@@ -105,11 +134,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signOut = async () => {
+    if (!isSupabaseConfigured()) {
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      return;
+    }
     await supabase.auth.signOut();
   };
 
   const updateProfile = async (newProfile: Partial<UserProfile>) => {
     if (!user) return;
+    if (!isSupabaseConfigured()) {
+      setProfile(prev => prev ? { ...prev, ...newProfile } : null);
+      return;
+    }
     const { error } = await supabase
       .from('profiles')
       .update(newProfile)
@@ -120,8 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updatePassword = async (password: string) => {
-    const isPlaceholder = (import.meta as any).env.VITE_SUPABASE_URL?.includes('placeholder') || !(import.meta as any).env.VITE_SUPABASE_URL;
-    if (isPlaceholder) {
+    if (!isSupabaseConfigured()) {
       console.log('Mật khẩu mới (Offline Mock):', password);
       return;
     }

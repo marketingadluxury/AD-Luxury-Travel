@@ -4,19 +4,20 @@ import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp } from 'lucide-react';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
 import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
+import PaymentModal from '../components/PaymentModal';
 
 export default function OrdersManagement() {
-  const { tours, orders: allOrders, passengers, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, currentRole } = useCRM();
+  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, currentRole } = useCRM();
   const { profile, user } = useAuth();
 
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
-  const [orderFilterStatus, setOrderFilterStatus] = useState('all');
+  const [orderFilterStatus, setOrderFilterStatus] = useState('sure');
   const [orderFilterTimeRange, setOrderFilterTimeRange] = useState('all');
   const [orderSortBy, setOrderSortBy] = useState('newest');
   
@@ -129,13 +130,126 @@ export default function OrdersManagement() {
     })).sort((a, b) => b.seatsHold - a.seatsHold);
   }, [allOrders, tours]);
 
+  const salesOverviewStats = React.useMemo(() => {
+    // 1. Filter by role/ownership
+    let baseOrders = ['admin', 'operator'].includes(currentRole)
+      ? allOrders
+      : allOrders.filter(o => o.user_id === profile?.id);
+    
+    // 2. Filter out Visa-only service orders
+    baseOrders = baseOrders.filter(o => {
+      const tour = tours.find(t => t.id === o.tour_id);
+      return tour?.tour_type !== 'visa';
+    });
+
+    const slotsHold = baseOrders
+      .filter(o => o.status === 'hold')
+      .reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+
+    const slotsSure = baseOrders
+      .filter(o => ['sure', 'paid'].includes(o.status))
+      .reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+
+    const totalRev = baseOrders
+      .filter(o => ['sure', 'paid'].includes(o.status))
+      .reduce((sum, o) => sum + (o.total_price || 0), 0);
+
+    const totalPaid = baseOrders
+      .filter(o => ['sure', 'paid'].includes(o.status))
+      .reduce((sum, o) => {
+        const orderInvoices = invoices.filter(inv => inv.order_id === o.id);
+        const approvedPaid = orderInvoices
+          .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+          .reduce((s, inv) => s + inv.amount, 0);
+        return sum + (approvedPaid || o.paid_amount || 0);
+      }, 0);
+
+    const totalRemaining = Math.max(0, totalRev - totalPaid);
+
+    const holdOrdersCount = baseOrders.filter(o => o.status === 'hold').length;
+    const sureOrdersCount = baseOrders.filter(o => ['sure', 'paid'].includes(o.status)).length;
+
+    return {
+      slotsHold,
+      slotsSure,
+      totalRevenue: totalRev,
+      totalPaid,
+      totalRemaining,
+      holdOrdersCount,
+      sureOrdersCount
+    };
+  }, [allOrders, currentRole, profile, tours, invoices]);
+
+  // Tính số lượng đơn hàng cho từng tab (sau khi đã áp dụng tìm kiếm, lọc thời gian...)
+  const tabCounts = React.useMemo(() => {
+    // 1. Filter by role/ownership
+    let base = ['admin', 'operator'].includes(currentRole)
+      ? allOrders
+      : allOrders.filter(o => o.user_id === profile?.id);
+    
+    // 2. Filter out Visa-only service orders
+    base = base.filter(o => {
+      const tour = tours.find(t => t.id === o.tour_id);
+      return tour?.tour_type !== 'visa';
+    });
+
+    // 3. Search term filter
+    if (orderSearchTerm.trim() !== '') {
+      const q = orderSearchTerm.toLowerCase().trim();
+      base = base.filter(o => {
+        const tour = tours.find(t => t.id === o.tour_id);
+        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(q);
+        const phoneMatch = o.booker_phone && o.booker_phone.includes(q);
+        const codeMatch = o.id && o.id.toLowerCase().includes(q);
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
+        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(q);
+        return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch;
+      });
+    }
+
+    // 4. Time range filter
+    if (orderFilterTimeRange !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      base = base.filter(o => {
+        if (!o.created_at) return false;
+        const orderDate = new Date(o.created_at);
+        orderDate.setHours(0, 0, 0, 0);
+
+        if (orderFilterTimeRange === 'today') {
+          return orderDate.getTime() === today.getTime();
+        } else if (orderFilterTimeRange === 'this_week') {
+          const firstDay = new Date(today);
+          firstDay.setDate(today.getDate() - today.getDay() + 1);
+          const lastDay = new Date(firstDay);
+          lastDay.setDate(firstDay.getDate() + 6);
+          return orderDate >= firstDay && orderDate <= lastDay;
+        } else if (orderFilterTimeRange === 'this_month') {
+          return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
+        }
+        return true;
+      });
+    }
+
+    return {
+      sure: base.filter(o => o.status === 'sure').length,
+      hold: base.filter(o => o.status === 'hold').length,
+      cancelled: base.filter(o => o.status === 'cancelled').length,
+      total: base.length
+    };
+  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange]);
+
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [activeTabs, setActiveTabs] = useState<Record<string, 'details' | 'payment_history'>>({});
   const [isPassengerModalOpen, setIsPassengerModalOpen] = useState(false);
   const [orderToConfirm, setOrderToConfirm] = useState<string | null>(null);
   const [orderToAddPassengers, setOrderToAddPassengers] = useState<string | null>(null);
   const [editingPassenger, setEditingPassenger] = useState<Passenger | null>(null);
   const [isEditPassengerOpen, setIsEditPassengerOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [disqualifiedReasonModal, setDisqualifiedReasonModal] = useState<{ name: string; reason: string } | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isEditOrderOpen, setIsEditOrderOpen] = useState(false);
@@ -240,6 +354,10 @@ export default function OrdersManagement() {
   const [roomShareInfo, setRoomShareInfo] = useState<string>('Không ghép');
   const [specialRequests, setSpecialRequests] = useState<string>('');
   const [vatOption, setVatOption] = useState<string>('Không xuất VAT');
+  const [vatCompanyName, setVatCompanyName] = useState<string>('');
+  const [vatTaxCode, setVatTaxCode] = useState<string>('');
+  const [vatAddress, setVatAddress] = useState<string>('');
+  const [vatEmail, setVatEmail] = useState<string>('');
 
   // Countdown timer for form completion
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
@@ -398,6 +516,10 @@ export default function OrdersManagement() {
       single_room_count: singleRoomCount,
       room_share_info: roomShareInfo,
       vat_option: vatOption,
+        vat_company_name: vatCompanyName,
+        vat_tax_code: vatTaxCode,
+        vat_address: vatAddress,
+        vat_email: vatEmail,
       special_requests: specialRequests,
     });
 
@@ -413,6 +535,10 @@ export default function OrdersManagement() {
     setRoomShareInfo('Không ghép');
     setSpecialRequests('');
     setVatOption('Không xuất VAT');
+    setVatCompanyName('');
+    setVatTaxCode('');
+    setVatAddress('');
+    setVatEmail('');
     setShowCreateForm(false);
   };
 
@@ -456,6 +582,117 @@ export default function OrdersManagement() {
           <Plus className="w-4 h-4 mr-2" />
           {showCreateForm ? 'Đóng form' : 'Đặt Đơn hàng Mới'}
         </button>
+      </div>
+
+      {/* Overview Statistics Cards Section */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4 font-sans">
+        <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+          <div>
+            <h3 className="text-base font-bold text-gray-950 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              <span>Bảng Tổng quan Giữ chỗ & Doanh thu</span>
+              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                ['admin', 'operator'].includes(currentRole)
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+              }`}>
+                {['admin', 'operator'].includes(currentRole) ? 'Toàn hệ thống (Admin/Điều hành)' : 'Cá nhân (Sales/CTV)'}
+              </span>
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">Tổng số chỗ giữ tạm, số chỗ đã xác nhận chắc chắn, doanh số và dư nợ cần nộp.</p>
+          </div>
+          <span className="text-xs text-gray-400 font-medium italic hidden sm:inline">Cập nhật theo thời gian thực</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Card 1: Slots Hold */}
+          <div className="bg-amber-50/40 rounded-xl p-4 border border-amber-200/60 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Chỗ giữ tạm (HOLD)</span>
+              <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 border border-amber-200/50">
+                <Clock className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black text-amber-950">{salesOverviewStats.slotsHold}</span>
+              <span className="text-xs font-bold text-amber-700">chỗ</span>
+            </div>
+            <p className="text-[11px] text-amber-600/95 mt-1 font-semibold">
+              Từ {salesOverviewStats.holdOrdersCount} đơn đang giữ chỗ tạm
+            </p>
+          </div>
+
+          {/* Card 2: Slots Sure */}
+          <div className="bg-green-50/40 rounded-xl p-4 border border-green-200/60 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Chỗ đã chốt (SURE)</span>
+              <div className="p-1.5 rounded-lg bg-green-100 text-green-700 border border-green-200/50">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black text-green-950">{salesOverviewStats.slotsSure}</span>
+              <span className="text-xs font-bold text-green-700">chỗ</span>
+            </div>
+            <p className="text-[11px] text-green-600/95 mt-1 font-semibold">
+              Từ {salesOverviewStats.sureOrdersCount} đơn chốt chắc chắn / đã mua
+            </p>
+          </div>
+
+          {/* Card 3: Total Revenue */}
+          <div className="bg-blue-50/40 rounded-xl p-4 border border-blue-200/60 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-blue-800 uppercase tracking-wider">Doanh thu chốt (SURE)</span>
+              <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700 border border-blue-200/50">
+                <DollarSign className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-lg font-black text-blue-950 break-all">
+                {new Intl.NumberFormat('vi-VN').format(salesOverviewStats.totalRevenue)}đ
+              </span>
+              <span className="text-[10px] text-blue-600/90 mt-1 font-medium">
+                Giá trị từ các đơn SURE & PAID
+              </span>
+            </div>
+          </div>
+
+          {/* Card 4: Total Paid */}
+          <div className="bg-teal-50/40 rounded-xl p-4 border border-teal-200/60 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">Đã thanh toán</span>
+              <div className="p-1.5 rounded-lg bg-teal-100 text-teal-700 border border-teal-200/50">
+                <CreditCard className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-lg font-black text-teal-950 break-all">
+                {new Intl.NumberFormat('vi-VN').format(salesOverviewStats.totalPaid)}đ
+              </span>
+              <span className="text-[10px] text-teal-600/90 mt-1 font-medium">
+                Số tiền kế toán đã duyệt thực thu
+              </span>
+            </div>
+          </div>
+
+          {/* Card 5: Remaining Debt */}
+          <div className="bg-rose-50/40 rounded-xl p-4 border border-rose-200/60 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-rose-800 uppercase tracking-wider">Còn lại cần nộp</span>
+              <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 border border-rose-200/50">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-lg font-black text-rose-950 break-all">
+                {new Intl.NumberFormat('vi-VN').format(salesOverviewStats.totalRemaining)}đ
+              </span>
+              <span className="text-[10px] text-rose-600/90 mt-1 font-medium">
+                Số dư còn lại khách cần hoàn tất
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Hold Statistics Dashboard */}
@@ -900,6 +1137,29 @@ export default function OrdersManagement() {
                     </label>
                   </div>
                 </div>
+                {vatOption === 'Xuất VAT' && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3 mb-4">
+                    <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Thông tin xuất hóa đơn</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">Tên công ty <span className="text-red-500">*</span></label>
+                        <input type="text" value={vatCompanyName} onChange={e => setVatCompanyName(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="CÔNG TY TNHH..." required />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">Mã số thuế <span className="text-red-500">*</span></label>
+                        <input type="text" value={vatTaxCode} onChange={e => setVatTaxCode(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Nhập mã số thuế..." required />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">Địa chỉ xuất hóa đơn <span className="text-red-500">*</span></label>
+                        <input type="text" value={vatAddress} onChange={e => setVatAddress(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Địa chỉ đăng ký kinh doanh..." required />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">Email nhận hóa đơn <span className="text-red-500">*</span></label>
+                        <input type="email" value={vatEmail} onChange={e => setVatEmail(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Email nhận hóa đơn điện tử..." required />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-gray-600">Yêu cầu đặc biệt (Ghi chú thêm)</label>
                   <span className="text-[10px] text-gray-500 block">Ăn chay, dị ứng, trẻ sơ sinh...</span>
@@ -973,6 +1233,10 @@ export default function OrdersManagement() {
                 setRoomShareInfo('Không ghép');
                 setSpecialRequests('');
                 setVatOption('Không xuất VAT');
+    setVatCompanyName('');
+    setVatTaxCode('');
+    setVatAddress('');
+    setVatEmail('');
               }}
               className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 bg-white transition-colors"
             >
@@ -997,15 +1261,71 @@ export default function OrdersManagement() {
 
       {/* Orders list and monitoring */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h3 className="text-lg font-bold text-gray-900">Danh sách Đơn hàng của bạn</h3>
-          <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-250 shrink-0">
-            Tổng cộng: {orders.length} đơn hàng
+        <div className="px-6 py-4 border-b border-gray-150 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <span>Danh sách Đơn hàng của bạn</span>
+          </h3>
+          <span className="bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full border border-gray-250 shrink-0">
+            Đang hiển thị: {orders.length} đơn hàng
           </span>
         </div>
 
-        {/* Filters and Sorting Controls */}
-        <div className="bg-slate-50 border-b border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        {/* 3 Tabs phân loại trạng thái cực kỳ trực quan và sang trọng */}
+        <div className="flex border-b border-gray-200 bg-white">
+          <button
+            onClick={() => setOrderFilterStatus('sure')}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+              orderFilterStatus === 'sure'
+                ? 'border-emerald-500 text-emerald-600 bg-emerald-50/10'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
+            }`}
+          >
+            <ShieldCheck className={`w-4.5 h-4.5 ${orderFilterStatus === 'sure' ? 'text-emerald-500' : 'text-gray-400'}`} />
+            <span>Sure chỗ</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
+              orderFilterStatus === 'sure' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {tabCounts.sure}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setOrderFilterStatus('hold')}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+              orderFilterStatus === 'hold'
+                ? 'border-amber-500 text-amber-600 bg-amber-50/10'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
+            }`}
+          >
+            <Clock className={`w-4.5 h-4.5 ${orderFilterStatus === 'hold' ? 'text-amber-500' : 'text-gray-400'}`} />
+            <span>Giữ chỗ</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
+              orderFilterStatus === 'hold' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {tabCounts.hold}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setOrderFilterStatus('cancelled')}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+              orderFilterStatus === 'cancelled'
+                ? 'border-slate-500 text-slate-700 bg-slate-50/20'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
+            }`}
+          >
+            <X className={`w-4.5 h-4.5 ${orderFilterStatus === 'cancelled' ? 'text-slate-500' : 'text-gray-400'}`} />
+            <span>Đã hủy</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
+              orderFilterStatus === 'cancelled' ? 'bg-slate-100 text-slate-700' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {tabCounts.cancelled}
+            </span>
+          </button>
+        </div>
+
+        {/* Filters and Sorting Controls (Adjusted to grid-cols-3) */}
+        <div className="bg-slate-50 border-b border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Tìm kiếm */}
           <div className="relative">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1019,18 +1339,6 @@ export default function OrdersManagement() {
               className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-
-          {/* Lọc trạng thái */}
-          <select
-            value={orderFilterStatus}
-            onChange={e => setOrderFilterStatus(e.target.value)}
-            className="w-full pl-3 pr-10 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="hold">Giữ chỗ (Hold)</option>
-            <option value="sure">Chắc chắn (Sure)</option>
-            <option value="cancelled">Đã hủy</option>
-          </select>
 
           {/* Lọc thời gian tạo */}
           <select
@@ -1209,9 +1517,50 @@ export default function OrdersManagement() {
                   </div>
 
                   {/* Expandable Details Container */}
-                  {isExpanded && (
-                    <div className="px-5 pb-6 pt-2 bg-slate-50/40 border-t border-gray-100 space-y-5 animate-in fade-in duration-150">
-                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+                  {isExpanded && (() => {
+                    const orderInvoices = invoices.filter(inv => inv.order_id === order.id);
+                    const approvedPaid = orderInvoices.filter(inv => inv.type === 'receipt' && inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0);
+                    const pendingPaid = orderInvoices.filter(inv => inv.type === 'receipt' && inv.status === 'pending').reduce((sum, inv) => sum + inv.amount, 0);
+                    const remainingAmount = Math.max(0, order.total_price - approvedPaid);
+                    const currentTab = activeTabs[order.id] || 'details';
+
+                    return (
+                      <div className="px-5 pb-6 pt-3 bg-slate-50/40 border-t border-gray-100 space-y-5 animate-in fade-in duration-150">
+                        {/* Tabs Bar */}
+                        <div className="flex border-b border-gray-200 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setActiveTabs(prev => ({ ...prev, [order.id]: 'details' }))}
+                            className={`py-2 px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer rounded-t-lg ${
+                              currentTab === 'details'
+                                ? 'border-blue-600 text-blue-600 bg-white shadow-sm font-extrabold'
+                                : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100/50'
+                            }`}
+                          >
+                            <FileText className="w-4 h-4" />
+                            Chi tiết đơn hàng
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTabs(prev => ({ ...prev, [order.id]: 'payment_history' }))}
+                            className={`py-2 px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer rounded-t-lg ${
+                              currentTab === 'payment_history'
+                                ? 'border-blue-600 text-blue-600 bg-white shadow-sm font-extrabold'
+                                : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100/50'
+                            }`}
+                          >
+                            <DollarSign className="w-4 h-4 text-emerald-600" />
+                            Lịch sử thanh toán
+                            {orderInvoices.length > 0 && (
+                              <span className="ml-1 px-1.5 py-0.5 text-[9px] font-black rounded-full bg-blue-100 text-blue-800">
+                                {orderInvoices.length}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+
+                        {currentTab === 'details' ? (
+                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
                         {/* Box 1: Surcharges & Room config */}
                         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5">
                           <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center justify-between">
@@ -1245,11 +1594,33 @@ export default function OrdersManagement() {
                               <span className="text-gray-500">Ghép giường:</span>
                               <span className="font-semibold text-gray-800">{order.room_share_info || 'Không'}</span>
                             </div>
-                            <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                              <span className="text-gray-500">VAT:</span>
-                              <span className={`font-bold ${order.vat_option === 'Xuất VAT' ? 'text-blue-600' : 'text-gray-500'}`}>
-                                {order.vat_option || 'Không'}
-                              </span>
+                            <div className="flex flex-col py-2 border-b border-dashed border-gray-100">
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">VAT:</span>
+                                <span className={`font-bold ${order.vat_option === 'Xuất VAT' ? 'text-blue-600' : 'text-gray-500'}`}>
+                                  {order.vat_option || 'Không'}
+                                </span>
+                              </div>
+                              {order.vat_option === 'Xuất VAT' && (
+                                <div className="mt-2 p-2 bg-blue-50/50 rounded-md border border-blue-100 space-y-1">
+                                  <div className="flex justify-between text-[11px]">
+                                    <span className="text-slate-500">Công ty:</span>
+                                    <span className="font-semibold text-slate-700 text-right">{order.vat_company_name || '---'}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[11px]">
+                                    <span className="text-slate-500">MST:</span>
+                                    <span className="font-semibold text-slate-700 text-right">{order.vat_tax_code || '---'}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[11px]">
+                                    <span className="text-slate-500">Địa chỉ:</span>
+                                    <span className="font-semibold text-slate-700 text-right line-clamp-2" title={order.vat_address || ''}>{order.vat_address || '---'}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[11px]">
+                                    <span className="text-slate-500">Email:</span>
+                                    <span className="font-semibold text-slate-700 text-right">{order.vat_email || '---'}</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             {order.special_requests && (
                               <div className="pt-2">
@@ -1295,6 +1666,16 @@ export default function OrdersManagement() {
                               <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
                                 <span className="text-gray-500">Visa ({visaPassengersCount}):</span>
                                 <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(totalVisa)} đ</span>
+                              </div>
+                            )}
+                            {(order.discount_value || 0) > 0 && (
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-rose-500">Giảm giá {order.discount_type === 'percent' ? `(${order.discount_value}%)` : ''}:</span>
+                                <span className="font-bold text-rose-600">-{new Intl.NumberFormat('vi-VN').format(
+                                  order.discount_type === 'percent' 
+                                    ? ((totalAdult + totalChild + totalInfant + totalSingleRoom) * (order.discount_value || 0)) / 100 
+                                    : (order.discount_value || 0)
+                                )} đ</span>
                               </div>
                             )}
                             {order.vat_option === 'Xuất VAT' && (
@@ -1532,6 +1913,163 @@ export default function OrdersManagement() {
                           </div>
                         )}
                       </div>
+                    ) : (
+                      /* Tab Lịch sử thanh toán */
+                          <div className="space-y-5 animate-in fade-in duration-150">
+                            {/* Khối thống kê số tiền */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+                                <div>
+                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Tổng giá trị đơn</span>
+                                  <span className="text-sm font-black text-slate-800 block mt-1">
+                                    {new Intl.NumberFormat('vi-VN').format(order.total_price)} đ
+                                  </span>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+                                  <DollarSign className="w-5 h-5" />
+                                </div>
+                              </div>
+
+                              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+                                <div>
+                                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider block">Đã thanh toán (Đã duyệt)</span>
+                                  <span className="text-sm font-black text-emerald-600 block mt-1">
+                                    {new Intl.NumberFormat('vi-VN').format(approvedPaid)} đ
+                                  </span>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500">
+                                  <Check className="w-5 h-5" />
+                                </div>
+                              </div>
+
+                              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+                                <div>
+                                  <span className="text-[10px] font-black text-amber-500 uppercase tracking-wider block">Đang chờ phê duyệt</span>
+                                  <span className="text-sm font-black text-amber-600 block mt-1">
+                                    {new Intl.NumberFormat('vi-VN').format(pendingPaid)} đ
+                                  </span>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
+                                  <Clock className="w-5 h-5" />
+                                </div>
+                              </div>
+
+                              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+                                <div>
+                                  <span className="text-[10px] font-black text-rose-500 uppercase tracking-wider block">Số tiền còn lại</span>
+                                  <span className={`text-sm font-black block mt-1 ${remainingAmount === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {new Intl.NumberFormat('vi-VN').format(remainingAmount)} đ
+                                  </span>
+                                </div>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${remainingAmount === 0 ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
+                                  {remainingAmount === 0 ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-5 h-5" />}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Danh sách lịch sử giao dịch */}
+                            <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center gap-1.5">
+                                <FileText className="w-4 h-4 text-emerald-600" />
+                                Lịch sử giao dịch thu/chi liên quan
+                              </h4>
+
+                              {orderInvoices.length === 0 ? (
+                                <div className="text-center py-8 text-gray-400 text-xs italic">
+                                  Chưa có lịch sử thanh toán hay biên lai thu chi nào được ghi nhận cho đơn hàng này.
+                                </div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full text-xs text-left text-gray-700 table-auto">
+                                    <thead>
+                                      <tr className="border-b border-gray-150 text-gray-400 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">
+                                        <th className="py-2.5 px-3">Mã hóa đơn / Phiếu</th>
+                                        <th className="py-2.5 px-3">Loại phiếu</th>
+                                        <th className="py-2.5 px-3">Số tiền</th>
+                                        <th className="py-2.5 px-3">Phương thức</th>
+                                        <th className="py-2.5 px-3">Thời gian</th>
+                                        <th className="py-2.5 px-3">Người nộp/tạo</th>
+                                        <th className="py-2.5 px-3">Ghi chú / Mô tả</th>
+                                        <th className="py-2.5 px-3">Minh chứng</th>
+                                        <th className="py-2.5 px-3 text-right">Trạng thái</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {orderInvoices.map((inv) => (
+                                        <tr key={inv.id} className="hover:bg-slate-50/50">
+                                          <td className="py-3 px-3 font-mono font-bold text-gray-900">
+                                            {inv.invoice_code || inv.id.substring(0, 8).toUpperCase()}
+                                          </td>
+                                          <td className="py-3 px-3">
+                                            {inv.type === 'receipt' ? (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-150">
+                                                Phiếu thu
+                                              </span>
+                                            ) : (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-150">
+                                                Phiếu chi (Hoàn)
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="py-3 px-3 font-extrabold text-slate-800">
+                                            {new Intl.NumberFormat('vi-VN').format(inv.amount)} đ
+                                          </td>
+                                          <td className="py-3 px-3 text-gray-500">
+                                            {inv.payment_method || '---'}
+                                          </td>
+                                          <td className="py-3 px-3 text-gray-500">
+                                            {inv.created_at ? new Date(inv.created_at).toLocaleString('vi-VN') : '---'}
+                                          </td>
+                                          <td className="py-3 px-3 text-gray-600 font-medium">
+                                            {order.booker_name || leadPassenger?.full_name || 'Khách trưởng đoàn'}
+                                          </td>
+                                          <td className="py-3 px-3 text-gray-500 max-w-[200px] truncate" title={inv.description}>
+                                            {inv.description || 'Chuyển khoản thanh toán'}
+                                          </td>
+                                          <td className="py-3 px-3">
+                                            {inv.file_url ? (
+                                              <a
+                                                href={inv.file_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors cursor-pointer"
+                                              >
+                                                <ExternalLink className="w-3 h-3" />
+                                                Xem ảnh
+                                              </a>
+                                            ) : (
+                                              <span className="text-gray-400 italic">Không có</span>
+                                            )}
+                                          </td>
+                                          <td className="py-3 px-3 text-right">
+                                            {inv.status === 'approved' && (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                <Check className="w-3 h-3" />
+                                                Đã duyệt
+                                              </span>
+                                            )}
+                                            {inv.status === 'pending' && (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                                <Clock className="w-3 h-3 animate-pulse" />
+                                                Chờ duyệt
+                                              </span>
+                                            )}
+                                            {inv.status === 'rejected' && (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                                <AlertCircle className="w-3 h-3" />
+                                                Từ chối
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                       {/* Box 3: Action center bar */}
                       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
@@ -1556,6 +2094,19 @@ export default function OrdersManagement() {
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto justify-end">
+                          {order.status !== 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentOrder(order);
+                                setIsPaymentModalOpen(true);
+                              }}
+                              className="px-3.5 py-2 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:text-blue-800 transition-colors inline-flex items-center"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                              Nộp biên lai thanh toán
+                            </button>
+                          )}
                           {order.status === 'hold' && (
                             <>
                               <button
@@ -1637,7 +2188,8 @@ export default function OrdersManagement() {
                         </div>
                       </div>
                     </div>
-                  )}
+                  );
+                })()}
                 </div>
               );
             })}
@@ -1746,6 +2298,15 @@ export default function OrdersManagement() {
           </div>
         </div>
       )}
+
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setPaymentOrder(null);
+        }}
+        order={paymentOrder}
+      />
     </div>
   );
 }

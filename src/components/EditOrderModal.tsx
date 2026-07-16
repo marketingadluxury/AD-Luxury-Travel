@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Bed, DollarSign, FileText, Percent, Info, ShieldAlert, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Order } from '../types';
 import { useCRM } from '../context/CRMContext';
+import { formatNumber, parseNumber } from '@/lib/utils';
 
 interface EditOrderModalProps {
   isOpen: boolean;
@@ -21,8 +22,14 @@ export default function EditOrderModal({
   
   const [singleRoomCount, setSingleRoomCount] = useState(0);
   const [roomShareInfo, setRoomShareInfo] = useState('');
-  const [vatOption, setVatOption] = useState('Không xuất VAT');
+  const [vatOption, setVatOption] = useState(order?.vat_option || 'Không xuất VAT');
+  const [vatCompanyName, setVatCompanyName] = useState(order?.vat_company_name || '');
+  const [vatTaxCode, setVatTaxCode] = useState(order?.vat_tax_code || '');
+  const [vatAddress, setVatAddress] = useState(order?.vat_address || '');
+  const [vatEmail, setVatEmail] = useState(order?.vat_email || '');
   const [specialRequests, setSpecialRequests] = useState('');
+  const [discountType, setDiscountType] = useState<'percent' | 'amount'>(order?.discount_type || 'amount');
+  const [discountValueDisplay, setDiscountValueDisplay] = useState(formatNumber(order?.discount_value || 0));
   const [totalPrice, setTotalPrice] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -46,8 +53,14 @@ export default function EditOrderModal({
   const baseSubtotal = baseAdultTotal + baseChildTotal + baseInfantTotal;
   const surchargeTotal = singleRoomSurcharge * singleRoomCount;
   const subtotalWithSurcharge = baseSubtotal + surchargeTotal;
-  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(subtotalWithSurcharge * 0.1) : 0;
-  const computedTotalPrice = subtotalWithSurcharge + vatAmount;
+  
+  const discountAmount = discountType === 'percent' 
+    ? (subtotalWithSurcharge * parseNumber(discountValueDisplay)) / 100 
+    : parseNumber(discountValueDisplay);
+    
+  const subtotalAfterDiscount = subtotalWithSurcharge - discountAmount;
+  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(subtotalAfterDiscount * 0.1) : 0;
+  const computedTotalPrice = subtotalAfterDiscount + vatAmount;
 
   // Format money function
   const formatCurrency = (amount: number) => {
@@ -59,7 +72,13 @@ export default function EditOrderModal({
       setSingleRoomCount(order.single_room_count || 0);
       setRoomShareInfo(order.room_share_info || '');
       setVatOption(order.vat_option || 'Không xuất VAT');
+      setVatCompanyName(order.vat_company_name || '');
+      setVatTaxCode(order.vat_tax_code || '');
+      setVatAddress(order.vat_address || '');
+      setVatEmail(order.vat_email || '');
       setSpecialRequests(order.special_requests || '');
+      setDiscountType(order.discount_type || 'amount');
+      setDiscountValueDisplay(formatNumber(order.discount_value || 0));
       setTotalPrice(order.total_price || 0);
       setIsInitialLoad(true);
     }
@@ -79,7 +98,7 @@ export default function EditOrderModal({
     if (!isAdmin || !isInitialLoad) {
       setTotalPrice(computedTotalPrice);
     }
-  }, [singleRoomCount, vatOption, currentRole]);
+  }, [singleRoomCount, vatOption, discountType, parseNumber(discountValueDisplay), currentRole]);
 
   if (!isOpen || !order) return null;
 
@@ -92,7 +111,13 @@ export default function EditOrderModal({
         single_room_count: Number(singleRoomCount),
         room_share_info: roomShareInfo.trim(),
         vat_option: vatOption,
+        vat_company_name: vatCompanyName.trim(),
+        vat_tax_code: vatTaxCode.trim(),
+        vat_address: vatAddress.trim(),
+        vat_email: vatEmail.trim(),
         special_requests: specialRequests.trim(),
+        discount_type: discountType,
+        discount_value: parseNumber(discountValueDisplay),
         total_price: Number(totalPrice),
       });
       toast.success('Cập nhật thông tin đơn hàng thành công!');
@@ -171,6 +196,33 @@ export default function EditOrderModal({
                 </p>
               )}
             </div>
+            
+            {vatOption === 'Xuất VAT' && (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 space-y-3 md:col-span-2">
+                <h4 className="text-xs font-bold text-emerald-800 uppercase mb-2">Thông tin xuất hóa đơn</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Tên công ty <span className="text-red-500">*</span></label>
+                    <input type="text" value={vatCompanyName} onChange={e => setVatCompanyName(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="CÔNG TY TNHH..." required />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Mã số thuế <span className="text-red-500">*</span></label>
+                    <input type="text" value={vatTaxCode} onChange={e => setVatTaxCode(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="Nhập mã số thuế..." required />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Địa chỉ xuất hóa đơn <span className="text-red-500">*</span></label>
+                    <input type="text" value={vatAddress} onChange={e => setVatAddress(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="Địa chỉ đăng ký kinh doanh..." required />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Email nhận hóa đơn <span className="text-red-500">*</span></label>
+                    <input type="email" value={vatEmail} onChange={e => setVatEmail(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="Email nhận hóa đơn điện tử..." required />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="hidden">
+            </div>
           </div>
 
           {/* Share Room Info */}
@@ -199,6 +251,42 @@ export default function EditOrderModal({
               placeholder="Yêu cầu ăn chay, dị ứng hải sản, em bé cần cũi nằm, ..."
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
             />
+          </div>
+
+          {/* Discount Block */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Loại giảm giá
+              </label>
+              <select
+                value={discountType}
+                onChange={(e) => setDiscountType(e.target.value as 'percent' | 'amount')}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold bg-white"
+              >
+                <option value="amount">Số tiền (đ)</option>
+                <option value="percent">Phần trăm (%)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Giá trị giảm
+              </label>
+            <input
+                type="text"
+                value={discountValueDisplay}
+                onChange={(e) => {
+                    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                    if (!rawValue) {
+                      setDiscountValueDisplay('');
+                    } else {
+                      const numericValue = parseInt(rawValue, 10);
+                      setDiscountValueDisplay(formatNumber(numericValue.toString()));
+                    }
+                }}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+            />
+            </div>
           </div>
 
           {/* Automatic Calculator Breakdown Box */}
@@ -232,6 +320,13 @@ export default function EditOrderModal({
                 <div className="flex justify-between text-blue-700 font-medium">
                   <span>Phụ thu phòng đơn ({singleRoomCount} phòng x {formatCurrency(singleRoomSurcharge)} đ):</span>
                   <span className="font-bold">{formatCurrency(surchargeTotal)} đ</span>
+                </div>
+              )}
+
+              {parseNumber(discountValueDisplay) > 0 && (
+                <div className="flex justify-between text-rose-700 font-medium">
+                  <span>Giảm giá{discountType === 'percent' ? ` (${discountValueDisplay}%)` : ''}:</span>
+                  <span className="font-bold">-{formatCurrency(discountAmount)} đ</span>
                 </div>
               )}
 
@@ -272,9 +367,6 @@ export default function EditOrderModal({
             </div>
 
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <DollarSign className="w-4 h-4" />
-              </div>
               <input
                 type="text"
                 value={totalPrice === 0 ? '0' : formatCurrency(totalPrice)}
@@ -283,7 +375,7 @@ export default function EditOrderModal({
                   const rawValue = e.target.value.replace(/\D/g, '');
                   setTotalPrice(rawValue ? parseInt(rawValue, 10) : 0);
                 }}
-                className={`pl-9 w-full rounded-lg border px-3 py-2.5 text-base font-black focus:outline-none ring-offset-2 transition-all ${
+                className={`w-full rounded-lg border px-4 py-2.5 text-base font-black focus:outline-none ring-offset-2 transition-all ${
                   isAdmin 
                     ? 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 text-rose-600 bg-white cursor-text' 
                     : 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed font-extrabold'

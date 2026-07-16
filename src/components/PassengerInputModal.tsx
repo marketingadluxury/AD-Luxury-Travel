@@ -26,6 +26,10 @@ interface PassengerInputState {
   passport_url?: string;
   isPayer: boolean;
   needs_visa_service: boolean;
+  gender?: string;
+  nationality?: string;
+  passport_issue_date?: string;
+  passport_expiry_date?: string;
 }
 
 const getInitials = (fullName: string): string => {
@@ -126,6 +130,10 @@ export default function PassengerInputModal({
       name: p.full_name.toUpperCase(),
       passport_number: (p.passport_number || '').toUpperCase(),
       dob: p.dob || '',
+      gender: p.gender || '',
+      nationality: p.nationality || 'VN',
+      passport_issue_date: p.passport_issue_date || '',
+      passport_expiry_date: p.passport_expiry_date || '',
     };
     setPassengers(updated);
     setModalSuggestions([]);
@@ -149,6 +157,10 @@ export default function PassengerInputModal({
           files: [],
           isPayer: isFirst,
           needs_visa_service: false,
+          gender: '',
+          nationality: 'VN',
+          passport_issue_date: '',
+          passport_expiry_date: '',
         });
         isFirst = false;
       }
@@ -164,6 +176,10 @@ export default function PassengerInputModal({
           files: [],
           isPayer: false,
           needs_visa_service: false,
+          gender: '',
+          nationality: 'VN',
+          passport_issue_date: '',
+          passport_expiry_date: '',
         });
       }
 
@@ -178,6 +194,10 @@ export default function PassengerInputModal({
           files: [],
           isPayer: false,
           needs_visa_service: false,
+          gender: '',
+          nationality: 'VN',
+          passport_issue_date: '',
+          passport_expiry_date: '',
         });
       }
 
@@ -277,7 +297,11 @@ export default function PassengerInputModal({
           dob: p.dob,
           passport_url: passportUrls.length > 0 ? passportUrls.join(',') : undefined,
           is_payer: p.isPayer,
-          needs_visa_service: p.needs_visa_service
+          needs_visa_service: p.needs_visa_service,
+          gender: p.gender,
+          nationality: p.nationality,
+          passport_issue_date: p.passport_issue_date,
+          passport_expiry_date: p.passport_expiry_date,
         });
       }
 
@@ -344,110 +368,171 @@ export default function PassengerInputModal({
                 </div>
 
                 {/* Input Fields Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* full_name */}
-                  <div className="relative">
-                    <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                      Họ và tên khách {p.isPayer && <span className="text-rose-500">*</span>}
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="NGUYEN VAN A" 
-                      required={p.isPayer}
-                      value={p.full_name} 
-                      onChange={e => updatePassenger(index, 'full_name', e.target.value.toUpperCase())} 
-                      onFocus={() => {
-                        setActivePaxIndex(index);
-                        setActivePaxField('full_name');
-                      }}
-                      onBlur={() => setTimeout(() => {
-                        setActivePaxIndex(null);
-                        setActivePaxField('full_name');
-                      }, 250)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none placeholder:font-normal placeholder:text-gray-300 uppercase" 
-                    />
-                    {activePaxIndex === index && activePaxField === 'full_name' && modalSuggestions.length > 0 && (
-                      <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-lg mt-1 max-h-40 overflow-y-auto shadow-xl divide-y divide-slate-100">
-                        {modalSuggestions.map(suggestion => (
-                          <div 
-                            key={suggestion.id}
-                            onMouseDown={() => selectModalSuggestion(index, suggestion)}
-                            className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
-                          >
-                            <div>
-                              <div className="font-bold text-slate-800">{suggestion.full_name}</div>
-                              {suggestion.passport_number && (
-                                <div className="text-[10px] text-gray-500 font-mono">HC: {suggestion.passport_number}</div>
-                              )}
+                <div className="space-y-4">
+                  {/* Row 1: Personal Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* full_name */}
+                    <div className="relative md:col-span-5">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Họ và tên khách {p.isPayer && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="NGUYEN VAN A" 
+                        required={p.isPayer}
+                        value={p.full_name} 
+                        onChange={e => updatePassenger(index, 'full_name', e.target.value.toUpperCase())} 
+                        onFocus={() => {
+                          setActivePaxIndex(index);
+                          setActivePaxField('full_name');
+                        }}
+                        onBlur={() => setTimeout(() => {
+                          setActivePaxIndex(null);
+                          setActivePaxField('full_name');
+                        }, 250)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none placeholder:font-normal placeholder:text-gray-300 uppercase" 
+                      />
+                      {activePaxIndex === index && activePaxField === 'full_name' && modalSuggestions.length > 0 && (
+                        <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-lg mt-1 max-h-40 overflow-y-auto shadow-xl divide-y divide-slate-100">
+                          {modalSuggestions.map(suggestion => (
+                            <div 
+                              key={suggestion.id}
+                              onMouseDown={() => selectModalSuggestion(index, suggestion)}
+                              className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
+                            >
+                              <div>
+                                <div className="font-bold text-slate-800">{suggestion.full_name}</div>
+                                {suggestion.passport_number && (
+                                  <div className="text-[10px] text-gray-500 font-mono">HC: {suggestion.passport_number}</div>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-blue-600 font-bold">{suggestion.phone || 'Chưa có SĐT'}</div>
+                                {suggestion.dob && (
+                                  <div className="text-[10px] text-gray-400">NS: {suggestion.dob}</div>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-blue-600 font-bold">{suggestion.phone || 'Chưa có SĐT'}</div>
-                              {suggestion.dob && (
-                                <div className="text-[10px] text-gray-400">NS: {suggestion.dob}</div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* gender */}
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Giới tính (Sex)
+                      </label>
+                      <select
+                        value={p.gender || ''}
+                        onChange={e => updatePassenger(index, 'gender', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+                      >
+                        <option value="">Chọn</option>
+                        <option value="Mr">Mr (Nam)</option>
+                        <option value="Mrs">Mrs (Bà)</option>
+                        <option value="Ms">Ms (Cô)</option>
+                      </select>
+                    </div>
+
+                    {/* dob */}
+                    <div className="md:col-span-3">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Ngày sinh (DOB)
+                      </label>
+                      <DatePicker 
+                        value={p.dob} 
+                        onChange={val => updatePassenger(index, 'dob', val)} 
+                        align="right"
+                      />
+                    </div>
+
+                    {/* nationality */}
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Quốc tịch
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="VN" 
+                        value={p.nationality || ''} 
+                        onChange={e => updatePassenger(index, 'nationality', e.target.value.toUpperCase())} 
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase" 
+                      />
+                    </div>
                   </div>
 
-                  {/* passport_number */}
-                  <div className="relative">
-                    <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                      Số hộ chiếu (Passport)
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="Nhập số hộ chiếu" 
-                      value={p.passport_number} 
-                      onChange={e => updatePassenger(index, 'passport_number', e.target.value.toUpperCase())} 
-                      onFocus={() => {
-                        setActivePaxIndex(index);
-                        setActivePaxField('passport_number');
-                      }}
-                      onBlur={() => setTimeout(() => {
-                        setActivePaxIndex(null);
-                        setActivePaxField(null);
-                      }, 250)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase font-semibold placeholder:font-normal placeholder:text-gray-300" 
-                    />
-                    {activePaxIndex === index && activePaxField === 'passport_number' && modalSuggestions.length > 0 && (
-                      <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-lg mt-1 max-h-40 overflow-y-auto shadow-xl divide-y divide-slate-100">
-                        {modalSuggestions.map(suggestion => (
-                          <div 
-                            key={suggestion.id}
-                            onMouseDown={() => selectModalSuggestion(index, suggestion)}
-                            className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
-                          >
-                            <div>
-                              <div className="font-bold text-slate-800">{suggestion.full_name}</div>
-                              {suggestion.passport_number && (
-                                <div className="text-[10px] text-gray-500 font-mono">HC: {suggestion.passport_number}</div>
-                              )}
+                  {/* Row 2: Passport Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* passport_number */}
+                    <div className="relative">
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Số hộ chiếu (Passport)
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="Nhập số hộ chiếu" 
+                        value={p.passport_number} 
+                        onChange={e => updatePassenger(index, 'passport_number', e.target.value.toUpperCase())} 
+                        onFocus={() => {
+                          setActivePaxIndex(index);
+                          setActivePaxField('passport_number');
+                        }}
+                        onBlur={() => setTimeout(() => {
+                          setActivePaxIndex(null);
+                          setActivePaxField(null);
+                        }, 250)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none uppercase font-semibold placeholder:font-normal placeholder:text-gray-300" 
+                      />
+                      {activePaxIndex === index && activePaxField === 'passport_number' && modalSuggestions.length > 0 && (
+                        <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-lg mt-1 max-h-40 overflow-y-auto shadow-xl divide-y divide-slate-100">
+                          {modalSuggestions.map(suggestion => (
+                            <div 
+                              key={suggestion.id}
+                              onMouseDown={() => selectModalSuggestion(index, suggestion)}
+                              className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
+                            >
+                              <div>
+                                <div className="font-bold text-slate-800">{suggestion.full_name}</div>
+                                {suggestion.passport_number && (
+                                  <div className="text-[10px] text-gray-500 font-mono">HC: {suggestion.passport_number}</div>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-blue-600 font-bold">{suggestion.phone || 'Chưa có SĐT'}</div>
+                                {suggestion.dob && (
+                                  <div className="text-[10px] text-gray-400">NS: {suggestion.dob}</div>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-blue-600 font-bold">{suggestion.phone || 'Chưa có SĐT'}</div>
-                              {suggestion.dob && (
-                                <div className="text-[10px] text-gray-400">NS: {suggestion.dob}</div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                  {/* dob */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                      Ngày tháng năm sinh
-                    </label>
-                    <DatePicker 
-                      value={p.dob} 
-                      onChange={val => updatePassenger(index, 'dob', val)} 
-                      align="right"
-                    />
+                    {/* passport_issue_date */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Ngày cấp hộ chiếu (DOI)
+                      </label>
+                      <DatePicker 
+                        value={p.passport_issue_date || ''} 
+                        onChange={val => updatePassenger(index, 'passport_issue_date', val)} 
+                        align="right"
+                      />
+                    </div>
+
+                    {/* passport_expiry_date */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Ngày hết hạn hộ chiếu (DOE)
+                      </label>
+                      <DatePicker 
+                        value={p.passport_expiry_date || ''} 
+                        onChange={val => updatePassenger(index, 'passport_expiry_date', val)} 
+                        align="right"
+                      />
+                    </div>
                   </div>
                 </div>
 

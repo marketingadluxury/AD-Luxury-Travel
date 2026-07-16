@@ -261,6 +261,33 @@ async function getOrCreateVisaServiceFolder(visaCode: string, visaFolderId: stri
   return serviceFolderId;
 }
 
+async function getOrCreateOrderFolder(orderCode: string, token: string): Promise<string> {
+  const cleanOrderCode = (orderCode || 'Don_hang').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
+  
+  // 1. Get or create AD Luxury Travel root folder
+  let rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  if (!rootId) {
+    rootId = await createFolder('AD Luxury Travel', undefined, token);
+    await makeFolderPublic(rootId, token);
+  }
+
+  // 2. Get or create "Đơn hàng" folder inside root
+  let donHangFolderId = await searchFolder('Đơn hàng', rootId, token);
+  if (!donHangFolderId) {
+    donHangFolderId = await createFolder('Đơn hàng', rootId, token);
+    await makeFolderPublic(donHangFolderId, token);
+  }
+
+  // 3. Get or create [Mã đơn hàng] folder inside "Đơn hàng"
+  let orderFolderId = await searchFolder(cleanOrderCode, donHangFolderId, token);
+  if (!orderFolderId) {
+    orderFolderId = await createFolder(cleanOrderCode, donHangFolderId, token);
+    await makeFolderPublic(orderFolderId, token);
+  }
+
+  return orderFolderId;
+}
+
 async function uploadFileToSupabase(
   bucketName: string,
   filePath: string,
@@ -741,6 +768,64 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
   } catch (error: any) {
     console.error('Lỗi API /api/upload:', error);
     res.status(500).json({ error: error.message || 'Lỗi tải file lên hệ thống' });
+  }
+});
+
+// Unified Invoice Receipt Upload API (Google Drive with Supabase Storage fallback)
+app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt'], upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const { orderCode } = req.body;
+
+    if (!file) {
+      res.status(400).json({ error: 'Không tìm thấy file để tải lên.' });
+      return;
+    }
+
+    if (!orderCode) {
+      res.status(400).json({ error: 'Thiếu mã đơn hàng.' });
+      return;
+    }
+
+    const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY);
+    const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+    const driveActive = hasServiceAccount || hasOAuth;
+
+    const cleanOrderCode = orderCode.trim().toUpperCase().replace(/\s+/g, '_');
+    const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
+    const fileName = `${cleanOrderCode}_${Date.now()}_${cleanOriginalName}`;
+
+    if (driveActive) {
+      console.log(`[Drive] Đang tải file hóa đơn lên Google Drive cho Đơn hàng: ${cleanOrderCode}`);
+      const token = await getGoogleDriveAccessToken();
+      const orderFolderId = await getOrCreateOrderFolder(cleanOrderCode, token);
+      const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, orderFolderId, token);
+      res.json({
+        success: true,
+        url: result.webViewLink,
+        fileName: fileName,
+        storage: 'drive'
+      });
+    } else {
+      console.log(`[Supabase Fallback] Đang tải file hóa đơn lên Supabase: Đơn hàng/${cleanOrderCode}/${fileName}`);
+      const supabase = getSupabaseClient(req);
+      const publicUrl = await uploadFileToSupabase(
+        'crm-attachments',
+        `Đơn hàng/${cleanOrderCode}/${fileName}`,
+        file.buffer,
+        file.mimetype,
+        supabase
+      );
+      res.json({
+        success: true,
+        url: publicUrl,
+        fileName: fileName,
+        storage: 'supabase'
+      });
+    }
+  } catch (error: any) {
+    console.error('Lỗi API /api/upload-invoice-receipt:', error);
+    res.status(500).json({ error: error.message || 'Lỗi tải hóa đơn thanh toán lên hệ thống' });
   }
 });
 

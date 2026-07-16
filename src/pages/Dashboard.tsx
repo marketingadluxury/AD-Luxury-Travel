@@ -69,7 +69,6 @@ function getDaysArray(start: Date, end: Date) {
   return arr;
 }
 
-// Hàm phụ trợ sinh các mốc tháng liên tục
 function getMonthsArray(start: Date, end: Date) {
   const arr = [];
   const dt = new Date(start);

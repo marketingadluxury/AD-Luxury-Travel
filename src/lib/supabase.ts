@@ -5,6 +5,12 @@ const initialAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || (impor
 
 let activeClient = createClient(initialUrl, initialAnonKey);
 
+export function isSupabaseConfigured(): boolean {
+  const url = (import.meta as any).env.VITE_SUPABASE_URL || (import.meta as any).env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || (import.meta as any).env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  return !!(url && !url.includes('placeholder') && key && !key.includes('placeholder'));
+}
+
 export function updateSupabaseClient(url: string, key: string) {
   if (url && key && !url.includes('placeholder')) {
     activeClient = createClient(url, key);
