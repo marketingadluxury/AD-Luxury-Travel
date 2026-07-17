@@ -32,7 +32,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
       const orderShortId = order.id.substring(0, 8).toUpperCase();
       setInvoiceCode(`${orderShortId}-TT-${sequence}`);
       
-      setDescription(`Thanh toán cọc lần ${sequence}`);
+      setDescription(`Thanh toán lần ${sequence}`);
       setFile(null);
     }
   }, [order, isOpen, invoices]);

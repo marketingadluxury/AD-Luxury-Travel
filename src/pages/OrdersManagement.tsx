@@ -49,7 +49,16 @@ export default function OrdersManagement() {
 
     // 4. Status filter
     if (orderFilterStatus !== 'all') {
-      filtered = filtered.filter(o => o.status === orderFilterStatus);
+      filtered = filtered.filter(o => {
+        const hasApprovedReceipt = invoices.some(inv => inv.order_id === o.id && inv.type === 'receipt' && inv.status === 'approved');
+        if (orderFilterStatus === 'sure') {
+          return o.status === 'sure' && !hasApprovedReceipt;
+        }
+        if (orderFilterStatus === 'paid') {
+          return o.status === 'paid' || (o.status === 'sure' && hasApprovedReceipt);
+        }
+        return o.status === orderFilterStatus;
+      });
     }
 
     // 5. Time range filter
@@ -98,7 +107,7 @@ export default function OrdersManagement() {
       }
       return 0;
     });
-  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterStatus, orderFilterTimeRange, orderSortBy]);
+  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterStatus, orderFilterTimeRange, orderSortBy, invoices]);
 
   const holdStatistics = React.useMemo(() => {
     const stats: Record<string, { orderCount: number; seatsHold: number; detailTours: Record<string, number> }> = {};
@@ -233,12 +242,13 @@ export default function OrdersManagement() {
     }
 
     return {
-      sure: base.filter(o => o.status === 'sure').length,
+      sure: base.filter(o => o.status === 'sure' && !invoices.some(inv => inv.order_id === o.id && inv.type === 'receipt' && inv.status === 'approved')).length,
+      paid: base.filter(o => o.status === 'paid' || (o.status === 'sure' && invoices.some(inv => inv.order_id === o.id && inv.type === 'receipt' && inv.status === 'approved'))).length,
       hold: base.filter(o => o.status === 'hold').length,
       cancelled: base.filter(o => o.status === 'cancelled').length,
       total: base.length
     };
-  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange]);
+  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange, invoices]);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -1290,6 +1300,23 @@ export default function OrdersManagement() {
           </button>
 
           <button
+            onClick={() => setOrderFilterStatus('paid')}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+              orderFilterStatus === 'paid'
+                ? 'border-blue-500 text-blue-600 bg-blue-50/10'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
+            }`}
+          >
+            <CreditCard className={`w-4.5 h-4.5 ${orderFilterStatus === 'paid' ? 'text-blue-500' : 'text-gray-400'}`} />
+            <span>Đã thanh toán</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
+              orderFilterStatus === 'paid' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {tabCounts.paid}
+            </span>
+          </button>
+
+          <button
             onClick={() => setOrderFilterStatus('hold')}
             className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
               orderFilterStatus === 'hold'
@@ -1380,6 +1407,11 @@ export default function OrdersManagement() {
               const timeSeverity = getHoldTimeSeverity(order.hold_expiry);
               const remainingTime = getRemainingHoldTime(order.hold_expiry);
               const isExpanded = expandedOrderId === order.id;
+              const orderInvoices = invoices.filter(inv => inv.order_id === order.id);
+              const approvedPaidAmount = orderInvoices.filter(inv => inv.type === 'receipt' && inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0);
+              const hasApprovedReceipt = approvedPaidAmount > 0;
+              const isPartiallyPaid = hasApprovedReceipt && approvedPaidAmount < order.total_price;
+              const isFullyPaid = hasApprovedReceipt && approvedPaidAmount >= order.total_price;
 
               const visaPassengersCount = orderPassengers.filter(p => p.needs_visa_service).length;
               const priceAdult = tour?.price_adult || tour?.price || 0;
@@ -1472,9 +1504,19 @@ export default function OrdersManagement() {
                       {/* Non-hold Status & Expand Indicator */}
                       <div className="flex items-center justify-between lg:justify-end gap-3.5 min-w-[110px] shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-gray-100">
                         <div>
-                          {order.status === 'sure' && (
+                          {order.status === 'sure' && !hasApprovedReceipt && (
                             <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                               Sure chỗ
+                            </span>
+                          )}
+                          {(order.status === 'paid' || isFullyPaid) && (
+                            <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              Đã thanh toán
+                            </span>
+                          )}
+                          {(order.status === 'sure' && isPartiallyPaid && order.status !== 'paid') && (
+                            <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
+                              Thanh toán một phần
                             </span>
                           )}
                           {order.status === 'cancelled' && (
@@ -2075,17 +2117,30 @@ export default function OrdersManagement() {
                       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                            order.status === 'hold' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                            order.status === 'hold' ? 'bg-amber-50 text-amber-600' :
+                            (order.status === 'paid' || isFullyPaid) ? 'bg-blue-50 text-blue-600' : 
+                            isPartiallyPaid ? 'bg-cyan-50 text-cyan-600' : 'bg-emerald-50 text-emerald-600'
                           }`}>
-                            {order.status === 'hold' ? <Clock className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                            {order.status === 'hold' ? <Clock className="w-4 h-4" /> :
+                             (order.status === 'paid' || isFullyPaid) ? <Check className="w-4 h-4" /> : 
+                             isPartiallyPaid ? <CreditCard className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
                           </div>
                           <div className="text-xs">
                             <span className="font-bold text-gray-900 block">
-                              Yêu cầu nghiệp vụ: {order.status === 'hold' ? 'Nhận thanh toán đặt cọc' : order.status === 'sure' ? 'Xác nhận dịch vụ hoàn tất' : 'Booking đã đóng'}
+                              Yêu cầu nghiệp vụ: {
+                                order.status === 'hold' ? 'Nhận thanh toán đặt cọc' :
+                                (order.status === 'paid' || isFullyPaid) ? 'Booking đã hoàn tất thanh toán' :
+                                isPartiallyPaid ? 'Booking còn dư nợ, cần thanh toán thêm' :
+                                order.status === 'sure' ? 'Xác nhận dịch vụ hoàn tất' : 'Booking đã đóng'
+                              }
                             </span>
                             <span className="text-gray-500 mt-0.5 block">
                               {order.status === 'hold' 
                                 ? 'Cần chuyển trạng thái đơn sang Sure để giữ phòng & vé máy bay chính thức trước khi đếm ngược kết thúc.' 
+                                : (order.status === 'paid' || isFullyPaid)
+                                ? 'Đơn hàng đã được thanh toán đầy đủ, không còn dư nợ.'
+                                : isPartiallyPaid
+                                ? 'Đơn hàng mới được thanh toán một phần. Cần hoàn tất số dư còn lại.'
                                 : order.status === 'sure' 
                                 ? 'Đơn hàng an toàn. Điều hành tour và Đại lý có thể tiến hành chuẩn bị hồ sơ visa, vé máy bay.' 
                                 : 'Đơn đặt đã huỷ. Quỹ vé đã được giải phóng để bán cho khách hàng khác.'}
@@ -2104,7 +2159,7 @@ export default function OrdersManagement() {
                               className="px-3.5 py-2 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:text-blue-800 transition-colors inline-flex items-center"
                             >
                               <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                              Nộp biên lai thanh toán
+                              Thanh toán
                             </button>
                           )}
                           {order.status === 'hold' && (
@@ -2174,9 +2229,21 @@ export default function OrdersManagement() {
                             </>
                           )}
 
-                          {order.status === 'sure' && (
+                          {order.status === 'sure' && !hasApprovedReceipt && (
                             <span className="px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg inline-flex items-center">
                               <Check className="w-4 h-4 mr-1.5" /> Đã chốt thành công (Sure)
+                            </span>
+                          )}
+
+                          {(order.status === 'paid' || isFullyPaid) && (
+                            <span className="px-3.5 py-2 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg inline-flex items-center">
+                              <Check className="w-4 h-4 mr-1.5" /> Đã hoàn tất thanh toán
+                            </span>
+                          )}
+
+                          {(order.status === 'sure' && isPartiallyPaid) && (
+                            <span className="px-3.5 py-2 text-xs font-bold text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-lg inline-flex items-center">
+                              <CreditCard className="w-4 h-4 mr-1.5" /> Đã thanh toán một phần
                             </span>
                           )}
 
