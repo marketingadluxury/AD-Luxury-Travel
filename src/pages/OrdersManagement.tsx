@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
@@ -13,7 +14,8 @@ import EditOrderModal from '../components/EditOrderModal';
 import PaymentModal from '../components/PaymentModal';
 
 export default function OrdersManagement() {
-  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, currentRole } = useCRM();
+  const navigate = useNavigate();
+  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, createInvoiceReceipt, currentRole } = useCRM();
   const { profile, user } = useAuth();
 
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
@@ -56,6 +58,9 @@ export default function OrdersManagement() {
         }
         if (orderFilterStatus === 'paid') {
           return o.status === 'paid' || (o.status === 'sure' && hasApprovedReceipt);
+        }
+        if (orderFilterStatus === 'refund') {
+          return o.status === 'cancelled' && invoices.some(inv => inv.order_id === o.id && inv.type === 'payment');
         }
         return o.status === orderFilterStatus;
       });
@@ -246,6 +251,7 @@ export default function OrdersManagement() {
       paid: base.filter(o => o.status === 'paid' || (o.status === 'sure' && invoices.some(inv => inv.order_id === o.id && inv.type === 'receipt' && inv.status === 'approved'))).length,
       hold: base.filter(o => o.status === 'hold').length,
       cancelled: base.filter(o => o.status === 'cancelled').length,
+      refund: base.filter(o => o.status === 'cancelled' && invoices.some(inv => inv.order_id === o.id && inv.type === 'payment')).length,
       total: base.length
     };
   }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange, invoices]);
@@ -263,6 +269,12 @@ export default function OrdersManagement() {
   const [disqualifiedReasonModal, setDisqualifiedReasonModal] = useState<{ name: string; reason: string } | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isEditOrderOpen, setIsEditOrderOpen] = useState(false);
+  const [selectedInvoiceNote, setSelectedInvoiceNote] = useState<{ code: string; note: string } | null>(null);
+  const [isCancelPaymentModalOpen, setIsCancelPaymentModalOpen] = useState(false);
+  const [cancelPaymentOrder, setCancelPaymentOrder] = useState<Order | null>(null);
+  const [cancelPaymentReason, setCancelPaymentReason] = useState('');
+  const [cancelPaymentRefundAmount, setCancelPaymentRefundAmount] = useState<number>(0);
+  const [cancelPaymentRefundInput, setCancelPaymentRefundInput] = useState('');
   const [confirmModalData, setConfirmModalData] = useState<{
     isOpen: boolean;
     title: string;
@@ -1349,6 +1361,23 @@ export default function OrdersManagement() {
               {tabCounts.cancelled}
             </span>
           </button>
+
+          <button
+            onClick={() => setOrderFilterStatus('refund')}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+              orderFilterStatus === 'refund'
+                ? 'border-rose-500 text-rose-600 bg-rose-50/10'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
+            }`}
+          >
+            <DollarSign className={`w-4.5 h-4.5 ${orderFilterStatus === 'refund' ? 'text-rose-500' : 'text-gray-400'}`} />
+            <span>Hủy hoàn tiền</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
+              orderFilterStatus === 'refund' ? 'bg-rose-100 text-rose-800' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {tabCounts.refund}
+            </span>
+          </button>
         </div>
 
         {/* Filters and Sorting Controls (Adjusted to grid-cols-3) */}
@@ -1427,7 +1456,12 @@ export default function OrdersManagement() {
               const totalVisa = visaPassengersCount * priceVisaTour;
 
               const totalSubtotal = totalAdult + totalChild + totalInfant + totalSingleRoom + totalVisa;
-              const computedVat = order.vat_option === 'Xuất VAT' ? Math.round(totalSubtotal * 0.1) : 0;
+              const discountAmount = order.discount_type === 'percent' 
+                ? (totalSubtotal * (order.discount_value || 0)) / 100 
+                : (order.discount_value || 0);
+              const customSurchargeAmount = order.surcharge_amount || 0;
+              const totalBeforeVat = totalSubtotal - discountAmount + customSurchargeAmount;
+              const computedVat = order.vat_option === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
 
               return (
                 <div 
@@ -1509,21 +1543,58 @@ export default function OrdersManagement() {
                               Sure chỗ
                             </span>
                           )}
-                          {(order.status === 'paid' || isFullyPaid) && (
+                          {(order.payment_status === 'paid' || isFullyPaid) && (
                             <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                               Đã thanh toán
                             </span>
                           )}
-                          {(order.status === 'sure' && isPartiallyPaid && order.status !== 'paid') && (
+                          {(order.status === 'sure' && isPartiallyPaid && order.payment_status !== 'paid') && (
                             <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
                               Thanh toán một phần
                             </span>
                           )}
-                          {order.status === 'cancelled' && (
-                            <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-slate-50 text-slate-400 border border-slate-200">
-                              Đã huỷ
-                            </span>
-                          )}
+                          {order.status === 'cancelled' && (() => {
+                            const refundInvoices = invoices.filter(inv => inv.order_id === order.id && inv.type === 'payment');
+                            if (refundInvoices.length === 0) {
+                              return (
+                                <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-slate-50 text-slate-400 border border-slate-200">
+                                  Đã huỷ
+                                </span>
+                              );
+                            }
+                            
+                            const allApproved = refundInvoices.every(inv => inv.status === 'approved');
+                            const anyApproved = refundInvoices.some(inv => inv.status === 'approved');
+                            const anyPending = refundInvoices.some(inv => inv.status === 'pending');
+                            const allRejected = refundInvoices.every(inv => inv.status === 'rejected');
+
+                            let progressText = '';
+                            let progressStyle = '';
+                            if (allApproved) {
+                              progressText = 'Hoàn tiền: Hoàn tất';
+                              progressStyle = 'bg-green-50 text-green-700 border-green-200';
+                            } else if (anyApproved && anyPending) {
+                              progressText = 'Hoàn tiền: Đang xử lý';
+                              progressStyle = 'bg-cyan-50 text-cyan-700 border-cyan-200 animate-pulse';
+                            } else if (allRejected) {
+                              progressText = 'Hoàn tiền: Từ chối';
+                              progressStyle = 'bg-rose-50 text-rose-700 border-rose-200';
+                            } else {
+                              progressText = 'Hoàn tiền: Chờ duyệt';
+                              progressStyle = 'bg-amber-50 text-amber-700 border-amber-200';
+                            }
+
+                            return (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-slate-50 text-slate-400 border border-slate-200">
+                                  Đã huỷ
+                                </span>
+                                <span className={`inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border ${progressStyle}`}>
+                                  {progressText}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="text-gray-400 p-1 hover:bg-slate-100 rounded-full transition-colors ml-auto lg:ml-0">
@@ -1712,12 +1783,18 @@ export default function OrdersManagement() {
                             )}
                             {(order.discount_value || 0) > 0 && (
                               <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-rose-500">Giảm giá {order.discount_type === 'percent' ? `(${order.discount_value}%)` : ''}:</span>
+                                <span className="text-rose-500">Giảm giá {order.discount_type === 'percent' ? `(${order.discount_value}%)` : ''} : </span>
                                 <span className="font-bold text-rose-600">-{new Intl.NumberFormat('vi-VN').format(
                                   order.discount_type === 'percent' 
                                     ? ((totalAdult + totalChild + totalInfant + totalSingleRoom) * (order.discount_value || 0)) / 100 
                                     : (order.discount_value || 0)
                                 )} đ</span>
+                              </div>
+                            )}
+                            {(order.surcharge_amount || 0) > 0 && (
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-blue-500">{order.surcharge_name || 'Phụ thu khác'}:</span>
+                                <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(order.surcharge_amount || 0)} đ</span>
                               </div>
                             )}
                             {order.vat_option === 'Xuất VAT' && (
@@ -2010,101 +2087,153 @@ export default function OrdersManagement() {
                             </div>
 
                             {/* Danh sách lịch sử giao dịch */}
-                            <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
-                              <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center gap-1.5">
-                                <FileText className="w-4 h-4 text-emerald-600" />
-                                Lịch sử giao dịch thu/chi liên quan
-                              </h4>
+                            <div className="bg-white rounded-2xl border border-slate-200/85 shadow-md overflow-hidden" id="transaction_history_section">
+                              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 border border-emerald-100">
+                                    <FileText className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                                      Lịch sử giao dịch thu/chi liên quan
+                                    </h4>
+                                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                      Danh sách phiếu thu và phiếu chi đã khởi tạo cho đơn hàng này
+                                    </p>
+                                  </div>
+                                </div>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wider">
+                                  {orderInvoices.length} Giao dịch
+                                </span>
+                              </div>
 
                               {orderInvoices.length === 0 ? (
-                                <div className="text-center py-8 text-gray-400 text-xs italic">
+                                <div className="text-center py-12 text-gray-400 text-xs italic bg-slate-50/20">
                                   Chưa có lịch sử thanh toán hay biên lai thu chi nào được ghi nhận cho đơn hàng này.
                                 </div>
                               ) : (
                                 <div className="overflow-x-auto">
                                   <table className="min-w-full text-xs text-left text-gray-700 table-auto">
                                     <thead>
-                                      <tr className="border-b border-gray-150 text-gray-400 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">
-                                        <th className="py-2.5 px-3">Mã hóa đơn / Phiếu</th>
-                                        <th className="py-2.5 px-3">Loại phiếu</th>
-                                        <th className="py-2.5 px-3">Số tiền</th>
-                                        <th className="py-2.5 px-3">Phương thức</th>
-                                        <th className="py-2.5 px-3">Thời gian</th>
-                                        <th className="py-2.5 px-3">Người nộp/tạo</th>
-                                        <th className="py-2.5 px-3">Ghi chú / Mô tả</th>
-                                        <th className="py-2.5 px-3">Minh chứng</th>
-                                        <th className="py-2.5 px-3 text-right">Trạng thái</th>
+                                      <tr className="bg-slate-50/55 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">
+                                        <th className="py-3 px-4">Mã hóa đơn / Phiếu</th>
+                                        <th className="py-3 px-4">Loại phiếu</th>
+                                        <th className="py-3 px-4">Số tiền</th>
+                                        <th className="py-3 px-4">Phương thức</th>
+                                        <th className="py-3 px-4">Thời gian</th>
+                                        <th className="py-3 px-4">Người nộp/tạo</th>
+                                        <th className="py-3 px-4">Ghi chú / Mô tả</th>
+                                        <th className="py-3 px-4">Minh chứng</th>
+                                        <th className="py-3 px-4 text-right">Trạng thái</th>
                                       </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                      {orderInvoices.map((inv) => (
-                                        <tr key={inv.id} className="hover:bg-slate-50/50">
-                                          <td className="py-3 px-3 font-mono font-bold text-gray-900">
-                                            {inv.invoice_code || inv.id.substring(0, 8).toUpperCase()}
-                                          </td>
-                                          <td className="py-3 px-3">
-                                            {inv.type === 'receipt' ? (
-                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-150">
-                                                Phiếu thu
+                                    <tbody className="divide-y divide-slate-100">
+                                      {orderInvoices.map((inv) => {
+                                        const isReceipt = inv.type === 'receipt';
+                                        return (
+                                          <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+                                            {/* Mã hóa đơn / Phiếu */}
+                                            <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                                              <span className="bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200 text-[10px] uppercase font-mono">
+                                                {inv.invoice_code || inv.id.substring(0, 8).toUpperCase()}
                                               </span>
-                                            ) : (
-                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-150">
-                                                Phiếu chi (Hoàn)
+                                            </td>
+                                            {/* Loại phiếu */}
+                                            <td className="py-3.5 px-4 whitespace-nowrap">
+                                              {isReceipt ? (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-150 uppercase">
+                                                  Phiếu thu
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-150 uppercase">
+                                                  Phiếu chi (Hoàn)
+                                                </span>
+                                              )}
+                                            </td>
+                                            {/* Số tiền */}
+                                            <td className="py-3.5 px-4 whitespace-nowrap">
+                                              <span className={`font-black text-sm ${isReceipt ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                {isReceipt ? '+' : '-'} {new Intl.NumberFormat('vi-VN').format(inv.amount)} đ
                                               </span>
-                                            )}
-                                          </td>
-                                          <td className="py-3 px-3 font-extrabold text-slate-800">
-                                            {new Intl.NumberFormat('vi-VN').format(inv.amount)} đ
-                                          </td>
-                                          <td className="py-3 px-3 text-gray-500">
-                                            {inv.payment_method || '---'}
-                                          </td>
-                                          <td className="py-3 px-3 text-gray-500">
-                                            {inv.created_at ? new Date(inv.created_at).toLocaleString('vi-VN') : '---'}
-                                          </td>
-                                          <td className="py-3 px-3 text-gray-600 font-medium">
-                                            {order.booker_name || leadPassenger?.full_name || 'Khách trưởng đoàn'}
-                                          </td>
-                                          <td className="py-3 px-3 text-gray-500 max-w-[200px] truncate" title={inv.description}>
-                                            {inv.description || 'Chuyển khoản thanh toán'}
-                                          </td>
-                                          <td className="py-3 px-3">
-                                            {inv.file_url ? (
-                                              <a
-                                                href={inv.file_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors cursor-pointer"
+                                            </td>
+                                            {/* Phương thức */}
+                                            <td className="py-3.5 px-4 text-slate-600 font-semibold whitespace-nowrap">
+                                              {inv.payment_method || '---'}
+                                            </td>
+                                            {/* Thời gian */}
+                                            <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
+                                              {inv.created_at ? (
+                                                <div className="flex flex-col leading-tight">
+                                                  <span className="font-semibold text-slate-700">
+                                                    {new Date(inv.created_at).toLocaleTimeString('vi-VN')}
+                                                  </span>
+                                                  <span className="text-[10px] text-gray-400 mt-0.5">
+                                                    {new Date(inv.created_at).toLocaleDateString('vi-VN')}
+                                                  </span>
+                                                </div>
+                                              ) : (
+                                                '---'
+                                              )}
+                                            </td>
+                                            {/* Người nộp/tạo */}
+                                            <td className="py-3.5 px-4 text-slate-700 font-bold uppercase tracking-wide whitespace-nowrap">
+                                              {inv.created_by || order.booker_name || leadPassenger?.full_name || 'Hệ thống'}
+                                            </td>
+                                            {/* Ghi chú / Mô tả (Popup Button!) */}
+                                            <td className="py-3.5 px-4 whitespace-nowrap">
+                                              <button
+                                                type="button"
+                                                onClick={() => setSelectedInvoiceNote({
+                                                  code: inv.invoice_code || inv.id.substring(0, 8).toUpperCase(),
+                                                  note: inv.description || 'Chuyển khoản thanh toán'
+                                                })}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all rounded-lg border border-slate-200 cursor-pointer max-w-[180px]"
+                                                title="Bấm để xem đầy đủ ghi chú"
                                               >
-                                                <ExternalLink className="w-3 h-3" />
-                                                Xem ảnh
-                                              </a>
-                                            ) : (
-                                              <span className="text-gray-400 italic">Không có</span>
-                                            )}
-                                          </td>
-                                          <td className="py-3 px-3 text-right">
-                                            {inv.status === 'approved' && (
-                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                                <Check className="w-3 h-3" />
-                                                Đã duyệt
-                                              </span>
-                                            )}
-                                            {inv.status === 'pending' && (
-                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                                <Clock className="w-3 h-3 animate-pulse" />
-                                                Chờ duyệt
-                                              </span>
-                                            )}
-                                            {inv.status === 'rejected' && (
-                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                                                <AlertCircle className="w-3 h-3" />
-                                                Từ chối
-                                              </span>
-                                            )}
-                                          </td>
-                                        </tr>
-                                      ))}
+                                                <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                                <span className="truncate">{inv.description || 'Xem ghi chú'}</span>
+                                              </button>
+                                            </td>
+                                            {/* Minh chứng */}
+                                            <td className="py-3.5 px-4 whitespace-nowrap">
+                                              {inv.file_url ? (
+                                                <a
+                                                  href={inv.file_url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+                                                >
+                                                  <ExternalLink className="w-3.5 h-3.5" />
+                                                  Xem ảnh
+                                                </a>
+                                              ) : (
+                                                <span className="text-gray-400 italic">Không có</span>
+                                              )}
+                                            </td>
+                                            {/* Trạng thái */}
+                                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                              {inv.status === 'approved' && (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                  <Check className="w-3 h-3" />
+                                                  Đã duyệt
+                                                </span>
+                                              )}
+                                              {inv.status === 'pending' && (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+                                                  <Clock className="w-3 h-3 animate-pulse" />
+                                                  Chờ duyệt
+                                                </span>
+                                              )}
+                                              {inv.status === 'rejected' && (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                                  <AlertCircle className="w-3 h-3" />
+                                                  Từ chối
+                                                </span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>
@@ -2149,7 +2278,7 @@ export default function OrdersManagement() {
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto justify-end">
-                          {order.status !== 'cancelled' && (
+                          {order.status !== 'cancelled' && order.status !== 'paid' && !isFullyPaid && (
                             <button
                               type="button"
                               onClick={() => {
@@ -2174,23 +2303,6 @@ export default function OrdersManagement() {
                               >
                                 <Check className="w-3.5 h-3.5 mr-1.5" />
                                 Xác nhận
-                              </button>
-                              {/* Cancel order booking button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  console.log('Cancel button clicked for:', order.id);
-                                  setConfirmModalData({
-                                    isOpen: true,
-                                    title: 'Hủy đơn hàng',
-                                    message: `Bạn có chắc chắn muốn HỦY đơn đặt giữ chỗ #${order.id.substring(0, 8)}? Hành động này sẽ trả lại ${orderPassengers.length} chỗ trống về quỹ tour khởi hành.`,
-                                    onConfirm: () => cancelOrder(order.id),
-                                  });
-                                }}
-                                className="px-3.5 py-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 hover:text-rose-800 transition-colors inline-flex items-center"
-                              >
-                                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                                Hủy giữ chỗ
                               </button>
 
                               {/* Extensions Request Button */}
@@ -2229,6 +2341,45 @@ export default function OrdersManagement() {
                             </>
                           )}
 
+                          {/* Universal Cancel Order Button */}
+                          {order.status !== 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                console.log('Cancel button clicked for:', order.id);
+                                const orderInvoices = invoices.filter(inv => inv.order_id === order.id);
+                                const approvedPaidAmount = orderInvoices.filter(inv => inv.type === 'receipt' && inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0) || order.paid_amount || 0;
+                                const hasPayment = approvedPaidAmount > 0;
+                                if (hasPayment) {
+                                  setCancelPaymentOrder({ ...order, paid_amount: approvedPaidAmount });
+                                  setCancelPaymentReason('');
+                                  setCancelPaymentRefundAmount(approvedPaidAmount);
+                                  setCancelPaymentRefundInput(new Intl.NumberFormat('vi-VN').format(approvedPaidAmount));
+                                  setIsCancelPaymentModalOpen(true);
+                                } else {
+                                  setConfirmModalData({
+                                    isOpen: true,
+                                    title: 'Hủy đơn hàng',
+                                    message: `Bạn có chắc chắn muốn HỦY đơn đặt giữ chỗ #${order.id.substring(0, 8)}? Hành động này sẽ trả lại ${orderPassengers.length} chỗ trống về quỹ tour khởi hành.`,
+                                    showInput: false,
+                                    onConfirm: async () => {
+                                      try {
+                                        await cancelOrder(order.id, '');
+                                        toast.success('Đã hủy đơn đặt giữ chỗ thành công!');
+                                      } catch (err) {
+                                        toast.error('Gặp sự cố khi hủy đơn hàng!');
+                                      }
+                                    },
+                                  });
+                                }
+                              }}
+                              className="px-3.5 py-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 hover:text-rose-800 transition-colors inline-flex items-center cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                              Hủy đơn hàng
+                            </button>
+                          )}
+
                           {order.status === 'sure' && !hasApprovedReceipt && (
                             <span className="px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg inline-flex items-center">
                               <Check className="w-4 h-4 mr-1.5" /> Đã chốt thành công (Sure)
@@ -2247,11 +2398,37 @@ export default function OrdersManagement() {
                             </span>
                           )}
 
-                          {order.status === 'cancelled' && (
-                            <span className="px-3.5 py-2 text-xs font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded-lg inline-flex items-center">
-                              Đã hủy đơn hàng
-                            </span>
-                          )}
+                          {order.status === 'cancelled' && (() => {
+                            const orderInvoices = invoices.filter(inv => inv.order_id === order.id);
+                            const refundInvoices = orderInvoices.filter(inv => inv.type === 'payment');
+                            const approvedPaidAmount = orderInvoices.filter(inv => inv.type === 'receipt' && inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0) || order.paid_amount || 0;
+                            const hasRefundPendingOrApproved = refundInvoices.some(inv => inv.status === 'pending' || inv.status === 'approved');
+                            const hasRejectedRefund = refundInvoices.some(inv => inv.status === 'rejected');
+
+                            return (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="px-3.5 py-2 text-xs font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded-lg inline-flex items-center">
+                                  Đã hủy đơn hàng
+                                </span>
+                                {approvedPaidAmount > 0 && !hasRefundPendingOrApproved && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCancelPaymentOrder({ ...order, paid_amount: approvedPaidAmount });
+                                      setCancelPaymentReason(hasRejectedRefund ? 'Yêu cầu hoàn tiền lại sau khi bị từ chối' : '');
+                                      setCancelPaymentRefundAmount(approvedPaidAmount);
+                                      setCancelPaymentRefundInput(new Intl.NumberFormat('vi-VN').format(approvedPaidAmount));
+                                      setIsCancelPaymentModalOpen(true);
+                                    }}
+                                    className="px-3.5 py-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors inline-flex items-center cursor-pointer"
+                                  >
+                                    <DollarSign className="w-3.5 h-3.5 mr-1.5" />
+                                    {hasRejectedRefund ? 'Yêu cầu hoàn tiền lại' : 'Tạo phiếu chi hoàn tiền'}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -2326,6 +2503,48 @@ export default function OrdersManagement() {
         }}
       />
 
+      {/* Selected Invoice Note Modal */}
+      {selectedInvoiceNote && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" id="invoice_note_modal">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 transform transition-all duration-200 scale-100">
+            <div className="bg-slate-50 px-6 py-4 flex items-center justify-between border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Chi tiết Ghi chú / Mô tả</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedInvoiceNote(null)}
+                className="text-slate-400 hover:text-slate-600 transition-colors text-lg font-bold p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Mã hóa đơn / Phiếu</span>
+                <span className="text-xs font-mono font-extrabold text-slate-900 mt-0.5 block uppercase">{selectedInvoiceNote.code}</span>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-150 max-h-[300px] overflow-y-auto">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Nội dung ghi chú</span>
+                <p className="text-xs font-semibold text-slate-800 whitespace-pre-wrap leading-relaxed">
+                  {selectedInvoiceNote.note || 'Không có ghi chú chi tiết.'}
+                </p>
+              </div>
+            </div>
+            <div className="bg-slate-50 px-6 py-3.5 flex justify-end border-t border-slate-150">
+              <button
+                type="button"
+                onClick={() => setSelectedInvoiceNote(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 active:scale-95 transition-all text-white font-extrabold text-xs rounded-lg uppercase shadow-md shadow-slate-900/10 cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Disqualified Reason Modal */}
       {disqualifiedReasonModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" id="disqualified_reason_modal">
@@ -2360,6 +2579,156 @@ export default function OrdersManagement() {
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 transition-all text-white font-extrabold text-xs rounded-lg uppercase shadow-md shadow-rose-600/10 cursor-pointer"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hủy đơn hàng có thanh toán */}
+      {isCancelPaymentModalOpen && cancelPaymentOrder && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-950 flex items-center gap-2">
+                ⚠️ Hủy Đơn Hàng Có Thanh Toán
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsCancelPaymentModalOpen(false);
+                  setCancelPaymentOrder(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 bg-white hover:bg-gray-100 rounded-full p-1.5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 font-semibold leading-relaxed">
+                Đơn hàng <span className="font-mono font-bold">#{cancelPaymentOrder.id.substring(0, 8)}</span> này đã được thanh toán. Khi hủy, hệ thống sẽ tự động tạo một phiếu chi hoàn trả cho khách hàng tương ứng với số tiền bạn thiết lập dưới đây.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Số tiền đã thanh toán
+                </label>
+                <div className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-black text-gray-800">
+                  {new Intl.NumberFormat('vi-VN').format(cancelPaymentOrder.paid_amount || 0)}đ
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Số tiền hoàn trả cho khách <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={cancelPaymentRefundInput}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const cleanVal = raw.replace(/\D/g, '');
+                      if (!cleanVal) {
+                        setCancelPaymentRefundInput('');
+                        setCancelPaymentRefundAmount(0);
+                        return;
+                      }
+                      const numVal = Number(cleanVal);
+                      const maxPaid = cancelPaymentOrder.paid_amount || 0;
+                      const capVal = Math.min(numVal, maxPaid);
+                      setCancelPaymentRefundAmount(capVal);
+                      setCancelPaymentRefundInput(new Intl.NumberFormat('vi-VN').format(capVal));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-950 focus:ring-2 focus:ring-blue-500 bg-white pr-8"
+                    placeholder="Nhập số tiền hoàn trả..."
+                  />
+                  <span className="absolute right-3 top-2.5 text-sm text-gray-400 font-bold">đ</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Số tiền còn lại (giữ lại)
+                </label>
+                <div className="px-3 py-2 bg-rose-50 border border-rose-100 rounded-lg text-sm font-black text-rose-700">
+                  {new Intl.NumberFormat('vi-VN').format(Math.max(0, (cancelPaymentOrder.paid_amount || 0) - cancelPaymentRefundAmount))}đ
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Lý do hủy đơn hàng <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={cancelPaymentReason}
+                  onChange={(e) => setCancelPaymentReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs text-gray-900 focus:ring-2 focus:ring-blue-500 bg-white"
+                  rows={3}
+                  placeholder="Vui lòng nhập lý do khách hủy hoặc lý do hoàn trả cụ thể..."
+                />
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCancelPaymentModalOpen(false);
+                  setCancelPaymentOrder(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!cancelPaymentReason.trim()) {
+                    toast.error('Vui lòng nhập lý do hủy đơn hàng!');
+                    return;
+                  }
+                  if (cancelPaymentRefundAmount > (cancelPaymentOrder.paid_amount || 0)) {
+                    toast.error('Số tiền hoàn trả không được vượt quá số tiền đã thanh toán!');
+                    return;
+                  }
+
+                  try {
+                    // 1. Hủy đơn hàng nếu chưa hủy
+                    if (cancelPaymentOrder.status !== 'cancelled') {
+                      await cancelOrder(cancelPaymentOrder.id, cancelPaymentReason);
+                    }
+                    
+                    // 2. Tạo phiếu chi hoàn tiền nếu số tiền hoàn trả > 0
+                    if (cancelPaymentRefundAmount > 0) {
+                      await createInvoiceReceipt({
+                        order_id: cancelPaymentOrder.id,
+                        amount: cancelPaymentRefundAmount,
+                        description: cancelPaymentOrder.status === 'cancelled'
+                          ? `Yêu cầu hoàn tiền mới cho đơn đặt chỗ đã hủy #${cancelPaymentOrder.id.substring(0, 8)}. Lý do: ${cancelPaymentReason}`
+                          : `Hoàn tiền cho khách hàng do hủy đơn hàng #${cancelPaymentOrder.id.substring(0, 8)}. Lý do: ${cancelPaymentReason}`,
+                        payment_method: 'Chuyển khoản',
+                        type: 'payment',
+                        created_by: profile?.full_name || user?.email || 'Hệ thống',
+                      });
+                      toast.success(cancelPaymentOrder.status === 'cancelled'
+                        ? `Đã gửi lại yêu cầu hoàn trả ${new Intl.NumberFormat('vi-VN').format(cancelPaymentRefundAmount)}đ thành công!`
+                        : `Đã tự động tạo phiếu chi hoàn trả ${new Intl.NumberFormat('vi-VN').format(cancelPaymentRefundAmount)}đ thành công!`
+                      );
+                    } else {
+                      toast.success(cancelPaymentOrder.status === 'cancelled' ? 'Đã lưu thông tin.' : 'Đã hủy đơn hàng thành công (Không có tiền hoàn trả).');
+                    }
+                    
+                    setIsCancelPaymentModalOpen(false);
+                    setCancelPaymentOrder(null);
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Có lỗi xảy ra khi hủy đơn hàng hoặc tạo phiếu chi hoàn tiền!');
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+              >
+                Xác nhận Hủy & Hoàn tiền
               </button>
             </div>
           </div>

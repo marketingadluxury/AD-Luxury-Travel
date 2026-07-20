@@ -6,7 +6,7 @@ interface ActionModalProps {
   onClose: () => void;
   title: string;
   message: string;
-  onConfirm: (input?: string) => void;
+  onConfirm: (input?: string) => void | boolean;
   showInput?: boolean;
   inputPlaceholder?: string;
   inputLabel?: string;
@@ -27,9 +27,11 @@ export default function ActionModal({
   if (!isOpen) return null;
 
   const handleConfirm = () => {
-    onConfirm(showInput ? inputValue : undefined);
-    onClose();
-    setInputValue('');
+    const result = onConfirm(showInput ? inputValue : undefined);
+    if (result !== false) {
+      onClose();
+      setInputValue('');
+    }
   };
 
   return (

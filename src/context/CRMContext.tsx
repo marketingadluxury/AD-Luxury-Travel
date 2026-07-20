@@ -93,9 +93,13 @@ interface CRMContextType {
     vat_address?: string;
     vat_email?: string;
     special_requests?: string;
+    discount_type?: 'percent' | 'amount';
+    discount_value?: number;
+    surcharge_name?: string;
+    surcharge_amount?: number;
   }) => void;
   confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
-  cancelOrder: (orderId: string) => void;
+  cancelOrder: (orderId: string, reason?: string) => void;
   requestExtension: (orderId: string, hours: number) => void;
   handleExtensionRequest: (orderId: string, approve: boolean) => void;
   updateVisaStatus: (passengerId: string, status: Passenger['visa_status'], reason?: string) => void;
@@ -111,8 +115,9 @@ interface CRMContextType {
   updateVisaCommonFiles: (files: { name: string; url: string }[]) => Promise<void>;
   invoices: Invoice[];
   createInvoiceReceipt: (invoiceData: Omit<Invoice, 'id' | 'status' | 'created_at'>) => Promise<Invoice>;
-  approveInvoiceReceipt: (invoiceId: string, verifierName: string) => Promise<void>;
+  approveInvoiceReceipt: (invoiceId: string, verifierName: string, fileUrl?: string) => Promise<void>;
   rejectInvoiceReceipt: (invoiceId: string, verifierName: string) => Promise<void>;
+  uploadInvoiceProof: (invoiceId: string, fileUrl: string) => Promise<void>;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -492,7 +497,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               vat_email: b.vat_email,
               special_requests: b.special_requests,
               discount_type: b.discount_type,
-              discount_value: Number(b.discount_value || 0)
+              discount_value: Number(b.discount_value || 0),
+              surcharge_name: b.surcharge_name,
+              surcharge_amount: Number(b.surcharge_amount || 0)
             }));
             setOrders(fetchedOrders);
             console.log('Đã nạp thành công Bookings từ Supabase');
@@ -1595,6 +1602,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     special_requests?: string;
     discount_type?: 'percent' | 'amount';
     discount_value?: number;
+    surcharge_name?: string;
+    surcharge_amount?: number;
   }) => {
     const tour = tours.find(t => t.id === orderData.tour_id);
     if (!tour) return;
@@ -1705,6 +1714,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       special_requests: orderData.special_requests,
       discount_type: orderData.discount_type || 'amount',
       discount_value: orderData.discount_value || 0,
+      surcharge_name: orderData.surcharge_name || '',
+      surcharge_amount: orderData.surcharge_amount || 0,
     } as any;
 
     const newPassengers: Passenger[] = (orderData.passengers || []).map((p, index) => ({
@@ -1812,7 +1823,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           vat_email: orderData.vat_email,
           special_requests: orderData.special_requests,
           discount_type: orderData.discount_type || 'amount',
-          discount_value: Number(orderData.discount_value || 0)
+          discount_value: Number(orderData.discount_value || 0),
+          surcharge_name: orderData.surcharge_name || '',
+          surcharge_amount: Number(orderData.surcharge_amount || 0)
         });
         if (bookingError) throw bookingError;
 
@@ -2003,49 +2016,52 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
-  const cancelOrder = async (orderId: string) => {
+  const cancelOrder = async (orderId: string, reason?: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
     const tour = tours.find(t => t.id === order.tour_id);
-    if (!tour) return;
+    let updatedTours = tours;
 
-    const seatsToRelease = order.adult_count !== undefined 
-      ? ((order.adult_count || 0) + (order.child_count || 0)) 
-      : passengers.filter(p => p.order_id === orderId).length;
+    if (tour) {
+      const seatsToRelease = order.adult_count !== undefined 
+        ? ((order.adult_count || 0) + (order.child_count || 0)) 
+        : passengers.filter(p => p.order_id === orderId).length;
 
-    const updatedTours = tours.map(t => {
-      if (t.id === order.tour_id) {
-        const sold_seats = order.status === 'sure' ? t.sold_seats - seatsToRelease : t.sold_seats;
-        const hold_seats = order.status === 'hold' ? t.hold_seats - seatsToRelease : t.hold_seats;
-        const available_seats = t.total_seats - sold_seats - hold_seats;
-        const overbook = t.overbook_limit || 0;
-        const totalUsed = sold_seats + hold_seats;
-        let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
-        if (totalUsed >= t.total_seats + overbook) {
-          seatStatus = 'Hết chỗ';
-        } else if (totalUsed >= t.total_seats) {
-          seatStatus = 'Overbooked';
+      updatedTours = tours.map(t => {
+        if (t.id === order.tour_id) {
+          const sold_seats = order.status === 'sure' ? t.sold_seats - seatsToRelease : t.sold_seats;
+          const hold_seats = order.status === 'hold' ? t.hold_seats - seatsToRelease : t.hold_seats;
+          const available_seats = t.total_seats - sold_seats - hold_seats;
+          const overbook = t.overbook_limit || 0;
+          const totalUsed = sold_seats + hold_seats;
+          let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+          if (totalUsed >= t.total_seats + overbook) {
+            seatStatus = 'Hết chỗ';
+          } else if (totalUsed >= t.total_seats) {
+            seatStatus = 'Overbooked';
+          }
+          return {
+            ...t,
+            sold_seats,
+            hold_seats,
+            available_seats,
+            seat_status: seatStatus
+          } as Tour;
         }
-        return {
-          ...t,
-          sold_seats,
-          hold_seats,
-          available_seats,
-          seat_status: seatStatus
-        } as Tour;
-      }
-      return t;
-    });
+        return t;
+      });
+      setTours(updatedTours);
+    }
 
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
-    setTours(updatedTours);
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled', cancel_reason: reason } : o));
+
 
     const newNotif = {
       id: 'N-' + Date.now(),
       type: 'accounting' as const,
       title: 'Đơn hàng đã huỷ',
-      message: `Đơn hàng ${orderId} đã được huỷ bỏ bởi Sale/Đại lý.`,
+      message: `Đơn hàng ${orderId} đã được huỷ bỏ bởi Sale/Đại lý.${reason ? ` Lý do: ${reason}` : ''}`,
       targetId: orderId,
       createdAt: new Date().toISOString(),
       read: false
@@ -2055,7 +2071,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', toUuid(orderId));
+        await supabase.from('bookings').update({ 
+          status: 'cancelled',
+          cancel_reason: reason || null
+        }).eq('id', toUuid(orderId));
         
         const matchingTour = updatedTours.find(t => t.id === order.tour_id);
         if (matchingTour) {
@@ -2504,6 +2523,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           special_requests: updatedData.special_requests,
           discount_type: updatedData.discount_type,
           discount_value: updatedData.discount_value !== undefined ? Number(updatedData.discount_value) : undefined,
+          surcharge_name: updatedData.surcharge_name,
+          surcharge_amount: updatedData.surcharge_amount !== undefined ? Number(updatedData.surcharge_amount) : undefined,
           total_amount: updatedData.total_price !== undefined ? Number(updatedData.total_price) : undefined
         };
         console.log('CRMContext: Updating booking with payload:', updatePayload);
@@ -2531,10 +2552,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     const newId = generateSafeUUID();
     const nowStr = new Date().toISOString();
     
+    let code = invoiceData.invoice_code;
+    if (!code) {
+      const datePrefix = new Date().getFullYear().toString().substring(2) + 
+                         String(new Date().getMonth() + 1).padStart(2, '0') + 
+                         String(new Date().getDate()).padStart(2, '0');
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      if (invoiceData.type === 'payment') {
+        code = `PC-${datePrefix}-${randomSuffix}`;
+      } else {
+        code = `PT-${datePrefix}-${randomSuffix}`;
+      }
+    }
+
     const newInvoice: Invoice = {
       ...invoiceData,
       id: newId,
       status: 'pending',
+      invoice_code: code,
       created_at: nowStr
     };
 
@@ -2550,7 +2585,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           type: invoiceData.type,
           payment_method: invoiceData.payment_method || 'Chuyển khoản',
           description: invoiceData.description || '',
-          invoice_code: invoiceData.invoice_code || '',
+          invoice_code: code,
           file_url: invoiceData.file_url || '',
           created_by: invoiceData.created_by || ''
         };
@@ -2645,13 +2680,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     return newInvoice;
   };
 
-  const approveInvoiceReceipt = async (invoiceId: string, verifierName: string) => {
+  const approveInvoiceReceipt = async (invoiceId: string, verifierName: string, fileUrl?: string) => {
     const nowStr = new Date().toISOString();
     
     // Update local invoices state
     setInvoices(prev => prev.map(inv => 
       inv.id === invoiceId 
-        ? { ...inv, status: 'approved', verified_by: verifierName, verified_at: nowStr } 
+        ? { ...inv, status: 'approved', verified_by: verifierName, verified_at: nowStr, file_url: fileUrl || inv.file_url } 
         : inv
     ));
 
@@ -2662,7 +2697,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     if (bookingId) {
       const order = orders.find(o => o.id === bookingId);
       if (order) {
-        const approvedSum = targetInvoice.amount + (order.paid_amount || 0);
+        const change = targetInvoice.type === 'payment' ? -targetInvoice.amount : targetInvoice.amount;
+        const approvedSum = Math.max(0, (order.paid_amount || 0) + change);
         let newPaymentStatus: Order['payment_status'] = 'partially_paid';
         if (approvedSum >= order.total_price) {
           newPaymentStatus = 'paid';
@@ -2671,10 +2707,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         }
 
         let newOrderStatus = order.status;
-        if (newPaymentStatus === 'paid') {
-          newOrderStatus = 'paid';
-        } else if (order.status === 'hold' || order.status === 'cancelled') {
-          newOrderStatus = 'sure';
+        if (order.status !== 'cancelled') {
+          if (newPaymentStatus === 'paid') {
+            newOrderStatus = 'paid';
+          } else if (approvedSum === 0 && order.status === 'paid') {
+            newOrderStatus = 'sure';
+          } else if (order.status === 'hold') {
+            newOrderStatus = 'sure';
+          }
         }
 
         setOrders(prev => prev.map(o => 
@@ -2700,18 +2740,22 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('invoices').update({
+        const updatePayload: any = {
           status: 'approved',
           verified_by: verifierName,
           verified_at: nowStr
-        }).eq('id', toUuid(invoiceId));
-        toast.success('Duyệt phiếu thu thành công! Đã lưu trữ trong mục "Công ty đã nhận".');
+        };
+        if (fileUrl) {
+          updatePayload.file_url = fileUrl;
+        }
+        await supabase.from('invoices').update(updatePayload).eq('id', toUuid(invoiceId));
+        toast.success('Duyệt phiếu chi/thu thành công! Đã lưu trữ trong mục "Công ty đã nhận".');
       } catch (err) {
         console.error('Lỗi khi duyệt invoice trên Supabase:', err);
         toast.error('Gặp sự cố khi duyệt trên máy chủ!');
       }
     } else {
-      toast.success('Duyệt phiếu thu thành công (Chế độ ngoại tuyến)! Đã lưu trữ trong mục "Công ty đã nhận".');
+      toast.success('Duyệt phiếu chi/thu thành công (Chế độ ngoại tuyến)! Đã lưu trữ trong mục "Công ty đã nhận".');
     }
 
     const orderObj = bookingId ? orders.find(o => o.id === bookingId) : null;
@@ -2810,6 +2854,28 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const uploadInvoiceProof = async (invoiceId: string, fileUrl: string) => {
+    setInvoices(prev => prev.map(inv => 
+      inv.id === invoiceId 
+        ? { ...inv, file_url: fileUrl } 
+        : inv
+    ));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('invoices').update({
+          file_url: fileUrl
+        }).eq('id', toUuid(invoiceId));
+        toast.success('Đã lưu minh chứng chuyển khoản lên hệ thống!');
+      } catch (err) {
+        console.error('Lỗi khi cập nhật file_url của invoice trên Supabase:', err);
+        toast.error('Không thể lưu minh chứng lên máy chủ!');
+      }
+    } else {
+      toast.success('Đã lưu minh chứng chuyển khoản (Chế độ ngoại tuyến)!');
+    }
+  };
+
   return (
     <CRMContext.Provider value={{
       tours,
@@ -2844,7 +2910,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       invoices,
       createInvoiceReceipt,
       approveInvoiceReceipt,
-      rejectInvoiceReceipt
+      rejectInvoiceReceipt,
+      uploadInvoiceProof
     }}>
       {children}
     </CRMContext.Provider>

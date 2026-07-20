@@ -83,6 +83,7 @@ export interface Order {
   hold_expiry?: string; // Thời gian hết hạn hold
   invoice_status: 'pending' | 'issued';
   payment_status?: 'unpaid' | 'partially_paid' | 'paid';
+  cancel_reason?: string;
   paid_amount?: number;
   total_price: number;
   created_at: string;
@@ -104,6 +105,8 @@ export interface Order {
   special_requests?: string;
   discount_type?: 'percent' | 'amount';
   discount_value?: number;
+  surcharge_name?: string;
+  surcharge_amount?: number;
 }
 
 export interface Passenger {

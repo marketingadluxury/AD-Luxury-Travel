@@ -30,6 +30,8 @@ export default function EditOrderModal({
   const [specialRequests, setSpecialRequests] = useState('');
   const [discountType, setDiscountType] = useState<'percent' | 'amount'>(order?.discount_type || 'amount');
   const [discountValueDisplay, setDiscountValueDisplay] = useState(formatNumber(order?.discount_value || 0));
+  const [surchargeName, setSurchargeName] = useState(order?.surcharge_name || '');
+  const [surchargeAmountDisplay, setSurchargeAmountDisplay] = useState(formatNumber(order?.surcharge_amount || 0));
   const [totalPrice, setTotalPrice] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -59,8 +61,10 @@ export default function EditOrderModal({
     : parseNumber(discountValueDisplay);
     
   const subtotalAfterDiscount = subtotalWithSurcharge - discountAmount;
-  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(subtotalAfterDiscount * 0.1) : 0;
-  const computedTotalPrice = subtotalAfterDiscount + vatAmount;
+  const customSurchargeAmount = parseNumber(surchargeAmountDisplay);
+  const totalBeforeVat = subtotalAfterDiscount + customSurchargeAmount;
+  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
+  const computedTotalPrice = totalBeforeVat + vatAmount;
 
   // Format money function
   const formatCurrency = (amount: number) => {
@@ -79,6 +83,8 @@ export default function EditOrderModal({
       setSpecialRequests(order.special_requests || '');
       setDiscountType(order.discount_type || 'amount');
       setDiscountValueDisplay(formatNumber(order.discount_value || 0));
+      setSurchargeName(order.surcharge_name || '');
+      setSurchargeAmountDisplay(formatNumber(order.surcharge_amount || 0));
       setTotalPrice(order.total_price || 0);
       setIsInitialLoad(true);
     }
@@ -98,7 +104,7 @@ export default function EditOrderModal({
     if (!isAdmin || !isInitialLoad) {
       setTotalPrice(computedTotalPrice);
     }
-  }, [singleRoomCount, vatOption, discountType, parseNumber(discountValueDisplay), currentRole]);
+  }, [singleRoomCount, vatOption, discountType, parseNumber(discountValueDisplay), parseNumber(surchargeAmountDisplay), currentRole]);
 
   if (!isOpen || !order) return null;
 
@@ -118,6 +124,8 @@ export default function EditOrderModal({
         special_requests: specialRequests.trim(),
         discount_type: discountType,
         discount_value: parseNumber(discountValueDisplay),
+        surcharge_name: surchargeName.trim(),
+        surcharge_amount: parseNumber(surchargeAmountDisplay),
         total_price: Number(totalPrice),
       });
       toast.success('Cập nhật thông tin đơn hàng thành công!');
@@ -289,6 +297,41 @@ export default function EditOrderModal({
             </div>
           </div>
 
+          {/* Surcharge Block */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Tên phụ thu (nếu có)
+              </label>
+              <input
+                  type="text"
+                  placeholder="VD: Nâng cấp hạng phòng..."
+                  value={surchargeName}
+                  onChange={(e) => setSurchargeName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Số tiền phụ thu (đ)
+              </label>
+              <input
+                  type="text"
+                  value={surchargeAmountDisplay}
+                  onChange={(e) => {
+                      const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                      if (!rawValue) {
+                        setSurchargeAmountDisplay('');
+                      } else {
+                        const numericValue = parseInt(rawValue, 10);
+                        setSurchargeAmountDisplay(formatNumber(numericValue.toString()));
+                      }
+                  }}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+              />
+            </div>
+          </div>
+
           {/* Automatic Calculator Breakdown Box */}
           <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2.5">
             <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1">
@@ -327,6 +370,15 @@ export default function EditOrderModal({
                 <div className="flex justify-between text-rose-700 font-medium">
                   <span>Giảm giá{discountType === 'percent' ? ` (${discountValueDisplay}%)` : ''}:</span>
                   <span className="font-bold">-{formatCurrency(discountAmount)} đ</span>
+                </div>
+              )}
+
+              {parseNumber(surchargeAmountDisplay) > 0 && (
+                <div className="flex justify-between text-blue-700 font-medium border-t border-slate-200/60 pt-1.5 mt-1.5">
+                  <span className="flex items-center gap-1">
+                    {surchargeName || 'Phụ thu khác'}:
+                  </span>
+                  <span className="font-bold">+{formatCurrency(parseNumber(surchargeAmountDisplay))} đ</span>
                 </div>
               )}
 

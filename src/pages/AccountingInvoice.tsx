@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order, Invoice } from '@/types';
@@ -18,7 +19,8 @@ import {
   Hash,
   ArrowRight,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Upload
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -31,15 +33,22 @@ export default function AccountingInvoice() {
     updateInvoiceStatus,
     invoices,
     approveInvoiceReceipt,
-    rejectInvoiceReceipt
+    rejectInvoiceReceipt,
+    createInvoiceReceipt,
+    uploadInvoiceProof,
+    currentRole
   } = useCRM();
   
   const { profile } = useAuth();
   const verifierName = profile?.full_name || 'Kế toán';
+  const isAccountantOrAdmin = currentRole === 'accounting' || currentRole === 'admin';
 
-  const [activeTab, setActiveTab] = useState<'receipts' | 'vat'>('receipts');
+  const [activeTab, setActiveTab] = useState<'receipts' | 'vat' | 'payments'>(
+    (currentRole === 'accounting' || currentRole === 'admin') ? 'receipts' : 'payments'
+  );
   const [filterInvoice, setFilterInvoice] = useState<string>('pending');
   const [filterReceiptStatus, setFilterReceiptStatus] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
 
   // State quản lý việc xác nhận duyệt phiếu thu
   const [approveTarget, setApproveTarget] = useState<{ id: string; amount: number; orderCode: string } | null>(null);
@@ -48,11 +57,67 @@ export default function AccountingInvoice() {
   const [rejectTarget, setRejectTarget] = useState<{ id: string; orderCode: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('Sai thông tin số tiền / hóa đơn không khớp');
 
+  // State quản lý việc phê duyệt và từ chối phiếu chi (payments)
+  const [approvePaymentTarget, setApprovePaymentTarget] = useState<Invoice | null>(null);
+  const [paymentFile, setPaymentFile] = useState<File | null>(null);
+  const [paymentFileName, setPaymentFileName] = useState<string>('');
+  const [isUploadingPaymentFile, setIsUploadingPaymentFile] = useState(false);
+  const [uploadProofTarget, setUploadProofTarget] = useState<Invoice | null>(null);
+  const [rejectPaymentTarget, setRejectPaymentTarget] = useState<Invoice | null>(null);
+  const [rejectPaymentReason, setRejectPaymentReason] = useState('Đề xuất chi chưa chính xác hoặc thiếu chứng từ đối chiếu');
+
   // State quản lý việc xác nhận xuất hóa đơn VAT đỏ
   const [vatTarget, setVatTarget] = useState<{ orderId: string; orderCode: string; targetStatus: 'issued' | 'pending' } | null>(null);
 
   // State quản lý các đơn hàng đang được mở rộng chi tiết hóa đơn
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+
+  // State quản lý việc tạo phiếu chi
+  const [isCreatePaymentModalOpen, setIsCreatePaymentModalOpen] = useState(false);
+  const [newPaymentData, setNewPaymentData] = useState<{
+    amount: string;
+    description: string;
+    payment_method: string;
+    order_id: string | null;
+  }>({
+    amount: '',
+    description: '',
+    payment_method: 'Chuyển khoản',
+    order_id: null,
+  });
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'payments' || tabParam === 'receipts' || tabParam === 'vat') {
+      setActiveTab(tabParam as any);
+    }
+    
+    const createParam = searchParams.get('create');
+    const orderIdParam = searchParams.get('order_id');
+    const amountParam = searchParams.get('amount');
+    const reasonParam = searchParams.get('reason');
+    
+    if (createParam === 'true') {
+      setIsCreatePaymentModalOpen(true);
+      setNewPaymentData({
+        amount: amountParam || '',
+        description: reasonParam 
+          ? `Hoàn tiền cho đơn hàng đã hủy #${orderIdParam?.substring(0, 8)}. Lý do: ${decodeURIComponent(reasonParam)}`
+          : (orderIdParam ? `Hoàn tiền cho đơn hàng đã hủy #${orderIdParam?.substring(0, 8)}` : ''),
+        payment_method: 'Chuyển khoản',
+        order_id: orderIdParam || null,
+      });
+      // Clean up search parameters to avoid resetting form unexpectedly
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('create');
+      newParams.delete('order_id');
+      newParams.delete('amount');
+      newParams.delete('reason');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Filter receipt invoices (Phiếu thu chuyển khoản)
   const receiptInvoices = invoices
@@ -60,6 +125,33 @@ export default function AccountingInvoice() {
       if (inv.type !== 'receipt') return false;
       if (filterReceiptStatus === 'all') return true;
       return inv.status === filterReceiptStatus;
+    })
+    .sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+
+  // Filter payment invoices (Phiếu chi)
+  const paymentInvoices = invoices
+    .filter(inv => {
+      if (inv.type !== 'payment') return false;
+      
+      // If not accountant/admin, only show their own requests or refunds on their own bookings
+      if (!isAccountantOrAdmin) {
+        const isCreator = inv.created_by === (profile?.full_name || 'Admin');
+        let isMyOrder = false;
+        if (inv.order_id) {
+          const associatedOrder = orders.find(o => o.id === inv.order_id);
+          if (associatedOrder && (associatedOrder.user_id === profile?.id || associatedOrder.created_by === profile?.full_name)) {
+            isMyOrder = true;
+          }
+        }
+        if (!isCreator && !isMyOrder) return false;
+      }
+
+      if (filterPaymentStatus === 'all') return true;
+      return inv.status === filterPaymentStatus;
     })
     .sort((a, b) => {
       const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -176,76 +268,135 @@ export default function AccountingInvoice() {
         <div>
           <h2 className="text-xl font-bold text-gray-900">Kế toán & Phê duyệt Tài chính</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Xác thực hóa đơn chuyển khoản của khách hàng, cập nhật công nợ và duyệt xuất hóa đơn (VAT).
+            {isAccountantOrAdmin 
+              ? 'Xác thực hóa đơn chuyển khoản của khách hàng, cập nhật công nợ, duyệt xuất hóa đơn (VAT) hoặc xử lý phiếu chi.'
+              : 'Yêu cầu hoàn tiền cho đơn hàng bị hủy, đề xuất các phiếu chi và theo dõi trạng thái phê duyệt từ kế toán.'}
           </p>
         </div>
         <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 self-stretch md:self-auto">
+          {isAccountantOrAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('receipts')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                  activeTab === 'receipts'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Duyệt phiếu thu ({pendingReceiptsCount})
+              </button>
+              <button
+                onClick={() => setActiveTab('vat')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                  activeTab === 'vat'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Yêu cầu xuất VAT ({pendingVatCount})
+              </button>
+            </>
+          )}
           <button
-            onClick={() => setActiveTab('receipts')}
+            onClick={() => setActiveTab('payments')}
             className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-              activeTab === 'receipts'
+              activeTab === 'payments'
                 ? 'bg-white text-blue-700 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Duyệt phiếu thu ({pendingReceiptsCount})
-          </button>
-          <button
-            onClick={() => setActiveTab('vat')}
-            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-              activeTab === 'vat'
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Yêu cầu xuất VAT ({pendingVatCount})
+            {isAccountantOrAdmin ? 'Phiếu chi / Hoàn tiền' : 'Đề xuất phiếu chi'}
           </button>
         </div>
       </div>
 
       {/* Stats summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-sm font-medium text-gray-500">Phiếu thu chờ duyệt</span>
-            <div className="text-3xl font-extrabold text-amber-600 mt-2">
-              {pendingReceiptsCount} phiếu
+      {isAccountantOrAdmin ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-gray-500">Phiếu thu chờ duyệt</span>
+              <div className="text-3xl font-extrabold text-amber-600 mt-2">
+                {pendingReceiptsCount} phiếu
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Cần đối soát tài khoản ngân hàng</p>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Cần đối soát tài khoản ngân hàng</p>
+            <div className="bg-amber-50 p-3.5 rounded-lg">
+              <Clock className="w-6 h-6 text-amber-600 animate-pulse" />
+            </div>
           </div>
-          <div className="bg-amber-50 p-3.5 rounded-lg">
-            <Clock className="w-6 h-6 text-amber-600 animate-pulse" />
+
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-gray-500">Đã thu thực tế (Tổng cọc)</span>
+              <div className="text-3xl font-extrabold text-green-600 mt-2">
+                {new Intl.NumberFormat('vi-VN').format(approvedReceiptsSum)} đ
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Từ các phiếu thu đã duyệt</p>
+            </div>
+            <div className="bg-green-50 p-3.5 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-gray-500">Chờ xuất VAT</span>
+              <div className="text-3xl font-extrabold text-red-600 mt-2">
+                {orders.filter(o => (o.status === 'sure' || o.status === 'paid') && o.vat_option === 'Xuất VAT' && o.invoice_status === 'pending').length} đơn
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Đơn hàng chắc chắn yêu cầu hóa đơn</p>
+            </div>
+            <div className="bg-red-50 p-3.5 rounded-lg">
+              <Receipt className="w-6 h-6 text-red-600" />
+            </div>
           </div>
         </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-sm font-medium text-gray-500">Đã thu thực tế (Tổng cọc)</span>
-            <div className="text-3xl font-extrabold text-green-600 mt-2">
-              {new Intl.NumberFormat('vi-VN').format(approvedReceiptsSum)} đ
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-gray-500">Yêu cầu chi chờ duyệt</span>
+              <div className="text-3xl font-extrabold text-amber-600 mt-2">
+                {paymentInvoices.filter(inv => inv.status === 'pending').length} phiếu
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Đang chờ kế toán duyệt chi</p>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Từ các phiếu thu đã duyệt</p>
+            <div className="bg-amber-50 p-3.5 rounded-lg">
+              <Clock className="w-6 h-6 text-amber-600 animate-pulse" />
+            </div>
           </div>
-          <div className="bg-green-50 p-3.5 rounded-lg">
-            <TrendingUp className="w-6 h-6 text-green-600" />
+
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-gray-500">Đã được duyệt chi</span>
+              <div className="text-3xl font-extrabold text-green-600 mt-2">
+                {paymentInvoices.filter(inv => inv.status === 'approved').length} phiếu
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Yêu cầu hoàn/chi đã chi tiền</p>
+            </div>
+            <div className="bg-green-50 p-3.5 rounded-lg">
+              <Check className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-gray-500">Số tiền được hoàn/chi</span>
+              <div className="text-3xl font-extrabold text-blue-600 mt-2">
+                {new Intl.NumberFormat('vi-VN').format(paymentInvoices.filter(inv => inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0))} đ
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Tổng tiền mặt/chuyển khoản đã nhận</p>
+            </div>
+            <div className="bg-blue-50 p-3.5 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-blue-600" />
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-sm font-medium text-gray-500">Chờ xuất VAT</span>
-            <div className="text-3xl font-extrabold text-red-600 mt-2">
-              {orders.filter(o => (o.status === 'sure' || o.status === 'paid') && o.vat_option === 'Xuất VAT' && o.invoice_status === 'pending').length} đơn
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Đơn hàng chắc chắn yêu cầu hóa đơn</p>
-          </div>
-          <div className="bg-red-50 p-3.5 rounded-lg">
-            <Receipt className="w-6 h-6 text-red-600" />
-          </div>
-        </div>
-      </div>
-
-      {activeTab === 'receipts' ? (
+      {activeTab === 'receipts' && (
         /* TAB 1: DUYỆT PHIẾU THU CHUYỂN KHOẢN */
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gray-50/50">
@@ -501,7 +652,9 @@ export default function AccountingInvoice() {
             </div>
           )}
         </div>
-      ) : (
+      )}
+      
+      {activeTab === 'vat' && (
         /* TAB 2: YÊU CẦU XUẤT HÓA ĐƠN VAT */
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gray-50/50">
@@ -705,6 +858,240 @@ export default function AccountingInvoice() {
         </div>
       )}
 
+      {activeTab === 'payments' && (
+        /* TAB 3: PHIẾU CHI */
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-gray-50/50">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Danh sách phiếu chi & Hoàn tiền</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Quản lý, phê duyệt các khoản chi tiền, hoàn tiền cho khách hàng hoặc đại lý</p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Thanh chuyển đổi trạng thái phiếu chi (Sub-tabs) */}
+              <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setFilterPaymentStatus('pending')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                    filterPaymentStatus === 'pending'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Chờ duyệt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterPaymentStatus('approved')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                    filterPaymentStatus === 'approved'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Đã duyệt chi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterPaymentStatus('rejected')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                    filterPaymentStatus === 'rejected'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Bị từ chối
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterPaymentStatus('all')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                    filterPaymentStatus === 'all'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Tất cả
+                </button>
+              </div>
+
+              <button
+                onClick={() => setIsCreatePaymentModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-sm transition-colors cursor-pointer"
+              >
+                + Tạo phiếu chi mới
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 md:p-6 space-y-4">
+            {paymentInvoices.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <h4 className="text-gray-900 font-bold text-sm">Chưa có phiếu chi nào</h4>
+                <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">Các phiếu chi, hoàn tiền thuộc trạng thái bộ lọc hiện tại sẽ hiển thị tại đây.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {paymentInvoices.map((inv) => (
+                  <div key={inv.id} className="border border-gray-200 rounded-xl p-4 shadow-sm relative overflow-hidden bg-white hover:border-blue-200 transition-all flex flex-col justify-between">
+                    <div>
+                      {/* Top Code and Amount */}
+                      <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-150">
+                        <div>
+                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Mã Phiếu Chi</div>
+                          <div className="font-mono font-black text-gray-800 text-xs flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
+                            {inv.invoice_code || 'Chưa cấp'}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Số Tiền Chi</div>
+                          <div className="font-black text-rose-600 text-sm select-all">{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ</div>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className="flex items-center justify-between mb-3 text-xs">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Trạng thái</span>
+                        {inv.status === 'pending' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                            <Clock className="w-3 h-3 mr-1 animate-spin" /> Chờ duyệt chi
+                          </span>
+                        ) : inv.status === 'approved' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-50 text-green-700 border border-green-200">
+                            <Check className="w-3.5 h-3.5 mr-1" /> Đã duyệt chi
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                            <X className="w-3.5 h-3.5 mr-1" /> Bị từ chối
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Verification Detail */}
+                      {inv.status === 'approved' && inv.verified_by && (
+                        <div className="text-[10px] text-green-700 bg-green-50/50 p-2 rounded-lg border border-green-100 mb-3 flex items-center justify-between font-semibold">
+                          <span>Duyệt bởi: <strong>{inv.verified_by}</strong></span>
+                          {inv.verified_at && <span>{format(new Date(inv.verified_at), 'dd/MM/yyyy')}</span>}
+                        </div>
+                      )}
+
+                      {/* Order Association if available */}
+                      {inv.order_id && (
+                        <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 mb-3 font-semibold flex items-center justify-between">
+                          <span>Đơn hàng liên kết:</span>
+                          <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold">
+                            #{inv.order_id.substring(0, 8).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Description */}
+                      <div className="bg-gray-50 rounded-lg p-2.5 mb-3 text-xs text-gray-600 border border-gray-100">
+                        <span className="font-bold text-gray-700 block mb-1">Lý do chi:</span>
+                        <p className="leading-relaxed break-words">{inv.description || 'Không có mô tả chi tiết'}</p>
+                      </div>
+
+                      {/* Minh chứng chuyển khoản cho phiếu chi */}
+                      <div className="mt-3 p-2.5 bg-slate-50/80 rounded-lg border border-gray-150 text-xs flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-gray-500 uppercase text-[10px]">Minh chứng chi tiền</span>
+                          {inv.file_url ? (
+                            <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 font-bold px-1.5 py-0.5 rounded">
+                              Đã có minh chứng
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-bold px-1.5 py-0.5 rounded">
+                              Chưa có minh chứng
+                            </span>
+                          )}
+                        </div>
+
+                        {inv.file_url ? (
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={inv.file_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 transition-colors"
+                            >
+                              <FileText className="w-3.5 h-3.5" /> Xem ảnh chuyển tiền
+                            </a>
+                            {isAccountantOrAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setUploadProofTarget(inv);
+                                }}
+                                className="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-white hover:bg-gray-100 rounded-md border border-gray-200 transition-colors cursor-pointer"
+                                title="Cập nhật ảnh khác"
+                              >
+                                <Upload className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            {isAccountantOrAdmin ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setUploadProofTarget(inv);
+                                }}
+                                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 rounded-md border border-gray-200 transition-colors cursor-pointer"
+                              >
+                                <Upload className="w-3.5 h-3.5 text-gray-500" /> Tải lên biên lai chuyển khoản
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 italic block text-center py-1">Chưa cập nhật ảnh chuyển khoản</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      {/* Footer Info */}
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-3 border-t border-gray-100">
+                        <div className="flex items-center gap-1.5 font-semibold">
+                          <User className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="truncate max-w-[120px]" title={inv.created_by}>{inv.created_by || 'Hệ thống'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{inv.created_at ? format(new Date(inv.created_at), 'dd/MM/yyyy') : 'N/A'}</span>
+                        </div>
+                      </div>
+
+                      {/* Accountant Actions */}
+                      {isAccountantOrAdmin && inv.status === 'pending' && (
+                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100">
+                          <button
+                            type="button"
+                            onClick={() => setRejectPaymentTarget(inv)}
+                            className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" /> Từ chối chi
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setApprovePaymentTarget(inv)}
+                            className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Phê duyệt chi
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Modal Xác nhận Duyệt Phiếu Thu */}
       {approveTarget && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -811,6 +1198,298 @@ export default function AccountingInvoice() {
         </div>
       )}
 
+      {/* Modal Xác nhận Duyệt Chi Phiếu Chi */}
+      {approvePaymentTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-100 text-green-600 mx-auto mb-4">
+                <Check className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-950 text-center mb-2 font-sans tracking-tight">Xác nhận Duyệt chi tiền</h3>
+              <p className="text-xs text-gray-600 text-center leading-relaxed">
+                Bạn có chắc chắn muốn PHÊ DUYỆT và đánh dấu ĐÃ CHI cho phiếu chi{' '}
+                <strong className="text-gray-900 font-mono">
+                  {approvePaymentTarget.invoice_code}
+                </strong>{' '}
+                với số tiền{' '}
+                <strong className="text-rose-600 font-black">
+                  {new Intl.NumberFormat('vi-VN').format(approvePaymentTarget.amount)}đ
+                </strong>? Hành động này sẽ cập nhật trực tiếp vào số dư đơn hàng liên quan nếu có.
+              </p>
+
+              {/* Thêm phần tải ảnh hóa đơn chuyển khoản chuyển tiền */}
+              <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                <label className="text-xs font-extrabold text-gray-700 uppercase block text-left">
+                  Ảnh hóa đơn/biên lai chuyển khoản (Khuyên dùng)
+                </label>
+                <div className="border-2 border-dashed border-gray-200 rounded-lg p-3 text-center bg-gray-50/50 hover:bg-gray-50 transition-colors relative cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setPaymentFile(f);
+                      setPaymentFileName(f ? f.name : '');
+                    }}
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                    <Upload className="w-5 h-5 text-gray-400" />
+                    <p className="text-xs font-semibold text-gray-600">
+                      {paymentFileName || 'Nhấp để chọn ảnh biên lai chuyển tiền'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">Hỗ trợ JPG, PNG, PDF</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={isUploadingPaymentFile}
+                onClick={() => {
+                  setPaymentFile(null);
+                  setPaymentFileName('');
+                  setApprovePaymentTarget(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isUploadingPaymentFile}
+                onClick={async () => {
+                  setIsUploadingPaymentFile(true);
+                  try {
+                    let fileUrl = '';
+                    if (paymentFile) {
+                      const targetOrder = orders.find(o => o.id === approvePaymentTarget.order_id);
+                      const orderCode = targetOrder ? targetOrder.id : 'CHUA_RO';
+                      
+                      const formData = new FormData();
+                      formData.append('file', paymentFile);
+                      formData.append('orderCode', orderCode);
+
+                      const uploadRes = await fetch('/api/upload-invoice-receipt', {
+                        method: 'POST',
+                        body: formData,
+                      });
+
+                      if (!uploadRes.ok) {
+                        const text = await uploadRes.text();
+                        let errData = { error: 'Lỗi upload file' };
+                        try { errData = JSON.parse(text); } catch {}
+                        throw new Error(errData.error || 'Lỗi khi upload hóa đơn lên Google Drive.');
+                      }
+
+                      const resText = await uploadRes.text();
+                      let resData = JSON.parse(resText);
+                      fileUrl = resData.url;
+                    }
+
+                    await approveInvoiceReceipt(approvePaymentTarget.id, verifierName, fileUrl);
+                    
+                    // Reset state
+                    setPaymentFile(null);
+                    setPaymentFileName('');
+                    setApprovePaymentTarget(null);
+                  } catch (err: any) {
+                    console.error(err);
+                    toast.error(err.message || 'Gặp sự cố khi phê duyệt phiếu chi');
+                  } finally {
+                    setIsUploadingPaymentFile(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isUploadingPaymentFile ? (
+                  <>
+                    <Clock className="w-3.5 h-3.5 animate-spin" />
+                    Đang xử lý...
+                  </>
+                ) : (
+                  'Duyệt & Chi tiền'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Từ chối Duyệt Chi Phiếu Chi */}
+      {rejectPaymentTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto mb-4">
+                <X className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-950 text-center mb-2 font-sans tracking-tight">Từ chối Phiếu chi</h3>
+              <p className="text-xs text-gray-600 text-center mb-4 leading-relaxed">
+                Vui lòng nhập lý do từ chối phiếu chi{' '}
+                <strong className="text-gray-900 font-mono">
+                  {rejectPaymentTarget.invoice_code}
+                </strong> ({new Intl.NumberFormat('vi-VN').format(rejectPaymentTarget.amount)}đ):
+              </p>
+              
+              <textarea
+                value={rejectPaymentReason}
+                onChange={(e) => setRejectPaymentReason(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs text-gray-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 bg-white"
+                rows={3}
+                placeholder="Ví dụ: Đề xuất chi chưa chính xác hoặc thiếu chứng từ đối chiếu..."
+              />
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectPaymentTarget(null);
+                  setRejectPaymentReason('Đề xuất chi chưa chính xác hoặc thiếu chứng từ đối chiếu');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!rejectPaymentReason.trim()) {
+                    toast.error('Vui lòng nhập lý do từ chối chi');
+                    return;
+                  }
+                  try {
+                    await rejectInvoiceReceipt(rejectPaymentTarget.id, verifierName);
+                    setRejectPaymentTarget(null);
+                    setRejectPaymentReason('Đề xuất chi chưa chính xác hoặc thiếu chứng từ đối chiếu');
+                  } catch (err) {
+                    toast.error('Gặp sự cố khi từ chối phiếu chi');
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+              >
+                Từ chối chi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Upload/Cập nhật minh chứng chuyển khoản */}
+      {uploadProofTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mx-auto mb-4">
+                <Upload className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-950 text-center mb-2 font-sans tracking-tight">Cập nhật ảnh chuyển khoản</h3>
+              <p className="text-xs text-gray-600 text-center mb-4 leading-relaxed">
+                Tải lên hóa đơn chuyển khoản (biên lai) cho phiếu chi{' '}
+                <strong className="text-gray-900 font-mono">
+                  {uploadProofTarget.invoice_code}
+                </strong>{' '}
+                với số tiền{' '}
+                <strong className="text-rose-600 font-black">
+                  {new Intl.NumberFormat('vi-VN').format(uploadProofTarget.amount)}đ
+                </strong>.
+              </p>
+
+              <div className="space-y-2">
+                <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center bg-gray-50/50 hover:bg-gray-50 transition-colors relative cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setPaymentFile(f);
+                      setPaymentFileName(f ? f.name : '');
+                    }}
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                    <Upload className="w-6 h-6 text-gray-400" />
+                    <p className="text-xs font-semibold text-gray-600">
+                      {paymentFileName || 'Nhấp để chọn ảnh biên lai mới'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">Hỗ trợ JPG, PNG, PDF</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={isUploadingPaymentFile}
+                onClick={() => {
+                  setPaymentFile(null);
+                  setPaymentFileName('');
+                  setUploadProofTarget(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                disabled={!paymentFile || isUploadingPaymentFile}
+                onClick={async () => {
+                  if (!paymentFile) return;
+                  setIsUploadingPaymentFile(true);
+                  try {
+                    const targetOrder = orders.find(o => o.id === uploadProofTarget.order_id);
+                    const orderCode = targetOrder ? targetOrder.id : 'CHUA_RO';
+                    
+                    const formData = new FormData();
+                    formData.append('file', paymentFile);
+                    formData.append('orderCode', orderCode);
+
+                    const uploadRes = await fetch('/api/upload-invoice-receipt', {
+                      method: 'POST',
+                      body: formData,
+                    });
+
+                    if (!uploadRes.ok) {
+                      const text = await uploadRes.text();
+                      let errData = { error: 'Lỗi upload file' };
+                      try { errData = JSON.parse(text); } catch {}
+                      throw new Error(errData.error || 'Lỗi khi upload hóa đơn lên Google Drive.');
+                    }
+
+                    const resText = await uploadRes.text();
+                    let resData = JSON.parse(resText);
+                    
+                    await uploadInvoiceProof(uploadProofTarget.id, resData.url);
+                    
+                    // Reset state
+                    setPaymentFile(null);
+                    setPaymentFileName('');
+                    setUploadProofTarget(null);
+                  } catch (err: any) {
+                    console.error(err);
+                    toast.error(err.message || 'Gặp lỗi khi lưu minh chứng');
+                  } finally {
+                    setIsUploadingPaymentFile(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isUploadingPaymentFile ? (
+                  <>
+                    <Clock className="w-3.5 h-3.5 animate-spin" />
+                    Đang tải lên...
+                  </>
+                ) : (
+                  'Lưu minh chứng'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Xác nhận Trạng thái Hóa đơn VAT */}
       {vatTarget && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -857,6 +1536,116 @@ export default function AccountingInvoice() {
                 }`}
               >
                 Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tạo Phiếu Chi */}
+      {isCreatePaymentModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden transform transition-all">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-900">Tạo Phiếu Chi Mới</h3>
+              <button 
+                onClick={() => setIsCreatePaymentModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 bg-white hover:bg-gray-100 rounded-full p-1.5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Số tiền chi <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <DollarSign className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="number"
+                    value={newPaymentData.amount}
+                    onChange={(e) => setNewPaymentData({ ...newPaymentData, amount: e.target.value })}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    placeholder="Nhập số tiền..."
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">VND</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Lý do chi <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  value={newPaymentData.description}
+                  onChange={(e) => setNewPaymentData({ ...newPaymentData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  rows={3}
+                  placeholder="Ví dụ: Hoàn tiền khách hủy tour, chi phí marketing..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Phương thức <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={newPaymentData.payment_method}
+                  onChange={(e) => setNewPaymentData({ ...newPaymentData, payment_method: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                >
+                  <option value="Chuyển khoản">Chuyển khoản</option>
+                  <option value="Tiền mặt">Tiền mặt</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setIsCreatePaymentModalOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!newPaymentData.amount || Number(newPaymentData.amount) <= 0) {
+                    toast.error('Vui lòng nhập số tiền hợp lệ');
+                    return;
+                  }
+                  if (!newPaymentData.description.trim()) {
+                    toast.error('Vui lòng nhập lý do chi');
+                    return;
+                  }
+                  
+                  try {
+                    await createInvoiceReceipt({
+                      order_id: newPaymentData.order_id,
+                      amount: Number(newPaymentData.amount),
+                      description: newPaymentData.description,
+                      payment_method: newPaymentData.payment_method,
+                      type: 'payment',
+                      created_by: profile?.full_name || 'Admin',
+                    });
+                    
+                    toast.success('Tạo phiếu chi thành công!');
+                    setIsCreatePaymentModalOpen(false);
+                    setNewPaymentData({ amount: '', description: '', payment_method: 'Chuyển khoản', order_id: null });
+                  } catch (error) {
+                    toast.error('Gặp sự cố khi tạo phiếu chi');
+                  }
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+              >
+                Tạo Phiếu Chi
               </button>
             </div>
           </div>

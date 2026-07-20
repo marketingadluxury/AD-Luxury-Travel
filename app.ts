@@ -43,36 +43,26 @@ async function getGoogleDriveAccessToken(): Promise<string> {
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
 
-  if (clientId && clientSecret && refreshToken) {
-    console.log('[Drive] Authorizing using OAuth Refresh Token...');
+  const hasOAuth = !!(clientId && clientSecret && refreshToken);
+
+  if (!hasOAuth) {
+    throw new Error('Cấu hình Google Drive OAuth 2.0 chưa hoàn tất. Vui lòng định nghĩa GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, và GOOGLE_DRIVE_REFRESH_TOKEN trong biến môi trường.');
+  }
+
+  try {
+    console.log('[Drive] Authorizing using OAuth 2.0 Refresh Token...');
     const oauth2Client = new OAuth2Client(clientId, clientSecret);
     oauth2Client.setCredentials({ refresh_token: refreshToken });
     const tokenResponse = await oauth2Client.getAccessToken();
     if (!tokenResponse.token) {
       throw new Error('Failed to retrieve access token from Google OAuth Refresh Token.');
     }
+    console.log('[Drive] OAuth 2.0 authorization successful.');
     return tokenResponse.token;
+  } catch (err: any) {
+    console.error('[Drive] OAuth 2.0 authorization failed:', err.message || err);
+    throw new Error(`Google Drive authorization failed: ${err.message || err}`);
   }
-
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
-
-  if (email && rawKey && rawKey.trim() && rawKey.includes('PRIVATE KEY')) {
-    console.log('[Drive] Authorizing using Service Account...');
-    const key = rawKey.replace(/\\n/g, '\n');
-    const authClient = new JWT({
-      email,
-      key,
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    });
-    const creds = await authClient.authorize();
-    if (!creds.access_token) {
-      throw new Error('Failed to retrieve access token from Google Auth Service Account.');
-    }
-    return creds.access_token;
-  }
-
-  throw new Error('Google Drive credentials are not configured. Please define GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN in your environment.');
 }
 
 async function searchFolder(folderName: string, parentId?: string, token?: string): Promise<string | null> {
@@ -82,7 +72,7 @@ async function searchFolder(folderName: string, parentId?: string, token?: strin
     query += ` and '${parentId}' in parents`;
   }
   
-  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`
@@ -111,7 +101,7 @@ async function createFolder(folderName: string, parentId?: string, token?: strin
     metadata.parents = [parentId];
   }
   
-  const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
+  const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink&supportsAllDrives=true', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -130,7 +120,7 @@ async function createFolder(folderName: string, parentId?: string, token?: strin
 }
 
 async function makeFolderPublic(fileId: string, token?: string): Promise<void> {
-  const url = `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`;
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -150,7 +140,7 @@ async function makeFolderPublic(fileId: string, token?: string): Promise<void> {
 }
 
 async function getFolderWebViewLink(fileId: string, token?: string): Promise<string> {
-  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=webViewLink`;
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=webViewLink&supportsAllDrives=true`;
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`
@@ -166,6 +156,14 @@ async function getFolderWebViewLink(fileId: string, token?: string): Promise<str
   return data.webViewLink;
 }
 
+function getDriveRootParentId(): string | undefined {
+  return process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || 
+         process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || 
+         process.env.GOOGLE_DRIVE_FOLDER_ID ||
+         process.env.DRIVE_PARENT_FOLDER_ID ||
+         process.env.DRIVE_ROOT_ID;
+}
+
 async function getOrCreatePassengerFolder(fullName: string, passportNumber: string, token: string): Promise<string> {
   const cleanPassport = (passportNumber || 'CHUA_CO_HC').trim().toUpperCase();
   const getInitials = (name: string) => {
@@ -175,11 +173,12 @@ async function getOrCreatePassengerFolder(fullName: string, passportNumber: stri
   };
   const initials = getInitials(fullName);
   const folderName = `${cleanPassport}-${initials}`;
+  const baseParentId = getDriveRootParentId();
 
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
   if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', undefined, token);
+    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
     await makeFolderPublic(rootId, token);
   }
 
@@ -202,11 +201,12 @@ async function getOrCreatePassengerFolder(fullName: string, passportNumber: stri
 
 async function getOrCreateTourFolder(category: string, token: string): Promise<string> {
   const cleanCategory = (category || 'Chung').trim();
+  const baseParentId = getDriveRootParentId();
 
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
   if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', undefined, token);
+    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
     await makeFolderPublic(rootId, token);
   }
 
@@ -228,17 +228,19 @@ async function getOrCreateTourFolder(category: string, token: string): Promise<s
 }
 
 async function getOrCreateVisaFolder(token: string): Promise<string> {
+  const baseParentId = getDriveRootParentId();
+
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
   if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', undefined, token);
+    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
     await makeFolderPublic(rootId, token);
   }
 
   // 2. Search for existing "Visa" folder in AD Luxury Travel first
   let visaFolderId = await searchFolder('Visa', rootId, token);
-  if (!visaFolderId) {
-    // Search for any existing "Visa" folder globally, in case user created it at root level
+  if (!visaFolderId && !baseParentId) {
+    // Search for any existing "Visa" folder globally, in case user created it at root level (only if no parent is specified)
     visaFolderId = await searchFolder('Visa', undefined, token);
   }
   
@@ -263,11 +265,12 @@ async function getOrCreateVisaServiceFolder(visaCode: string, visaFolderId: stri
 
 async function getOrCreateOrderFolder(orderCode: string, token: string): Promise<string> {
   const cleanOrderCode = (orderCode || 'Don_hang').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
+  const baseParentId = getDriveRootParentId();
   
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
   if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', undefined, token);
+    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
     await makeFolderPublic(rootId, token);
   }
 
@@ -334,7 +337,7 @@ async function uploadFileToGoogleDrive(
 
   const bodyBuffer = Buffer.concat([head, buffer, tail]);
 
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink&supportsAllDrives=true', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -379,7 +382,7 @@ function getGoogleDriveFileId(url: string): string | null {
 
 async function deleteGoogleDriveFile(fileId: string, token: string): Promise<void> {
   try {
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${token}`
