@@ -740,6 +740,29 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             }));
             setInvoices(fetchedInvoices);
             console.log('Đã nạp thành công Invoices từ Supabase');
+
+            // AUTO-FIX: Cancelled orders might be stuck in "sure" or "paid" if cancel_reason failed to insert previously.
+            // Check if they have a refund invoice ('payment' type).
+            if (fetchedInvoices.length > 0 && fetchedOrders.length > 0) {
+               const refundOrderIds = new Set(fetchedInvoices.filter(i => i.type === 'payment' && i.order_id).map(i => i.order_id));
+               const ordersToFix = fetchedOrders.filter(o => o.status !== 'cancelled' && refundOrderIds.has(o.id));
+               
+               if (ordersToFix.length > 0) {
+                 console.log(`Auto-fixing ${ordersToFix.length} stuck cancelled orders...`);
+                 const newFetchedOrders = fetchedOrders.map(o => {
+                   if (refundOrderIds.has(o.id) && o.status !== 'cancelled') {
+                     // Update DB asynchronously
+                     supabase.from('bookings').update({ status: 'cancelled' }).eq('id', o.id).then(({error}) => {
+                       if (error) console.warn('Auto-fix DB update failed:', error);
+                     });
+                     return { ...o, status: 'cancelled' } as Order;
+                   }
+                   return o;
+                 });
+                 setOrders(newFetchedOrders);
+               }
+            }
+
           } else {
             setInvoices([]);
           }
@@ -2071,10 +2094,21 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ 
+        let updateData: any = { 
           status: 'cancelled',
           cancel_reason: reason || null
-        }).eq('id', toUuid(orderId));
+        };
+        
+        let { error } = await supabase.from('bookings').update(updateData).eq('id', toUuid(orderId));
+        
+        if (error && error.message?.includes('cancel_reason')) {
+          console.warn("Column 'cancel_reason' not found, retrying without it...");
+          delete updateData.cancel_reason;
+          const retryRes = await supabase.from('bookings').update(updateData).eq('id', toUuid(orderId));
+          error = retryRes.error;
+        }
+
+        if (error) throw error;
         
         const matchingTour = updatedTours.find(t => t.id === order.tour_id);
         if (matchingTour) {
@@ -2589,6 +2623,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           file_url: invoiceData.file_url || '',
           created_by: invoiceData.created_by || ''
         };
+
+        if (invoiceData.refund_method) insertData.refund_method = invoiceData.refund_method;
+        if (invoiceData.refund_bank_name) insertData.refund_bank_name = invoiceData.refund_bank_name;
+        if (invoiceData.refund_account_number) insertData.refund_account_number = invoiceData.refund_account_number;
+        if (invoiceData.refund_account_name) insertData.refund_account_name = invoiceData.refund_account_name;
 
         let currentInsertData = { ...insertData };
         let { error } = await supabase.from('invoices').insert(currentInsertData);

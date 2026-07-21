@@ -151,5 +151,9 @@ export interface Invoice {
   verified_by?: string;
   verified_at?: string;
   created_at?: string;
+  refund_method?: string;
+  refund_bank_name?: string;
+  refund_account_number?: string;
+  refund_account_name?: string;
 }
 

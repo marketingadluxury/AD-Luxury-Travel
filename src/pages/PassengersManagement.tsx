@@ -368,7 +368,7 @@ export default function PassengersManagement() {
   if (isDenied) {
     return (
       <div className="p-8 text-center bg-white rounded-xl border border-gray-200 max-w-xl mx-auto mt-12 shadow-sm font-sans animate-fade-in">
-        <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto mb-4 animate-bounce" />
+        <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto mb-4 animate-pulse" />
         <h3 className="text-base font-black text-gray-950 uppercase tracking-tight">Quyền truy cập bị từ chối</h3>
         <p className="text-sm text-gray-500 mt-2">
           Hệ thống ghi nhận bạn đang đăng nhập với vai trò <strong className="text-rose-600">{currentRole}</strong>. 
@@ -598,7 +598,7 @@ export default function PassengersManagement() {
                       {isExpanded && (
                         <tr>
                           <td colSpan={10} className="p-0 bg-slate-50/70 border-b border-gray-200">
-                            <div className="p-6 space-y-4 border-l-4 border-blue-500 ml-4 my-2">
+                            <div className="p-6 space-y-4 border-l-2 border-blue-500 ml-4 my-2">
                               <h4 className="text-xs font-black text-gray-950 uppercase tracking-wider flex items-center gap-1.5">
                                 <Briefcase className="w-4 h-4 text-blue-600" />
                                 Lịch sử đăng ký tour của hành khách {c.full_name}

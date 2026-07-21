@@ -1516,7 +1516,7 @@ export default function VisaServices() {
                               <button
                                 type="button"
                                 onClick={() => setFileToDelete(url)}
-                                className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-100 shrink-0"
+                                className="p-2 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded-lg transition-colors border border-transparent hover:border-slate-200 shrink-0"
                                 title="Xóa tài liệu này"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1849,7 +1849,7 @@ export default function VisaServices() {
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveItineraryFile(fileObj.url)}
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-all shrink-0"
                                     title="Xóa tài liệu này"
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -1958,7 +1958,7 @@ export default function VisaServices() {
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveItineraryFile(fileObj.url)}
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-all shrink-0"
                                     title="Xóa tài liệu này"
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -3048,7 +3048,7 @@ export default function VisaServices() {
 
                 return sections.map((sec, secIdx) => (
                   <div key={secIdx} className="space-y-3">
-                    <h4 className="text-xs font-black text-blue-800 uppercase tracking-wider bg-blue-50 border-l-4 border-blue-600 px-3 py-1.5 rounded-r-md">
+                    <h4 className="text-xs font-black text-blue-900 uppercase tracking-wider bg-blue-50/70 px-3 py-2 rounded-lg">
                       {sec.title}
                     </h4>
                     <div className="space-y-3 pl-1">

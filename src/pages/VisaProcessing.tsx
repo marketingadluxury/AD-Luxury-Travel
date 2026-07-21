@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Passenger } from '@/types';
 import { FileText, Download, Check, X, Clock, HelpCircle, AlertCircle, RefreshCw, ExternalLink, Search } from 'lucide-react';
@@ -64,6 +65,7 @@ function DisqualifiedReasonInput({ passengerId, initialReason, onSave }: Disqual
 }
 
 export default function VisaProcessing() {
+  const location = useLocation();
   const { passengers, orders, tours, updateVisaStatus } = useCRM();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [disqualifiedReasonModal, setDisqualifiedReasonModal] = useState<{ name: string; reason: string } | null>(null);
@@ -71,6 +73,18 @@ export default function VisaProcessing() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTimeRange, setFilterTimeRange] = useState('all');
   const [sortBy, setSortBy] = useState('newest_created');
+
+  // Xử lý click từ thông báo
+  useEffect(() => {
+    if (location.state?.searchTarget) {
+      setSearchTerm(location.state.searchTarget);
+      setFilterStatus('all');
+      setFilterTimeRange('all');
+      
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
 
   // Filter passengers who have uploaded documents (passport or labor contract)
   const visaPassengers = passengers

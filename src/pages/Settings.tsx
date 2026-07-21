@@ -208,7 +208,7 @@ export default function Settings() {
 
             <div className="pt-4 border-t border-slate-150 flex items-center justify-between gap-4">
               {isSaved ? (
-                <div className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 animate-bounce">
+                <div className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 animate-pulse">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   Lưu thiết lập thành công! Hệ thống đã cập nhật tức thì.
                 </div>

@@ -653,7 +653,7 @@ export default function UserManagement() {
             >
               <div className="p-6 text-center space-y-4">
                 <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-200">
-                  <AlertCircle className="w-6 h-6 animate-bounce" />
+                  <AlertCircle className="w-6 h-6" />
                 </div>
                 
                 <div>

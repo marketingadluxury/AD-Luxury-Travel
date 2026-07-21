@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Calendar, 
   Map, 
@@ -33,9 +33,23 @@ const navigation = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { currentRole, setCurrentRole, notifications: allNotifications, orders, passengers } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
+
+  const handleNotificationClick = (notif: any) => {
+    setShowNotifications(false);
+    if (notif.type === 'accounting') {
+      navigate('/accounting');
+    } else if (notif.type === 'visa') {
+      navigate('/visa');
+    } else if (notif.type === 'extension') {
+      navigate('/orders');
+    } else {
+      navigate('/orders'); // Default fallback
+    }
+  };
 
   const notifications = React.useMemo(() => {
     if (currentRole === 'admin') {
@@ -243,7 +257,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <div className="p-4 text-center text-xs text-gray-500">Chưa có thông báo nào</div>
                     ) : (
                       notifications.map(notif => (
-                        <div key={notif.id} className="p-3 hover:bg-gray-50 transition-colors">
+                        <div 
+                          key={notif.id} 
+                          onClick={() => handleNotificationClick(notif)}
+                          className="p-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
                           <span className={`text-xs font-bold ${
                             notif.type === 'visa' ? 'text-purple-600' :
                             notif.type === 'accounting' ? 'text-red-600' : 'text-orange-600'

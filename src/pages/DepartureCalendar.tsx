@@ -753,7 +753,9 @@ export default function DepartureCalendar() {
             <button 
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               className={`inline-flex items-center px-4 py-2.5 border text-sm font-medium rounded-lg transition-colors ${
-                showAdvancedFilters ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                showAdvancedFilters 
+                  ? 'bg-blue-50 text-blue-700 border-blue-300' 
+                  : 'bg-white text-slate-700 border-gray-300 hover:bg-gray-50'
               }`}
             >
               <Filter className="h-4 w-4 mr-2" />

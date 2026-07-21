@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order, Invoice } from '@/types';
+import { parseRefundInfo } from '@/lib/utils';
 import { 
   Receipt, 
   Check, 
@@ -20,7 +21,8 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronUp,
-  Upload
+  Upload,
+  Search
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -61,8 +63,10 @@ export default function AccountingInvoice() {
   const [approvePaymentTarget, setApprovePaymentTarget] = useState<Invoice | null>(null);
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [paymentFileName, setPaymentFileName] = useState<string>('');
-  const [isUploadingPaymentFile, setIsUploadingPaymentFile] = useState(false);
-  const [uploadProofTarget, setUploadProofTarget] = useState<Invoice | null>(null);
+  const [isUpload,
+  SearchingPaymentFile, setIsUploadingPaymentFile] = useState(false);
+  const [uploadProofTarget, setUpload,
+  SearchProofTarget] = useState<Invoice | null>(null);
   const [rejectPaymentTarget, setRejectPaymentTarget] = useState<Invoice | null>(null);
   const [rejectPaymentReason, setRejectPaymentReason] = useState('Đề xuất chi chưa chính xác hoặc thiếu chứng từ đối chiếu');
 
@@ -87,6 +91,18 @@ export default function AccountingInvoice() {
   });
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Handle click from notifications
+  useEffect(() => {
+    if (location.state?.searchTarget) {
+      setSearchTerm(location.state.searchTarget);
+      setFilterReceiptStatus('all');
+      setFilterPaymentStatus('all');
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -122,6 +138,7 @@ export default function AccountingInvoice() {
   // Filter receipt invoices (Phiếu thu chuyển khoản)
   const receiptInvoices = invoices
     .filter(inv => {
+      if (searchTerm && (!inv.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) && !inv.invoice_code?.toLowerCase().includes(searchTerm.toLowerCase()))) return false;
       if (inv.type !== 'receipt') return false;
       if (filterReceiptStatus === 'all') return true;
       return inv.status === filterReceiptStatus;
@@ -136,6 +153,7 @@ export default function AccountingInvoice() {
   const paymentInvoices = invoices
     .filter(inv => {
       if (inv.type !== 'payment') return false;
+      if (searchTerm && (!inv.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) && !inv.invoice_code?.toLowerCase().includes(searchTerm.toLowerCase()))) return false;
       
       // If not accountant/admin, only show their own requests or refunds on their own bookings
       if (!isAccountantOrAdmin) {
@@ -273,12 +291,12 @@ export default function AccountingInvoice() {
               : 'Yêu cầu hoàn tiền cho đơn hàng bị hủy, đề xuất các phiếu chi và theo dõi trạng thái phê duyệt từ kế toán.'}
           </p>
         </div>
-        <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 self-stretch md:self-auto">
+        <div className="flex flex-wrap md:flex-nowrap bg-gray-100 p-1.5 rounded-lg border border-gray-200 self-stretch md:self-auto gap-1 md:gap-0">
           {isAccountantOrAdmin && (
             <>
               <button
                 onClick={() => setActiveTab('receipts')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
                   activeTab === 'receipts'
                     ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
@@ -288,7 +306,7 @@ export default function AccountingInvoice() {
               </button>
               <button
                 onClick={() => setActiveTab('vat')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
                   activeTab === 'vat'
                     ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
@@ -300,7 +318,7 @@ export default function AccountingInvoice() {
           )}
           <button
             onClick={() => setActiveTab('payments')}
-            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'payments'
                 ? 'bg-white text-blue-700 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -308,6 +326,33 @@ export default function AccountingInvoice() {
           >
             {isAccountantOrAdmin ? 'Phiếu chi / Hoàn tiền' : 'Đề xuất phiếu chi'}
           </button>
+        </div>
+      </div>
+
+      
+      {/* Filters and Search */}
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Tìm kiếm theo mã đơn hàng hoặc mã phiếu..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+          <TrendingUp className="w-4 h-4" />
+          <span>Theo dõi các luồng dòng tiền</span>
         </div>
       </div>
 
@@ -468,9 +513,10 @@ export default function AccountingInvoice() {
                 }`}
               >
                 <span>Tất cả</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filterReceiptStatus === 'all' ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-800'
-                }`}>
+                <span className={filterReceiptStatus === 'all' 
+                  ? 'px-1.5 py-0.5 rounded-full text-[10px] bg-blue-700 text-white' 
+                  : 'px-1.5 py-0.5 rounded-full text-[10px] bg-gray-200 text-gray-800'
+                }>
                   {totalReceiptsCount}
                 </span>
               </button>
@@ -628,7 +674,7 @@ export default function AccountingInvoice() {
                                                   orderCode: group.orderCode
                                                 });
                                               }}
-                                              className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-md text-gray-700 bg-white border border-gray-300 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
+                                              className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-md text-slate-700 bg-white border border-gray-300 hover:bg-slate-100 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
                                             >
                                               <X className="w-3 h-3 mr-0.5" /> Từ chối
                                             </button>
@@ -738,7 +784,7 @@ export default function AccountingInvoice() {
                       {/* Left: Đơn hàng & Tour */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="font-mono font-black text-gray-950 text-xs bg-blue-50 text-blue-800 px-2 py-0.5 rounded border border-blue-100">
+                          <span className="font-mono font-black text-blue-950 text-xs bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
                             {orderCode}
                           </span>
                           <span className="text-[11px] text-gray-400 font-medium">
@@ -990,13 +1036,47 @@ export default function AccountingInvoice() {
                       {/* Description */}
                       <div className="bg-gray-50 rounded-lg p-2.5 mb-3 text-xs text-gray-600 border border-gray-100">
                         <span className="font-bold text-gray-700 block mb-1">Lý do chi:</span>
-                        <p className="leading-relaxed break-words">{inv.description || 'Không có mô tả chi tiết'}</p>
+                        <p className="leading-relaxed break-words">
+                          {parseRefundInfo(inv).cleanDescription || 'Không có mô tả chi tiết'}
+                        </p>
                       </div>
+
+                      {/* Refund Method Info */}
+                      {parseRefundInfo(inv).method === 'transfer' && (
+                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 mb-3">
+                          <span className="text-blue-800 font-black uppercase text-[10px] tracking-wider block mb-2 border-b border-blue-200/50 pb-1">
+                            Hoàn trả qua Ngân hàng
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Ngân hàng</span>
+                              <span className="font-semibold text-blue-950 text-xs">{parseRefundInfo(inv).bankName || '---'}</span>
+                            </div>
+                            <div>
+                              <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Số tài khoản</span>
+                              <span className="font-semibold text-blue-950 text-xs">{parseRefundInfo(inv).accountNumber || '---'}</span>
+                            </div>
+                            <div>
+                              <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Chủ tài khoản</span>
+                              <span className="font-bold text-blue-950 text-xs">{parseRefundInfo(inv).accountName || '---'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {parseRefundInfo(inv).method === 'cash' && (
+                        <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 mb-3">
+                          <span className="text-amber-800 font-black uppercase text-[10px] tracking-wider block mb-1">
+                            Hoàn trả: Nhận tiền mặt
+                          </span>
+                          <p className="text-amber-700 text-xs font-semibold">Khách hàng nhận tiền mặt trực tiếp tại văn phòng.</p>
+                        </div>
+                      )}
 
                       {/* Minh chứng chuyển khoản cho phiếu chi */}
                       <div className="mt-3 p-2.5 bg-slate-50/80 rounded-lg border border-gray-150 text-xs flex flex-col gap-2">
                         <div className="flex justify-between items-center">
-                          <span className="font-bold text-gray-500 uppercase text-[10px]">Minh chứng chi tiền</span>
+                          <span className="font-bold text-gray-500 uppercase text-[10px]">Xác nhận</span>
                           {inv.file_url ? (
                             <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 font-bold px-1.5 py-0.5 rounded">
                               Đã có minh chứng
@@ -1022,7 +1102,8 @@ export default function AccountingInvoice() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setUploadProofTarget(inv);
+                                  setUpload,
+  SearchProofTarget(inv);
                                 }}
                                 className="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-white hover:bg-gray-100 rounded-md border border-gray-200 transition-colors cursor-pointer"
                                 title="Cập nhật ảnh khác"
@@ -1037,7 +1118,8 @@ export default function AccountingInvoice() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setUploadProofTarget(inv);
+                                  setUpload,
+  SearchProofTarget(inv);
                                 }}
                                 className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 rounded-md border border-gray-200 transition-colors cursor-pointer"
                               >
@@ -1247,7 +1329,8 @@ export default function AccountingInvoice() {
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
               <button
                 type="button"
-                disabled={isUploadingPaymentFile}
+                disabled={isUpload,
+  SearchingPaymentFile}
                 onClick={() => {
                   setPaymentFile(null);
                   setPaymentFileName('');
@@ -1259,9 +1342,11 @@ export default function AccountingInvoice() {
               </button>
               <button
                 type="button"
-                disabled={isUploadingPaymentFile}
+                disabled={isUpload,
+  SearchingPaymentFile}
                 onClick={async () => {
-                  setIsUploadingPaymentFile(true);
+                  setIsUpload,
+  SearchingPaymentFile(true);
                   try {
                     let fileUrl = '';
                     if (paymentFile) {
@@ -1299,12 +1384,14 @@ export default function AccountingInvoice() {
                     console.error(err);
                     toast.error(err.message || 'Gặp sự cố khi phê duyệt phiếu chi');
                   } finally {
-                    setIsUploadingPaymentFile(false);
+                    setIsUpload,
+  SearchingPaymentFile(false);
                   }
                 }}
                 className="px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isUploadingPaymentFile ? (
+                {isUpload,
+  SearchingPaymentFile ? (
                   <>
                     <Clock className="w-3.5 h-3.5 animate-spin" />
                     Đang xử lý...
@@ -1377,7 +1464,8 @@ export default function AccountingInvoice() {
         </div>
       )}
 
-      {/* Modal Upload/Cập nhật minh chứng chuyển khoản */}
+      {/* Modal Upload,
+  Search/Cập nhật minh chứng chuyển khoản */}
       {uploadProofTarget && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
@@ -1422,11 +1510,13 @@ export default function AccountingInvoice() {
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
               <button
                 type="button"
-                disabled={isUploadingPaymentFile}
+                disabled={isUpload,
+  SearchingPaymentFile}
                 onClick={() => {
                   setPaymentFile(null);
                   setPaymentFileName('');
-                  setUploadProofTarget(null);
+                  setUpload,
+  SearchProofTarget(null);
                 }}
                 className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
               >
@@ -1434,10 +1524,12 @@ export default function AccountingInvoice() {
               </button>
               <button
                 type="button"
-                disabled={!paymentFile || isUploadingPaymentFile}
+                disabled={!paymentFile || isUpload,
+  SearchingPaymentFile}
                 onClick={async () => {
                   if (!paymentFile) return;
-                  setIsUploadingPaymentFile(true);
+                  setIsUpload,
+  SearchingPaymentFile(true);
                   try {
                     const targetOrder = orders.find(o => o.id === uploadProofTarget.order_id);
                     const orderCode = targetOrder ? targetOrder.id : 'CHUA_RO';
@@ -1466,17 +1558,20 @@ export default function AccountingInvoice() {
                     // Reset state
                     setPaymentFile(null);
                     setPaymentFileName('');
-                    setUploadProofTarget(null);
+                    setUpload,
+  SearchProofTarget(null);
                   } catch (err: any) {
                     console.error(err);
                     toast.error(err.message || 'Gặp lỗi khi lưu minh chứng');
                   } finally {
-                    setIsUploadingPaymentFile(false);
+                    setIsUpload,
+  SearchingPaymentFile(false);
                   }
                 }}
                 className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isUploadingPaymentFile ? (
+                {isUpload,
+  SearchingPaymentFile ? (
                   <>
                     <Clock className="w-3.5 h-3.5 animate-spin" />
                     Đang tải lên...

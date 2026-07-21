@@ -646,20 +646,22 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between hover:shadow-md transition-all group"
+          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col gap-4 hover:shadow-md transition-all group"
         >
-          <div className="space-y-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng doanh thu lữ hành</span>
-            <h3 className="text-2xl font-black text-gray-900 group-hover:text-blue-600 transition-colors">
+          <div className="flex items-start justify-between gap-4 w-full">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Tổng doanh thu lữ hành</span>
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 shrink-0">
+              <DollarSign className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 group-hover:text-blue-600 transition-colors break-words">
               {formatVND(kpiStats.totalRevenue)}
             </h3>
             <div className="flex items-center gap-1 text-xs font-bold text-green-600">
               <TrendingUp className="w-3.5 h-3.5" />
               <span>+18.4% so với năm trước</span>
             </div>
-          </div>
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
-            <DollarSign className="w-6 h-6" />
           </div>
         </motion.div>
 
@@ -668,20 +670,22 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.05 }}
-          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between hover:shadow-md transition-all group"
+          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col gap-4 hover:shadow-md transition-all group"
         >
-          <div className="space-y-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tour đã khởi hành</span>
-            <h3 className="text-2xl font-black text-gray-900 group-hover:text-emerald-600 transition-colors">
+          <div className="flex items-start justify-between gap-4 w-full">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Tour đã khởi hành</span>
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shrink-0">
+              <Calendar className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 group-hover:text-emerald-600 transition-colors break-words">
               {kpiStats.completedToursCount} <span className="text-sm font-medium text-gray-500">tours</span>
             </h3>
             <div className="flex items-center gap-1 text-xs font-bold text-emerald-600">
               <CheckCircle className="w-3.5 h-3.5" />
               <span>{kpiStats.upcomingToursCount} tour sắp tới</span>
             </div>
-          </div>
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
-            <Calendar className="w-6 h-6" />
           </div>
         </motion.div>
 
@@ -690,20 +694,22 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between hover:shadow-md transition-all group"
+          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col gap-4 hover:shadow-md transition-all group"
         >
-          <div className="space-y-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Hồ sơ khách hàng</span>
-            <h3 className="text-2xl font-black text-gray-900 group-hover:text-amber-600 transition-colors">
+          <div className="flex items-start justify-between gap-4 w-full">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Hồ sơ khách hàng</span>
+            <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all duration-300 shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 group-hover:text-amber-600 transition-colors break-words">
               {kpiStats.totalCustomers} <span className="text-sm font-medium text-gray-500">thành viên</span>
             </h3>
             <div className="flex items-center gap-1 text-xs font-bold text-amber-600">
               <Award className="w-3.5 h-3.5" />
               <span>Đại lý & CTV đóng góp 65%</span>
             </div>
-          </div>
-          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all duration-300">
-            <Users className="w-6 h-6" />
           </div>
         </motion.div>
 
@@ -712,22 +718,24 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.15 }}
-          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between hover:shadow-md transition-all group"
+          className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col gap-4 hover:shadow-md transition-all group"
         >
-          <div className="space-y-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Hiệu suất lấp đầy ghế</span>
-            <h3 className="text-2xl font-black text-gray-900 group-hover:text-purple-600 transition-colors">
+          <div className="flex items-start justify-between gap-4 w-full">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Hiệu suất lấp đầy ghế</span>
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shrink-0">
+              <Layers className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 group-hover:text-emerald-600 transition-colors break-words">
               {kpiStats.averageOccupancy}%
             </h3>
-            <div className="w-24 bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
+            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
               <div 
-                className="bg-purple-600 h-1.5 rounded-full transition-all duration-500" 
+                className="bg-emerald-600 h-1.5 rounded-full transition-all duration-500" 
                 style={{ width: `${kpiStats.averageOccupancy}%` }}
               />
             </div>
-          </div>
-          <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-all duration-300">
-            <Layers className="w-6 h-6" />
           </div>
         </motion.div>
       </div>
