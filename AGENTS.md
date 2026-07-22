@@ -16,6 +16,9 @@ Tài liệu này lưu trữ toàn bộ thông tin cốt lõi, quy tắc phát tr
 
 ## 2. Quy Tắc Hoạt Động & Giao Tiếp (Bắt Buộc)
 - **Ngôn ngữ giao tiếp:** Luôn luôn phản hồi bằng **Tiếng Việt**.
+- **Định dạng Thời gian & Lịch:**
+  - **Định dạng hiển thị thời gian:** Tất cả thời gian trên hệ thống phải luôn tuân thủ chuẩn **`hh:mm dd/mm/yyyy`** (hoặc `dd/mm/yyyy` đối với ngày thuần túy).
+  - **Lịch chọn ngày (Calendar):** Luôn sử dụng bộ chọn ngày chuẩn hóa Tiếng Việt (Thứ 2 - CN, Tháng 1 - Tháng 12, Hôm nay, Xóa ngày...) thông qua component `DatePicker.tsx` để đảm bảo trải nghiệm thuần Việt trên mọi thiết bị và trình duyệt.
 - **Quy trình thay đổi logic:** Trước khi thực hiện bất kỳ thay đổi nào về logic hệ thống, cấu trúc database, hoặc tính năng chính, **PHẢI** giải thích chi tiết giải pháp cho người dùng và chỉ thực hiện sau khi có sự xác nhận của người dùng.
 - **Quản lý File & Storage:** 
   - **TẤT CẢ** các file tải lên (hình ảnh, tài liệu, file visa, hộ chiếu, hóa đơn...) **phải luôn được lưu vào Supabase Storage**.
@@ -127,24 +130,27 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 
 ---
 
-## 8. Tích hợp Lưu Trữ Google Drive (Mới)
+## 8. Tích hợp & Quy Trình Lưu Trữ File, Hình Ảnh (Google Drive & Supabase Storage)
 - **Cơ chế hoạt động (Bảo mật ở Backend):**
-  - Hệ thống tích hợp Google Drive hoàn toàn ở phía **Backend** để thay thế cho bộ nhớ Supabase Storage khi có cấu hình, đảm bảo tuyệt đối bảo mật và trải nghiệm trong suốt cho người dùng. Không có bất kỳ nút bấm đăng nhập hoặc widget kết nối nào hiển thị ở phía Frontend.
+  - Hệ thống tích hợp lưu trữ file hoàn toàn ở phía **Backend** thông qua các API endpoint (`/api/upload`, `/api/upload-invoice-receipt`, `/api/delete`).
+  - **Tầng ưu tiên lưu trữ:** Hệ thống kiểm tra cấu hình `GOOGLE_SERVICE_ACCOUNT` hoặc Google OAuth trong môi trường. Nếu đã cấu hình Google Drive, mọi file sẽ tự động tải lên Google Drive. Nếu chưa cấu hình, hệ thống sẽ tự động dùng **Supabase Storage** (bucket `crm-attachments`) làm phương án dự phòng mặc định.
   - Một badge trạng thái dạng read-only hiển thị ở Sidebar giúp quản trị viên biết hệ thống đang sử dụng Google Drive hay Supabase Storage làm kho lưu trữ hiện tại.
-- **Quy trình lưu trữ và tải lên:**
-  - Khi Google Drive **chưa cấu hình ở backend** (thiếu biến môi trường): Hệ thống tự động sử dụng **Supabase Storage** làm phương án dự phòng mặc định, đảm bảo mọi thao tác không bị gián đoạn.
-  - Khi Google Drive **đã cấu hình ở backend** (`GOOGLE_SERVICE_ACCOUNT_EMAIL` và `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` trong file `.env`): Mọi file tải lên từ *Tạo Booking mới* hoặc *Cập nhật hồ sơ hành khách* sẽ được chuyển hướng trực tiếp lên Google Drive của tài khoản Service Account đã cấu hình thông qua API:
-    1. Tự động kiểm tra hoặc tạo mới thư mục gốc tên là `AD Luxury Travel`.
-    2. Tự động kiểm tra hoặc tạo thư mục con đặt tên theo Số hộ chiếu (`passport_number` hoặc `CHUA_CO_HC`).
-    3. Tải file lên và đổi tên file theo định dạng chuẩn hóa: `{SO_HO_CHIEU}-{CHU_CAI_VIET_TAT_TEN}.{ten_file_goc}`.
-    4. Cấp quyền xem cho "bất kỳ ai có liên kết" (role: reader, type: anyone) và trả về liên kết xem trực tuyến (`webViewLink`) của Google Drive để lưu vào trường `passport_url` trong database. Khi người dùng click vào liên kết, file sẽ mở trên giao diện xem trước chính thức của Google Drive (hỗ trợ phóng to, tải xuống, in ấn cực kỳ tiện lợi).
-  - **Quy tắc lưu trữ tài liệu Visa và File hướng dẫn mẫu:**
-    - **File mẫu của từng dịch vụ visa lẻ:** Được tổ chức lưu trữ riêng biệt trong thư mục của từng mã dịch vụ visa tương ứng (Ví dụ trên Google Drive: `AD Luxury Travel > Visa > VIAU`, hoặc trên Supabase Storage: thư mục `Visa/VIAU/`).
-    - **Hồ sơ, file mẫu chung của tất cả các loại visa:** Lưu trữ trực tiếp tại thư mục Visa gốc (Ví dụ trên Google Drive: `AD Luxury Travel > Visa`, hoặc trên Supabase Storage: thư mục `Visa/`).
-- **Quy trình xóa file:**
-  - Khi người dùng xóa file đính kèm cũ khỏi hồ sơ hành khách, hệ thống gửi yêu cầu đến backend tự động kiểm tra liên kết của file:
-    - Nếu là liên kết Google Drive, backend sẽ gọi API Google Drive để **xóa vĩnh viễn** file đó khỏi Drive.
-    - Nếu là liên kết Supabase, backend thực hiện xóa file trong Supabase Storage như thông thường.
+
+- **Cấu trúc Thư mục & Định dạng Tên File:**
+  1. **Hóa đơn, Phiếu Thu, Phiếu Chi, Minh chứng chuyển khoản & Hợp đồng Tour:**
+     - **Vị trí lưu trữ:** Được tự động gom nhóm và lưu trực tiếp vào **thư mục Tour tương ứng** (`AD Luxury Travel > Tour > {MÃ_TOUR}`).
+     - **Cơ chế nhận diện:** Backend tự động phân tích và tra cứu mã Tour (`tourCode`) từ Mã đơn hàng (`orderId`/`orderCode`), mã hóa đơn (`invoiceId`/`invoiceCode`), hoặc mã Tour trực tiếp. Nếu là khoản chi phí chung không thuộc tour cụ thể, file sẽ được lưu vào thư mục `AD Luxury Travel > Tour > TOUR_CHUNG`.
+     - **Tên file:** Chuẩn hóa theo công thức: `{MÃ_ĐƠN_HÀNG/MÃ_LOẠI}_{TIMESTAMP}_{TÊN_FILE_GỐC}`.
+  2. **Hồ sơ Hành khách, Hộ chiếu & Giấy tờ cá nhân:**
+     - **Vị trí lưu trữ:** Lưu theo thư mục số hộ chiếu của khách: `AD Luxury Travel > Đơn hàng > {SỐ_HỘ_CHIẾU}` (hoặc `CHUA_CO_HC` nếu chưa có hộ chiếu).
+     - **Tên file:** Chuẩn hóa theo công thức: `{SỐ_HỘ_CHIẾU}-{TÊN_VIẾT_TẮT_KHÁCH}.{định_dạng_file}`.
+  3. **Tài liệu Visa & File Hướng dẫn Mẫu:**
+     - **File mẫu từng dịch vụ visa lẻ:** Lưu tại thư mục dịch vụ riêng biệt (`AD Luxury Travel > Visa > {MÃ_DỊCH_VỤ}` - VD: `AD Luxury Travel > Visa > VIAU`).
+     - **File mẫu dùng chung tất cả loại visa:** Lưu trực tiếp tại thư mục gốc Visa (`AD Luxury Travel > Visa`).
+
+- **Quyền Truy Cập & Xóa File Vĩnh Viễn:**
+  - **Quyền truy cập:** Khi file được tải lên Google Drive, backend tự động thiết lập quyền xem công khai (`role: reader, type: anyone`) và trả về đường dẫn `webViewLink`. Người dùng có thể click trực tiếp để xem trước, phóng to, in ấn hoặc tải xuống.
+  - **Xóa file:** Khi xóa file khỏi hệ thống, backend tự động phân biệt liên kết (Google Drive File ID hay Supabase Public URL) để gọi API xóa vĩnh viễn trên kho lưu trữ tương ứng, đảm bảo không để lại tài liệu rác hay chiếm dụng dung lượng.
 
 ---
 

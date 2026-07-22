@@ -103,6 +103,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_company_name TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_tax_code TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_address TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_email TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS contract_url TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE CASCADE;
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -237,6 +238,22 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
+-- 11. Bảng Chi phí Tour (Tour Costs - Lưu trữ chi tiết chi phí riêng biệt cho từng tour để tránh xung đột ghi đè)
+CREATE TABLE IF NOT EXISTS tour_costs (
+  tour_id UUID PRIMARY KEY REFERENCES tours(id) ON DELETE CASCADE,
+  flight_amount NUMERIC NOT NULL DEFAULT 0,
+  insurance_amount NUMERIC NOT NULL DEFAULT 0,
+  tour_guide_amount NUMERIC NOT NULL DEFAULT 0,
+  gift_amount NUMERIC NOT NULL DEFAULT 0,
+  commission_amount NUMERIC NOT NULL DEFAULT 0,
+  advertising_amount NUMERIC NOT NULL DEFAULT 0,
+  other_amount NUMERIC NOT NULL DEFAULT 0,
+  visa_amount NUMERIC NOT NULL DEFAULT 0,
+  landtours JSONB NOT NULL DEFAULT '[]'::jsonb,
+  partner_payments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
 -- KÍCH HOẠT ROW LEVEL SECURITY (RLS)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tours ENABLE ROW LEVEL SECURITY;
@@ -248,6 +265,7 @@ ALTER TABLE passengers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tour_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tour_costs ENABLE ROW LEVEL SECURITY;
 
 -- CẤP QUYỀN TRUY CẬP CHO USER ĐÃ ĐĂNG NHẬP
 DROP POLICY IF EXISTS "Allow authenticated access to profiles" ON profiles;
@@ -330,6 +348,7 @@ ALTER TABLE passengers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tour_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tour_costs ENABLE ROW LEVEL SECURITY;
 
 -- CẤP QUYỀN TRUY CẬP (ĐỌC & GHI) CHO TÀI KHOẢN ĐÃ ĐĂNG NHẬP
 DO $$
@@ -345,6 +364,7 @@ BEGIN
     DROP POLICY IF EXISTS "Allow authenticated access to system_notifications" ON system_notifications;
     DROP POLICY IF EXISTS "Allow authenticated access to tour_categories" ON tour_categories;
     DROP POLICY IF EXISTS "Allow authenticated access to app_settings" ON app_settings;
+    DROP POLICY IF EXISTS "Allow authenticated access to tour_costs" ON tour_costs;
 
     -- Tạo policy mới với USING và WITH CHECK để cho phép Thêm/Sửa/Xóa (Insert/Update/Delete)
     CREATE POLICY "Allow authenticated access to profiles" ON profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -357,6 +377,11 @@ BEGIN
     CREATE POLICY "Allow authenticated access to system_notifications" ON system_notifications FOR ALL TO authenticated USING (true) WITH CHECK (true);
     CREATE POLICY "Allow authenticated access to tour_categories" ON tour_categories FOR ALL TO authenticated USING (true) WITH CHECK (true);
     CREATE POLICY "Allow authenticated access to app_settings" ON app_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow authenticated access to tour_costs" ON tour_costs FOR ALL TO authenticated USING (true) WITH CHECK (true);
 EXCEPTION
     WHEN undefined_object THEN NULL;
 END $$;
+
+-- NÂNG CẤP SCHEMA: Tự động thêm cột visa_amount nếu đã tồn tại bảng tour_costs trước đó
+ALTER TABLE tour_costs ADD COLUMN IF NOT EXISTS visa_amount NUMERIC NOT NULL DEFAULT 0;
+

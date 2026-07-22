@@ -5,7 +5,7 @@ import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload } from 'lucide-react';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
@@ -24,6 +24,61 @@ export default function OrdersManagement() {
   const [orderFilterStatus, setOrderFilterStatus] = useState('sure');
   const [orderFilterTimeRange, setOrderFilterTimeRange] = useState('all');
   const [orderSortBy, setOrderSortBy] = useState('newest');
+  const [contractUploadProgress, setContractUploadProgress] = useState<Record<string, boolean>>({});
+
+  const handleUploadContract = async (orderId: string, orderCode: string, file: File) => {
+    setContractUploadProgress(prev => ({ ...prev, [orderId]: true }));
+    const toastId = toast.loading(`Đang tải hợp đồng của đơn hàng ${orderCode || orderId.substring(0,8)}...`);
+    try {
+      const targetOrder = allOrders.find(o => o.id === orderId);
+      const targetTour = targetOrder ? tours.find(t => t.id === targetOrder.tour_id) : null;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('orderCode', orderId);
+      if (targetTour?.code) {
+        formData.append('tourCode', targetTour.code);
+      }
+
+      const response = await fetch('/api/upload-invoice-receipt', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData = { error: 'Tải lên không thành công' };
+        try { errorData = JSON.parse(errorText); } catch {}
+        throw new Error(errorData.error || 'Tải lên không thành công');
+      }
+
+      const resText = await response.text();
+      let resData;
+      try {
+        resData = JSON.parse(resText);
+      } catch {
+        throw new Error('Định dạng phản hồi từ máy chủ không đúng.');
+      }
+      await updateOrder(orderId, { contract_url: resData.url });
+      toast.success('Tải lên hợp đồng thành công!', { id: toastId });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'Gặp lỗi khi tải lên hợp đồng', { id: toastId });
+    } finally {
+      setContractUploadProgress(prev => ({ ...prev, [orderId]: false }));
+    }
+  };
+
+  const handleDeleteContract = async (orderId: string) => {
+    const toastId = toast.loading('Đang gỡ hợp đồng...');
+    try {
+      await updateOrder(orderId, { contract_url: undefined });
+      toast.success('Đã gỡ hợp đồng thành công!', { id: toastId });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'Lỗi khi gỡ hợp đồng', { id: toastId });
+    }
+  };
 
   // Xử lý click từ thông báo
   useEffect(() => {
@@ -498,14 +553,14 @@ export default function OrdersManagement() {
       return;
     }
 
-    if (orderStatus === 'sure' && (!bookerName.trim() || !bookerPhone.trim())) {
-      toast.error('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách trưởng nhóm khi Đặt chắc chắn!');
+    if (!bookerName.trim() || !bookerPhone.trim()) {
+      toast.error('Vui lòng nhập đầy đủ Họ và tên và Số điện thoại khách trưởng nhóm!');
       return;
     }
 
     const orderPassengers: any[] = [];
-    const finalBookerName = bookerName.trim() || (orderStatus === 'hold' ? 'Chưa cung cấp (Giữ chỗ tạm)' : '');
-    const finalBookerPhone = bookerPhone.trim() || (orderStatus === 'hold' ? 'Chưa cung cấp' : '');
+    const finalBookerName = bookerName.trim();
+    const finalBookerPhone = bookerPhone.trim();
     
     // Create lead passenger
     orderPassengers.push({
@@ -548,10 +603,10 @@ export default function OrdersManagement() {
 
     createOrder({
       tour_id: selectedTourId,
-      status: orderStatus,
+      status: 'hold',
       total_price: calculatedTotalPrice,
       adult_price: priceAdult,
-      passengers: orderStatus === 'hold' ? [] : orderPassengers,
+      passengers: orderPassengers,
       booker_name: finalBookerName,
       booker_phone: finalBookerPhone,
       created_by: creatorFullName,
@@ -836,35 +891,17 @@ export default function OrdersManagement() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Hình thức giữ chỗ *</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center flex-1 border border-gray-300 rounded-lg px-4 py-2 cursor-pointer hover:bg-gray-50 text-sm transition-colors">
-                    <input 
-                      type="radio" 
-                      name="status" 
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 mr-2"
-                      checked={orderStatus === 'hold'}
-                      onChange={() => setOrderStatus('hold')}
-                    />
+                <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse flex-shrink-0"></span>
                     <div>
-                      <div className="font-semibold text-gray-900">Hold tạm thời</div>
-                      <div className="text-[11px] text-gray-500">
-                        Tự động nhả chỗ sau {selectedTour?.hold_duration_hours || 48} giờ
+                      <div className="font-bold text-blue-900 text-sm">Hold tạm thời</div>
+                      <div className="text-xs text-blue-700 mt-0.5">
+                        Hệ thống tự động nhả chỗ sau {selectedTour?.hold_duration_hours || 48} giờ. Booking sẽ chuyển sang Sure chỗ sau khi ghi nhận thanh toán.
                       </div>
                     </div>
-                  </label>
-                  <label className="flex items-center flex-1 border border-gray-300 rounded-lg px-4 py-2 cursor-pointer hover:bg-gray-50 text-sm transition-colors">
-                    <input 
-                      type="radio" 
-                      name="status" 
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 mr-2"
-                      checked={orderStatus === 'sure'}
-                      onChange={() => setOrderStatus('sure')}
-                    />
-                    <div>
-                      <div className="font-semibold text-gray-900">Sure chỗ (Đặt chắc chắn)</div>
-                      <div className="text-[11px] text-gray-500">Yêu cầu kế toán xuất hóa đơn</div>
-                    </div>
-                  </label>
+                  </div>
+                  <span className="text-xs font-extrabold bg-blue-100 text-blue-800 px-3 py-1 rounded-lg border border-blue-200 whitespace-nowrap ml-2">Hold</span>
                 </div>
               </div>
             </div>
@@ -901,7 +938,7 @@ export default function OrdersManagement() {
                   <span className="w-1.5 h-3.5 bg-blue-600 rounded mr-2 inline-block"></span>
                   1. Thông tin khách đặt tour
                 </h4>
-                {orderStatus !== 'hold' && uniqueCustomers.length > 0 && (
+                {uniqueCustomers.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowCustomerSelector(!showCustomerSelector)}
@@ -913,7 +950,7 @@ export default function OrdersManagement() {
                 )}
               </div>
 
-              {orderStatus !== 'hold' && showCustomerSelector && (
+              {showCustomerSelector && (
                 <div className="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2">
                     <input 
@@ -983,21 +1020,7 @@ export default function OrdersManagement() {
                 </div>
               )}
 
-              {orderStatus === 'hold' ? (
-                <div className="bg-blue-50/70 p-3.5 rounded-xl border border-blue-150 space-y-1 text-xs">
-                  <div className="font-bold text-blue-900 flex items-center">
-                    <Clock className="w-4 h-4 mr-1.5 text-blue-600" />
-                    Ghi nhận tự động từ tài khoản của bạn
-                  </div>
-                  <p className="text-gray-600 leading-relaxed font-semibold">
-                    Hệ thống tự động ghi nhận người thực hiện giữ chỗ: <span className="text-blue-700 font-extrabold">{profile?.full_name || user?.email || 'Ẩn danh'} ({currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên'})</span>.
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    * Chế độ giữ chỗ tạm không yêu cầu thông tin của khách trưởng nhóm. Giao diện tối giản giúp bạn đặt giữ chỗ nhanh nhất có thể.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className={`relative ${focusedInput === 'name' ? 'z-30' : 'z-20'}`}>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Họ và tên khách trưởng nhóm *</label>
                     <input 
@@ -1073,7 +1096,6 @@ export default function OrdersManagement() {
                     )}
                   </div>
                 </div>
-              )}
             </div>
 
             {/* Section 2: Classified guest counts */}
@@ -1533,7 +1555,9 @@ export default function OrdersManagement() {
                       <div className="min-w-[170px] shrink-0">
                         <div className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Khách trưởng nhóm</div>
                         <div className="text-sm font-bold text-gray-800 mt-0.5">
-                          {order.booker_name || leadPassenger?.full_name}
+                          {(order.booker_name && (order.status === 'hold' || !order.booker_name.includes('Giữ chỗ tạm')))
+                            ? order.booker_name
+                            : (leadPassenger?.full_name || 'Chưa cung cấp')}
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5">
                           {order.booker_phone || leadPassenger?.phone || 'Chưa cung cấp'}
@@ -1889,7 +1913,9 @@ export default function OrdersManagement() {
                                   <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
                                     <span className="text-gray-600 font-medium">Người đặt chỗ:</span>
                                     <span className="font-bold text-gray-900">
-                                      {order.booker_name || leadPassenger?.full_name || 'Chưa cung cấp'}
+                                      {(order.booker_name && (order.status === 'hold' || !order.booker_name.includes('Giữ chỗ tạm')))
+                                        ? order.booker_name
+                                        : (leadPassenger?.full_name || 'Chưa cung cấp')}
                                     </span>
                                   </div>
                                   <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
@@ -1898,11 +1924,60 @@ export default function OrdersManagement() {
                                       {order.booker_phone || leadPassenger?.phone || 'Chưa cung cấp'}
                                     </span>
                                   </div>
-                                  <div className="flex justify-between items-center py-1">
-                                    <span className="text-gray-600 font-medium">Người thực hiện:</span>
-                                    <span className="text-gray-500 italic">
-                                      {order.created_by}
+                                  <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
+                                    <span className="text-gray-600 font-medium">Sales / CTV phụ trách:</span>
+                                    <span className="font-bold text-blue-700">
+                                      {order.created_by || 'Chưa rõ'}
                                     </span>
+                                  </div>
+                                  <div className="flex justify-between items-center py-1.5 border-t border-dashed border-gray-100 mt-1 pt-1">
+                                    <span className="text-gray-600 font-medium flex items-center gap-1.5">
+                                      <FileText className="w-4 h-4 text-blue-600" /> Hợp đồng dịch vụ:
+                                    </span>
+                                    <div>
+                                      {order.contract_url ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            Đã tải hợp đồng
+                                          </span>
+                                          <a
+                                            href={order.contract_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-bold text-[10px] flex items-center gap-1 transition-all"
+                                          >
+                                            <Eye className="w-3 h-3" /> Xem
+                                          </a>
+                                          {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
+                                            <button
+                                              onClick={() => handleDeleteContract(order.id)}
+                                              className="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer"
+                                              title="Gỡ hợp đồng"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5">
+                                          <label className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer text-[10px] font-bold transition-all flex items-center gap-1 shadow-sm">
+                                            <Upload className="w-3 h-3" />
+                                            Tải hợp đồng lên
+                                            <input
+                                              type="file"
+                                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                              className="hidden"
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) handleUploadContract(order.id, order.id.substring(0,8), file);
+                                              }}
+                                              disabled={contractUploadProgress[order.id]}
+                                            />
+                                          </label>
+                                          {contractUploadProgress[order.id] && <Clock className="w-3 h-3 animate-spin text-blue-600" />}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -2259,7 +2334,9 @@ export default function OrdersManagement() {
                                               <div>
                                                 <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wider block mb-1">Người nộp/tạo</span>
                                                 <span className="font-semibold text-slate-800">
-                                                  {inv.created_by || order.booker_name || leadPassenger?.full_name || 'Hệ thống'}
+                                                  {(inv.created_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(inv.created_by)) 
+                                                    ? inv.created_by 
+                                                    : (order.created_by || order.booker_name || leadPassenger?.full_name || 'Hệ thống')}
                                                 </span>
                                               </div>
                                             </div>
@@ -2365,7 +2442,7 @@ export default function OrdersManagement() {
                               Thanh toán
                             </button>
                           )}
-                          {order.status === 'hold' && (
+                          {order.status === 'hold' && currentRole !== 'sale' && (
                             <>
                               <button
                                 type="button"
@@ -2919,9 +2996,13 @@ export default function OrdersManagement() {
                   setIsCancelUploading(true);
                   try {
                     // 1. Upload ảnh minh chứng lên Google Drive qua backend API
+                    const targetTour = tours.find(t => t.id === cancelPaymentOrder.tour_id);
                     const formData = new FormData();
                     formData.append('file', cancelConfirmFile);
-                    formData.append('orderCode', cancelPaymentOrder.id.substring(0, 8));
+                    formData.append('orderCode', cancelPaymentOrder.id);
+                    if (targetTour?.code) {
+                      formData.append('tourCode', targetTour.code);
+                    }
 
                     const uploadRes = await fetch('/api/upload-invoice-receipt', {
                       method: 'POST',

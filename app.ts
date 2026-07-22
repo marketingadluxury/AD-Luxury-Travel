@@ -164,6 +164,23 @@ function getDriveRootParentId(): string | undefined {
          process.env.DRIVE_ROOT_ID;
 }
 
+async function getOrCreateADLuxuryTravelRootFolder(baseParentId: string | undefined, token: string): Promise<string> {
+  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
+  if (!rootId && baseParentId) {
+    console.log('[Drive] Không tìm thấy "AD Luxury Travel" trong thư mục cha chỉ định. Đang tìm kiếm trên toàn bộ Drive phòng trường hợp người dùng di chuyển ra ngoài...');
+    rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  }
+  
+  if (!rootId) {
+    console.log('[Drive] Thư mục "AD Luxury Travel" chưa tồn tại, đang tạo mới...');
+    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
+    await makeFolderPublic(rootId, token);
+  } else {
+    console.log(`[Drive] Đã tìm thấy thư mục "AD Luxury Travel" hiện có (ID: ${rootId})`);
+  }
+  return rootId;
+}
+
 async function getOrCreatePassengerFolder(fullName: string, passportNumber: string, token: string): Promise<string> {
   const cleanPassport = (passportNumber || 'CHUA_CO_HC').trim().toUpperCase();
   const getInitials = (name: string) => {
@@ -176,11 +193,7 @@ async function getOrCreatePassengerFolder(fullName: string, passportNumber: stri
   const baseParentId = getDriveRootParentId();
 
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
-  if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
-    await makeFolderPublic(rootId, token);
-  }
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
 
   // 2. Get or create "Khách hàng" folder inside root
   let khachHangFolderId = await searchFolder('Khách hàng', rootId, token);
@@ -204,11 +217,7 @@ async function getOrCreateTourFolder(category: string, token: string): Promise<s
   const baseParentId = getDriveRootParentId();
 
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
-  if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
-    await makeFolderPublic(rootId, token);
-  }
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
 
   // 2. Get or create "Tour" folder inside root
   let tourFolderId = await searchFolder('Tour', rootId, token);
@@ -231,11 +240,7 @@ async function getOrCreateVisaFolder(token: string): Promise<string> {
   const baseParentId = getDriveRootParentId();
 
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
-  if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
-    await makeFolderPublic(rootId, token);
-  }
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
 
   // 2. Search for existing "Visa" folder in AD Luxury Travel first
   let visaFolderId = await searchFolder('Visa', rootId, token);
@@ -263,16 +268,187 @@ async function getOrCreateVisaServiceFolder(visaCode: string, visaFolderId: stri
   return serviceFolderId;
 }
 
+async function getOrCreateTourFolderV2(tourCode: string, token: string): Promise<string> {
+  const cleanTourCode = (tourCode || 'TOUR_CHUNG').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
+  const baseParentId = getDriveRootParentId();
+
+  // 1. Get or create AD Luxury Travel root folder
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
+
+  // 2. Get or create "Tour" folder inside root
+  let tourFolderId = await searchFolder('Tour', rootId, token);
+  if (!tourFolderId) {
+    tourFolderId = await createFolder('Tour', rootId, token);
+    await makeFolderPublic(tourFolderId, token);
+  }
+
+  // 3. Get or create [Mã Tour] folder inside "Tour"
+  let targetTourFolderId = await searchFolder(cleanTourCode, tourFolderId, token);
+  if (!targetTourFolderId) {
+    targetTourFolderId = await createFolder(cleanTourCode, tourFolderId, token);
+    await makeFolderPublic(targetTourFolderId, token);
+  }
+
+  return targetTourFolderId;
+}
+
+async function getOrCreateTourSubFolderV2(tourCode: string, subFolder: 'Đơn hàng' | 'Chi phí', token: string): Promise<string> {
+  const tourFolderId = await getOrCreateTourFolderV2(tourCode, token);
+
+  let subFolderId = await searchFolder(subFolder, tourFolderId, token);
+  if (!subFolderId) {
+    subFolderId = await createFolder(subFolder, tourFolderId, token);
+    await makeFolderPublic(subFolderId, token);
+  }
+
+  return subFolderId;
+}
+
+async function getOrCreateOrderFolderV2(tourCode: string, orderCode: string, token: string): Promise<string> {
+  const donHangFolderId = await getOrCreateTourSubFolderV2(tourCode, 'Đơn hàng', token);
+
+  const cleanOrderCode = (orderCode || 'Don_hang').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
+  let orderFolderId = await searchFolder(cleanOrderCode, donHangFolderId, token);
+  if (!orderFolderId) {
+    orderFolderId = await createFolder(cleanOrderCode, donHangFolderId, token);
+    await makeFolderPublic(orderFolderId, token);
+  }
+
+  return orderFolderId;
+}
+
+async function getTourCodeFromOrderOrTour(
+  orderCode: string, 
+  bodyTourCode: string | undefined, 
+  supabase: any
+): Promise<{ tourCode: string; isTourCodeDirectly: boolean; orderId?: string }> {
+  const cleanTourCodeParam = (bodyTourCode || '').trim();
+  const cleanOrderCodeParam = (orderCode || '').trim();
+
+  const invalidPlaceholders = ['CHUA_RO', 'CHIPHI_TOUR', 'TOUR_CHUNG', 'TOUR', 'DON_HANG', 'CHIPHI'];
+  
+  // 1. If explicit tourCode is provided and valid
+  if (cleanTourCodeParam && !invalidPlaceholders.includes(cleanTourCodeParam.toUpperCase())) {
+    const isGenericOrderCode = !cleanOrderCodeParam || invalidPlaceholders.includes(cleanOrderCodeParam.toUpperCase()) || cleanOrderCodeParam.toUpperCase() === cleanTourCodeParam.toUpperCase();
+    return {
+      tourCode: cleanTourCodeParam.toUpperCase(),
+      isTourCodeDirectly: isGenericOrderCode,
+      orderId: isGenericOrderCode ? undefined : cleanOrderCodeParam
+    };
+  }
+
+  const cleanCode = cleanOrderCodeParam;
+  if (!cleanCode || invalidPlaceholders.includes(cleanCode.toUpperCase())) {
+    return { tourCode: 'TOUR_CHUNG', isTourCodeDirectly: true };
+  }
+
+  try {
+    // 2. Check if cleanCode is directly a tour code in `tours` table
+    const { data: tourByCode } = await supabase
+      .from('tours')
+      .select('code')
+      .eq('code', cleanCode)
+      .maybeSingle();
+
+    if (tourByCode && tourByCode.code) {
+      return { tourCode: tourByCode.code, isTourCodeDirectly: true };
+    }
+
+    // 3. Check if cleanCode matches an order/booking ID
+    const { data: bookingData } = await supabase
+      .from('bookings')
+      .select('id, tour_id')
+      .eq('id', cleanCode)
+      .maybeSingle();
+
+    let targetBooking = bookingData;
+
+    if (!targetBooking) {
+      const { data: bookingsLike } = await supabase
+        .from('bookings')
+        .select('id, tour_id')
+        .ilike('id', `${cleanCode}%`)
+        .limit(1);
+
+      if (bookingsLike && bookingsLike.length > 0) {
+        targetBooking = bookingsLike[0];
+      }
+    }
+
+    if (targetBooking && targetBooking.tour_id) {
+      const { data: tourData } = await supabase
+        .from('tours')
+        .select('code')
+        .eq('id', targetBooking.tour_id)
+        .maybeSingle();
+
+      if (tourData && tourData.code) {
+        return { tourCode: tourData.code, isTourCodeDirectly: false, orderId: targetBooking.id };
+      }
+    }
+
+    // 4. Check if cleanCode is an invoice ID or invoice code in `invoices` table
+    const { data: invoiceData } = await supabase
+      .from('invoices')
+      .select('id, order_id, description')
+      .or(`id.eq.${cleanCode},invoice_code.eq.${cleanCode}`)
+      .maybeSingle();
+
+    if (invoiceData) {
+      if (invoiceData.order_id) {
+        const { data: invBooking } = await supabase
+          .from('bookings')
+          .select('id, tour_id')
+          .eq('id', invoiceData.order_id)
+          .maybeSingle();
+
+        if (invBooking && invBooking.tour_id) {
+          const { data: tourData } = await supabase
+            .from('tours')
+            .select('code')
+            .eq('id', invBooking.tour_id)
+            .maybeSingle();
+
+          if (tourData && tourData.code) {
+            return { tourCode: tourData.code, isTourCodeDirectly: false, orderId: invBooking.id };
+          }
+        }
+      }
+
+      // Try extracting Tour from description if present
+      const desc = invoiceData.description || '';
+      const match = desc.match(/Tour:\s*"([^"]+)"/i) || desc.match(/\[Tour:\s*"([^"]+)"\]/i) || desc.match(/Tour:\s*([A-Z0-9_-]+)/i);
+      if (match && match[1]) {
+        const raw = match[1].trim();
+        const extractedCode = raw.split(' - ')[0].trim().toUpperCase();
+        if (extractedCode) {
+          return { tourCode: extractedCode, isTourCodeDirectly: true };
+        }
+      }
+    }
+
+    // 5. Query tours list to see if cleanCode contains a tour code
+    const { data: toursList } = await supabase.from('tours').select('code').limit(100);
+    if (toursList) {
+      const matched = toursList.find((t: any) => t.code && cleanCode.toUpperCase().includes(t.code.toUpperCase()));
+      if (matched) {
+        return { tourCode: matched.code, isTourCodeDirectly: true };
+      }
+    }
+  } catch (error) {
+    console.warn('[Storage Config] Lỗi khi truy vấn thông tin Tour/Booking từ database:', error);
+  }
+
+  // Fallback: if cleanCode is not a known order, treat as direct tour cost
+  return { tourCode: 'TOUR_CHUNG', isTourCodeDirectly: true };
+}
+
 async function getOrCreateOrderFolder(orderCode: string, token: string): Promise<string> {
   const cleanOrderCode = (orderCode || 'Don_hang').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
   const baseParentId = getDriveRootParentId();
   
   // 1. Get or create AD Luxury Travel root folder
-  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
-  if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
-    await makeFolderPublic(rootId, token);
-  }
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
 
   // 2. Get or create "Đơn hàng" folder inside root
   let donHangFolderId = await searchFolder('Đơn hàng', rootId, token);
@@ -691,9 +867,9 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
       const fileName = `${tourCode.trim().toUpperCase()}${ext}`;
 
       if (driveActive) {
-        console.log(`[Drive] Đang tải file lịch trình tour lên Google Drive cho Tour: ${tourCode} (${category})`);
+        console.log(`[Drive] Đang tải file lịch trình tour lên Google Drive cho Tour: ${tourCode}`);
         const token = await getGoogleDriveAccessToken();
-        const tourFolderId = await getOrCreateTourFolder(category, token);
+        const tourFolderId = await getOrCreateTourFolderV2(tourCode, token);
         const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, tourFolderId, token);
         res.json({
           success: true,
@@ -702,11 +878,11 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
           storage: 'drive'
         });
       } else {
-        console.log(`[Supabase Fallback] Đang tải file lịch trình tour lên Supabase: Tour/${category}/${fileName}`);
+        console.log(`[Supabase Fallback] Đang tải file lịch trình tour lên Supabase: Tour/${tourCode.trim().toUpperCase()}/${fileName}`);
         const supabase = getSupabaseClient(req);
         const publicUrl = await uploadFileToSupabase(
           'crm-attachments',
-          `Tour/${category}/${fileName}`,
+          `Tour/${tourCode.trim().toUpperCase()}/${fileName}`,
           file.buffer,
           file.mimetype,
           supabase
@@ -775,18 +951,18 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
 });
 
 // Unified Invoice Receipt Upload API (Google Drive with Supabase Storage fallback)
-app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt'], upload.single('file'), async (req, res) => {
+app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt', '/api/drive/upload', '/drive/upload'], upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
-    const { orderCode } = req.body;
+    const { orderCode, tourCode: bodyTourCode } = req.body;
 
     if (!file) {
       res.status(400).json({ error: 'Không tìm thấy file để tải lên.' });
       return;
     }
 
-    if (!orderCode) {
-      res.status(400).json({ error: 'Thiếu mã đơn hàng.' });
+    if (!orderCode && !bodyTourCode) {
+      res.status(400).json({ error: 'Thiếu thông tin mã đơn hàng hoặc mã tour.' });
       return;
     }
 
@@ -794,15 +970,29 @@ app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt'], upload.sing
     const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
     const driveActive = hasServiceAccount || hasOAuth;
 
-    const cleanOrderCode = orderCode.trim().toUpperCase().replace(/\s+/g, '_');
+    const rawOrderCode = (orderCode || bodyTourCode || 'CHIPHI').trim();
+    const cleanOrderCode = rawOrderCode.toUpperCase().replace(/\s+/g, '_');
     const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
     const fileName = `${cleanOrderCode}_${Date.now()}_${cleanOriginalName}`;
 
+    // Khởi tạo Supabase để tra cứu mối quan hệ giữa Booking và Tour
+    const supabase = getAdminSupabaseClient(req);
+    const { tourCode, isTourCodeDirectly, orderId } = await getTourCodeFromOrderOrTour(orderCode, bodyTourCode, supabase);
+    const actualOrderCode = orderId ? orderId.substring(0, 8).toUpperCase() : cleanOrderCode;
+
     if (driveActive) {
-      console.log(`[Drive] Đang tải file hóa đơn lên Google Drive cho Đơn hàng: ${cleanOrderCode}`);
       const token = await getGoogleDriveAccessToken();
-      const orderFolderId = await getOrCreateOrderFolder(cleanOrderCode, token);
-      const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, orderFolderId, token);
+      let folderId = '';
+
+      if (isTourCodeDirectly) {
+        console.log(`[Drive] Đang tải file chi phí lên Google Drive cho Tour: ${tourCode}`);
+        folderId = await getOrCreateTourSubFolderV2(tourCode, 'Chi phí', token);
+      } else {
+        console.log(`[Drive] Đang tải file đơn hàng lên Google Drive cho Tour: ${tourCode}, Đơn hàng: ${actualOrderCode}`);
+        folderId = await getOrCreateOrderFolderV2(tourCode, actualOrderCode, token);
+      }
+
+      const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, folderId, token);
       res.json({
         success: true,
         url: result.webViewLink,
@@ -810,11 +1000,17 @@ app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt'], upload.sing
         storage: 'drive'
       });
     } else {
-      console.log(`[Supabase Fallback] Đang tải file hóa đơn lên Supabase: Đơn hàng/${cleanOrderCode}/${fileName}`);
-      const supabase = getSupabaseClient(req);
+      let storagePath = '';
+      if (isTourCodeDirectly) {
+        storagePath = `Tour/${tourCode.toUpperCase()}/Chi_phi/${fileName}`;
+      } else {
+        storagePath = `Tour/${tourCode.toUpperCase()}/Don_hang/${actualOrderCode}/${fileName}`;
+      }
+
+      console.log(`[Supabase Fallback] Đang tải file hóa đơn lên Supabase: ${storagePath}`);
       const publicUrl = await uploadFileToSupabase(
         'crm-attachments',
-        `Đơn hàng/${cleanOrderCode}/${fileName}`,
+        storagePath,
         file.buffer,
         file.mimetype,
         supabase

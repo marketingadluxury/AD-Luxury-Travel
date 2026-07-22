@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import DashboardOperator from '@/components/DashboardOperator';
+import TourCostsManagement from '@/components/TourCostsManagement';
 
 // Formatted numeric input component with thousands separators on input
 const NumericFormatInput: React.FC<{
@@ -387,11 +388,13 @@ export default function ToursManagement() {
     addCategory,
     deleteCategory,
     updateCategory,
-    currentRole
+    currentRole,
+    tourCosts,
+    updateTourCost
   } = useCRM();
 
-  // Navigation tabs: 'tours' | 'categories'
-  const [activeTab, setActiveTab] = useState<'tours' | 'categories'>('tours');
+  // Navigation tabs: 'tours' | 'categories' | 'costs'
+  const [activeTab, setActiveTab] = useState<'tours' | 'categories' | 'costs'>('tours');
 
   // View mode for tour listing: 'grouped' (default) | 'flat'
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
@@ -1256,6 +1259,16 @@ export default function ToursManagement() {
             >
               Danh mục Tour ({categories.length})
             </button>
+            <button
+              onClick={() => setActiveTab('costs')}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                activeTab === 'costs' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Chi phí & Lãi lỗ
+            </button>
           </div>
 
           {activeTab === 'tours' && !showAddForm && !editingTour && (
@@ -1380,6 +1393,9 @@ export default function ToursManagement() {
             </div>
           </div>
         </div>
+      ) : activeTab === 'costs' ? (
+        /* TOUR COSTS MANAGEMENT TAB */
+        <TourCostsManagement />
       ) : (
         /* TOURS MANAGEMENT TAB */
         <>

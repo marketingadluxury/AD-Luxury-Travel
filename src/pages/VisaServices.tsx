@@ -730,11 +730,15 @@ export default function VisaServices() {
         });
 
         if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
+          const text = await res.text();
+          let errorData = { error: `Lỗi tải file ${file.name}` };
+          try { errorData = JSON.parse(text); } catch {}
           throw new Error(errorData.error || `Lỗi tải file ${file.name}`);
         }
 
-        const data = await res.json();
+        const resText = await res.text();
+        let data;
+        try { data = JSON.parse(resText); } catch { throw new Error(`Định dạng phản hồi từ máy chủ không đúng cho file ${file.name}`); }
         if (data.success && data.url) {
           uploadedFiles.push({
             name: data.fileName || file.name,
@@ -774,7 +778,9 @@ export default function VisaServices() {
       });
       
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
+        const text = await res.text();
+        let errorData = { error: 'Lỗi từ máy chủ khi xóa file' };
+        try { errorData = JSON.parse(text); } catch {}
         throw new Error(errorData.error || 'Lỗi từ máy chủ khi xóa file');
       }
       

@@ -19,50 +19,117 @@ export interface ParsedRefundInfo {
   bankName?: string;
   accountNumber?: string;
   accountName?: string;
+  tourCode?: string;
+  tourName?: string;
   cleanDescription: string;
 }
 
-export function parseRefundInfo(invoice: { description?: string | null; refund_method?: string; refund_bank_name?: string; refund_account_number?: string; refund_account_name?: string }): ParsedRefundInfo {
-  // If explicitly stored in columns
-  if (invoice.refund_method) {
-    return {
-      method: invoice.refund_method as 'transfer' | 'cash',
-      bankName: invoice.refund_bank_name,
-      accountNumber: invoice.refund_account_number,
-      accountName: invoice.refund_account_name,
-      cleanDescription: invoice.description || '',
-    };
+export function parseRefundInfo(
+  invoice: { 
+    description?: string | null; 
+    payment_method?: string; 
+    refund_method?: string; 
+    refund_bank_name?: string; 
+    refund_account_number?: string; 
+    refund_account_name?: string;
+    tour_code?: string;
+    tour_name?: string;
+    order_id?: string | null;
+  },
+  orders?: any[],
+  tours?: any[]
+): ParsedRefundInfo {
+  let description = (invoice.description || '').trim();
+
+  let bankName = invoice.refund_bank_name || '';
+  let accountNumber = invoice.refund_account_number || '';
+  let accountName = invoice.refund_account_name || '';
+  let method: 'transfer' | 'cash' | null = (invoice.refund_method as any) || (invoice.payment_method === 'Chuyển khoản' ? 'transfer' : null);
+
+  let tourCode = (invoice.tour_code || '').trim();
+  let tourName = (invoice.tour_name || '').trim();
+
+  // Extract Tour from description if present
+  const quotedTourMatch = description.match(/-\s*Tour:\s*"([^"]+)"/i) || description.match(/\[Tour:\s*"([^"]+)"\]/i);
+  if (quotedTourMatch) {
+    const rawTour = quotedTourMatch[1].trim();
+    if (rawTour) {
+      const parts = rawTour.split(' - ');
+      if (parts.length > 1) {
+        if (!tourCode) tourCode = parts[0].trim();
+        if (!tourName) tourName = parts.slice(1).join(' - ').trim();
+      } else {
+        if (!tourCode) tourCode = rawTour;
+      }
+    }
+    description = description
+      .replace(/-\s*Tour:\s*"[^"]*"/gi, '')
+      .replace(/\[Tour:\s*"[^"]*"\]/gi, '')
+      .trim();
+  } else {
+    const unquotedTourMatch = description.match(/-\s*Tour:\s*([^\n\r()]+)/i);
+    if (unquotedTourMatch) {
+      const rawTour = unquotedTourMatch[1].trim();
+      if (rawTour) {
+        const parts = rawTour.split(' - ');
+        if (parts.length > 1) {
+          if (!tourCode) tourCode = parts[0].trim();
+          if (!tourName) tourName = parts.slice(1).join(' - ').trim();
+        } else {
+          if (!tourCode) tourCode = rawTour;
+        }
+      }
+      description = description.replace(/-\s*Tour:\s*[^\n\r()]+/gi, '').trim();
+    }
   }
 
-  const description = invoice.description;
-  if (!description) return { method: null, cleanDescription: '' };
+  // Lookup Tour via order_id -> order -> tour if missing
+  if ((!tourCode || !tourName) && invoice.order_id && Array.isArray(orders) && Array.isArray(tours)) {
+    const matchedOrder = orders.find(o => o?.id === invoice.order_id);
+    if (matchedOrder && matchedOrder.tour_id) {
+      const matchedTour = tours.find(t => t?.id === matchedOrder.tour_id);
+      if (matchedTour) {
+        if (!tourCode) tourCode = matchedTour.code || '';
+        if (!tourName) tourName = matchedTour.name || '';
+      }
+    }
+  }
 
-  const transferRegex = /\[Hoàn trả qua Ngân hàng\]:\s*([^-]+)\s*-\s*STK:\s*([^-]+)\s*-\s*Chủ\s*TK:\s*([^\n]+)/i;
+  const transferRegex = /\[(?:Hoàn trả qua Ngân hàng|Chuyển khoản Ngân hàng|Thông tin chuyển khoản)\]:\s*([^-]+)\s*-\s*STK:\s*([^-]+)\s*-\s*Chủ\s*TK:\s*([^\n]+)/i;
   const cashRegex = /\[Hoàn trả\]:\s*Nhận tiền mặt trực tiếp tại văn phòng/i;
 
   const transferMatch = description.match(transferRegex);
   if (transferMatch) {
-    const cleanDesc = description.replace(/\[Hoàn trả qua Ngân hàng\]:[\s\S]*$/gi, '').trim();
-    return {
-      method: 'transfer',
-      bankName: transferMatch[1]?.trim(),
-      accountNumber: transferMatch[2]?.trim(),
-      accountName: transferMatch[3]?.trim(),
-      cleanDescription: cleanDesc,
-    };
+    if (!method) method = 'transfer';
+    if (!bankName) bankName = transferMatch[1]?.trim() || '';
+    if (!accountNumber) accountNumber = transferMatch[2]?.trim() || '';
+    if (!accountName) accountName = transferMatch[3]?.trim() || '';
   }
 
   const cashMatch = description.match(cashRegex);
   if (cashMatch) {
-    const cleanDesc = description.replace(/\[Hoàn trả\]:[\s\S]*$/gi, '').trim();
-    return {
-      method: 'cash',
-      cleanDescription: cleanDesc,
-    };
+    if (!method) method = 'cash';
+  }
+
+  // Always strip bank/refund info suffix from cleanDescription
+  description = description
+    .replace(/\[(?:Hoàn trả qua Ngân hàng|Chuyển khoản Ngân hàng|Thông tin chuyển khoản)\]:[\s\S]*$/gi, '')
+    .replace(/\[Hoàn trả\]:[\s\S]*$/gi, '')
+    .trim();
+
+  description = description.replace(/\s+-\s*$/g, '').trim();
+
+  if (bankName || accountNumber || accountName) {
+    if (!method) method = 'transfer';
   }
 
   return {
-    method: null,
+    method,
+    bankName,
+    accountNumber,
+    accountName: accountName ? accountName.trim().toUpperCase() : '',
+    tourCode: tourCode || undefined,
+    tourName: tourName || undefined,
     cleanDescription: description,
   };
 }

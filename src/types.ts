@@ -107,6 +107,7 @@ export interface Order {
   discount_value?: number;
   surcharge_name?: string;
   surcharge_amount?: number;
+  contract_url?: string;
 }
 
 export interface Passenger {
@@ -140,6 +141,9 @@ export interface MembershipSettings {
 export interface Invoice {
   id: string;
   order_id: string | null;
+  tour_id?: string;
+  tour_code?: string;
+  tour_name?: string;
   amount: number;
   status: 'pending' | 'approved' | 'rejected';
   type: 'receipt' | 'payment';
@@ -156,4 +160,54 @@ export interface Invoice {
   refund_account_number?: string;
   refund_account_name?: string;
 }
+
+export interface LandtourCost {
+  id: string;
+  supplierName: string;
+  amount: number;
+  updatedAt: string;
+}
+
+export interface PartnerPaymentInstallment {
+  id: string;
+  amount: number;
+  payment_method?: string;
+  payment_date?: string;
+  note?: string;
+  proof_url?: string; // Ảnh xác nhận / UNC / Biên lai do Kế toán upload
+  status?: 'pending' | 'approved' | 'rejected';
+  invoice_id?: string;
+  bank_name?: string;
+  account_number?: string;
+  account_name?: string;
+  transfer_note?: string;
+  created_at?: string;
+}
+
+export interface PartnerPayment {
+  id: string;
+  partnerName: string;
+  amountToPay: number;
+  status: 'unpaid' | 'partially_paid' | 'paid';
+  voucherUrl?: string; // Chứng từ / đề xuất ban đầu
+  proofUrl?: string; // Ảnh xác nhận thanh toán do Điều hành upload
+  invoiceId?: string;
+  installments?: PartnerPaymentInstallment[];
+}
+
+export interface TourCost {
+  tourId: string;
+  flightAmount: number;
+  insuranceAmount: number;
+  tourGuideAmount: number;
+  giftAmount: number;
+  commissionAmount: number;
+  advertisingAmount: number;
+  otherAmount?: number;
+  visaAmount?: number;
+  landtours: LandtourCost[];
+  partnerPayments: PartnerPayment[];
+  updatedAt: string;
+}
+
 

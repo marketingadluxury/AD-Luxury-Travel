@@ -548,14 +548,14 @@ export default function DepartureCalendar() {
     e.preventDefault();
     if (!selectedTourForBooking) return;
 
-    if (orderStatus === 'sure' && (!bookerName.trim() || !bookerPhone.trim())) {
-      toast.error('Vui lòng điền đầy đủ Họ tên và Số điện thoại của khách trưởng nhóm khi Đặt chắc chắn!');
+    if (!bookerName.trim() || !bookerPhone.trim()) {
+      toast.error('Vui lòng nhập đầy đủ Họ và tên và Số điện thoại khách trưởng nhóm!');
       return;
     }
 
     const orderPassengers: any[] = [];
-    const finalBookerName = bookerName.trim() || (orderStatus === 'hold' ? 'Chưa cung cấp (Giữ chỗ tạm)' : '');
-    const finalBookerPhone = bookerPhone.trim() || (orderStatus === 'hold' ? 'Chưa cung cấp' : '');
+    const finalBookerName = bookerName.trim();
+    const finalBookerPhone = bookerPhone.trim();
     
     // Booker passenger
     orderPassengers.push({
@@ -598,10 +598,10 @@ export default function DepartureCalendar() {
 
     createOrder({
       tour_id: selectedTourForBooking.id,
-      status: orderStatus,
+      status: 'hold',
       adult_price: priceAdult,
       total_price: calculatedTotalPrice,
-      passengers: orderStatus === 'hold' ? [] : orderPassengers,
+      passengers: orderPassengers,
       booker_name: finalBookerName,
       booker_phone: finalBookerPhone,
       created_by: creatorFullName,
@@ -902,35 +902,17 @@ export default function DepartureCalendar() {
               {/* Step 1: Choose Hold type */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Hình thức giữ chỗ *</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="flex items-center border border-gray-300 rounded-xl px-4 py-3 cursor-pointer hover:bg-gray-50 text-sm transition-colors">
-                    <input 
-                      type="radio" 
-                      name="modalStatus" 
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 mr-3"
-                      checked={orderStatus === 'hold'}
-                      onChange={() => setOrderStatus('hold')}
-                    />
+                <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse flex-shrink-0"></span>
                     <div>
-                      <div className="font-bold text-gray-900">Hold tạm thời</div>
-                      <div className="text-[11px] text-gray-500">
-                        Hệ thống tự động nhả chỗ sau {selectedTourForBooking.hold_duration_hours || 48} giờ
+                      <div className="font-bold text-blue-900 text-sm">Hold tạm thời</div>
+                      <div className="text-xs text-blue-700 mt-0.5">
+                        Hệ thống tự động nhả chỗ sau {selectedTourForBooking.hold_duration_hours || 48} giờ. Booking sẽ chuyển sang Sure chỗ sau khi ghi nhận thanh toán.
                       </div>
                     </div>
-                  </label>
-                  <label className="flex items-center border border-gray-300 rounded-xl px-4 py-3 cursor-pointer hover:bg-gray-50 text-sm transition-colors">
-                    <input 
-                      type="radio" 
-                      name="modalStatus" 
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 mr-3"
-                      checked={orderStatus === 'sure'}
-                      onChange={() => setOrderStatus('sure')}
-                    />
-                    <div>
-                      <div className="font-bold text-gray-900">Sure chỗ (Đặt chắc chắn)</div>
-                      <div className="text-[11px] text-gray-500">Yêu cầu kế toán xuất hóa đơn chính thức</div>
-                    </div>
-                  </label>
+                  </div>
+                  <span className="text-xs font-extrabold bg-blue-100 text-blue-800 px-3 py-1 rounded-lg border border-blue-200 whitespace-nowrap ml-2">Hold</span>
                 </div>
               </div>
 
@@ -964,7 +946,7 @@ export default function DepartureCalendar() {
                     <span className="w-1.5 h-3.5 bg-blue-600 rounded mr-2 inline-block"></span>
                     1. Thông tin khách đặt tour
                   </h4>
-                  {orderStatus !== 'hold' && uniqueCustomers.length > 0 && (
+                  {uniqueCustomers.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setShowCustomerSelector(!showCustomerSelector)}
@@ -976,7 +958,7 @@ export default function DepartureCalendar() {
                   )}
                 </div>
 
-                {orderStatus !== 'hold' && showCustomerSelector && (
+                {showCustomerSelector && (
                   <div className="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-3 animate-in fade-in duration-200">
                     <div className="flex items-center gap-2">
                       <input 
@@ -1046,21 +1028,7 @@ export default function DepartureCalendar() {
                   </div>
                 )}
                 
-                {orderStatus === 'hold' ? (
-                  <div className="bg-blue-50/70 p-3.5 rounded-xl border border-blue-150 space-y-1 text-xs">
-                    <div className="font-bold text-blue-900 flex items-center">
-                      <Clock className="w-4 h-4 mr-1.5 text-blue-600" />
-                      Ghi nhận tự động từ tài khoản của bạn
-                    </div>
-                    <p className="text-gray-600 leading-relaxed font-semibold">
-                      Hệ thống tự động ghi nhận người thực hiện giữ chỗ: <span className="text-blue-700 font-extrabold">{profile?.full_name || user?.email || 'Ẩn danh'} ({currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên'})</span>.
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      * Chế độ giữ chỗ tạm không yêu cầu thông tin của khách trưởng nhóm. Giao diện tối giản giúp bạn đặt giữ chỗ nhanh nhất có thể.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className={`relative ${focusedInput === 'name' ? 'z-30' : 'z-20'}`}>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">
                         Họ và tên khách trưởng nhóm *
@@ -1140,7 +1108,6 @@ export default function DepartureCalendar() {
                       )}
                     </div>
                   </div>
-                )}
               </div>
 
               {/* Section 2: Classified guest counts */}

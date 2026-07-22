@@ -12,7 +12,7 @@ interface PaymentModalProps {
 }
 
 export default function PaymentModal({ isOpen, onClose, order }: PaymentModalProps) {
-  const { createInvoiceReceipt, invoices } = useCRM();
+  const { createInvoiceReceipt, invoices, tours } = useCRM();
   const { profile } = useAuth();
   const [amount, setAmount] = useState<number>(0);
   const [invoiceCode, setInvoiceCode] = useState<string>('');
@@ -65,9 +65,13 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
     setIsUploading(true);
     try {
       // 1. Prepare upload form data
+      const targetTour = tours.find(t => t.id === order.tour_id);
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('orderCode', orderCode);
+      formData.append('orderCode', order.id);
+      if (targetTour?.code) {
+        formData.append('tourCode', targetTour.code);
+      }
 
       // 2. Call upload API
       const uploadRes = await fetch('/api/upload-invoice-receipt', {
