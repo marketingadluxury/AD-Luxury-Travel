@@ -3,12 +3,14 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { Role } from '../types';
 
-interface UserProfile {
+export interface UserProfile {
   id: string;
   full_name: string;
   phone: string;
   company_name: string;
   role: Role;
+  leader_id?: string | null;
+  email?: string;
 }
 
 interface AuthContextType {

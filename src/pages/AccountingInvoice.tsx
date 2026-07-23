@@ -254,7 +254,7 @@ export default function AccountingInvoice() {
 
   const handleUploadContract = async (orderId: string, orderCode: string, file: File) => {
     setContractUploadProgress(prev => ({ ...prev, [orderId]: true }));
-    const toastId = toast.loading(`Đang tải hợp đồng của đơn hàng ${orderCode || orderId.substring(0,8)}...`);
+    const toastId = toast.loading(`Đang tải hợp đồng của booking ${orderCode || orderId.substring(0,8)}...`);
     try {
       const targetOrder = orders.find(o => o.id === orderId);
       const targetTour = targetOrder ? tours.find(t => t.id === targetOrder.tour_id) : null;
@@ -376,8 +376,8 @@ export default function AccountingInvoice() {
       setNewPaymentData({
         amount: amountParam || '',
         description: reasonParam 
-          ? `Hoàn tiền cho đơn hàng đã hủy #${orderIdParam?.substring(0, 8)}. Lý do: ${decodeURIComponent(reasonParam)}`
-          : (orderIdParam ? `Hoàn tiền cho đơn hàng đã hủy #${orderIdParam?.substring(0, 8)}` : ''),
+          ? `Hoàn tiền cho booking đã hủy #${orderIdParam?.substring(0, 8)}. Lý do: ${decodeURIComponent(reasonParam)}`
+          : (orderIdParam ? `Hoàn tiền cho booking đã hủy #${orderIdParam?.substring(0, 8)}` : ''),
         payment_method: 'Chuyển khoản',
         order_id: orderIdParam || null,
         refund_bank_name: '',
@@ -397,8 +397,24 @@ export default function AccountingInvoice() {
   // Filter receipt invoices (Phiếu thu chuyển khoản)
   const receiptInvoices = invoices
     .filter(inv => {
-      if (searchTerm && (!inv.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) && !inv.invoice_code?.toLowerCase().includes(searchTerm.toLowerCase()))) return false;
       if (inv.type !== 'receipt') return false;
+      if (searchTerm.trim() !== '') {
+        const q = searchTerm.toLowerCase().trim().replace(/^#/, '');
+        const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+        const tour = assocOrder ? tours.find(t => t.id === assocOrder.tour_id) : null;
+
+        const invCodeMatch = inv.invoice_code && inv.invoice_code.toLowerCase().includes(q);
+        const orderIdMatch = inv.order_id && inv.order_id.toLowerCase().includes(q);
+        const descMatch = inv.description && inv.description.toLowerCase().includes(q);
+        const creatorMatch = inv.created_by && inv.created_by.toLowerCase().includes(q);
+        const bookerMatch = assocOrder && assocOrder.booker_name && assocOrder.booker_name.toLowerCase().includes(q);
+        const phoneMatch = assocOrder && assocOrder.booker_phone && assocOrder.booker_phone.includes(q);
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
+
+        if (!invCodeMatch && !orderIdMatch && !descMatch && !creatorMatch && !bookerMatch && !phoneMatch && !tourCodeMatch) {
+          return false;
+        }
+      }
       if (filterReceiptStatus === 'all') return true;
       return inv.status === filterReceiptStatus;
     })
@@ -412,7 +428,23 @@ export default function AccountingInvoice() {
   const paymentInvoices = invoices
     .filter(inv => {
       if (inv.type !== 'payment') return false;
-      if (searchTerm && (!inv.order_id?.toLowerCase().includes(searchTerm.toLowerCase()) && !inv.invoice_code?.toLowerCase().includes(searchTerm.toLowerCase()))) return false;
+      if (searchTerm.trim() !== '') {
+        const q = searchTerm.toLowerCase().trim().replace(/^#/, '');
+        const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+        const tour = assocOrder ? tours.find(t => t.id === assocOrder.tour_id) : null;
+
+        const invCodeMatch = inv.invoice_code && inv.invoice_code.toLowerCase().includes(q);
+        const orderIdMatch = inv.order_id && inv.order_id.toLowerCase().includes(q);
+        const descMatch = inv.description && inv.description.toLowerCase().includes(q);
+        const creatorMatch = inv.created_by && inv.created_by.toLowerCase().includes(q);
+        const bookerMatch = assocOrder && assocOrder.booker_name && assocOrder.booker_name.toLowerCase().includes(q);
+        const phoneMatch = assocOrder && assocOrder.booker_phone && assocOrder.booker_phone.includes(q);
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
+
+        if (!invCodeMatch && !orderIdMatch && !descMatch && !creatorMatch && !bookerMatch && !phoneMatch && !tourCodeMatch) {
+          return false;
+        }
+      }
       
       // If not accountant/admin, only show their own requests or refunds on their own bookings
       if (!isAccountantOrAdmin) {
@@ -483,6 +515,18 @@ export default function AccountingInvoice() {
     .filter(o => {
       if (o.status !== 'sure' && o.status !== 'paid') return false;
       if (o.vat_option !== 'Xuất VAT') return false;
+
+      if (searchTerm.trim() !== '') {
+        const q = searchTerm.toLowerCase().trim().replace(/^#/, '');
+        const tour = tours.find(t => t.id === o.tour_id);
+        const codeMatch = o.id.toLowerCase().includes(q);
+        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(q);
+        const companyMatch = o.vat_company_name && o.vat_company_name.toLowerCase().includes(q);
+        const taxMatch = o.vat_tax_code && o.vat_tax_code.toLowerCase().includes(q);
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
+        if (!codeMatch && !nameMatch && !companyMatch && !taxMatch && !tourCodeMatch) return false;
+      }
+
       if (filterInvoice === 'all') return true;
       return o.invoice_status === filterInvoice;
     })
@@ -549,7 +593,7 @@ export default function AccountingInvoice() {
           <p className="text-sm text-gray-500 mt-1">
             {isAccountantOrAdmin 
               ? 'Xác thực hóa đơn chuyển khoản của khách hàng, cập nhật công nợ, duyệt xuất hóa đơn (VAT) hoặc xử lý phiếu chi.'
-              : 'Yêu cầu hoàn tiền cho đơn hàng bị hủy, đề xuất các phiếu chi và theo dõi trạng thái phê duyệt từ kế toán.'}
+              : 'Yêu cầu hoàn tiền cho booking bị hủy, đề xuất các phiếu chi và theo dõi trạng thái phê duyệt từ kế toán.'}
           </p>
         </div>
         <div className="flex flex-wrap md:flex-nowrap bg-gray-100 p-1.5 rounded-lg border border-gray-200 self-stretch md:self-auto gap-1 md:gap-0">
@@ -609,7 +653,7 @@ export default function AccountingInvoice() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
-            placeholder="Tìm kiếm theo mã đơn hàng hoặc mã phiếu..."
+            placeholder="Tìm kiếm theo mã booking hoặc mã phiếu..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
@@ -664,7 +708,7 @@ export default function AccountingInvoice() {
               <div className="text-3xl font-extrabold text-red-600 mt-2">
                 {orders.filter(o => (o.status === 'sure' || o.status === 'paid') && o.vat_option === 'Xuất VAT' && o.invoice_status === 'pending').length} đơn
               </div>
-              <p className="text-xs text-gray-400 mt-1">Đơn hàng chắc chắn yêu cầu hóa đơn</p>
+              <p className="text-xs text-gray-400 mt-1">Booking chắc chắn yêu cầu hóa đơn</p>
             </div>
             <div className="bg-red-50 p-3.5 rounded-lg">
               <Receipt className="w-6 h-6 text-red-600" />
@@ -978,7 +1022,7 @@ export default function AccountingInvoice() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gray-50/50">
             <div>
-              <h3 className="text-lg font-bold text-gray-900">Danh sách đơn hàng xuất hóa đơn (VAT)</h3>
+              <h3 className="text-lg font-bold text-gray-900">Danh sách booking xuất hóa đơn (VAT)</h3>
               <p className="text-xs text-gray-500 mt-0.5">Xử lý các yêu cầu viết hóa đơn thuế giá trị gia tăng</p>
             </div>
             
@@ -1054,7 +1098,7 @@ export default function AccountingInvoice() {
                 return (
                   <div key={order.id} className="p-5 hover:bg-slate-50/40 transition-colors">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      {/* Left: Đơn hàng & Tour */}
+                      {/* Left: Booking & Tour */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <span className="font-mono font-black text-blue-950 text-xs bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
@@ -1327,7 +1371,7 @@ export default function AccountingInvoice() {
                         {/* Order Association if available */}
                         {inv.order_id && (
                           <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 mb-3 font-semibold flex items-center justify-between">
-                            <span>Đơn hàng liên kết:</span>
+                            <span>Booking liên kết:</span>
                             <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold">
                               #{inv.order_id.substring(0, 8).toUpperCase()}
                             </span>
@@ -1802,27 +1846,27 @@ export default function AccountingInvoice() {
 
                                           {/* Hợp đồng dịch vụ du lịch */}
                                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white p-3 rounded-lg border border-slate-200">
-                                            <div className="flex items-center gap-2">
-                                              <FileText className="w-4 h-4 text-blue-600" />
-                                              <span className="font-bold text-gray-800 text-xs">Hợp đồng dịch vụ du lịch</span>
+                                            <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
+                                              <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                                              <span className="font-bold text-gray-800 text-xs whitespace-nowrap shrink-0">Hợp đồng dịch vụ du lịch</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
                                               {order.contract_url ? (
                                                 <>
-                                                  <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                  <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap shrink-0">
                                                     Đã có hợp đồng
                                                   </span>
                                                   <a
                                                     href={order.contract_url}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] flex items-center gap-1 transition-all shadow-xs"
+                                                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] flex items-center gap-1 transition-all shadow-xs whitespace-nowrap shrink-0"
                                                   >
-                                                    <Eye className="w-3 h-3" /> Xem hợp đồng
+                                                    <Eye className="w-3 h-3 shrink-0" /> Xem hợp đồng
                                                   </a>
                                                 </>
                                               ) : (
-                                                <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[11px] font-semibold border border-amber-200">
+                                                <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[11px] font-semibold border border-amber-200 whitespace-nowrap shrink-0">
                                                   Chưa có hợp đồng (Chờ Sales tải)
                                                 </span>
                                               )}
@@ -2076,7 +2120,7 @@ export default function AccountingInvoice() {
                 <strong className="text-blue-600">
                   {new Intl.NumberFormat('vi-VN').format(approveTarget.amount)}đ
                 </strong>{' '}
-                cho đơn hàng{' '}
+                cho booking{' '}
                 <strong>
                   {approveTarget.orderCode}
                 </strong>?
@@ -2119,7 +2163,7 @@ export default function AccountingInvoice() {
               </div>
               <h3 className="text-lg font-bold text-gray-950 text-center mb-2">Từ chối Phiếu thu</h3>
               <p className="text-sm text-gray-600 text-center mb-4">
-                Vui lòng nhập lý do từ chối phiếu thu cho đơn hàng{' '}
+                Vui lòng nhập lý do từ chối phiếu thu cho booking{' '}
                 <strong>
                   {rejectTarget.orderCode}
                 </strong>:
@@ -2185,7 +2229,7 @@ export default function AccountingInvoice() {
                 với số tiền{' '}
                 <strong className="text-rose-600 font-black">
                   {new Intl.NumberFormat('vi-VN').format(approvePaymentTarget.amount)}đ
-                </strong>? Hành động này sẽ cập nhật trực tiếp vào số dư đơn hàng liên quan nếu có.
+                </strong>? Hành động này sẽ cập nhật trực tiếp vào số dư booking liên quan nếu có.
               </p>
 
               {/* Thêm phần tải ảnh hóa đơn chuyển khoản chuyển tiền */}
@@ -2484,8 +2528,8 @@ export default function AccountingInvoice() {
               </h3>
               <p className="text-sm text-gray-600 text-center">
                 {vatTarget.targetStatus === 'issued' 
-                  ? `Bạn có chắc chắn muốn xác nhận ĐÃ XUẤT hóa đơn tài chính VAT đỏ cho đơn hàng ${vatTarget.orderCode}?`
-                  : `Bạn có chắc chắn muốn đánh dấu đơn hàng ${vatTarget.orderCode} là CHƯA XUẤT hóa đơn VAT đỏ?`
+                  ? `Bạn có chắc chắn muốn xác nhận ĐÃ XUẤT hóa đơn tài chính VAT đỏ cho booking ${vatTarget.orderCode}?`
+                  : `Bạn có chắc chắn muốn đánh dấu booking ${vatTarget.orderCode} là CHƯA XUẤT hóa đơn VAT đỏ?`
                 }
               </p>
             </div>

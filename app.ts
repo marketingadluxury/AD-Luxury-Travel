@@ -1113,7 +1113,16 @@ app.post(['/api/delete', '/delete'], async (req, res) => {
 
 // --- ADMIN USER MANAGEMENT API ENDPOINTS ---
 
-let mockUsers = [
+let mockUsers: {
+  id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  company_name?: string;
+  role: string;
+  leader_id?: string | null;
+  created_at: string;
+}[] = [
   {
     id: 'a809b4db-9ee7-4c07-b352-09419106093d',
     full_name: 'Quản trị viên hệ thống',
@@ -1182,6 +1191,7 @@ app.get(['/api/admin/users', '/admin/users'], async (req, res) => {
         phone: p.phone || '',
         company_name: p.company_name || '',
         role: p.role || 'CTV',
+        leader_id: p.leader_id || null,
         created_at: p.created_at,
         email: authUser?.email || p.email || ''
       };
@@ -1201,7 +1211,7 @@ app.get(['/api/admin/users', '/admin/users'], async (req, res) => {
 // CREATE a new user/profile
 app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) => {
   try {
-    const { full_name, phone, company_name, role, email, password } = req.body;
+    const { full_name, phone, company_name, role, email, password, leader_id } = req.body;
     
     if (!email || !full_name) {
       return res.status(400).json({ error: 'Email và họ tên là bắt buộc.' });
@@ -1217,6 +1227,7 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
         phone: phone || '',
         company_name: company_name || '',
         role: role || 'CTV',
+        leader_id: leader_id || null,
         email,
         created_at: new Date().toISOString()
       };
@@ -1251,13 +1262,23 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
       return res.status(400).json({ error: `Lỗi đăng ký tài khoản Auth: ${authErr.message || authErr}` });
     }
     
-    const { error: pError } = await client.from('profiles').upsert({
+    let profileUpsertData: any = {
       id: userId,
       full_name,
       phone: phone || '',
       company_name: company_name || '',
-      role: role || 'CTV'
-    });
+      role: role || 'CTV',
+      leader_id: leader_id || null
+    };
+
+    let { error: pError } = await client.from('profiles').upsert(profileUpsertData);
+    
+    if (pError && (pError.message?.includes('leader_id') || pError.message?.includes('schema cache'))) {
+      console.warn('Cột leader_id chưa có trong Supabase schema cache. Thử lại không có leader_id...');
+      delete profileUpsertData.leader_id;
+      const retryRes = await client.from('profiles').upsert(profileUpsertData);
+      pError = retryRes.error;
+    }
     
     if (pError) {
       return res.status(400).json({ error: `Lỗi lưu thông tin profile: ${pError.message}` });
@@ -1271,6 +1292,7 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
         phone,
         company_name,
         role,
+        leader_id: leader_id || null,
         email,
         created_at: new Date().toISOString()
       }
@@ -1285,7 +1307,7 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
 app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, phone, company_name, role, email, password } = req.body;
+    const { full_name, phone, company_name, role, email, password, leader_id } = req.body;
     
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1299,6 +1321,7 @@ app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req
           phone: phone !== undefined ? phone : mockUsers[userIndex].phone,
           company_name: company_name !== undefined ? company_name : mockUsers[userIndex].company_name,
           role: role !== undefined ? role : mockUsers[userIndex].role,
+          leader_id: leader_id !== undefined ? leader_id : (mockUsers[userIndex] as any).leader_id,
           email: email !== undefined ? email : mockUsers[userIndex].email
         };
         return res.json({ success: true, user: mockUsers[userIndex] });
@@ -1314,12 +1337,24 @@ app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req
     
     const client = getAdminSupabaseClient(req);
     
-    const { error: pError } = await client.from('profiles').update({
+    let profileUpdateData: any = {
       full_name,
       phone,
       company_name,
       role
-    }).eq('id', id);
+    };
+    if (leader_id !== undefined) {
+      profileUpdateData.leader_id = leader_id || null;
+    }
+
+    let { error: pError } = await client.from('profiles').update(profileUpdateData).eq('id', id);
+    
+    if (pError && (pError.message?.includes('leader_id') || pError.message?.includes('schema cache'))) {
+      console.warn('Cột leader_id chưa có trong Supabase schema cache. Thử lại không có leader_id...');
+      delete profileUpdateData.leader_id;
+      const retryRes = await client.from('profiles').update(profileUpdateData).eq('id', id);
+      pError = retryRes.error;
+    }
     
     if (pError) {
       return res.status(400).json({ error: `Lỗi cập nhật profile: ${pError.message}` });

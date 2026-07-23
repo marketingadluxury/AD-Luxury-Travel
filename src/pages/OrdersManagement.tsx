@@ -2,10 +2,10 @@ import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Select from 'react-select';
-import { useCRM } from '@/context/CRMContext';
+import { useCRM, canUnlockOrder } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock } from 'lucide-react';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
@@ -17,18 +17,18 @@ import { parseRefundInfo } from '@/lib/utils';
 export default function OrdersManagement() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, createInvoiceReceipt, currentRole } = useCRM();
+  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, createInvoiceReceipt, currentRole, profilesList } = useCRM();
   const { profile, user } = useAuth();
 
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
-  const [orderFilterStatus, setOrderFilterStatus] = useState('sure');
+  const [orderFilterStatus, setOrderFilterStatus] = useState('hold');
   const [orderFilterTimeRange, setOrderFilterTimeRange] = useState('all');
   const [orderSortBy, setOrderSortBy] = useState('newest');
   const [contractUploadProgress, setContractUploadProgress] = useState<Record<string, boolean>>({});
 
   const handleUploadContract = async (orderId: string, orderCode: string, file: File) => {
     setContractUploadProgress(prev => ({ ...prev, [orderId]: true }));
-    const toastId = toast.loading(`Đang tải hợp đồng của đơn hàng ${orderCode || orderId.substring(0,8)}...`);
+    const toastId = toast.loading(`Đang tải hợp đồng của booking ${orderCode || orderId.substring(0,8)}...`);
     try {
       const targetOrder = allOrders.find(o => o.id === orderId);
       const targetTour = targetOrder ? tours.find(t => t.id === targetOrder.tour_id) : null;
@@ -86,18 +86,18 @@ export default function OrdersManagement() {
       setOrderSearchTerm(location.state.searchTarget);
       setOrderFilterStatus('all'); // Mở rộng bộ lọc
       setOrderFilterTimeRange('all');
-      
+
       // Clear state để không tự nhảy lại khi F5
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
-  
+
   const orders = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let filtered = ['admin', 'operator'].includes(currentRole)
+    let filtered = ['admin', 'operator', 'sale_leader'].includes(currentRole)
       ? allOrders
       : allOrders.filter(o => o.user_id === profile?.id);
-    
+
     // 2. Filter out Visa-only service orders (separation of concerns)
     filtered = filtered.filter(o => {
       const tour = tours.find(t => t.id === o.tour_id);
@@ -121,12 +121,8 @@ export default function OrdersManagement() {
     // 4. Status filter
     if (orderFilterStatus !== 'all') {
       filtered = filtered.filter(o => {
-        const hasApprovedReceipt = invoices.some(inv => inv.order_id === o.id && inv.type === 'receipt' && inv.status === 'approved');
-        if (orderFilterStatus === 'sure') {
-          return o.status === 'sure' && !hasApprovedReceipt;
-        }
         if (orderFilterStatus === 'paid') {
-          return o.status === 'paid' || (o.status === 'sure' && hasApprovedReceipt);
+          return o.status === 'paid' || o.status === 'sure';
         }
         if (orderFilterStatus === 'refund') {
           return o.status === 'cancelled' && invoices.some(inv => inv.order_id === o.id && inv.type === 'payment');
@@ -162,7 +158,7 @@ export default function OrdersManagement() {
         return true;
       });
     }
-    
+
     // Sort logic
     return [...filtered].sort((a, b) => {
       if (orderSortBy === 'newest') {
@@ -188,14 +184,14 @@ export default function OrdersManagement() {
 
   const holdStatistics = React.useMemo(() => {
     const stats: Record<string, { orderCount: number; seatsHold: number; detailTours: Record<string, number> }> = {};
-    
+
     allOrders.forEach(o => {
       if (o.status === 'hold') {
         const creator = o.created_by || 'Chưa rõ';
         const tour = tours.find(t => t.id === o.tour_id);
         const tourCode = tour?.code || 'Chưa rõ Tour';
         const seats = (o.adult_count || 0) + (o.child_count || 0);
-        
+
         if (!stats[creator]) {
           stats[creator] = {
             orderCount: 0,
@@ -203,13 +199,13 @@ export default function OrdersManagement() {
             detailTours: {}
           };
         }
-        
+
         stats[creator].orderCount += 1;
         stats[creator].seatsHold += seats;
         stats[creator].detailTours[tourCode] = (stats[creator].detailTours[tourCode] || 0) + seats;
       }
     });
-    
+
     return Object.entries(stats).map(([creator, data]) => ({
       creator,
       ...data
@@ -218,10 +214,10 @@ export default function OrdersManagement() {
 
   const salesOverviewStats = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let baseOrders = ['admin', 'operator'].includes(currentRole)
+    let baseOrders = ['admin', 'operator', 'sale_leader'].includes(currentRole)
       ? allOrders
       : allOrders.filter(o => o.user_id === profile?.id);
-    
+
     // 2. Filter out Visa-only service orders
     baseOrders = baseOrders.filter(o => {
       const tour = tours.find(t => t.id === o.tour_id);
@@ -269,10 +265,10 @@ export default function OrdersManagement() {
   // Tính số lượng đơn hàng cho từng tab (sau khi đã áp dụng tìm kiếm, lọc thời gian...)
   const tabCounts = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let base = ['admin', 'operator'].includes(currentRole)
+    let base = ['admin', 'operator', 'sale_leader'].includes(currentRole)
       ? allOrders
       : allOrders.filter(o => o.user_id === profile?.id);
-    
+
     // 2. Filter out Visa-only service orders
     base = base.filter(o => {
       const tour = tours.find(t => t.id === o.tour_id);
@@ -319,8 +315,7 @@ export default function OrdersManagement() {
     }
 
     return {
-      sure: base.filter(o => o.status === 'sure' && !invoices.some(inv => inv.order_id === o.id && inv.type === 'receipt' && inv.status === 'approved')).length,
-      paid: base.filter(o => o.status === 'paid' || (o.status === 'sure' && invoices.some(inv => inv.order_id === o.id && inv.type === 'receipt' && inv.status === 'approved'))).length,
+      paid: base.filter(o => o.status === 'paid' || o.status === 'sure').length,
       hold: base.filter(o => o.status === 'hold').length,
       cancelled: base.filter(o => o.status === 'cancelled' && !invoices.some(inv => inv.order_id === o.id && inv.type === 'payment')).length,
       refund: base.filter(o => o.status === 'cancelled' && invoices.some(inv => inv.order_id === o.id && inv.type === 'payment')).length,
@@ -376,7 +371,7 @@ export default function OrdersManagement() {
   // New Order Form State
   const [selectedTourId, setSelectedTourId] = useState('');
   const [orderStatus, setOrderStatus] = useState<'hold' | 'sure'>('hold');
-  
+
   // Booker/Representative
   const [bookerName, setBookerName] = useState('');
   const [bookerPhone, setBookerPhone] = useState('');
@@ -444,12 +439,12 @@ export default function OrdersManagement() {
     setSuggestions([]);
     setFocusedInput(null);
   };
-  
+
   // Passenger counts
   const [adultCount, setAdultCount] = useState<number>(1);
   const [childCount, setChildCount] = useState<number>(0);
   const [infantCount, setInfantCount] = useState<number>(0);
-  
+
   // Surcharges & Advanced
   const [singleRoomCount, setSingleRoomCount] = useState<number>(0);
   const [roomShareInfo, setRoomShareInfo] = useState<string>('Không ghép');
@@ -539,7 +534,7 @@ export default function OrdersManagement() {
   const priceInfant = selectedTour ? (selectedTour.price_infant ?? Math.round(selectedTour.price * 0.3)) : 0;
   const singleRoomSurcharge = selectedTour ? (selectedTour.single_room_surcharge ?? 7500000) : 0;
 
-  const subtotalPrice = selectedTour 
+  const subtotalPrice = selectedTour
     ? (priceAdult * adultCount) + (priceChild * childCount) + (priceInfant * infantCount) + (singleRoomSurcharge * singleRoomCount)
     : 0;
 
@@ -561,7 +556,7 @@ export default function OrdersManagement() {
     const orderPassengers: any[] = [];
     const finalBookerName = bookerName.trim();
     const finalBookerPhone = bookerPhone.trim();
-    
+
     // Create lead passenger
     orderPassengers.push({
       is_payer: true,
@@ -598,49 +593,64 @@ export default function OrdersManagement() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
-    createOrder({
-      tour_id: selectedTourId,
-      status: 'hold',
-      total_price: calculatedTotalPrice,
-      adult_price: priceAdult,
-      passengers: orderPassengers,
-      booker_name: finalBookerName,
-      booker_phone: finalBookerPhone,
-      created_by: creatorFullName,
-      user_id: profile?.id,
-      adult_count: adultCount,
-      child_count: childCount,
-      infant_count: infantCount,
-      single_room_count: singleRoomCount,
-      room_share_info: roomShareInfo,
-      vat_option: vatOption,
+    const executeCreateOrder = () => {
+      createOrder({
+        tour_id: selectedTourId,
+        status: orderStatus,
+        total_price: calculatedTotalPrice,
+        adult_price: priceAdult,
+        passengers: orderPassengers,
+        booker_name: finalBookerName,
+        booker_phone: finalBookerPhone,
+        created_by: creatorFullName,
+        user_id: profile?.id,
+        adult_count: adultCount,
+        child_count: childCount,
+        infant_count: infantCount,
+        single_room_count: singleRoomCount,
+        room_share_info: roomShareInfo,
+        vat_option: vatOption,
         vat_company_name: vatCompanyName,
         vat_tax_code: vatTaxCode,
         vat_address: vatAddress,
         vat_email: vatEmail,
-      special_requests: specialRequests,
-    });
+        special_requests: specialRequests,
+        is_locked: true,
+      });
 
-    // Reset Form
-    setSelectedTourId('');
-    setOrderStatus('hold');
-    setBookerName('');
-    setBookerPhone('');
-    setAdultCount(1);
-    setChildCount(0);
-    setInfantCount(0);
-    setSingleRoomCount(0);
-    setRoomShareInfo('Không ghép');
-    setSpecialRequests('');
-    setVatOption('Không xuất VAT');
-    setVatCompanyName('');
-    setVatTaxCode('');
-    setVatAddress('');
-    setVatEmail('');
-    setShowCreateForm(false);
+      // Reset Form
+      setSelectedTourId('');
+      setOrderStatus('hold');
+      setBookerName('');
+      setBookerPhone('');
+      setAdultCount(1);
+      setChildCount(0);
+      setInfantCount(0);
+      setSingleRoomCount(0);
+      setRoomShareInfo('Không ghép');
+      setSpecialRequests('');
+      setVatOption('Không xuất VAT');
+      setVatCompanyName('');
+      setVatTaxCode('');
+      setVatAddress('');
+      setVatEmail('');
+      setShowCreateForm(false);
+    };
+
+    if (!['admin', 'sale_leader'].includes(currentRole)) {
+      setConfirmModalData({
+        isOpen: true,
+        title: '🔒 Cảnh báo: Tự động khóa booking sau khi lưu',
+        message: 'Sau khi lưu thông tin booking này, hệ thống sẽ TỰ ĐỘNG KHÓA các thông tin giá tiền, VAT, phụ thu & doanh thu để bảo vệ dữ liệu kế toán. Chỉ Quản trị viên (Admin) hoặc Sale Leader mới có quyền mở khóa. Bạn có chắc chắn muốn tiến hành tạo booking không?',
+        onConfirm: executeCreateOrder
+      });
+      return;
+    }
+
+    executeCreateOrder();
   };
 
   // Helper to format remaining hold time
@@ -671,17 +681,17 @@ export default function OrdersManagement() {
       {/* Header section */}
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Quản lý Đơn hàng (Sales & Đại lý)</h2>
+          <h2 className="text-xl font-bold text-gray-900">Quản lý Booking (Sales & Đại lý)</h2>
           <p className="text-sm text-gray-500 mt-1">
             Giữ chỗ tạm thời, chốt chắc chắn (Sure) và theo dõi đếm ngược thời hạn giải phóng booking tự động.
           </p>
         </div>
-        <button 
+        <button
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="inline-flex items-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
         >
           <Plus className="w-4 h-4 mr-2" />
-          {showCreateForm ? 'Đóng form' : 'Đặt Đơn hàng Mới'}
+          {showCreateForm ? 'Đóng form' : 'Tạo Booking Mới'}
         </button>
       </div>
 
@@ -693,11 +703,11 @@ export default function OrdersManagement() {
               <TrendingUp className="w-5 h-5 text-blue-600" />
               <span>Bảng Tổng quan Giữ chỗ & Doanh thu</span>
               <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
-                ['admin', 'operator'].includes(currentRole)
+                ['admin', 'operator', 'sale_leader'].includes(currentRole)
                   ? 'bg-blue-50 text-blue-700 border-blue-200'
                   : 'bg-indigo-50 text-indigo-700 border-indigo-200'
               }`}>
-                {['admin', 'operator'].includes(currentRole) ? 'Toàn hệ thống (Admin/Điều hành)' : 'Cá nhân (Sales/CTV)'}
+                {['admin', 'operator', 'sale_leader'].includes(currentRole) ? 'Toàn hệ thống (Admin/Leader/Điều hành)' : 'Cá nhân (Sales/CTV)'}
               </span>
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">Tổng số chỗ giữ tạm, số chỗ đã xác nhận chắc chắn, doanh số và dư nợ cần nộp.</p>
@@ -797,7 +807,7 @@ export default function OrdersManagement() {
       </div>
 
       {/* Hold Statistics Dashboard */}
-      {['admin', 'operator'].includes(currentRole) && holdStatistics.length > 0 && (
+      {['admin', 'operator', 'sale_leader'].includes(currentRole) && holdStatistics.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4 font-sans">
           <div className="flex justify-between items-center border-b border-gray-100 pb-3">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
@@ -823,7 +833,7 @@ export default function OrdersManagement() {
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-400 mt-0.5 font-semibold">
-                    Đang giữ {stat.orderCount} đơn hàng tạm tính
+                    Đang giữ {stat.orderCount} booking tạm tính
                   </p>
                 </div>
 
@@ -866,7 +876,7 @@ export default function OrdersManagement() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Chọn Tour du lịch *</label>
-                <Select 
+                <Select
                   placeholder="-- Chọn Tour khởi hành --"
                   options={tours
                     .filter(t => t.tour_type !== 'visa')
@@ -953,7 +963,7 @@ export default function OrdersManagement() {
               {showCustomerSelector && (
                 <div className="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2">
-                    <input 
+                    <input
                       type="text"
                       placeholder="Tìm theo tên, SĐT hoặc hộ chiếu..."
                       className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500 outline-none"
@@ -961,7 +971,7 @@ export default function OrdersManagement() {
                       onChange={e => setCustomerSearchQuery(e.target.value)}
                     />
                     {customerSearchQuery && (
-                      <button 
+                      <button
                         type="button"
                         onClick={() => setCustomerSearchQuery('')}
                         className="text-xs text-gray-500 hover:text-gray-700 font-medium shrink-0 bg-white border border-gray-200 px-2 py-1 rounded"
@@ -981,7 +991,7 @@ export default function OrdersManagement() {
                         return nameMatch || phoneMatch || passportMatch;
                       })
                       .map(c => (
-                        <div 
+                        <div
                           key={c.id}
                           onClick={() => {
                             setBookerName(c.full_name);
@@ -1023,7 +1033,7 @@ export default function OrdersManagement() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className={`relative ${focusedInput === 'name' ? 'z-30' : 'z-20'}`}>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Họ và tên khách trưởng nhóm *</label>
-                    <input 
+                    <input
                       type="text"
                       required
                       placeholder="Nhập họ và tên trưởng nhóm đại diện"
@@ -1036,7 +1046,7 @@ export default function OrdersManagement() {
                     {focusedInput === 'name' && suggestions.length > 0 && (
                       <div className="absolute z-50 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-xl divide-y divide-gray-100">
                         {suggestions.map(p => (
-                          <div 
+                          <div
                             key={p.id}
                             className="px-3.5 py-2.5 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
                             onMouseDown={() => selectSuggestion(p)}
@@ -1060,7 +1070,7 @@ export default function OrdersManagement() {
                   </div>
                   <div className={`relative ${focusedInput === 'phone' ? 'z-30' : 'z-10'}`}>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Số điện thoại liên hệ *</label>
-                    <input 
+                    <input
                       type="text"
                       required
                       placeholder="Nhập số điện thoại trưởng nhóm"
@@ -1073,7 +1083,7 @@ export default function OrdersManagement() {
                     {focusedInput === 'phone' && suggestions.length > 0 && (
                       <div className="absolute z-50 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-xl divide-y divide-gray-100">
                         {suggestions.map(p => (
-                          <div 
+                          <div
                             key={p.id}
                             className="px-3.5 py-2.5 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
                             onMouseDown={() => selectSuggestion(p)}
@@ -1108,7 +1118,7 @@ export default function OrdersManagement() {
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 space-y-1">
                   <label className="block text-xs font-bold text-gray-700">Số người lớn (≥ 10 tuổi) *</label>
                   <span className="text-[10px] text-gray-500 block pb-1">Tính 100% biểu giá người lớn</span>
-                  <input 
+                  <input
                     type="number"
                     min="1"
                     required
@@ -1120,7 +1130,7 @@ export default function OrdersManagement() {
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 space-y-1">
                   <label className="block text-xs font-bold text-gray-700">Số trẻ em (2 - dưới 10 tuổi)</label>
                   <span className="text-[10px] text-gray-500 block pb-1">Tính theo giá trẻ em của tour</span>
-                  <input 
+                  <input
                     type="number"
                     min="0"
                     className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm bg-white font-bold"
@@ -1131,7 +1141,7 @@ export default function OrdersManagement() {
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 space-y-1">
                   <label className="block text-xs font-bold text-gray-700">Số trẻ nhỏ (&lt; 2 tuổi)</label>
                   <span className="text-[10px] text-gray-500 block pb-1">Tính theo giá trẻ nhỏ của tour</span>
-                  <input 
+                  <input
                     type="number"
                     min="0"
                     className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm bg-white font-bold"
@@ -1152,7 +1162,7 @@ export default function OrdersManagement() {
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-gray-600">Số lượng phụ thu phòng đơn</label>
                   <span className="text-[10px] text-gray-500 block">Cộng thêm đơn giá phòng đơn quy định</span>
-                  <input 
+                  <input
                     type="number"
                     min="0"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
@@ -1163,7 +1173,7 @@ export default function OrdersManagement() {
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-gray-600">Thông tin ghép phòng (Lẻ nam / Lẻ nữ)</label>
                   <span className="text-[10px] text-gray-500 block">Lựa chọn ghép nhóm hoặc đi lẻ</span>
-                  <select 
+                  <select
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
                     value={roomShareInfo}
                     onChange={e => setRoomShareInfo(e.target.value)}
@@ -1182,9 +1192,9 @@ export default function OrdersManagement() {
                   <span className="text-[10px] text-gray-500 block">Hóa đơn giá trị gia tăng</span>
                   <div className="flex gap-4 pt-1">
                     <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="vatOption" 
+                      <input
+                        type="radio"
+                        name="vatOption"
                         value="Không xuất VAT"
                         className="text-blue-600 focus:ring-blue-500"
                         checked={vatOption === 'Không xuất VAT'}
@@ -1193,9 +1203,9 @@ export default function OrdersManagement() {
                       <span>Không xuất VAT</span>
                     </label>
                     <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="vatOption" 
+                      <input
+                        type="radio"
+                        name="vatOption"
                         value="Xuất VAT"
                         className="text-blue-600 focus:ring-blue-500"
                         checked={vatOption === 'Xuất VAT'}
@@ -1231,7 +1241,7 @@ export default function OrdersManagement() {
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-gray-600">Yêu cầu đặc biệt (Ghi chú thêm)</label>
                   <span className="text-[10px] text-gray-500 block">Ăn chay, dị ứng, trẻ sơ sinh...</span>
-                  <textarea 
+                  <textarea
                     rows={2}
                     placeholder="Nhập các yêu cầu ăn uống, phòng ở đặc biệt..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
@@ -1288,7 +1298,7 @@ export default function OrdersManagement() {
           )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 bg-slate-50 -mx-6 -mb-6 p-6">
-            <button 
+            <button
               type="button"
               onClick={() => {
                 // reset form
@@ -1310,14 +1320,14 @@ export default function OrdersManagement() {
             >
               Nhập lại (Reset)
             </button>
-            <button 
+            <button
               type="button"
               onClick={() => setShowCreateForm(false)}
               className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 bg-white transition-colors"
             >
               Hủy bỏ
             </button>
-            <button 
+            <button
               type="submit"
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all"
             >
@@ -1331,30 +1341,30 @@ export default function OrdersManagement() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-150 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <span>Danh sách Đơn hàng của bạn</span>
+            <span>Danh sách Booking của bạn</span>
           </h3>
           <span className="bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full border border-gray-250 shrink-0">
-            Đang hiển thị: {orders.length} đơn hàng
+            Đang hiển thị: {orders.length} booking
           </span>
         </div>
 
-        {/* 3 Tabs phân loại trạng thái cực kỳ trực quan và sang trọng */}
+        {/* Tabs phân loại trạng thái trực quan và sang trọng */}
         <div className="flex border-b border-gray-200 bg-white">
           <button
-            onClick={() => setOrderFilterStatus('sure')}
+            onClick={() => setOrderFilterStatus('hold')}
             className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
-              orderFilterStatus === 'sure'
-                ? 'border-emerald-500 text-emerald-600 bg-emerald-50/10'
+              orderFilterStatus === 'hold'
+                ? 'border-amber-500 text-amber-600 bg-amber-50/10'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
             }`}
           >
-            <ShieldCheck className={`w-4.5 h-4.5 ${orderFilterStatus === 'sure' ? 'text-emerald-500' : 'text-gray-400'}`} />
-            <span>Sure chỗ</span>
-            <span className={orderFilterStatus === 'sure' 
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-emerald-100 text-emerald-800' 
+            <Clock className={`w-4.5 h-4.5 ${orderFilterStatus === 'hold' ? 'text-amber-500' : 'text-gray-400'}`} />
+            <span>Giữ chỗ</span>
+            <span className={orderFilterStatus === 'hold'
+              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-800'
               : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
-              {tabCounts.sure}
+              {tabCounts.hold}
             </span>
           </button>
 
@@ -1368,29 +1378,11 @@ export default function OrdersManagement() {
           >
             <CreditCard className={`w-4.5 h-4.5 ${orderFilterStatus === 'paid' ? 'text-blue-500' : 'text-gray-400'}`} />
             <span>Đã thanh toán</span>
-            <span className={orderFilterStatus === 'paid' 
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-blue-100 text-blue-800' 
+            <span className={orderFilterStatus === 'paid'
+              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-blue-100 text-blue-800'
               : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
               {tabCounts.paid}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setOrderFilterStatus('hold')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
-              orderFilterStatus === 'hold'
-                ? 'border-amber-500 text-amber-600 bg-amber-50/10'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
-            }`}
-          >
-            <Clock className={`w-4.5 h-4.5 ${orderFilterStatus === 'hold' ? 'text-amber-500' : 'text-gray-400'}`} />
-            <span>Giữ chỗ</span>
-            <span className={orderFilterStatus === 'hold' 
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-800' 
-              : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
-            }>
-              {tabCounts.hold}
             </span>
           </button>
 
@@ -1404,8 +1396,8 @@ export default function OrdersManagement() {
           >
             <X className={`w-4.5 h-4.5 ${orderFilterStatus === 'cancelled' ? 'text-slate-500' : 'text-gray-400'}`} />
             <span>Đã hủy</span>
-            <span className={orderFilterStatus === 'cancelled' 
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-slate-100 text-slate-700' 
+            <span className={orderFilterStatus === 'cancelled'
+              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-slate-100 text-slate-700'
               : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
               {tabCounts.cancelled}
@@ -1422,8 +1414,8 @@ export default function OrdersManagement() {
           >
             <DollarSign className={`w-4.5 h-4.5 ${orderFilterStatus === 'refund' ? 'text-rose-500' : 'text-gray-400'}`} />
             <span>Hủy hoàn tiền</span>
-            <span className={orderFilterStatus === 'refund' 
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-rose-100 text-rose-800' 
+            <span className={orderFilterStatus === 'refund'
+              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-rose-100 text-rose-800'
               : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
               {tabCounts.refund}
@@ -1472,7 +1464,7 @@ export default function OrdersManagement() {
             <option value="hold_expiry">Sắp xếp: Hạn giữ chỗ gần nhất</option>
           </select>
         </div>
-        
+
         {orders.length === 0 ? (
           <div className="text-center py-12">
             <ShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -1507,24 +1499,24 @@ export default function OrdersManagement() {
               const totalVisa = visaPassengersCount * priceVisaTour;
 
               const totalSubtotal = totalAdult + totalChild + totalInfant + totalSingleRoom + totalVisa;
-              const discountAmount = order.discount_type === 'percent' 
-                ? (totalSubtotal * (order.discount_value || 0)) / 100 
+              const discountAmount = order.discount_type === 'percent'
+                ? (totalSubtotal * (order.discount_value || 0)) / 100
                 : (order.discount_value || 0);
               const customSurchargeAmount = order.surcharge_amount || 0;
               const totalBeforeVat = totalSubtotal - discountAmount + customSurchargeAmount;
               const computedVat = order.vat_option === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
 
               return (
-                <div 
-                  key={order.id} 
+                <div
+                  key={order.id}
                   className={`transition-all duration-200 ${
-                    isExpanded 
-                      ? 'bg-blue-50/10' 
+                    isExpanded
+                      ? 'bg-blue-50/10'
                       : 'hover:bg-gray-50/60'
                   }`}
                 >
                   {/* Summary / Header block clickable */}
-                  <div 
+                  <div
                     onClick={() => toggleOrderExpand(order.id)}
                     className="p-5 flex flex-col gap-3.5 cursor-pointer select-none"
                   >
@@ -1615,14 +1607,14 @@ export default function OrdersManagement() {
                                 </span>
                               );
                             }
-                            
+
                             const anyApproved = refundInvoices.some(inv => inv.status === 'approved');
                             const anyPending = refundInvoices.some(inv => inv.status === 'pending');
                             const allRejected = refundInvoices.every(inv => inv.status === 'rejected');
 
                             let progressText = '';
                             let progressStyle = '';
-                            
+
                             if (anyApproved && !anyPending) {
                               progressText = 'Hoàn tiền: Hoàn tất';
                               progressStyle = 'bg-green-50 text-green-700 border-green-200';
@@ -1710,7 +1702,7 @@ export default function OrdersManagement() {
                             }`}
                           >
                             <FileText className="w-4 h-4" />
-                            Chi tiết đơn hàng
+                            Chi tiết booking
                           </button>
                           <button
                             type="button"
@@ -1740,7 +1732,7 @@ export default function OrdersManagement() {
                               <FileText className="w-4 h-4 text-blue-600" />
                               Phụ thu & Dịch vụ
                             </span>
-                            {/* Nút sửa đơn hàng */}
+                            {/* Nút sửa booking */}
                             {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
                               <button
                                 type="button"
@@ -1844,8 +1836,8 @@ export default function OrdersManagement() {
                               <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
                                 <span className="text-rose-500">Giảm giá {order.discount_type === 'percent' ? `(${order.discount_value}%)` : ''} : </span>
                                 <span className="font-bold text-rose-600">-{new Intl.NumberFormat('vi-VN').format(
-                                  order.discount_type === 'percent' 
-                                    ? ((totalAdult + totalChild + totalInfant + totalSingleRoom) * (order.discount_value || 0)) / 100 
+                                  order.discount_type === 'percent'
+                                    ? ((totalAdult + totalChild + totalInfant + totalSingleRoom) * (order.discount_value || 0)) / 100
                                     : (order.discount_value || 0)
                                 )} đ</span>
                               </div>
@@ -1930,28 +1922,28 @@ export default function OrdersManagement() {
                                       {order.created_by || 'Chưa rõ'}
                                     </span>
                                   </div>
-                                  <div className="flex justify-between items-center py-1.5 border-t border-dashed border-gray-100 mt-1 pt-1">
-                                    <span className="text-gray-600 font-medium flex items-center gap-1.5">
-                                      <FileText className="w-4 h-4 text-blue-600" /> Hợp đồng dịch vụ:
+                                  <div className="flex flex-wrap items-center justify-between py-1.5 border-t border-dashed border-gray-100 mt-1 pt-1 gap-2">
+                                    <span className="text-gray-600 font-medium flex items-center gap-1.5 whitespace-nowrap">
+                                      <FileText className="w-4 h-4 text-blue-600 shrink-0" /> Hợp đồng dịch vụ:
                                     </span>
-                                    <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
                                       {order.contract_url ? (
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                                             Đã tải hợp đồng
                                           </span>
                                           <a
                                             href={order.contract_url}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-bold text-[10px] flex items-center gap-1 transition-all"
+                                            className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-bold text-[10px] flex items-center gap-1 transition-all whitespace-nowrap"
                                           >
-                                            <Eye className="w-3 h-3" /> Xem
+                                            <Eye className="w-3 h-3 shrink-0" /> Xem
                                           </a>
                                           {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
                                             <button
                                               onClick={() => handleDeleteContract(order.id)}
-                                              className="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer"
+                                              className="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer shrink-0"
                                               title="Gỡ hợp đồng"
                                             >
                                               <Trash2 className="w-3.5 h-3.5" />
@@ -1959,9 +1951,9 @@ export default function OrdersManagement() {
                                           )}
                                         </div>
                                       ) : (
-                                        <div className="flex items-center gap-1.5">
-                                          <label className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer text-[10px] font-bold transition-all flex items-center gap-1 shadow-sm">
-                                            <Upload className="w-3 h-3" />
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <label className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm whitespace-nowrap">
+                                            <Upload className="w-3 h-3 shrink-0" />
                                             Tải hợp đồng lên
                                             <input
                                               type="file"
@@ -1974,7 +1966,7 @@ export default function OrdersManagement() {
                                               disabled={contractUploadProgress[order.id]}
                                             />
                                           </label>
-                                          {contractUploadProgress[order.id] && <Clock className="w-3 h-3 animate-spin text-blue-600" />}
+                                          {contractUploadProgress[order.id] && <Clock className="w-3 h-3 animate-spin text-blue-600 shrink-0" />}
                                         </div>
                                       )}
                                     </div>
@@ -1988,8 +1980,8 @@ export default function OrdersManagement() {
                               <div className="space-y-0.5">
                                 <p className="font-bold text-xs">Yêu cầu khai báo thông tin & Hồ sơ Visa</p>
                                 <p className="text-gray-600 leading-relaxed text-[11px]">
-                                  Trong trạng thái giữ chỗ tạm thời, hệ thống chỉ hiển thị tổng quan số lượng khách đặt chỗ để tối ưu hóa hiệu năng hiển thị. 
-                                  Bản khai chi tiết từng hành khách (Họ tên, Ngày sinh, Hộ chiếu) và chức năng tải lên hồ sơ Visa sẽ tự động kích hoạt sau khi đơn hàng được chuyển sang trạng thái <strong>Sure chỗ (Xác nhận chắc chắn)</strong>.
+                                  Trong trạng thái giữ chỗ tạm thời, hệ thống chỉ hiển thị tổng quan số lượng khách đặt chỗ để tối ưu hóa hiệu năng hiển thị.
+                                  Bản khai chi tiết từng hành khách (Họ tên, Ngày sinh, Hộ chiếu) và chức năng tải lên hồ sơ Visa sẽ tự động kích hoạt sau khi booking được chuyển sang trạng thái <strong>Sure chỗ (Xác nhận chắc chắn)</strong>.
                                 </p>
                               </div>
                             </div>
@@ -2047,10 +2039,10 @@ export default function OrdersManagement() {
                                               {passenger.passport_url.split(',').filter(Boolean).map((url, uIdx) => {
                                                 const isSupabaseFolder = url.includes('supabase.com/dashboard/project') || url.includes('supabase.co');
                                                 const isGoogleDriveFolder = url.includes('drive.google.com');
-                                                
+
                                                 let label = `Tài liệu #${uIdx + 1}`;
                                                 let linkClass = "inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 font-bold max-w-[120px] truncate bg-blue-50/50 border border-blue-100 px-1.5 py-0.5 rounded whitespace-nowrap";
-                                                
+
                                                 if (isGoogleDriveFolder) {
                                                   label = 'Tài liệu';
                                                   linkClass = "inline-flex items-center gap-1 text-[10px] text-emerald-700 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-1 rounded transition-colors font-bold shadow-sm max-w-[150px] truncate cursor-pointer whitespace-nowrap";
@@ -2058,13 +2050,13 @@ export default function OrdersManagement() {
                                                   label = 'Thư mục hồ sơ (Hệ thống)';
                                                   linkClass = "inline-flex items-center gap-1 text-[10px] text-blue-700 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-1.5 py-1 rounded transition-colors font-bold shadow-sm max-w-[150px] truncate cursor-pointer whitespace-nowrap";
                                                 }
-                                                    
+
                                                 return (
-                                                  <a 
+                                                  <a
                                                     key={uIdx}
-                                                    href={url} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer" 
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
                                                     className={linkClass}
                                                     title={isGoogleDriveFolder ? 'Mở tài liệu' : isSupabaseFolder ? 'Mở thư mục' : `Xem tài liệu ${uIdx + 1}`}
                                                   >
@@ -2102,7 +2094,7 @@ export default function OrdersManagement() {
                                             <span className="px-2 py-0.5 font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap inline-block">Từ chối Visa</span>
                                           )}
                                           {passenger.visa_status === 'disqualified' && (
-                                            <button 
+                                            <button
                                               type="button"
                                               onClick={() => {
                                                 setDisqualifiedReasonModal({
@@ -2122,7 +2114,7 @@ export default function OrdersManagement() {
                                           )}
                                         </td>
                                         <td className="py-2.5 pl-3 pr-1 text-right font-semibold whitespace-nowrap">
-                                          <button 
+                                          <button
                                             type="button"
                                             onClick={() => {
                                               setEditingPassenger(passenger);
@@ -2208,7 +2200,7 @@ export default function OrdersManagement() {
                                       Lịch sử giao dịch thu/chi liên quan
                                     </h4>
                                     <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                                      Danh sách phiếu thu và phiếu chi đã khởi tạo cho đơn hàng này
+                                      Danh sách phiếu thu và phiếu chi đã khởi tạo cho booking này
                                     </p>
                                   </div>
                                 </div>
@@ -2219,32 +2211,28 @@ export default function OrdersManagement() {
 
                               {orderInvoices.length === 0 ? (
                                 <div className="text-center py-12 text-gray-400 text-xs italic bg-slate-50/20">
-                                  Chưa có lịch sử thanh toán hay biên lai thu chi nào được ghi nhận cho đơn hàng này.
+                                  Chưa có lịch sử thanh toán hay biên lai thu chi nào được ghi nhận cho booking này.
                                 </div>
                               ) : (
-                                <div className="divide-y divide-slate-100">
+                                <div className="space-y-2">
                                   {orderInvoices.map((inv) => {
-                                    const isReceipt = inv.type === 'receipt';
+                                    const isReceipt = inv.type === "receipt";
                                     const isExpanded = expandedInvoiceId === inv.id;
-                                    const cardBgClass = isExpanded 
-                                      ? (isReceipt ? 'bg-emerald-50/80 border-l-4 border-emerald-600 shadow-sm ring-1 ring-emerald-200/60 my-1 rounded-r-lg' : 'bg-rose-50/80 border-l-4 border-rose-600 shadow-sm ring-1 ring-rose-200/60 my-1 rounded-r-lg')
-                                      : 'border-l-4 border-transparent hover:bg-slate-50/50';
+                                    const cardBgClass = isExpanded
+                                      ? "bg-white border border-slate-200 shadow-sm rounded-xl ring-1 ring-slate-900/5 transition-all overflow-hidden"
+                                      : "bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 hover:shadow-2xs transition-all overflow-hidden";
                                     return (
-                                      <div key={inv.id} className={`transition-all ${cardBgClass}`}>
+                                      <div key={inv.id} className={cardBgClass}>
                                         {/* Row Header (Collapsed State) */}
-                                        <div 
+                                        <div
                                           onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.id)}
-                                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 transition-colors cursor-pointer select-none"
+                                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 transition-colors cursor-pointer select-none hover:bg-slate-50/60"
                                         >
                                           <div className="flex items-center gap-3 min-w-0">
                                             {/* Chevron indicator */}
                                             <div className="text-slate-400 shrink-0">
                                               {isExpanded ? (
-                                                isReceipt ? (
-                                                  <ChevronDown className="w-4 h-4 text-emerald-600 font-black" />
-                                                ) : (
-                                                  <ChevronDown className="w-4 h-4 text-rose-600 font-black" />
-                                                )
+                                                <ChevronDown className="w-4 h-4 text-slate-600" />
                                               ) : (
                                                 <ChevronRight className="w-4 h-4 text-slate-400" />
                                               )}
@@ -2252,15 +2240,15 @@ export default function OrdersManagement() {
 
                                             {/* Invoice Code and Type Badge */}
                                             <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                              <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 text-[10px] uppercase font-mono font-bold shrink-0">
+                                              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 text-[11px] font-mono font-medium shrink-0">
                                                 {inv.invoice_code || inv.id.substring(0, 8).toUpperCase()}
                                               </span>
                                               {isReceipt ? (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-150 uppercase">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/60 uppercase tracking-wide">
                                                   Phiếu thu
                                                 </span>
                                               ) : (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-150 uppercase">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-800 border border-rose-200/60 uppercase tracking-wide">
                                                   Phiếu chi (Hoàn)
                                                 </span>
                                               )}
@@ -2270,44 +2258,44 @@ export default function OrdersManagement() {
                                           <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 ml-7 sm:ml-0">
                                             {/* Amount */}
                                             <div className="text-left sm:text-right whitespace-nowrap">
-                                              <span className={`font-black text-sm ${isReceipt ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                {isReceipt ? '+' : '-'} {new Intl.NumberFormat('vi-VN').format(inv.amount)} đ
+                                              <span className={`font-semibold text-sm ${isReceipt ? "text-emerald-700" : "text-rose-700"}`}>
+                                                {isReceipt ? "+" : "-"} {new Intl.NumberFormat("vi-VN").format(inv.amount)} đ
                                               </span>
                                             </div>
 
                                             {/* Date Time */}
-                                            <div className="hidden md:block text-slate-500 font-medium text-[11px] whitespace-nowrap">
+                                            <div className="hidden md:block text-slate-500 font-normal text-[11px] whitespace-nowrap">
                                               {inv.created_at ? (
                                                 <div className="flex flex-col text-right leading-tight">
-                                                  <span className="font-semibold text-slate-600">
-                                                    {new Date(inv.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                  <span className="font-medium text-slate-700">
+                                                    {new Date(inv.created_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                                                   </span>
                                                   <span className="text-[10px] text-slate-400">
-                                                    {new Date(inv.created_at).toLocaleDateString('vi-VN')}
+                                                    {new Date(inv.created_at).toLocaleDateString("vi-VN")}
                                                   </span>
                                                 </div>
                                               ) : (
-                                                '---'
+                                                "---"
                                               )}
                                             </div>
 
                                             {/* Status Badge */}
                                             <div className="shrink-0 text-right">
-                                              {inv.status === 'approved' && (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                                  <Check className="w-3 h-3" />
+                                              {inv.status === "approved" && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                                                  <Check className="w-3 h-3 text-emerald-600" />
                                                   Đã duyệt
                                                 </span>
                                               )}
-                                              {inv.status === 'pending' && (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">
-                                                  <Clock className="w-3 h-3 animate-pulse" />
+                                              {inv.status === "pending" && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200/70">
+                                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
                                                   Chờ duyệt
                                                 </span>
                                               )}
-                                              {inv.status === 'rejected' && (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
-                                                  <AlertCircle className="w-3 h-3" />
+                                              {inv.status === "rejected" && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-800 border border-rose-200/70">
+                                                  <AlertCircle className="w-3 h-3 text-rose-600" />
                                                   Từ chối
                                                 </span>
                                               )}
@@ -2317,64 +2305,91 @@ export default function OrdersManagement() {
 
                                         {/* Expanded Details Area */}
                                         {isExpanded && (
-                                          <div className={`p-4 border-t ${isReceipt ? 'border-emerald-200/60' : 'border-rose-200/60'} text-xs text-slate-700 animate-fadeIn space-y-4`}>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                              <div>
-                                                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wider block mb-1">Phương thức thanh toán</span>
-                                                <span className="font-semibold text-slate-800">{inv.payment_method || '---'}</span>
+                                          <div className="p-4 border-t border-slate-150 bg-slate-50/50 text-xs text-slate-700 animate-fadeIn space-y-3">
+                                            {/* Metadata Tiles Grid */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                              {/* Payment Method */}
+                                              <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs flex items-center gap-3">
+                                                <CreditCard className="w-4 h-4 text-slate-400 shrink-0" />
+                                                <div className="min-w-0">
+                                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Phương thức thanh toán</span>
+                                                  <span className="font-medium text-slate-800 text-xs truncate block">{inv.payment_method || "Chuyển khoản"}</span>
+                                                </div>
                                               </div>
-                                              <div>
-                                                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wider block mb-1">Thời gian giao dịch</span>
-                                                <span className="font-semibold text-slate-800">
-                                                  {inv.created_at ? (
-                                                    `${new Date(inv.created_at).toLocaleTimeString('vi-VN')} ngày ${new Date(inv.created_at).toLocaleDateString('vi-VN')}`
-                                                  ) : '---'}
-                                                </span>
+
+                                              {/* Transaction Time */}
+                                              <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs flex items-center gap-3">
+                                                <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                                                <div className="min-w-0">
+                                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Thời gian giao dịch</span>
+                                                  <span className="font-medium text-slate-800 text-xs truncate block">
+                                                    {inv.created_at ? (
+                                                      `${new Date(inv.created_at).toLocaleTimeString("vi-VN")} ngày ${new Date(inv.created_at).toLocaleDateString("vi-VN")}`
+                                                    ) : "---"}
+                                                  </span>
+                                                </div>
                                               </div>
-                                              <div>
-                                                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wider block mb-1">Người nộp/tạo</span>
-                                                <span className="font-semibold text-slate-800">
-                                                  {(inv.created_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(inv.created_by)) 
-                                                    ? inv.created_by 
-                                                    : (order.created_by || order.booker_name || leadPassenger?.full_name || 'Hệ thống')}
-                                                </span>
+
+                                              {/* Creator / Payer */}
+                                              <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs flex items-center gap-3">
+                                                <User className="w-4 h-4 text-slate-400 shrink-0" />
+                                                <div className="min-w-0">
+                                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Người nộp / Tạo</span>
+                                                  <span className="font-medium text-slate-800 text-xs truncate block">
+                                                    {(inv.created_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(inv.created_by))
+                                                      ? inv.created_by
+                                                      : (order.created_by || order.booker_name || leadPassenger?.full_name || "Hệ thống")}
+                                                  </span>
+                                                </div>
                                               </div>
                                             </div>
 
-                                            <div className="pt-2 border-t border-slate-150/60">
-                                              <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wider block mb-1">Ghi chú / Mô tả chi tiết</span>
-                                              <p className="font-medium text-slate-800 bg-white p-2.5 rounded-lg border border-slate-200/60 leading-relaxed whitespace-pre-wrap break-words">
-                                                {inv.description || 'Chuyển khoản thanh toán'}
-                                              </p>
+                                            {/* Note / Description Box */}
+                                            <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs space-y-1.5">
+                                              <div className="flex items-center gap-1.5 text-slate-500 font-medium text-[11px] uppercase tracking-wider">
+                                                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Ghi chú / Mô tả chi tiết</span>
+                                              </div>
+                                              <div className="p-2.5 rounded-md bg-slate-50/80 text-slate-800 text-xs font-normal leading-relaxed whitespace-pre-wrap break-words border border-slate-200/60">
+                                                {inv.description || "Chuyển khoản thanh toán"}
+                                              </div>
                                             </div>
 
-                                            {/* Verification Details */}
+                                            {/* Verification Details if verified */}
                                             {(inv.verified_by || inv.verified_at) && (
-                                              <div className="pt-2 border-t border-slate-150/60 flex flex-wrap gap-x-6 gap-y-1 text-slate-500 font-semibold text-[10px]">
-                                                {inv.verified_by && (
-                                                  <span>Người duyệt: <strong className="text-slate-700">{inv.verified_by}</strong></span>
-                                                )}
+                                              <div className="bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs flex flex-wrap items-center justify-between gap-2 text-xs">
+                                                <div className="flex items-center gap-2">
+                                                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                  <span className="text-slate-600 font-medium">Người duyệt: <strong className="text-slate-800 font-semibold">{inv.verified_by || "Hệ thống"}</strong></span>
+                                                </div>
                                                 {inv.verified_at && (
-                                                  <span>Ngày duyệt: <strong className="text-slate-700">{new Date(inv.verified_at).toLocaleDateString('vi-VN')}</strong></span>
+                                                  <span className="text-slate-400 text-[11px]">
+                                                    Ngày duyệt: {new Date(inv.verified_at).toLocaleDateString("vi-VN")}
+                                                  </span>
                                                 )}
                                               </div>
                                             )}
 
-                                            {/* Minh chứng file */}
-                                            <div className="pt-3 border-t border-slate-150/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                              <span className="text-[10px] text-slate-500 font-semibold">Minh chứng giao dịch:</span>
+                                            {/* Proof File Attachment Footer */}
+                                            <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                              <div className="flex items-center gap-2 text-slate-600 font-medium text-xs">
+                                                <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                                                <span>Minh chứng giao dịch:</span>
+                                              </div>
                                               {inv.file_url ? (
                                                 <a
                                                   href={inv.file_url}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
-                                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+                                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-md transition-colors cursor-pointer"
                                                 >
-                                                  <ExternalLink className="w-3.5 h-3.5" />
+                                                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
                                                   Xem ảnh minh chứng giao dịch
                                                 </a>
                                               ) : (
-                                                <span className="text-gray-400 italic text-[11px]">Không có ảnh minh chứng được đính kèm</span>
+                                                <span className="text-slate-400 italic text-xs">
+                                                  Không có ảnh minh chứng được đính kèm
+                                                </span>
                                               )}
                                             </div>
                                           </div>
@@ -2384,9 +2399,9 @@ export default function OrdersManagement() {
                                   })}
                                 </div>
                               )}
-                            </div>
                           </div>
-                        )}
+                        </div>
+                      )}
 
                       {/* Box 3: Action center bar */}
                       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
@@ -2394,12 +2409,12 @@ export default function OrdersManagement() {
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                             order.status === 'cancelled' ? 'bg-slate-50 text-slate-500' :
                             order.status === 'hold' ? 'bg-amber-50 text-amber-600' :
-                            (order.status === 'paid' || isFullyPaid) ? 'bg-blue-50 text-blue-600' : 
+                            (order.status === 'paid' || isFullyPaid) ? 'bg-blue-50 text-blue-600' :
                             isPartiallyPaid ? 'bg-cyan-50 text-cyan-600' : 'bg-emerald-50 text-emerald-600'
                           }`}>
                             {order.status === 'cancelled' ? <ShieldCheck className="w-4 h-4" /> :
                              order.status === 'hold' ? <Clock className="w-4 h-4" /> :
-                             (order.status === 'paid' || isFullyPaid) ? <Check className="w-4 h-4" /> : 
+                             (order.status === 'paid' || isFullyPaid) ? <Check className="w-4 h-4" /> :
                              isPartiallyPaid ? <CreditCard className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
                           </div>
                           <div className="text-xs">
@@ -2415,20 +2430,70 @@ export default function OrdersManagement() {
                             <span className="text-gray-500 mt-0.5 block">
                               {order.status === 'cancelled'
                                 ? 'Đơn đặt đã huỷ. Quỹ vé đã được giải phóng để bán cho khách hàng khác.'
-                                : order.status === 'hold' 
-                                ? 'Cần chuyển trạng thái đơn sang Sure để giữ phòng & vé máy bay chính thức trước khi đếm ngược kết thúc.' 
+                                : order.status === 'hold'
+                                ? 'Cần chuyển trạng thái đơn sang Sure để giữ phòng & vé máy bay chính thức trước khi đếm ngược kết thúc.'
                                 : (order.status === 'paid' || isFullyPaid)
-                                ? 'Đơn hàng đã được thanh toán đầy đủ, không còn dư nợ.'
+                                ? 'Booking đã được thanh toán đầy đủ, không còn dư nợ.'
                                 : isPartiallyPaid
-                                ? 'Đơn hàng mới được thanh toán một phần. Cần hoàn tất số dư còn lại.'
-                                : order.status === 'sure' 
-                                ? 'Đơn hàng an toàn. Điều hành tour và Đại lý có thể tiến hành chuẩn bị hồ sơ visa, vé máy bay.' 
+                                ? 'Booking mới được thanh toán một phần. Cần hoàn tất số dư còn lại.'
+                                : order.status === 'sure'
+                                ? 'Booking an toàn. Điều hành tour và Đại lý có thể tiến hành chuẩn bị hồ sơ visa, vé máy bay.'
                                 : 'Đơn đặt đã huỷ.'}
                             </span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto justify-end">
+                          {/* Nút Khóa / Mở khóa booking dành cho Admin & Sale Leader */}
+                          {['admin', 'sale_leader'].includes(currentRole) && order.status !== 'cancelled' && (() => {
+                            const isAllowedToUnlock = canUnlockOrder(order, currentRole, profile, profilesList);
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (order.is_locked) {
+                                    if (!isAllowedToUnlock) {
+                                      const creatorName = order.created_by || 'nhân viên thuộc nhóm khác';
+                                      toast.error(`Bạn không có quyền mở khóa booking này. Booking do ${creatorName} tạo. Leader chỉ được mở khóa đơn của thành viên nhóm mình.`);
+                                      return;
+                                    }
+                                    updateOrder(order.id, { is_locked: false });
+                                    toast.success(`Đã mở khóa booking #${order.id.substring(0, 8)}. Hệ thống cho phép chỉnh sửa lại thông tin.`);
+                                  } else {
+                                    updateOrder(order.id, { is_locked: true });
+                                    toast.success(`Đã khóa booking #${order.id.substring(0, 8)}`);
+                                  }
+                                }}
+                                className={`px-3.5 py-2 text-xs font-bold rounded-lg border transition-all inline-flex items-center gap-1.5 cursor-pointer ${
+                                  order.is_locked
+                                    ? isAllowedToUnlock
+                                      ? 'text-amber-800 bg-amber-50 border-amber-300 hover:bg-amber-100'
+                                      : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-75'
+                                    : 'text-slate-700 bg-slate-50 border-slate-200 hover:bg-slate-100'
+                                }`}
+                                title={
+                                  order.is_locked
+                                    ? isAllowedToUnlock
+                                      ? 'Bấm để mở khóa booking'
+                                      : 'Bạn không có quyền mở khóa booking của thành viên thuộc nhóm khác'
+                                    : 'Bấm để khóa booking'
+                                }
+                              >
+                                {order.is_locked ? (
+                                  <>
+                                    <Unlock className={`w-3.5 h-3.5 ${isAllowedToUnlock ? 'text-amber-600' : 'text-gray-400'}`} />
+                                    Mở khóa đơn
+                                  </>
+                                ) : (
+                                  <>
+                                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                                    Khóa đơn
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })()}
+
                           {order.status !== 'cancelled' && order.status !== 'paid' && !isFullyPaid && (
                             <button
                               type="button"
@@ -2476,7 +2541,7 @@ export default function OrdersManagement() {
                                     setConfirmModalData({
                                       isOpen: true,
                                       title: 'Yêu cầu gia hạn',
-                                      message: `Gia hạn thời gian giữ chỗ cho đơn hàng #${order.id.substring(0, 8)}.`,
+                                      message: `Gia hạn thời gian giữ chỗ cho booking #${order.id.substring(0, 8)}.`,
                                       showInput: true,
                                       inputLabel: 'Số giờ gia hạn',
                                       inputPlaceholder: '24',
@@ -2515,7 +2580,7 @@ export default function OrdersManagement() {
                                 } else {
                                   setConfirmModalData({
                                     isOpen: true,
-                                    title: 'Hủy đơn hàng',
+                                    title: 'Hủy booking',
                                     message: `Bạn có chắc chắn muốn HỦY đơn đặt giữ chỗ #${order.id.substring(0, 8)}? Hành động này sẽ trả lại ${orderPassengers.length} chỗ trống về quỹ tour khởi hành.`,
                                     showInput: false,
                                     onConfirm: async () => {
@@ -2523,7 +2588,7 @@ export default function OrdersManagement() {
                                         await cancelOrder(order.id, '');
                                         toast.success('Đã hủy đơn đặt giữ chỗ thành công!');
                                       } catch (err) {
-                                        toast.error('Gặp sự cố khi hủy đơn hàng!');
+                                        toast.error('Gặp sự cố khi hủy booking!');
                                       }
                                     },
                                   });
@@ -2532,7 +2597,7 @@ export default function OrdersManagement() {
                               className="px-3.5 py-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 hover:text-rose-800 transition-colors inline-flex items-center cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                              Hủy đơn hàng
+                              Hủy booking
                             </button>
                           )}
 
@@ -2564,7 +2629,7 @@ export default function OrdersManagement() {
                             return (
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="px-3.5 py-2 text-xs font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded-lg inline-flex items-center">
-                                  Đã hủy đơn hàng
+                                  Đã hủy booking
                                 </span>
                                 {approvedPaidAmount > 0 && !hasRefundPendingOrApproved && (
                                   <button
@@ -2601,7 +2666,7 @@ export default function OrdersManagement() {
           </div>
         )}
       </div>
-      <ActionModal 
+      <ActionModal
         isOpen={confirmModalData.isOpen}
         onClose={() => setConfirmModalData(prev => ({ ...prev, isOpen: false }))}
         title={confirmModalData.title}
@@ -2611,8 +2676,8 @@ export default function OrdersManagement() {
         inputPlaceholder={confirmModalData.inputPlaceholder}
         inputLabel={confirmModalData.inputLabel}
       />
-      <PassengerInputModal 
-        isOpen={isPassengerModalOpen} 
+      <PassengerInputModal
+        isOpen={isPassengerModalOpen}
         onClose={() => setIsPassengerModalOpen(false)}
         adultCount={orderToConfirm ? allOrders.find(o => o.id === orderToConfirm)?.adult_count || 1 : 1}
         childCount={orderToConfirm ? allOrders.find(o => o.id === orderToConfirm)?.child_count || 0 : 0}
@@ -2620,14 +2685,27 @@ export default function OrdersManagement() {
         tourPriceVisa={orderToConfirm ? tours.find(t => t.id === allOrders.find(o => o.id === orderToConfirm)?.tour_id)?.price_visa_tour : 0}
         onConfirm={(passengers) => {
           if (orderToConfirm) {
-            confirmOrder(orderToConfirm, passengers);
-            setIsPassengerModalOpen(false);
-            setOrderToConfirm(null);
+            if (!['admin', 'sale_leader'].includes(currentRole)) {
+              setConfirmModalData({
+                isOpen: true,
+                title: '🔒 Cảnh báo: Chốt Sure & Tự động khóa booking',
+                message: 'Chuyển booking sang trạng thái Chắc chắn (Sure) sẽ TỰ ĐỘNG KHÓA toàn bộ thông tin giá tiền & doanh thu. Chỉ Admin hoặc Sale Leader mới có quyền mở khóa hoặc điều chỉnh lại. Bạn có chắc chắn danh sách hành khách và thông tin booking đã chính xác?',
+                onConfirm: () => {
+                  confirmOrder(orderToConfirm, passengers);
+                  setIsPassengerModalOpen(false);
+                  setOrderToConfirm(null);
+                }
+              });
+            } else {
+              confirmOrder(orderToConfirm, passengers);
+              setIsPassengerModalOpen(false);
+              setOrderToConfirm(null);
+            }
           }
         }}
       />
-      <PassengerInputModal 
-        isOpen={!!orderToAddPassengers} 
+      <PassengerInputModal
+        isOpen={!!orderToAddPassengers}
         onClose={() => setOrderToAddPassengers(null)}
         adultCount={orderToAddPassengers ? (allOrders.find(o => o.id === orderToAddPassengers)?.adult_count || 0) + (allOrders.find(o => o.id === orderToAddPassengers)?.child_count || 0) + (allOrders.find(o => o.id === orderToAddPassengers)?.infant_count || 0) - passengers.filter(p => p.order_id === orderToAddPassengers).length : 1}
         childCount={0}
@@ -2640,7 +2718,7 @@ export default function OrdersManagement() {
           }
         }}
       />
-      <EditPassengerModal 
+      <EditPassengerModal
         isOpen={isEditPassengerOpen}
         onClose={() => {
           setIsEditPassengerOpen(false);
@@ -2746,15 +2824,15 @@ export default function OrdersManagement() {
         </div>
       )}
 
-      {/* Modal Hủy đơn hàng có thanh toán */}
+      {/* Modal Hủy booking có thanh toán */}
       {isCancelPaymentModalOpen && cancelPaymentOrder && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-xl w-full shadow-xl border border-gray-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-lg font-bold text-gray-950 flex items-center gap-2">
-                ⚠️ Hủy Đơn Hàng Có Thanh Toán
+                ⚠️ Hủy Booking Có Thanh Toán
               </h3>
-              <button 
+              <button
                 onClick={() => {
                   setIsCancelPaymentModalOpen(false);
                   setCancelPaymentOrder(null);
@@ -2767,7 +2845,7 @@ export default function OrdersManagement() {
 
             <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 font-semibold leading-relaxed">
-                Đơn hàng <span className="font-mono font-bold">#{cancelPaymentOrder.id.substring(0, 8)}</span> này đã được thanh toán. Khi hủy, hệ thống sẽ tự động tạo một phiếu chi hoàn trả cho khách hàng tương ứng với số tiền bạn thiết lập dưới đây.
+                Booking <span className="font-mono font-bold">#{cancelPaymentOrder.id.substring(0, 8)}</span> này đã được thanh toán. Khi hủy, hệ thống sẽ tự động tạo một phiếu chi hoàn trả cho khách hàng tương ứng với số tiền bạn thiết lập dưới đây.
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2822,7 +2900,7 @@ export default function OrdersManagement() {
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Lý do hủy đơn hàng <span className="text-red-500">*</span>
+                    Lý do hủy booking <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -2881,7 +2959,7 @@ export default function OrdersManagement() {
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wider block border-b border-slate-200/80 pb-1.5">
                     💳 Phương án hoàn trả tiền
                   </span>
-                  
+
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
                       Hình thức hoàn trả <span className="text-red-500">*</span>
@@ -2975,7 +3053,7 @@ export default function OrdersManagement() {
                 disabled={isCancelUploading}
                 onClick={async () => {
                   if (!cancelPaymentReason.trim()) {
-                    toast.error('Vui lòng nhập lý do hủy đơn hàng!');
+                    toast.error('Vui lòng nhập lý do hủy booking!');
                     return;
                   }
                   if (!cancelConfirmFile) {
@@ -3025,13 +3103,13 @@ export default function OrdersManagement() {
                     if (cancelPaymentOrder.status !== 'cancelled') {
                       await cancelOrder(cancelPaymentOrder.id, cancelPaymentReason);
                     }
-                    
+
                     // 3. Tạo phiếu chi hoàn tiền nếu số tiền hoàn trả > 0
                     if (cancelPaymentRefundAmount > 0) {
                       const paymentMethodLabel = cancelRefundMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản';
                       let finalDesc = cancelPaymentOrder.status === 'cancelled'
                         ? `Yêu cầu hoàn tiền mới cho đơn đặt chỗ đã hủy #${cancelPaymentOrder.id.substring(0, 8)}. Lý do: ${cancelPaymentReason}`
-                        : `Hoàn tiền cho khách hàng do hủy đơn hàng #${cancelPaymentOrder.id.substring(0, 8)}. Lý do: ${cancelPaymentReason}`;
+                        : `Hoàn tiền cho khách hàng do hủy booking #${cancelPaymentOrder.id.substring(0, 8)}. Lý do: ${cancelPaymentReason}`;
 
                       if (cancelRefundMethod === 'transfer') {
                         finalDesc += `\n[Hoàn trả qua Ngân hàng]: ${cancelRefundBankName.trim()} - STK: ${cancelRefundAccountNumber.trim()} - Chủ TK: ${cancelRefundAccountName.trim()}`;
@@ -3058,14 +3136,14 @@ export default function OrdersManagement() {
                         : `Đã tự động tạo phiếu chi hoàn trả ${new Intl.NumberFormat('vi-VN').format(cancelPaymentRefundAmount)}đ thành công!`
                       );
                     } else {
-                      toast.success(cancelPaymentOrder.status === 'cancelled' ? 'Đã lưu thông tin.' : 'Đã hủy đơn hàng thành công (Không có tiền hoàn trả).');
+                      toast.success(cancelPaymentOrder.status === 'cancelled' ? 'Đã lưu thông tin.' : 'Đã hủy booking thành công (Không có tiền hoàn trả).');
                     }
-                    
+
                     setIsCancelPaymentModalOpen(false);
                     setCancelPaymentOrder(null);
                   } catch (err: any) {
                     console.error(err);
-                    toast.error(err.message || 'Có lỗi xảy ra khi hủy đơn hàng hoặc tạo phiếu chi hoàn tiền!');
+                    toast.error(err.message || 'Có lỗi xảy ra khi hủy booking hoặc tạo phiếu chi hoàn tiền!');
                   } finally {
                     setIsCancelUploading(false);
                   }

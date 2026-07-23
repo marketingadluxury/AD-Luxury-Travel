@@ -121,7 +121,7 @@ export default function PassengersManagement() {
 
   // 1. Filter orders based on user permissions
   const myOrders = useMemo(() => {
-    if (['admin', 'operator', 'visa'].includes(currentRole)) {
+    if (['admin', 'operator', 'visa', 'sale_leader'].includes(currentRole)) {
       return allOrders;
     }
     return allOrders.filter(o => o.user_id === profile?.id);
@@ -431,7 +431,7 @@ export default function PassengersManagement() {
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Tìm kiếm theo Tên khách, Số điện thoại, Số hộ chiếu hoặc Mã đơn hàng..."
+              placeholder="Tìm kiếm theo Tên khách, Số điện thoại, Số hộ chiếu hoặc Mã booking..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-slate-800"
             />
           </div>
@@ -608,7 +608,7 @@ export default function PassengersManagement() {
                                 <table className="min-w-full divide-y divide-gray-150">
                                   <thead className="bg-gray-100/70">
                                     <tr className="whitespace-nowrap">
-                                      <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-gray-500 uppercase whitespace-nowrap">Mã đơn hàng</th>
+                                      <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-gray-500 uppercase whitespace-nowrap">Mã booking</th>
                                       <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-gray-500 uppercase whitespace-nowrap">Tour tham gia</th>
                                       <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-gray-500 uppercase whitespace-nowrap">Ngày đi</th>
                                       <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-gray-500 uppercase whitespace-nowrap">Vai trò</th>
@@ -622,7 +622,7 @@ export default function PassengersManagement() {
                                         <tr key={b.passenger_id} className="hover:bg-gray-50/40">
                                           {/* Order ID */}
                                           <td className="px-4 py-3 text-xs font-bold text-blue-600 font-mono whitespace-nowrap">
-                                            {b.order_id}
+                                            #{b.order_id ? b.order_id.substring(0, 8) : ''}
                                           </td>
 
                                           {/* Tour Code & Name */}
@@ -810,14 +810,14 @@ export default function PassengersManagement() {
                                   <div className="mt-6 space-y-3">
                                     <h5 className="text-[11px] font-black text-gray-950 uppercase tracking-wider flex items-center gap-1.5">
                                       <Users className="w-4 h-4 text-emerald-600" />
-                                      Hành khách liên quan (Người liên quan trong đơn hàng)
+                                      Hành khách liên quan (Người liên quan trong booking)
                                     </h5>
                                     <div className="overflow-hidden border border-emerald-100 rounded-lg shadow-sm bg-white">
                                       <table className="min-w-full divide-y divide-gray-150">
                                         <thead className="bg-emerald-50/40">
                                           <tr>
                                             <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-emerald-800 uppercase">Họ và tên</th>
-                                            <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-emerald-800 uppercase">Mối quan hệ đơn hàng</th>
+                                            <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-emerald-800 uppercase">Mối quan hệ booking</th>
                                             <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-emerald-800 uppercase">Mã đơn</th>
                                             <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-emerald-800 uppercase">Hộ chiếu</th>
                                             <th scope="col" className="px-4 py-2 text-left text-[10px] font-bold text-emerald-800 uppercase">Điện thoại</th>
@@ -839,7 +839,7 @@ export default function PassengersManagement() {
                                                   </span>
                                                 )}
                                               </td>
-                                              <td className="px-4 py-2.5 font-mono text-gray-500">{rel.order_id}</td>
+                                              <td className="px-4 py-2.5 font-mono text-gray-500">#{rel.order_id ? rel.order_id.substring(0, 8) : ''}</td>
                                               <td className="px-4 py-2.5 font-mono text-gray-600">{rel.passport || '-'}</td>
                                               <td className="px-4 py-2.5 text-gray-600">{rel.phone || '-'}</td>
                                               <td className="px-4 py-2.5">{getVisaBadge(rel.visa_status, rel.visa_disqualified_reason)}</td>

@@ -54,9 +54,9 @@ export default function ActionModal({
             />
           </div>
         )}
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 border rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Hủy</button>
-          <button onClick={handleConfirm} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Xác nhận</button>
+        <div className="flex justify-end gap-2 whitespace-nowrap shrink-0">
+          <button onClick={onClose} className="px-4 py-2 border rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap shrink-0">Hủy</button>
+          <button onClick={handleConfirm} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 whitespace-nowrap shrink-0">Xác nhận</button>
         </div>
       </div>
     </div>

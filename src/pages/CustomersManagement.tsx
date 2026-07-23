@@ -81,7 +81,7 @@ export default function CustomersManagement() {
 
             <div className="bg-gray-50 px-6 py-4 border-t border-gray-150 grid grid-cols-2 gap-4 text-center">
               <div>
-                <span className="text-xs text-gray-500 font-medium">Tổng Đơn hàng</span>
+                <span className="text-xs text-gray-500 font-medium">Tổng Booking</span>
                 <div className="text-lg font-bold text-gray-900 mt-0.5">{agent.totalBookings} đơn</div>
               </div>
               <div>

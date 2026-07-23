@@ -14,12 +14,14 @@ interface ManagedUser {
   phone: string;
   company_name: string;
   role: Role;
+  leader_id?: string | null;
   created_at?: string;
 }
 
 const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; border: string }> = {
   admin: { label: 'Quản trị viên', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
-  sale: { label: 'Kinh doanh', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+  sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
+  sale: { label: 'Kinh doanh (Sale)', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
   operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
   visa: { label: 'Phòng Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
   accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
@@ -52,7 +54,8 @@ export default function UserManagement() {
     full_name: '',
     phone: '',
     company_name: '',
-    role: 'CTV' as Role
+    role: 'CTV' as Role,
+    leader_id: ''
   });
 
   const fetchUsers = async () => {
@@ -104,7 +107,8 @@ export default function UserManagement() {
       full_name: '',
       phone: '',
       company_name: 'AD Luxury Travel',
-      role: 'CTV'
+      role: 'CTV',
+      leader_id: ''
     });
     setShowPassword(false);
     setIsFormOpen(true);
@@ -118,7 +122,8 @@ export default function UserManagement() {
       full_name: user.full_name,
       phone: user.phone || '',
       company_name: user.company_name || '',
-      role: user.role
+      role: user.role,
+      leader_id: user.leader_id || ''
     });
     setShowPassword(false);
     setIsFormOpen(true);
@@ -344,6 +349,7 @@ export default function UserManagement() {
                     <th className="py-3 px-6">Thông tin liên hệ</th>
                     <th className="py-3 px-6">Công ty / Tổ chức</th>
                     <th className="py-3 px-6">Vai trò (Role)</th>
+                    <th className="py-3 px-6">Leader phụ trách</th>
                     <th className="py-3 px-6">Ngày tham gia</th>
                     <th className="py-3 px-6 text-right">Thao tác</th>
                   </tr>
@@ -351,6 +357,7 @@ export default function UserManagement() {
                 <tbody className="divide-y divide-gray-150 text-xs font-semibold text-gray-700">
                   {filteredUsers.map((user) => {
                     const roleCfg = ROLE_LABELS[user.role] || { label: user.role, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' };
+                    const leaderUser = user.leader_id ? users.find(u => u.id === user.leader_id) : null;
                     return (
                       <tr key={user.id} className="hover:bg-slate-50/40 transition-colors">
                         <td className="py-4 px-6">
@@ -381,6 +388,16 @@ export default function UserManagement() {
                             <Shield className="w-3 h-3 shrink-0" />
                             <span>{roleCfg.label}</span>
                           </span>
+                        </td>
+                        <td className="py-4 px-6 text-xs font-bold text-slate-700">
+                          {leaderUser ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
+                              <Users className="w-3 h-3 text-blue-500 shrink-0" />
+                              <span>{leaderUser.full_name}</span>
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic font-normal text-[11px]">— Trực tiếp / Top —</span>
+                          )}
                         </td>
                         <td className="py-4 px-6 text-gray-400 font-medium">
                           {user.created_at ? new Date(user.created_at).toLocaleDateString('vi-VN') : 'Không rõ'}
@@ -616,6 +633,31 @@ export default function UserManagement() {
                   </select>
                   <p className="text-[10px] text-gray-400 font-bold leading-relaxed mt-1">
                     Lưu ý: Quyền truy cập các tab (Kế toán, Visa, Quản trị) sẽ tự động kích hoạt dựa theo vai trò được gán này.
+                  </p>
+                </div>
+
+                {/* Leader SELECT (Trưởng nhóm phụ trách) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Leader phụ trách (Trưởng nhóm)</span>
+                  </label>
+                  <select
+                    value={formData.leader_id || ''}
+                    onChange={(e) => setFormData({ ...formData, leader_id: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-slate-300 bg-white rounded-xl text-xs font-extrabold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="">-- Không thuộc nhóm nào (Tự do / Top Leader) --</option>
+                    {users
+                      .filter(u => u.id !== editingUser?.id && (u.role === 'sale_leader' || u.role === 'admin'))
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.full_name} ({ROLE_LABELS[u.role]?.label || u.role}) - {u.email}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-[10px] text-gray-400 font-bold leading-relaxed mt-1">
+                    Sale Leader phụ trách sẽ có quyền mở khóa booking và quản lý đơn hàng của thành viên trong nhóm này.
                   </p>
                 </div>
 

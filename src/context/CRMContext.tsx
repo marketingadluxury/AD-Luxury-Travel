@@ -1,8 +1,8 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, User, TourStatus, MembershipSettings, Invoice, TourCost, LandtourCost, PartnerPayment } from '../types';
+import { Tour, Order, Passenger, Role, User, TourStatus, MembershipSettings, Invoice, TourCost, LandtourCost, PartnerPayment, ActivityLog } from '../types';
 import { supabase } from '../lib/supabase';
-import { useAuth } from './AuthContext';
+import { useAuth, UserProfile } from './AuthContext';
 
 const idMap: { [key: string]: string } = {
   '1': 'a809b4db-9ee7-4c07-b352-09419106093d',
@@ -63,6 +63,10 @@ interface CRMContextType {
   orders: Order[];
   passengers: Passenger[];
   notifications: Notification[];
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  profilesList: UserProfile[];
+  refreshProfiles: () => Promise<void>;
   currentRole: Role;
   setCurrentRole: (role: Role) => void;
   categories: string[];
@@ -97,6 +101,7 @@ interface CRMContextType {
     discount_value?: number;
     surcharge_name?: string;
     surcharge_amount?: number;
+    is_locked?: boolean;
   }) => void;
   confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
   cancelOrder: (orderId: string, reason?: string) => void;
@@ -121,6 +126,9 @@ interface CRMContextType {
   deleteInvoiceReceipt: (invoiceId: string) => Promise<void>;
   tourCosts: TourCost[];
   updateTourCost: (tourId: string, costData: Partial<TourCost>) => Promise<void>;
+  activityLogs: ActivityLog[];
+  logActivity: (logData: { action: string; module: ActivityLog['module']; details?: string }) => Promise<void>;
+  clearActivityLogs: () => Promise<void>;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -309,12 +317,92 @@ function sanitizePassengers(rawPassengers: Passenger[], rawOrders: Order[]): Pas
   return sanitized;
 }
 
+export const canUnlockOrder = (
+  order: Order | null,
+  currentRole: Role,
+  currentProfile: UserProfile | null,
+  profilesList: UserProfile[]
+): boolean => {
+  if (!order || !currentProfile) return false;
+  // 1. Admin can unlock any booking
+  if (currentRole === 'admin') return true;
+
+  // 2. Only Sale Leader can unlock bookings
+  if (currentRole !== 'sale_leader') return false;
+
+  // 3. Sale Leader can unlock if they created the booking themselves
+  if (
+    (order.user_id && order.user_id === currentProfile.id) ||
+    (order.salesperson_id && order.salesperson_id === currentProfile.id) ||
+    (order.created_by && currentProfile.full_name && order.created_by.toLowerCase().trim() === currentProfile.full_name.toLowerCase().trim()) ||
+    (order.created_by && currentProfile.email && order.created_by.toLowerCase().trim() === currentProfile.email.toLowerCase().trim())
+  ) {
+    return true;
+  }
+
+  // 4. Sale Leader can unlock if the creator of the booking belongs to their team (creator's leader_id === currentProfile.id)
+  const creatorProfile = profilesList.find(p => 
+    (p.id && order.user_id && p.id === order.user_id) || 
+    (p.id && order.salesperson_id && p.id === order.salesperson_id) || 
+    (p.full_name && order.created_by && p.full_name.toLowerCase().trim() === order.created_by.toLowerCase().trim()) ||
+    (p.email && order.created_by && p.email.toLowerCase().trim() === order.created_by.toLowerCase().trim())
+  );
+
+  if (creatorProfile && creatorProfile.leader_id === currentProfile.id) {
+    return true;
+  }
+
+  return false;
+};
+
 export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Role }> = ({ children, initialRole = 'admin' }) => {
   const { user, profile } = useAuth();
   const [tours, setTours] = useState<Tour[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [profilesList, setProfilesList] = useState<UserProfile[]>([]);
+
+  const refreshProfiles = async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase.from('profiles').select('*');
+        if (!error && data) {
+          setProfilesList(data as UserProfile[]);
+          return;
+        }
+      }
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        setProfilesList(data);
+      }
+    } catch (err) {
+      console.warn('Lỗi khi tải danh sách profiles:', err);
+    }
+  };
+
+  const markNotificationAsRead = async (notifId: string) => {
+    setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, read: true } : n));
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('system_notifications').update({ read: true }).eq('id', notifId);
+      } catch (err) {
+        console.error('Lỗi khi đánh dấu đã đọc thông báo:', err);
+      }
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('system_notifications').update({ read: true }).eq('read', false);
+      } catch (err) {
+        console.error('Lỗi khi đánh dấu tất cả đã đọc thông báo:', err);
+      }
+    }
+  };
   const [categories, setCategories] = useState<string[]>([]);
   const [membershipSettings, setMembershipSettings] = useState<MembershipSettings>({
     silverMin: 20000000,
@@ -325,6 +413,72 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const [visaCommonFiles, setVisaCommonFiles] = useState<{ name: string; url: string }[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tourCosts, setTourCosts] = useState<TourCost[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+
+  const logActivity = async (logData: {
+    action: string;
+    module: ActivityLog['module'];
+    details?: string;
+  }) => {
+    const userName = profile?.full_name || user?.email || 'Người dùng hệ thống';
+    const userEmail = user?.email || '';
+    const userRole = currentRole;
+    const userId = user?.id || profile?.id;
+
+    const newLog: ActivityLog = {
+      id: generateSafeUUID(),
+      user_id: userId,
+      user_name: userName,
+      user_email: userEmail,
+      user_role: userRole,
+      action: logData.action,
+      module: logData.module,
+      details: logData.details || '',
+      created_at: new Date().toISOString()
+    };
+
+    setActivityLogs(prev => [newLog, ...prev]);
+
+    try {
+      const existing = localStorage.getItem('crm_activity_logs');
+      const parsed = existing ? JSON.parse(existing) : [];
+      const updated = [newLog, ...parsed].slice(0, 500);
+      localStorage.setItem('crm_activity_logs', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Lỗi khi lưu activity log vào LocalStorage:', e);
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('activity_logs').insert({
+          id: newLog.id,
+          user_id: newLog.user_id || null,
+          user_name: newLog.user_name,
+          user_email: newLog.user_email,
+          user_role: newLog.user_role,
+          action: newLog.action,
+          module: newLog.module,
+          details: newLog.details,
+          created_at: newLog.created_at
+        });
+      } catch (err) {
+        console.warn('Ghi log thao tác lên Supabase thất bại:', err);
+      }
+    }
+  };
+
+  const clearActivityLogs = async () => {
+    setActivityLogs([]);
+    localStorage.removeItem('crm_activity_logs');
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('activity_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    toast.success('Đã xóa toàn bộ lịch sử nhật ký thao tác');
+  };
 
   useEffect(() => {
     setCurrentRole(initialRole);
@@ -333,6 +487,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   // Load Initial Data (either from Supabase or Fallback to LocalStorage)
   useEffect(() => {
     const loadCRMData = async () => {
+      refreshProfiles();
       if (isSupabaseConfigured()) {
         console.log('Cấu hình Supabase hợp lệ, đang tải dữ liệu...');
         
@@ -863,7 +1018,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
                 id: 'N-1',
                 type: 'visa',
                 title: 'Yêu cầu visa mới',
-                message: 'Khách hàng Nguyễn Văn Nam (Đơn hàng O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
+                message: 'Khách hàng Nguyễn Văn Nam (Booking O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
                 targetId: 'P-101',
                 createdAt: new Date(Date.now() - 3600000).toISOString(),
                 read: false
@@ -872,7 +1027,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
                 id: 'N-2',
                 type: 'accounting',
                 title: 'Yêu cầu xuất hóa đơn',
-                message: 'Đơn hàng O-1001 đã sure chỗ. Cần xuất hóa đơn VAT.',
+                message: 'Booking O-1001 đã sure chỗ. Cần xuất hóa đơn VAT.',
                 targetId: 'O-1001',
                 createdAt: new Date().toISOString(),
                 read: false
@@ -1084,6 +1239,34 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               setTourCosts([]);
             }
           }
+          // Tải Activity Logs
+          try {
+            const { data: logsData } = await supabase
+              .from('activity_logs')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .limit(300);
+            if (logsData && logsData.length > 0) {
+              const mappedLogs: ActivityLog[] = logsData.map(l => ({
+                id: l.id,
+                user_id: l.user_id,
+                user_name: l.user_name || 'Người dùng',
+                user_email: l.user_email || '',
+                user_role: (l.user_role as Role) || 'CTV',
+                action: l.action,
+                module: l.module as ActivityLog['module'],
+                details: l.details || '',
+                created_at: l.created_at || new Date().toISOString()
+              }));
+              setActivityLogs(mappedLogs);
+            } else {
+              const savedLogs = localStorage.getItem('crm_activity_logs');
+              setActivityLogs(savedLogs ? JSON.parse(savedLogs) : []);
+            }
+          } catch (err) {
+            const savedLogs = localStorage.getItem('crm_activity_logs');
+            setActivityLogs(savedLogs ? JSON.parse(savedLogs) : []);
+          }
         } catch (err) {
           console.warn('Lỗi khi tải Tour Costs từ Supabase (sử dụng fallback local):', err);
           const savedCosts = localStorage.getItem('crm_tour_costs');
@@ -1175,7 +1358,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           id: 'N-2',
           type: 'accounting',
           title: 'Yêu cầu xuất hóa đơn',
-          message: 'Đơn hàng chắc chắn O-1001 đã được xác nhận. Vui lòng kiểm tra và xuất hóa đơn.',
+          message: 'Booking chắc chắn O-1001 đã được xác nhận. Vui lòng kiểm tra và xuất hóa đơn.',
           targetId: 'O-1001',
           createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
           read: false
@@ -1205,6 +1388,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
       const savedCosts = localStorage.getItem('crm_tour_costs');
       setTourCosts(savedCosts ? JSON.parse(savedCosts) : []);
+
+      const savedLogs = localStorage.getItem('crm_activity_logs');
+      setActivityLogs(savedLogs ? JSON.parse(savedLogs) : []);
     };
 
     loadCRMData();
@@ -1383,6 +1569,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       localStorage.setItem('crm_categories', JSON.stringify(next));
       return next;
     });
+    logActivity({ action: 'Tạo Danh mục sản phẩm mới', module: 'Hệ thống', details: `Tên danh mục: ${trimmed}` });
 
     if (isSupabaseConfigured()) {
       try {
@@ -1422,6 +1609,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       localStorage.setItem('crm_categories', JSON.stringify(next));
       return next;
     });
+    logActivity({ action: 'Xóa Danh mục sản phẩm', module: 'Hệ thống', details: `Tên danh mục: ${categoryName}` });
 
     if (isSupabaseConfigured()) {
       try {
@@ -1519,6 +1707,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     
     // Thêm vào local state ngay lập tức
     setTours(prev => [...prev, newTour]);
+    logActivity({ action: 'Tạo Tour mới', module: 'Tour', details: `Mã tour: ${newTour.code || id} - ${newTour.name || 'Tour mới'}` });
 
     if (isSupabaseConfigured()) {
       try {
@@ -1660,7 +1849,40 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       seat_status: seatStatus
     };
 
+    const existingTour = tours.find(t => t.id === updatedTour.id);
+    const tourChanges: { field: string; old: string; new: string }[] = [];
+    if (existingTour) {
+      if (existingTour.name !== updatedTour.name) {
+        tourChanges.push({ field: 'Tên Tour', old: existingTour.name || 'Trống', new: updatedTour.name || 'Trống' });
+      }
+      const oldPrice = Number(existingTour.price_adult || existingTour.price || 0);
+      const newPrice = Number(updatedTour.price_adult || updatedTour.price || 0);
+      if (oldPrice !== newPrice) {
+        tourChanges.push({ field: 'Giá người lớn', old: `${oldPrice.toLocaleString('vi-VN')} đ`, new: `${newPrice.toLocaleString('vi-VN')} đ` });
+      }
+      const oldChild = Number(existingTour.price_child || 0);
+      const newChild = Number(updatedTour.price_child || 0);
+      if (oldChild !== newChild) {
+        tourChanges.push({ field: 'Giá trẻ em', old: `${oldChild.toLocaleString('vi-VN')} đ`, new: `${newChild.toLocaleString('vi-VN')} đ` });
+      }
+      if (existingTour.total_seats !== updatedTour.total_seats) {
+        tourChanges.push({ field: 'Tổng số chỗ', old: `${existingTour.total_seats} chỗ`, new: `${updatedTour.total_seats} chỗ` });
+      }
+      if (existingTour.departure_time !== updatedTour.departure_time) {
+        tourChanges.push({ field: 'Thời gian khởi hành', old: existingTour.departure_time || 'Chưa xếp', new: updatedTour.departure_time || 'Chưa xếp' });
+      }
+      if (existingTour.status !== updatedTour.status) {
+        tourChanges.push({ field: 'Trạng thái Tour', old: existingTour.status || '--', new: updatedTour.status || '--' });
+      }
+    }
+
+    const logDetails = tourChanges.length > 0 ? JSON.stringify({
+      info: `Mã tour: ${updatedTour.code || updatedTour.id} - ${updatedTour.name}`,
+      changes: tourChanges
+    }) : `Mã tour: ${updatedTour.code || updatedTour.id} - ${updatedTour.name}`;
+
     setTours(prev => prev.map(t => t.id === updatedTour.id ? nextTour : t));
+    logActivity({ action: 'Cập nhật Tour', module: 'Tour', details: logDetails });
 
     if (isSupabaseConfigured()) {
       try {
@@ -1783,6 +2005,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
   const deleteTour = async (tourId: string) => {
     setTours(prev => prev.filter(t => t.id !== tourId));
+    logActivity({ action: 'Xóa Tour', module: 'Tour', details: `Tour ID: ${tourId}` });
     if (isSupabaseConfigured()) {
       try {
         // Xóa các booking liên quan trước để tránh lỗi khóa ngoại
@@ -1827,6 +2050,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     discount_value?: number;
     surcharge_name?: string;
     surcharge_amount?: number;
+    is_locked?: boolean;
   }) => {
     const tour = tours.find(t => t.id === orderData.tour_id);
     if (!tour) return;
@@ -1862,6 +2086,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       currentRole === 'CTV' ? 'CTV' :
       currentRole === 'Đại lý' ? 'Đại lý' :
       currentRole === 'sale' ? 'Sale' :
+      currentRole === 'sale_leader' ? 'Sale Leader' :
       currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên'
     );
 
@@ -1939,6 +2164,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       discount_value: orderData.discount_value || 0,
       surcharge_name: orderData.surcharge_name || '',
       surcharge_amount: orderData.surcharge_amount || 0,
+      is_locked: orderData.is_locked !== undefined ? orderData.is_locked : true,
     } as any;
 
     const newPassengers: Passenger[] = (orderData.passengers || []).map((p, index) => ({
@@ -1979,6 +2205,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     setPassengers(prev => [...prev, ...newPassengers]);
     setTours(updatedTours);
 
+    logActivity({
+      action: orderData.status === 'sure' ? 'Tạo Booking chắc chắn (Sure)' : 'Tạo Booking giữ chỗ (Hold)',
+      module: 'Đơn hàng',
+      details: `Tour: ${tour.code || tour.id} - Khách đặt: ${orderData.booker_name || 'Khách lẻ'} (${orderData.booker_phone || 'Không SĐT'}) - Tổng tiền: ${totalPrice.toLocaleString('vi-VN')} đ`
+    });
+
     // Notifications
     const newNotifs: Notification[] = [];
     if (orderData.status === 'sure') {
@@ -1986,7 +2218,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         id: 'N-acc-' + Date.now(),
         type: 'accounting',
         title: 'Yêu cầu xuất hóa đơn',
-        message: `Đơn hàng ${orderId} của khách ${orderData.booker_name || (orderData.passengers && orderData.passengers[0] && orderData.passengers[0].full_name) || 'Giữ Chỗ'} đã sure chỗ. Cần xuất hóa đơn.`,
+        message: `Booking ${orderId} của khách ${orderData.booker_name || (orderData.passengers && orderData.passengers[0] && orderData.passengers[0].full_name) || 'Giữ Chỗ'} đã sure chỗ. Cần xuất hóa đơn.`,
         targetId: orderId,
         createdAt: new Date().toISOString(),
         read: false
@@ -2115,7 +2347,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         }
       } catch (err: any) {
         console.error('Lỗi khi lưu đơn hàng lên Supabase:', err);
-        toast.error(`Lỗi lưu cơ sở dữ liệu: ${err.message || JSON.stringify(err)}\n(Đơn hàng vừa tạo sẽ bị huỷ để đảm bảo đồng bộ)`);
+        toast.error(`Lỗi lưu cơ sở dữ liệu: ${err.message || JSON.stringify(err)}\n(Booking vừa tạo sẽ bị huỷ để đảm bảo đồng bộ)`);
         
         // Rollback local state
         setOrders(prev => prev.filter(o => o.id !== orderId));
@@ -2278,13 +2510,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled', cancel_reason: reason } : o));
+    logActivity({ action: 'Hủy Booking', module: 'Đơn hàng', details: `Mã booking: ${orderId.substring(0, 8)} - Lý do: ${reason || 'Không ghi'}` });
 
 
     const newNotif = {
       id: 'N-' + Date.now(),
       type: 'accounting' as const,
-      title: 'Đơn hàng đã huỷ',
-      message: `Đơn hàng ${orderId} đã được huỷ bỏ bởi Sale/Đại lý.${reason ? ` Lý do: ${reason}` : ''}`,
+      title: 'Booking đã huỷ',
+      message: `Booking ${orderId.substring(0, 8)} đã được huỷ bỏ bởi Sale/Đại lý.${reason ? ` Lý do: ${reason}` : ''}`,
       targetId: orderId,
       createdAt: new Date().toISOString(),
       read: false
@@ -2388,14 +2621,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     setOrders(prev => prev.map(o => {
       if (o.id === orderId) {
-        return { ...o, status: 'sure', hold_expiry: undefined, total_price: newTotal };
+        return { ...o, status: 'sure', is_locked: true, hold_expiry: undefined, total_price: newTotal };
       }
       return o;
     }));
+    logActivity({ action: 'Chuyển Hold sang Sure (Chắc chắn)', module: 'Đơn hàng', details: `Mã booking: ${orderId.substring(0, 8)} - Tổng tiền: ${newTotal.toLocaleString('vi-VN')} đ` });
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ status: 'sure', hold_expiry: null, total_amount: newTotal }).eq('id', toUuid(orderId));
+        await supabase.from('bookings').update({ status: 'sure', is_locked: true, hold_expiry: null, total_amount: newTotal }).eq('id', toUuid(orderId));
         await supabase.from('passengers').delete().eq('order_id', toUuid(orderId));
 
         for (const p of newPassengers) {
@@ -2463,12 +2697,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
       return o;
     }));
+    logActivity({ action: 'Yêu cầu gia hạn giữ chỗ', module: 'Đơn hàng', details: `Mã booking: ${orderId.substring(0, 8)} - Thêm ${hours} giờ` });
 
     const newNotif = {
       id: 'N-ext-' + Date.now(),
       type: 'extension' as const,
       title: 'Yêu cầu gia hạn giữ chỗ',
-      message: `Sale yêu cầu gia hạn giữ chỗ thêm ${hours} tiếng cho đơn hàng ${orderId}.`,
+      message: `Sale yêu cầu gia hạn giữ chỗ thêm ${hours} tiếng cho booking ${orderId.substring(0, 8)}.`,
       targetId: orderId,
       createdAt: new Date().toISOString(),
       read: false
@@ -2519,6 +2754,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
       return o;
     }));
+    logActivity({ action: approve ? 'Duyệt gia hạn giữ chỗ' : 'Từ chối gia hạn giữ chỗ', module: 'Đơn hàng', details: `Mã booking: ${orderId.substring(0, 8)}` });
 
     if (isSupabaseConfigured()) {
       try {
@@ -2552,6 +2788,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
       return p;
     }));
+
+    const targetPassenger = passengers.find(p => p.id === passengerId);
+    logActivity({
+      action: 'Cập nhật trạng thái Visa',
+      module: 'Visa',
+      details: `Hành khách: ${targetPassenger?.full_name || targetPassenger?.name || passengerId} - Trạng thái mới: ${status}${reason ? ` (Lý do: ${reason})` : ''}`
+    });
 
     // Save/delete disqualified reason to localStorage for safety backup
     const disqualifiedReasons = JSON.parse(localStorage.getItem('crm_disqualified_reasons') || '{}');
@@ -2681,7 +2924,29 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
     localStorage.setItem('crm_visa_submitted_ats', JSON.stringify(submittedAts));
 
+    const passChanges: { field: string; old: string; new: string }[] = [];
+    if (existing) {
+      if (finalData.full_name && finalData.full_name !== existing.full_name) {
+        passChanges.push({ field: 'Họ tên', old: existing.full_name || 'Trống', new: finalData.full_name });
+      }
+      if (finalData.passport_number && finalData.passport_number !== existing.passport_number) {
+        passChanges.push({ field: 'Số hộ chiếu', old: existing.passport_number || 'Trống', new: finalData.passport_number });
+      }
+      if (finalData.passport_expiry_date && finalData.passport_expiry_date !== existing.passport_expiry_date) {
+        passChanges.push({ field: 'Hạn hộ chiếu', old: existing.passport_expiry_date || 'Trống', new: finalData.passport_expiry_date });
+      }
+      if (finalData.visa_status && finalData.visa_status !== existing.visa_status) {
+        passChanges.push({ field: 'Trạng thái Visa', old: existing.visa_status || 'Trống', new: finalData.visa_status });
+      }
+    }
+
+    const passDetails = passChanges.length > 0 ? JSON.stringify({
+      info: `Khách: ${finalData.full_name || existing?.full_name || passengerId}`,
+      changes: passChanges
+    }) : `Khách: ${finalData.full_name || finalData.name || passengerId}`;
+
     setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, ...finalData } : p));
+    logActivity({ action: 'Cập nhật thông tin hành khách', module: 'Hành khách', details: passDetails });
     
     if (isSupabaseConfigured()) {
       try {
@@ -2725,8 +2990,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   };
 
   const deletePassenger = async (passengerId: string) => {
+    const target = passengers.find(p => p.id === passengerId);
     // Optimistic update
     setPassengers(prev => prev.filter(p => p.id !== passengerId));
+    logActivity({ action: 'Xóa hành khách khỏi đoàn', module: 'Hành khách', details: `Tên khách: ${target?.full_name || target?.name || passengerId}` });
 
     if (isSupabaseConfigured()) {
       try {
@@ -2743,7 +3010,61 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   };
 
   const updateOrder = async (orderId: string, updatedData: Partial<Order>) => {
+    const existingOrder = orders.find(o => o.id === orderId);
+    const orderChanges: { field: string; old: string; new: string }[] = [];
+    if (existingOrder) {
+      if (updatedData.total_price !== undefined && Number(updatedData.total_price) !== Number(existingOrder.total_price)) {
+        orderChanges.push({
+          field: 'Tổng giá trị đơn',
+          old: `${Number(existingOrder.total_price || 0).toLocaleString('vi-VN')} đ`,
+          new: `${Number(updatedData.total_price || 0).toLocaleString('vi-VN')} đ`
+        });
+      }
+      if (updatedData.vat_option !== undefined && updatedData.vat_option !== existingOrder.vat_option) {
+        orderChanges.push({
+          field: 'Cấu hình VAT',
+          old: existingOrder.vat_option || 'Không VAT',
+          new: updatedData.vat_option || 'Không VAT'
+        });
+      }
+      if (updatedData.discount_value !== undefined && Number(updatedData.discount_value) !== Number(existingOrder.discount_value)) {
+        orderChanges.push({
+          field: 'Chiết khấu / Giảm giá',
+          old: `${Number(existingOrder.discount_value || 0).toLocaleString('vi-VN')} ${existingOrder.discount_type === 'percent' ? '%' : 'đ'}`,
+          new: `${Number(updatedData.discount_value || 0).toLocaleString('vi-VN')} ${updatedData.discount_type === 'percent' ? '%' : 'đ'}`
+        });
+      }
+      if (updatedData.surcharge_amount !== undefined && Number(updatedData.surcharge_amount) !== Number(existingOrder.surcharge_amount)) {
+        orderChanges.push({
+          field: `Phụ thu (${updatedData.surcharge_name || 'Khác'})`,
+          old: `${Number(existingOrder.surcharge_amount || 0).toLocaleString('vi-VN')} đ`,
+          new: `${Number(updatedData.surcharge_amount || 0).toLocaleString('vi-VN')} đ`
+        });
+      }
+      if (updatedData.single_room_count !== undefined && Number(updatedData.single_room_count) !== Number(existingOrder.single_room_count)) {
+        orderChanges.push({
+          field: 'Số phòng đơn phụ thu',
+          old: `${existingOrder.single_room_count || 0} phòng`,
+          new: `${updatedData.single_room_count || 0} phòng`
+        });
+      }
+      if (updatedData.status !== undefined && updatedData.status !== existingOrder.status) {
+        orderChanges.push({
+          field: 'Trạng thái booking',
+          old: existingOrder.status === 'sure' ? 'Chắc chắn' : existingOrder.status === 'hold' ? 'Giữ chỗ' : 'Đã hủy',
+          new: updatedData.status === 'sure' ? 'Chắc chắn' : updatedData.status === 'hold' ? 'Giữ chỗ' : 'Đã hủy'
+        });
+      }
+    }
+
+    const displayOrderCode = (existingOrder?.id || orderId).substring(0, 8);
+    const logDetails = orderChanges.length > 0 ? JSON.stringify({
+      info: `Mã đơn: ${displayOrderCode} - Khách đặt: ${existingOrder?.booker_name || 'Khách lẻ'}`,
+      changes: orderChanges
+    }) : `Mã đơn: ${displayOrderCode}`;
+
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedData } : o));
+    logActivity({ action: 'Cập nhật booking', module: 'Đơn hàng', details: logDetails });
     if (isSupabaseConfigured()) {
       try {
         const updatePayload = {
@@ -2831,6 +3152,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     };
 
     setInvoices(prev => [newInvoice, ...prev]);
+    logActivity({
+      action: invoiceData.type === 'payment' ? 'Tạo Phiếu Chi' : 'Tạo Phiếu Thu',
+      module: 'Kế toán',
+      details: `Mã phiếu: ${code} - Số tiền: ${Number(invoiceData.amount).toLocaleString('vi-VN')} đ`
+    });
 
     if (isSupabaseConfigured()) {
       try {
@@ -2926,7 +3252,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       id: generateSafeUUID(),
       type: 'accounting',
       title: 'Hóa đơn thanh toán mới',
-      message: `Nhân viên ${invoiceData.created_by || 'Sale'} đã tải hóa đơn chuyển khoản ${amountStr}đ cho đơn hàng #${bookingCode}. Vui lòng kiểm tra và duyệt.`,
+      message: `Nhân viên ${invoiceData.created_by || 'Sale'} đã tải hóa đơn chuyển khoản ${amountStr}đ cho booking #${bookingCode}. Vui lòng kiểm tra và duyệt.`,
       targetId: (invoiceData as any).order_id || '',
       createdAt: nowStr,
       read: false
@@ -2965,6 +3291,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     const targetInvoice = invoices.find(inv => inv.id === invoiceId);
     if (!targetInvoice) return;
+
+    logActivity({
+      action: 'Duyệt Phiếu Thu/Chi',
+      module: 'Kế toán',
+      details: `Mã phiếu: ${targetInvoice.invoice_code || invoiceId} - Số tiền: ${targetInvoice.amount?.toLocaleString('vi-VN')} đ - Duyệt bởi: ${verifierName}`
+    });
 
     const bookingId = targetInvoice.order_id;
     if (bookingId) {
@@ -3142,7 +3474,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       id: generateSafeUUID(),
       type: 'extension',
       title: 'Hóa đơn thanh toán được duyệt',
-      message: `Kế toán ${verifierName} đã duyệt phiếu thu ${amountStr}đ cho đơn hàng #${bookingCode}.`,
+      message: `Kế toán ${verifierName} đã duyệt phiếu thu ${amountStr}đ cho booking #${bookingCode}.`,
       targetId: bookingId || '',
       createdAt: nowStr,
       read: false
@@ -3170,11 +3502,19 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const rejectInvoiceReceipt = async (invoiceId: string, verifierName: string) => {
     const nowStr = new Date().toISOString();
 
+    const targetInvoice = invoices.find(inv => inv.id === invoiceId);
+
     setInvoices(prev => prev.map(inv => 
       inv.id === invoiceId 
         ? { ...inv, status: 'rejected', verified_by: verifierName, verified_at: nowStr } 
         : inv
     ));
+
+    logActivity({
+      action: 'Từ chối Phiếu Thu/Chi',
+      module: 'Kế toán',
+      details: `Mã phiếu: ${targetInvoice?.invoice_code || invoiceId} - Người từ chối: ${verifierName}`
+    });
 
     // Sync rejection to tourCosts
     setTourCosts(prev => {
@@ -3226,7 +3566,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       return nextCosts;
     });
 
-    const targetInvoice = invoices.find(inv => inv.id === invoiceId);
     if (!targetInvoice) return;
 
     const bookingId = targetInvoice.order_id;
@@ -3255,7 +3594,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       id: generateSafeUUID(),
       type: 'extension',
       title: 'Hóa đơn thanh toán bị từ chối',
-      message: `Phiếu thu ${amountStr}đ cho đơn hàng #${bookingCode} đã bị kế toán từ chối. Vui lòng kiểm tra lại.`,
+      message: `Phiếu thu ${amountStr}đ cho booking #${bookingCode} đã bị kế toán từ chối. Vui lòng kiểm tra lại.`,
       targetId: bookingId || '',
       createdAt: nowStr,
       read: false
@@ -3351,7 +3690,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   };
 
   const deleteInvoiceReceipt = async (invoiceId: string) => {
+    const targetInvoice = invoices.find(inv => inv.id === invoiceId);
     setInvoices(prev => prev.filter(inv => inv.id !== invoiceId));
+    logActivity({
+      action: 'Xóa Phiếu Thu/Chi',
+      module: 'Kế toán',
+      details: `Mã phiếu: ${targetInvoice?.invoice_code || invoiceId}`
+    });
 
     // Also remove/update from tourCosts if linked
     setTourCosts(prev => {
@@ -3471,6 +3816,43 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     setTourCosts(updatedList);
     localStorage.setItem('crm_tour_costs', JSON.stringify(updatedList));
 
+    const tourObj = tours.find(t => t.id === tourId);
+    const costChanges: { field: string; old: string; new: string }[] = [];
+    if (currentCost) {
+      if (costData.flightAmount !== undefined && costData.flightAmount !== currentCost.flightAmount) {
+        costChanges.push({ field: 'Chi phí Vé máy bay', old: `${(currentCost.flightAmount || 0).toLocaleString('vi-VN')} đ`, new: `${(costData.flightAmount || 0).toLocaleString('vi-VN')} đ` });
+      }
+      if (costData.tourGuideAmount !== undefined && costData.tourGuideAmount !== currentCost.tourGuideAmount) {
+        costChanges.push({ field: 'Chi phí HDV', old: `${(currentCost.tourGuideAmount || 0).toLocaleString('vi-VN')} đ`, new: `${(costData.tourGuideAmount || 0).toLocaleString('vi-VN')} đ` });
+      }
+      if (costData.advertisingAmount !== undefined && costData.advertisingAmount !== currentCost.advertisingAmount) {
+        costChanges.push({ field: 'Chi phí Quảng cáo / Ads', old: `${(currentCost.advertisingAmount || 0).toLocaleString('vi-VN')} đ`, new: `${(costData.advertisingAmount || 0).toLocaleString('vi-VN')} đ` });
+      }
+      if (costData.insuranceAmount !== undefined && costData.insuranceAmount !== currentCost.insuranceAmount) {
+        costChanges.push({ field: 'Bảo hiểm du lịch', old: `${(currentCost.insuranceAmount || 0).toLocaleString('vi-VN')} đ`, new: `${(costData.insuranceAmount || 0).toLocaleString('vi-VN')} đ` });
+      }
+      if (costData.commissionAmount !== undefined && costData.commissionAmount !== currentCost.commissionAmount) {
+        costChanges.push({ field: 'Hoa hồng / Chiết khấu', old: `${(currentCost.commissionAmount || 0).toLocaleString('vi-VN')} đ`, new: `${(costData.commissionAmount || 0).toLocaleString('vi-VN')} đ` });
+      }
+      if (costData.otherAmount !== undefined && costData.otherAmount !== currentCost.otherAmount) {
+        costChanges.push({ field: 'Chi phí khác', old: `${(currentCost.otherAmount || 0).toLocaleString('vi-VN')} đ`, new: `${(costData.otherAmount || 0).toLocaleString('vi-VN')} đ` });
+      }
+      if (costData.visaAmount !== undefined && costData.visaAmount !== currentCost.visaAmount) {
+        costChanges.push({ field: 'Chi phí Visa', old: `${(currentCost.visaAmount || 0).toLocaleString('vi-VN')} đ`, new: `${(costData.visaAmount || 0).toLocaleString('vi-VN')} đ` });
+      }
+    }
+
+    const costDetails = costChanges.length > 0 ? JSON.stringify({
+      info: `Tour: ${tourObj?.code || tourId} - ${tourObj?.name || ''}`,
+      changes: costChanges
+    }) : `Tour: ${tourObj?.code || tourId} - ${tourObj?.name || ''}`;
+
+    logActivity({
+      action: 'Cập nhật chi phí & đối tác',
+      module: 'Chi phí',
+      details: costDetails
+    });
+
     // 3. Lưu vào Supabase
     if (isSupabaseConfigured()) {
       try {
@@ -3519,6 +3901,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       orders,
       passengers,
       notifications,
+      markNotificationAsRead,
+      markAllNotificationsAsRead,
+      profilesList,
+      refreshProfiles,
       currentRole,
       setCurrentRole,
       categories,
@@ -3551,7 +3937,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       uploadInvoiceProof,
       deleteInvoiceReceipt,
       tourCosts,
-      updateTourCost
+      updateTourCost,
+      activityLogs,
+      logActivity,
+      clearActivityLogs
     }}>
       {children}
     </CRMContext.Provider>

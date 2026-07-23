@@ -607,7 +607,7 @@ export default function DashboardOperator() {
                         <th className="py-3 px-3 text-center w-12 border-r border-gray-200">NO</th>
                         <th className="py-3 px-3 w-16 text-center border-r border-gray-200">SEX</th>
                         <th className="py-3 px-4 w-56 border-r border-gray-200">FULLNAME</th>
-                        <th className="py-3 px-4 w-32 border-r border-gray-200">Mã đơn hàng</th>
+                        <th className="py-3 px-4 w-32 border-r border-gray-200">Mã booking</th>
                         <th className="py-3 px-4 w-40 border-r border-gray-200">Sale/CTV</th>
                         <th className="py-3 px-3 w-28 text-center border-r border-gray-200">Phòng đơn</th>
                         <th className="py-3 px-4 w-52 border-r border-gray-200">Ghi chú</th>

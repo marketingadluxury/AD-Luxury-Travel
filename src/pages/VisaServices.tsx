@@ -1343,7 +1343,7 @@ export default function VisaServices() {
                 <div key={order.id} className="bg-white p-4 rounded-lg border border-orange-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-900">{order.id}</span>
+                      <span className="font-bold text-gray-900">#{order.id.substring(0, 8)}</span>
                       <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-700">{tour?.code}</span>
                     </div>
                     <p className="text-sm text-gray-700 mt-1">

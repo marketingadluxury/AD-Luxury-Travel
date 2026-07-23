@@ -125,7 +125,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div>
             <h3 className="font-bold text-gray-900 text-base">Nộp hóa đơn thanh toán</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Thanh toán nhiều lần cho đơn hàng {orderCode}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Thanh toán nhiều lần cho booking {orderCode}</p>
           </div>
           <button 
             type="button"
@@ -168,7 +168,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
               className="block w-full px-3.5 py-2.5 border border-emerald-200 rounded-lg text-sm font-mono uppercase font-black text-emerald-700 bg-emerald-50 cursor-not-allowed"
               value={invoiceCode}
             />
-            <p className="text-[11px] text-gray-400">Được tạo theo cấu trúc: [Mã đơn hàng]-TT-[Số thứ tự lần thanh toán].</p>
+            <p className="text-[11px] text-gray-400">Được tạo theo cấu trúc: [Mã booking]-TT-[Số thứ tự lần thanh toán].</p>
           </div>
 
           {/* Description */}
@@ -199,7 +199,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
                 <p className="text-xs font-semibold text-gray-600">
                   {file ? file.name : 'Nhấp hoặc kéo thả để tải lên biên lai'}
                 </p>
-                <p className="text-[10px] text-gray-400">Hỗ trợ JPG, PNG, PDF (Tự động tải lên Google Drive của Đơn hàng)</p>
+                <p className="text-[10px] text-gray-400">Hỗ trợ JPG, PNG, PDF (Tự động tải lên Google Drive của Booking)</p>
               </div>
             </div>
           </div>

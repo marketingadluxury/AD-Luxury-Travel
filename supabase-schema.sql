@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   phone TEXT,
   company_name TEXT,
   role TEXT DEFAULT 'CTV',
+  leader_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
@@ -350,6 +351,21 @@ ALTER TABLE tour_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tour_costs ENABLE ROW LEVEL SECURITY;
 
+-- 13. Bảng Activity Logs (Nhật ký thao tác hệ thống)
+CREATE TABLE IF NOT EXISTS activity_logs (
+  id UUID NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_name TEXT NOT NULL,
+  user_email TEXT,
+  user_role TEXT DEFAULT 'CTV',
+  action TEXT NOT NULL,
+  module TEXT NOT NULL,
+  details TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
+
 -- CẤP QUYỀN TRUY CẬP (ĐỌC & GHI) CHO TÀI KHOẢN ĐÃ ĐĂNG NHẬP
 DO $$
 BEGIN
@@ -365,6 +381,7 @@ BEGIN
     DROP POLICY IF EXISTS "Allow authenticated access to tour_categories" ON tour_categories;
     DROP POLICY IF EXISTS "Allow authenticated access to app_settings" ON app_settings;
     DROP POLICY IF EXISTS "Allow authenticated access to tour_costs" ON tour_costs;
+    DROP POLICY IF EXISTS "Allow authenticated access to activity_logs" ON activity_logs;
 
     -- Tạo policy mới với USING và WITH CHECK để cho phép Thêm/Sửa/Xóa (Insert/Update/Delete)
     CREATE POLICY "Allow authenticated access to profiles" ON profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -378,10 +395,12 @@ BEGIN
     CREATE POLICY "Allow authenticated access to tour_categories" ON tour_categories FOR ALL TO authenticated USING (true) WITH CHECK (true);
     CREATE POLICY "Allow authenticated access to app_settings" ON app_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
     CREATE POLICY "Allow authenticated access to tour_costs" ON tour_costs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow authenticated access to activity_logs" ON activity_logs FOR ALL TO authenticated USING (true) WITH CHECK (true);
 EXCEPTION
     WHEN undefined_object THEN NULL;
 END $$;
 
 -- NÂNG CẤP SCHEMA: Tự động thêm cột visa_amount nếu đã tồn tại bảng tour_costs trước đó
 ALTER TABLE tour_costs ADD COLUMN IF NOT EXISTS visa_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS leader_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, CheckCircle2, FileText, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { X, Upload, CheckCircle2, FileText, Trash2, ExternalLink, AlertTriangle, Lock } from 'lucide-react';
 import { Passenger } from '../types';
 import { DatePicker } from './DatePicker';
 import { supabase } from '../lib/supabase';
+import { useCRM } from '../context/CRMContext';
 
 interface EditPassengerModalProps {
   isOpen: boolean;
@@ -31,6 +32,12 @@ export default function EditPassengerModal({
   onSave,
   tourPriceVisa,
 }: EditPassengerModalProps) {
+  const { orders, currentRole } = useCRM();
+  const order = passenger ? orders.find(o => o.id === passenger.order_id) : null;
+  const isOrderConfirmed = order ? (order.status === 'sure' || order.status === 'paid' || Boolean(order.is_locked)) : false;
+  const isPrivilegedRole = ['admin', 'sale_leader'].includes(currentRole);
+  const canEditFinancials = isPrivilegedRole || !isOrderConfirmed;
+
   const [fullName, setFullName] = useState('');
   const [passportNumber, setPassportNumber] = useState('');
   const [dob, setDob] = useState('');
@@ -356,32 +363,51 @@ export default function EditPassengerModal({
           </div>
 
           {/* Visa Service Option */}
-          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 space-y-3">
+          <div className={`border rounded-xl p-4 space-y-3 ${
+            !canEditFinancials ? 'bg-slate-50 border-slate-200' : 'bg-blue-50/50 border-blue-100'
+          }`}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <CheckCircle2 className={`w-4 h-4 ${needsVisaService ? 'text-blue-600' : 'text-slate-400'}`} />
                 <span className="text-xs font-bold text-slate-700">Đăng ký dịch vụ làm Visa qua Tour</span>
+                {!canEditFinancials && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                    <Lock className="w-3 h-3 text-amber-600" />
+                    Đã khóa (Ảnh hưởng giá tour)
+                  </span>
+                )}
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
+              <label className={`relative inline-flex items-center ${!canEditFinancials ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                 <input 
                   type="checkbox" 
                   className="sr-only peer"
+                  disabled={!canEditFinancials}
                   checked={needsVisaService}
-                  onChange={e => setNeedsVisaService(e.target.checked)}
+                  onChange={e => {
+                    if (!canEditFinancials) return;
+                    setNeedsVisaService(e.target.checked);
+                  }}
                 />
                 <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
             </div>
             
-            {needsVisaService ? (
+            {!canEditFinancials && (
+              <div className="text-[11px] text-amber-900 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200/60 leading-relaxed">
+                🔒 Booking đã được xác nhận hoặc bị khóa. Tùy chọn làm Visa qua Tour trực tiếp tác động tới tổng giá trị booking, do đó bị khóa đối với tài khoản Sale/CTV.
+                Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần mở khóa hoặc thay đổi.
+              </div>
+            )}
+
+            {canEditFinancials && (needsVisaService ? (
               <div className="text-[11px] text-blue-700 font-medium bg-white/60 p-2.5 rounded-lg border border-blue-50 animate-fade-in">
-                Hành khách <strong>CHƯA CÓ VISA</strong>. Hệ thống sẽ tự động cộng thêm phí làm visa đi tour (<strong>{tourPriceVisa?.toLocaleString('vi-VN')}đ</strong>) vào tổng giá trị đơn hàng.
+                Hành khách <strong>CHƯA CÓ VISA</strong>. Hệ thống sẽ tự động cộng thêm phí làm visa đi tour (<strong>{tourPriceVisa?.toLocaleString('vi-VN')}đ</strong>) vào tổng giá trị booking.
               </div>
             ) : (
               <div className="text-[11px] text-slate-500 font-medium p-1">
                 Hành khách <strong>ĐÃ CÓ VISA</strong> hoặc không cần làm visa qua tour. Không phát sinh thêm phí.
               </div>
-            )}
+            ))}
           </div>
 
           {/* Document Section */}
@@ -505,12 +531,12 @@ export default function EditPassengerModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="bg-slate-50 border-t border-slate-150 px-6 py-4 flex justify-end gap-3 shrink-0">
+        <div className="bg-slate-50 border-t border-slate-150 px-6 py-4 flex justify-end gap-3 shrink-0 whitespace-nowrap">
           <button 
             type="button"
             onClick={onClose} 
             disabled={isSaving}
-            className="px-4 py-2 border border-slate-250 hover:bg-slate-100 rounded-lg text-xs font-bold text-slate-600 transition-all shadow-sm"
+            className="px-4 py-2 border border-slate-250 hover:bg-slate-100 rounded-lg text-xs font-bold text-slate-600 transition-all shadow-sm whitespace-nowrap shrink-0"
           >
             Hủy bỏ
           </button>
@@ -518,7 +544,7 @@ export default function EditPassengerModal({
             type="button"
             onClick={handleSave} 
             disabled={isSaving}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-xs font-black shadow-md shadow-blue-600/10 transition-all flex items-center gap-2"
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-xs font-black shadow-md shadow-blue-600/10 transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
           >
             {isSaving ? (
               <>

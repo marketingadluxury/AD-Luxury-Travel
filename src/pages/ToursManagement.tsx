@@ -1006,7 +1006,7 @@ export default function ToursManagement() {
     setCategory(categories[0] || 'Du lịch Đông Nam Á');
     setItineraryPdfUrl('');
     setNoticeSections(DEFAULT_NOTICE_SECTIONS);
-    setTourType('internal');
+    setTourType(currentRole === 'sale_leader' ? 'partner' : 'internal');
     setPartnerName('');
     setPartnerContact('');
     setOrganizationName('');
@@ -1043,6 +1043,10 @@ export default function ToursManagement() {
     e.preventDefault();
     if (isCodeDuplicate) {
       toast.error('Mã tour/visa này đã tồn tại, vui lòng chọn mã khác!');
+      return;
+    }
+    if (currentRole === 'sale_leader' && tourType === 'internal') {
+      toast.error('Sale Leader chỉ có quyền tạo Tour gửi khách đối tác hoặc Tour đoàn riêng.');
       return;
     }
     if (tourType !== 'visa' && (!code || !name || !departureTime || !returnTime)) {
@@ -1179,7 +1183,7 @@ export default function ToursManagement() {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-16">
-      {(currentRole === 'admin' || currentRole === 'operator') && (
+      {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
         <DashboardOperator />
       )}
 
@@ -1462,7 +1466,7 @@ export default function ToursManagement() {
                         value={tourType}
                         onChange={e => setTourType(e.target.value as any)}
                       >
-                        <option value="internal">🏢 Tour tự vận hành</option>
+                        {currentRole !== 'sale_leader' && <option value="internal">🏢 Tour tự vận hành</option>}
                         <option value="partner">🤝 Gửi khách đối tác</option>
                         <option value="private">👑 Tour đoàn riêng</option>
                       </select>

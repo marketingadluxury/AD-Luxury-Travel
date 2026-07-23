@@ -94,7 +94,7 @@ export default function Settings() {
           <div>
             <h3 className="text-sm font-bold text-slate-800">Cơ chế phân hạng thành viên</h3>
             <p className="text-xs text-slate-600 leading-relaxed mt-2 font-medium">
-              Phân hạng thành viên được tính tự động dựa trên <strong>tổng số tiền đã chi tiêu thực tế</strong> (các hóa đơn của đơn hàng có trạng thái <strong className="text-green-700">Chắc chắn (Sure)</strong> hoặc <strong className="text-emerald-700">Đã thanh toán (Paid)</strong>) do khách hàng đó làm người chi trả chính (Payer).
+              Phân hạng thành viên được tính tự động dựa trên <strong>tổng số tiền đã chi tiêu thực tế</strong> (các hóa đơn của booking có trạng thái <strong className="text-green-700">Chắc chắn (Sure)</strong> hoặc <strong className="text-emerald-700">Đã thanh toán (Paid)</strong>) do khách hàng đó làm người chi trả chính (Payer).
             </p>
           </div>
           

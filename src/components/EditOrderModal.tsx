@@ -1,8 +1,9 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { X, Bed, DollarSign, FileText, Percent, Info, ShieldAlert, CheckCircle2, RefreshCw } from 'lucide-react';
+import { X, Bed, DollarSign, FileText, Percent, Info, ShieldAlert, CheckCircle2, RefreshCw, Lock } from 'lucide-react';
 import { Order } from '../types';
-import { useCRM } from '../context/CRMContext';
+import { useCRM, canUnlockOrder } from '../context/CRMContext';
+import { useAuth } from '../context/AuthContext';
 import { formatNumber, parseNumber } from '@/lib/utils';
 
 interface EditOrderModalProps {
@@ -18,7 +19,8 @@ export default function EditOrderModal({
   order,
   onSave,
 }: EditOrderModalProps) {
-  const { tours, currentRole } = useCRM();
+  const { tours, currentRole, profilesList } = useCRM();
+  const { profile } = useAuth();
   
   const [singleRoomCount, setSingleRoomCount] = useState(0);
   const [roomShareInfo, setRoomShareInfo] = useState('');
@@ -35,6 +37,7 @@ export default function EditOrderModal({
   const [totalPrice, setTotalPrice] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [showLockConfirmModal, setShowLockConfirmModal] = useState(false);
 
   // Find tour for pricing references
   const tour = order ? tours.find((t) => t.id === order.tour_id) || null : null;
@@ -99,8 +102,8 @@ export default function EditOrderModal({
       return;
     }
 
-    const isAdmin = currentRole === 'admin';
-    // If not admin, total price is strictly automatic. If admin, we still auto-calculate but they can override.
+    const isAdmin = ['admin', 'sale_leader'].includes(currentRole);
+    // If not admin/leader, total price is strictly automatic. If admin/leader, we still auto-calculate but they can override.
     if (!isAdmin || !isInitialLoad) {
       setTotalPrice(computedTotalPrice);
     }
@@ -108,9 +111,17 @@ export default function EditOrderModal({
 
   if (!isOpen || !order) return null;
 
-  const isAdmin = currentRole === 'admin';
+  const isOrderConfirmed = order.status === 'sure' || order.status === 'paid' || Boolean(order.is_locked);
+  const canUnlock = canUnlockOrder(order, currentRole, profile, profilesList);
+  const isPrivilegedRole = currentRole === 'admin' || (currentRole === 'sale_leader' && canUnlock);
+  const canEditFinancials = isPrivilegedRole || !isOrderConfirmed;
 
-  const handleSave = async () => {
+  const handleSave = async (forceConfirm = false) => {
+    if (!isPrivilegedRole && !forceConfirm) {
+      setShowLockConfirmModal(true);
+      return;
+    }
+
     setIsSaving(true);
     try {
       onSave(order.id, {
@@ -127,12 +138,14 @@ export default function EditOrderModal({
         surcharge_name: surchargeName.trim(),
         surcharge_amount: parseNumber(surchargeAmountDisplay),
         total_price: Number(totalPrice),
+        is_locked: true,
       });
-      toast.success('Cập nhật thông tin đơn hàng thành công!');
+      toast.success('Cập nhật thông tin booking thành công! Booking đã tự động khóa.');
+      setShowLockConfirmModal(false);
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error('Đã xảy ra lỗi khi cập nhật đơn hàng.');
+      toast.error('Đã xảy ra lỗi khi cập nhật booking.');
     } finally {
       setIsSaving(false);
     }
@@ -146,7 +159,7 @@ export default function EditOrderModal({
         <div className="bg-slate-50 border-b border-slate-150 px-6 py-4 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-base font-black text-slate-800 flex items-center gap-1.5">
-              <span>Chỉnh sửa thông tin đơn hàng #{order.id.substring(0, 8)}</span>
+              <span>Chỉnh sửa thông tin booking #{order.id.substring(0, 8)}</span>
             </h2>
             <p className="text-xs text-gray-400 mt-0.5 font-medium">
               Cập nhật phụ thu phòng đơn, VAT, ghi chú hoặc điều chỉnh tổng tiền
@@ -163,6 +176,19 @@ export default function EditOrderModal({
 
         {/* Modal Content */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {!canEditFinancials && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3 text-xs text-amber-900">
+              <Lock className="w-4.5 h-4.5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-extrabold text-amber-950">Booking đã được xác nhận hoặc bị khóa</p>
+                <p className="text-amber-800 mt-0.5 leading-relaxed">
+                  Các thông tin liên quan tới <strong className="font-bold">giá tiền & tài chính</strong> (Phòng đơn, VAT, Giảm giá, Phụ thu, Tổng tiền) đã được khóa tự động để tránh sai lệch doanh thu kế toán.
+                  Chỉ <strong className="font-bold text-amber-950">Quản trị viên (Admin)</strong> và <strong className="font-bold text-amber-950">Sale Leader</strong> mới có quyền điều chỉnh hoặc mở khóa booking.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Surcharge & VAT Block */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -176,9 +202,14 @@ export default function EditOrderModal({
                 <input
                   type="number"
                   min="0"
+                  disabled={!canEditFinancials}
                   value={singleRoomCount}
                   onChange={(e) => setSingleRoomCount(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="pl-9 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                  className={`pl-9 w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                    !canEditFinancials 
+                      ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed' 
+                      : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+                  }`}
                 />
               </div>
               <p className="text-[10px] text-blue-600 font-medium">
@@ -191,9 +222,14 @@ export default function EditOrderModal({
                 Hoá đơn VAT (10%)
               </label>
               <select
+                disabled={!canEditFinancials}
                 value={vatOption}
                 onChange={(e) => setVatOption(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold bg-white"
+                className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                  !canEditFinancials
+                    ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
+                    : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
+                }`}
               >
                 <option value="Không xuất VAT">Không xuất VAT</option>
                 <option value="Xuất VAT">Xuất VAT (10%)</option>
@@ -211,19 +247,19 @@ export default function EditOrderModal({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Tên công ty <span className="text-red-500">*</span></label>
-                    <input type="text" value={vatCompanyName} onChange={e => setVatCompanyName(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="CÔNG TY TNHH..." required />
+                    <input type="text" disabled={!canEditFinancials} value={vatCompanyName} onChange={e => setVatCompanyName(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed" placeholder="CÔNG TY TNHH..." required />
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Mã số thuế <span className="text-red-500">*</span></label>
-                    <input type="text" value={vatTaxCode} onChange={e => setVatTaxCode(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="Nhập mã số thuế..." required />
+                    <input type="text" disabled={!canEditFinancials} value={vatTaxCode} onChange={e => setVatTaxCode(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed" placeholder="Nhập mã số thuế..." required />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Địa chỉ xuất hóa đơn <span className="text-red-500">*</span></label>
-                    <input type="text" value={vatAddress} onChange={e => setVatAddress(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="Địa chỉ đăng ký kinh doanh..." required />
+                    <input type="text" disabled={!canEditFinancials} value={vatAddress} onChange={e => setVatAddress(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed" placeholder="Địa chỉ đăng ký kinh doanh..." required />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-[11px] font-semibold text-emerald-700 mb-1">Email nhận hóa đơn <span className="text-red-500">*</span></label>
-                    <input type="email" value={vatEmail} onChange={e => setVatEmail(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" placeholder="Email nhận hóa đơn điện tử..." required />
+                    <input type="email" disabled={!canEditFinancials} value={vatEmail} onChange={e => setVatEmail(e.target.value)} className="w-full px-2.5 py-1.5 border border-emerald-200 rounded text-sm bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed" placeholder="Email nhận hóa đơn điện tử..." required />
                   </div>
                 </div>
               </div>
@@ -268,9 +304,14 @@ export default function EditOrderModal({
                 Loại giảm giá
               </label>
               <select
+                disabled={!canEditFinancials}
                 value={discountType}
                 onChange={(e) => setDiscountType(e.target.value as 'percent' | 'amount')}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold bg-white"
+                className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                  !canEditFinancials
+                    ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
+                    : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
+                }`}
               >
                 <option value="amount">Số tiền (đ)</option>
                 <option value="percent">Phần trăm (%)</option>
@@ -282,6 +323,7 @@ export default function EditOrderModal({
               </label>
             <input
                 type="text"
+                disabled={!canEditFinancials}
                 value={discountValueDisplay}
                 onChange={(e) => {
                     const rawValue = e.target.value.replace(/[^0-9]/g, '');
@@ -292,7 +334,11 @@ export default function EditOrderModal({
                       setDiscountValueDisplay(formatNumber(numericValue.toString()));
                     }
                 }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                  !canEditFinancials
+                    ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
+                    : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+                }`}
             />
             </div>
           </div>
@@ -305,10 +351,15 @@ export default function EditOrderModal({
               </label>
               <input
                   type="text"
+                  disabled={!canEditFinancials}
                   placeholder="VD: Nâng cấp hạng phòng..."
                   value={surchargeName}
                   onChange={(e) => setSurchargeName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                    !canEditFinancials
+                      ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
+                      : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+                  }`}
               />
             </div>
             <div className="space-y-1">
@@ -317,6 +368,7 @@ export default function EditOrderModal({
               </label>
               <input
                   type="text"
+                  disabled={!canEditFinancials}
                   value={surchargeAmountDisplay}
                   onChange={(e) => {
                       const rawValue = e.target.value.replace(/[^0-9]/g, '');
@@ -327,7 +379,11 @@ export default function EditOrderModal({
                         setSurchargeAmountDisplay(formatNumber(numericValue.toString()));
                       }
                   }}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                    !canEditFinancials
+                      ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
+                      : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+                  }`}
               />
             </div>
           </div>
@@ -403,10 +459,10 @@ export default function EditOrderModal({
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Tổng tiền đơn hàng (VND)
+                Tổng tiền booking (VND)
               </label>
               
-              {isAdmin && totalPrice !== computedTotalPrice && (
+              {canEditFinancials && isPrivilegedRole && totalPrice !== computedTotalPrice && (
                 <button
                   type="button"
                   onClick={() => setTotalPrice(computedTotalPrice)}
@@ -422,48 +478,93 @@ export default function EditOrderModal({
               <input
                 type="text"
                 value={totalPrice === 0 ? '0' : formatCurrency(totalPrice)}
-                disabled={!isAdmin}
+                disabled={!canEditFinancials || !isPrivilegedRole}
                 onChange={(e) => {
                   const rawValue = e.target.value.replace(/\D/g, '');
                   setTotalPrice(rawValue ? parseInt(rawValue, 10) : 0);
                 }}
                 className={`w-full rounded-lg border px-4 py-2.5 text-base font-black focus:outline-none ring-offset-2 transition-all ${
-                  isAdmin 
+                  canEditFinancials && isPrivilegedRole
                     ? 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 text-rose-600 bg-white cursor-text' 
                     : 'border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed font-extrabold'
                 }`}
               />
             </div>
             
-            {isAdmin ? (
+            {isPrivilegedRole ? (
               <p className="text-[10px] text-gray-400 font-medium">
-                * Bạn có quyền Quản trị viên (Admin) để điều chỉnh thủ công giá trị này vượt mức tự động của hệ thống.
+                * Bạn có quyền <strong className="font-bold">Quản trị viên / Sale Leader</strong> để điều chỉnh thủ công giá trị này vượt mức tính toán tự động của hệ thống.
               </p>
             ) : null}
           </div>
         </div>
 
         {/* Modal Footer */}
-        <div className="bg-slate-50 border-t border-slate-150 px-6 py-4 flex justify-end gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSaving}
-            className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            Hủy bỏ
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-          >
-            {isSaving ? 'Đang lưu...' : 'Lưu thông tin'}
-          </button>
+        <div className="bg-slate-50 border-t border-slate-150 px-6 py-4 flex flex-col gap-3 shrink-0">
+          {!isPrivilegedRole && (
+            <p className="text-[11px] font-medium text-amber-800 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200/80 flex items-center gap-2 w-full">
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Booking sẽ bị khóa sau khi lưu thông tin để tránh ảnh hưởng đến nghiệp vụ kế toán, hãy check thật kỹ.</span>
+            </p>
+          )}
+          <div className="flex items-center gap-3 w-full justify-end whitespace-nowrap">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors whitespace-nowrap shrink-0"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave(false)}
+              disabled={isSaving}
+              className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap shrink-0"
+            >
+              {isSaving ? 'Đang lưu...' : 'Lưu thông tin'}
+            </button>
+          </div>
         </div>
 
       </div>
+
+      {/* Confirmation Warning Modal before Auto-Locking for Sale/CTV */}
+      {showLockConfirmModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 z-[60] animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-amber-200 space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 mx-auto">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-extrabold text-slate-900">Xác nhận Lưu booking</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Sau khi nhấn <strong className="font-bold text-slate-900">Xác nhận lưu</strong>, hệ thống sẽ <strong className="font-bold text-amber-700">TỰ ĐỘNG KHÓA</strong> toàn bộ thông tin giá tiền, VAT, phụ thu & doanh thu của booking này.
+              </p>
+              <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-left font-medium">
+                🔒 Chỉ <strong className="font-bold">Quản trị viên (Admin)</strong> và <strong className="font-bold">Sale Leader</strong> mới có quyền mở khóa hoặc điều chỉnh lại các số liệu này sau khi đã lưu.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLockConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0"
+              >
+                Kiểm tra lại
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave(true)}
+                disabled={isSaving}
+                className="flex-1 px-4 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors shadow-sm cursor-pointer whitespace-nowrap shrink-0"
+              >
+                {isSaving ? 'Đang lưu...' : 'Đồng ý Lưu & Khóa booking'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

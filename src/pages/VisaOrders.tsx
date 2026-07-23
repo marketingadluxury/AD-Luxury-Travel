@@ -17,7 +17,7 @@ export default function VisaOrders() {
   
   const orders = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let filtered = ['admin', 'operator', 'visa'].includes(currentRole)
+    let filtered = ['admin', 'operator', 'visa', 'sale_leader'].includes(currentRole)
       ? allOrders
       : allOrders.filter(o => o.user_id === profile?.id);
     
@@ -172,7 +172,7 @@ export default function VisaOrders() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
     createOrder({
@@ -213,7 +213,7 @@ export default function VisaOrders() {
       {/* Header section */}
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Quản lý Đơn hàng Visa</h2>
+          <h2 className="text-xl font-bold text-gray-900">Quản lý Booking Visa</h2>
           <p className="text-sm text-gray-500 mt-1">
             Theo dõi danh sách các đơn đặt dịch vụ visa lẻ của đại lý và CTV.
           </p>
@@ -458,7 +458,7 @@ export default function VisaOrders() {
         <input
           type="text"
           className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
-          placeholder="Tìm đơn hàng visa theo mã, tên khách, số điện thoại..."
+          placeholder="Tìm booking visa theo mã, tên khách, số điện thoại..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -469,7 +469,7 @@ export default function VisaOrders() {
         {filteredOrders.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-16 text-center shadow-sm">
             <ShoppingCart className="w-14 h-14 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm font-medium">Không tìm thấy đơn hàng visa nào.</p>
+            <p className="text-gray-500 text-sm font-medium">Không tìm thấy booking visa nào.</p>
           </div>
         ) : (
           filteredOrders.map((order) => {
@@ -557,7 +557,7 @@ export default function VisaOrders() {
                       <div className="space-y-4">
                         <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                           <Info className="w-4 h-4 text-purple-600" />
-                          Thông tin đơn hàng & Lịch sử
+                          Thông tin booking & Lịch sử
                         </h4>
                         <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm text-sm">
                           <div className="flex justify-between items-center py-1 border-b border-gray-50">
@@ -566,7 +566,7 @@ export default function VisaOrders() {
                           </div>
                           <div className="flex justify-between items-center py-1 border-b border-gray-50">
                             <span className="text-gray-500">Mã giao dịch:</span>
-                            <span className="font-mono font-bold text-blue-600">{order.id.substring(0, 12)}</span>
+                            <span className="font-mono font-bold text-blue-600">{order.id.substring(0, 8)}</span>
                           </div>
                           <div className="flex justify-between items-center py-1 border-b border-gray-50">
                             <span className="text-gray-500">Dịch vụ:</span>
@@ -604,8 +604,8 @@ export default function VisaOrders() {
                               onClick={() => {
                                 setConfirmModalData({
                                   isOpen: true,
-                                  title: 'Hủy đơn hàng visa',
-                                  message: `Bạn có chắc chắn muốn hủy đơn hàng ${order.id.substring(0,8)}? Hành động này không thể hoàn tác.`,
+                                  title: 'Hủy booking visa',
+                                  message: `Bạn có chắc chắn muốn hủy booking ${order.id.substring(0,8)}? Hành động này không thể hoàn tác.`,
                                   onConfirm: () => cancelOrder(order.id)
                                 });
                               }}

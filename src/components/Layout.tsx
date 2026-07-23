@@ -11,7 +11,8 @@ import {
   Bell,
   UserCheck,
   User,
-  LayoutDashboard
+  LayoutDashboard,
+  History
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -20,39 +21,77 @@ import { Role } from '@/types';
 
 const navigation = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'Đại lý', 'operator', 'sale', 'visa', 'accounting', 'admin'] },
-  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin'] },
-  { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'visa'] },
-  { name: 'Đơn hàng Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'visa', 'admin'] },
-  { name: 'Quản lý Đơn hàng', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'operator', 'admin'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'Đại lý', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'admin'] },
+  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader'] },
+  { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa'] },
+  { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'sale_leader', 'visa', 'admin'] },
+  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'sale_leader', 'operator', 'admin'] },
   { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin'] },
   { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin'] },
-  { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'visa', 'admin'] },
+  { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'admin'] },
+  { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'sale_leader'] },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole, notifications: allNotifications, orders, passengers } = useCRM();
+  const { currentRole, setCurrentRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
 
   const handleNotificationClick = (notif: any) => {
     setShowNotifications(false);
-    if (notif.type === 'accounting') {
-      navigate('/accounting');
-    } else if (notif.type === 'visa') {
-      navigate('/visa');
-    } else if (notif.type === 'extension') {
-      navigate('/orders');
+    if (notif.id) {
+      markNotificationAsRead(notif.id);
+    }
+
+    let searchTarget = '';
+    const hashMatch = (notif.message || '').match(/#([a-zA-Z0-9-]+)/) || (notif.title || '').match(/#([a-zA-Z0-9-]+)/);
+    if (hashMatch && hashMatch[1]) {
+      searchTarget = hashMatch[1];
     } else {
-      navigate('/orders'); // Default fallback
+      const codeMatch = (notif.message || '').match(/(?:booking|đơn hàng|đơn giữ chỗ|mã)\s+([a-zA-Z0-9-]+)/i);
+      if (codeMatch && codeMatch[1]) {
+        searchTarget = codeMatch[1];
+      } else if (notif.targetId) {
+        if (notif.targetId.length > 8 && notif.targetId.includes('-')) {
+          searchTarget = notif.targetId.substring(0, 8);
+        } else {
+          searchTarget = notif.targetId;
+        }
+      }
+    }
+
+    const isAccountingUser = ['accounting', 'admin'].includes(currentRole);
+    const isVisaUser = ['visa', 'admin'].includes(currentRole);
+
+    if (notif.type === 'accounting') {
+      if (isAccountingUser) {
+        let tab: 'receipts' | 'payments' | 'vat' = 'receipts';
+        const msg = ((notif.title || '') + ' ' + (notif.message || '')).toLowerCase();
+        if (msg.includes('chi') || msg.includes('hoàn tiền') || msg.includes('phiếu chi')) {
+          tab = 'payments';
+        } else if (msg.includes('vat') || msg.includes('xuất hóa đơn')) {
+          tab = 'vat';
+        }
+        navigate('/accounting', { state: { searchTarget, tab } });
+      } else {
+        navigate('/orders', { state: { searchTarget } });
+      }
+    } else if (notif.type === 'visa') {
+      if (isVisaUser) {
+        navigate('/visa', { state: { searchTarget } });
+      } else {
+        navigate('/orders', { state: { searchTarget } });
+      }
+    } else {
+      navigate('/orders', { state: { searchTarget } });
     }
   };
 
   const notifications = React.useMemo(() => {
-    if (currentRole === 'admin') {
+    if (['admin', 'sale_leader'].includes(currentRole)) {
       return allNotifications;
     }
     
@@ -96,6 +135,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       case 'CTV': return 'Cộng tác viên (CTV)';
       case 'Đại lý': return 'Đại lý';
       case 'operator': return 'Điều hành Tour';
+      case 'sale_leader': return 'Sale Leader (Trưởng nhóm)';
       case 'sale': return 'Sale';
       case 'visa': return 'Bộ phận Visa';
       case 'accounting': return 'Kế toán tài vụ';
@@ -163,6 +203,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <option value="CTV">🤝 Cộng tác viên (CTV)</option>
             <option value="Đại lý">🏢 Đại lý</option>
             <option value="operator">👷 Điều hành Tour</option>
+            <option value="sale_leader">⭐ Sale Leader (Trưởng nhóm)</option>
             <option value="sale">💼 Sale</option>
             <option value="visa">🛂 Bộ phận Visa</option>
             <option value="accounting">💰 Kế toán tài vụ</option>
@@ -250,7 +291,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-30">
                   <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                     <span className="font-bold text-sm text-gray-900">Thông báo hệ thống</span>
-                    <span className="text-xs text-blue-600 font-semibold">{unreadNotifications.length} mới</span>
+                    <div className="flex items-center gap-2">
+                      {unreadNotifications.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            markAllNotificationsAsRead();
+                          }}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer hover:underline"
+                        >
+                          Đã đọc tất cả
+                        </button>
+                      )}
+                      <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                        {unreadNotifications.length} mới
+                      </span>
+                    </div>
                   </div>
                   <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
                     {notifications.length === 0 ? (

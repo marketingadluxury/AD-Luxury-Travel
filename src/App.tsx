@@ -12,6 +12,7 @@ import CustomersManagement from './pages/CustomersManagement';
 import PassengersManagement from './pages/PassengersManagement';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+import ActivityLogs from './pages/ActivityLogs';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import { CRMProvider } from './context/CRMContext';
@@ -45,6 +46,7 @@ function AppContent() {
             <Route path="/passengers" element={<PassengersManagement />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/activity-logs" element={<ActivityLogs />} />
           </Routes>
         </Layout>
       </Router>

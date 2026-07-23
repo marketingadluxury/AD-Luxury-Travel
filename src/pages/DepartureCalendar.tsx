@@ -370,7 +370,7 @@ const TourCard: React.FC<{
                 className="w-full inline-flex items-center justify-center bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={tour.available_seats === 0}
               >
-                Giữ chỗ / Đặt Đơn hàng
+                Giữ chỗ / Tạo Booking
               </button>
             </div>
           </div>
@@ -593,7 +593,7 @@ export default function DepartureCalendar() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
     createOrder({
@@ -649,7 +649,7 @@ export default function DepartureCalendar() {
     }
 
     // 0. Only show internal tours for external roles
-    const isInternalUser = ['admin', 'operator', 'sale', 'accounting', 'visa'].includes(currentRole);
+    const isInternalUser = ['admin', 'operator', 'sale', 'sale_leader', 'accounting', 'visa'].includes(currentRole);
     if (!isInternalUser && tour.tour_type && tour.tour_type !== 'internal') return false;
 
     // 1. Search term match code or name
@@ -761,7 +761,7 @@ export default function DepartureCalendar() {
               <Filter className="h-4 w-4 mr-2" />
               Bộ lọc nâng cao
             </button>
-            {(currentRole === 'admin' || currentRole === 'operator') && (
+            {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
               <button 
                 onClick={() => navigate('/tours', { state: { openCreateModal: true } })}
                 className="inline-flex items-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-[#0038A8] hover:bg-[#002a80] transition-colors cursor-pointer"

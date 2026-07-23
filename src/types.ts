@@ -1,10 +1,12 @@
-export type Role = 'sale' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'Đại lý';
+export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'Đại lý';
 
 export interface User {
   id: string;
   email: string;
   full_name: string;
   role: Role;
+  leader_id?: string | null;
+  leader_name?: string | null;
 }
 
 export type TourStatus = 'available' | 'noshop' | 'last_minute' | 'holiday' | 'on_sale' | 'full';
@@ -108,6 +110,7 @@ export interface Order {
   surcharge_name?: string;
   surcharge_amount?: number;
   contract_url?: string;
+  is_locked?: boolean;
 }
 
 export interface Passenger {
@@ -208,6 +211,18 @@ export interface TourCost {
   landtours: LandtourCost[];
   partnerPayments: PartnerPayment[];
   updatedAt: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  user_id?: string;
+  user_name: string;
+  user_email?: string;
+  user_role: Role;
+  action: string;
+  module: 'Tour' | 'Đơn hàng' | 'Visa' | 'Kế toán' | 'Hành khách' | 'Thành viên' | 'Chi phí' | 'Hệ thống';
+  details?: string;
+  created_at: string;
 }
 
 

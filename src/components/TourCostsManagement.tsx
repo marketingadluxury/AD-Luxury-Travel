@@ -1305,7 +1305,7 @@ export default function TourCostsManagement() {
                 <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
                   <span>Số lượng đã bán: <strong className="text-slate-800 font-bold">{selectedTour.sold_seats || 0} khách</strong></span>
                   <span>•</span>
-                  <span>Số đơn hàng: <strong className="text-slate-800 font-bold">{selectedTourOrders.length} bookings</strong></span>
+                  <span>Số booking: <strong className="text-slate-800 font-bold">{selectedTourOrders.length} bookings</strong></span>
                 </div>
               </div>
               
