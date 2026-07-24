@@ -529,9 +529,9 @@ export default function OrdersManagement() {
     }
   };
 
-  const priceAdult = selectedTour ? (selectedTour.price_adult ?? selectedTour.price) : 0;
-  const priceChild = selectedTour ? (selectedTour.price_child ?? Math.round(selectedTour.price * 0.8)) : 0;
-  const priceInfant = selectedTour ? (selectedTour.price_infant ?? Math.round(selectedTour.price * 0.3)) : 0;
+  const priceAdult = selectedTour ? (selectedTour.price_adult ?? (selectedTour.price - (selectedTour.discount || 0))) : 0;
+  const priceChild = selectedTour ? (selectedTour.price_child ?? Math.round((selectedTour.price - (selectedTour.discount || 0)) * 0.8)) : 0;
+  const priceInfant = selectedTour ? (selectedTour.price_infant ?? Math.round((selectedTour.price - (selectedTour.discount || 0)) * 0.3)) : 0;
   const singleRoomSurcharge = selectedTour ? (selectedTour.single_room_surcharge ?? 7500000) : 0;
 
   const subtotalPrice = selectedTour
@@ -1486,7 +1486,7 @@ export default function OrdersManagement() {
               const isFullyPaid = hasApprovedReceipt && approvedPaidAmount >= order.total_price;
 
               const visaPassengersCount = orderPassengers.filter(p => p.needs_visa_service).length;
-              const priceAdult = tour?.price_adult || tour?.price || 0;
+              const priceAdult = tour?.price_adult || (tour?.price - (tour?.discount || 0)) || 0;
               const priceChild = tour?.price_child || Math.round(priceAdult * 0.9);
               const priceInfant = tour?.price_infant || Math.round(priceAdult * 0.3);
               const singleRoomSurcharge = tour?.single_room_surcharge || 0;
@@ -1547,7 +1547,7 @@ export default function OrdersManagement() {
                       <div className="min-w-[170px] shrink-0">
                         <div className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Khách trưởng nhóm</div>
                         <div className="text-sm font-bold text-gray-800 mt-0.5">
-                          {(order.booker_name && (order.status === 'hold' || !order.booker_name.includes('Giữ chỗ tạm')))
+                          {(order.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
                             ? order.booker_name
                             : (leadPassenger?.full_name || 'Chưa cung cấp')}
                         </div>
@@ -1601,11 +1601,11 @@ export default function OrdersManagement() {
                           {order.status === 'cancelled' && (() => {
                             const refundInvoices = invoices.filter(inv => inv.order_id === order.id && inv.type === 'payment');
                             if (refundInvoices.length === 0) {
-                              return (
+                              return orderFilterStatus !== 'refund' ? (
                                 <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-slate-50 text-slate-400 border border-slate-200">
                                   Đã huỷ
                                 </span>
-                              );
+                              ) : null;
                             }
 
                             const anyApproved = refundInvoices.some(inv => inv.status === 'approved');
@@ -1631,9 +1631,11 @@ export default function OrdersManagement() {
 
                             return (
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-slate-50 text-slate-400 border border-slate-200">
-                                  Đã huỷ
-                                </span>
+                                {orderFilterStatus !== 'refund' && (
+                                  <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-slate-50 text-slate-400 border border-slate-200">
+                                    Đã huỷ
+                                  </span>
+                                )}
                                 <span className={`inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border ${progressStyle}`}>
                                   {progressText}
                                 </span>
@@ -1905,7 +1907,7 @@ export default function OrdersManagement() {
                                   <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
                                     <span className="text-gray-600 font-medium">Người đặt chỗ:</span>
                                     <span className="font-bold text-gray-900">
-                                      {(order.booker_name && (order.status === 'hold' || !order.booker_name.includes('Giữ chỗ tạm')))
+                                      {(order.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
                                         ? order.booker_name
                                         : (leadPassenger?.full_name || 'Chưa cung cấp')}
                                     </span>
@@ -1987,7 +1989,8 @@ export default function OrdersManagement() {
                             </div>
                           </div>
                         ) : (
-                          <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5 lg:col-span-2">
+                          <>
+                            <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5 lg:col-span-2">
                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                               <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
                                 <Users className="w-4 h-4 text-emerald-600" />
@@ -2132,6 +2135,84 @@ export default function OrdersManagement() {
                               </div>
                             )}
                           </div>
+                          <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5 lg:col-span-2 flex flex-col">
+                                <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Thông tin liên hệ đặt chỗ</span>
+                                  <div className="space-y-2 text-xs">
+                                    <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
+                                      <span className="text-gray-600 font-medium">Người đặt chỗ:</span>
+                                      <span className="font-bold text-gray-900">
+                                        {(order.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
+                                          ? order.booker_name
+                                          : (leadPassenger?.full_name || 'Chưa cung cấp')}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
+                                      <span className="text-gray-600 font-medium">Số điện thoại:</span>
+                                      <span className="font-mono font-bold text-gray-900">
+                                        {order.booker_phone || leadPassenger?.phone || 'Chưa cung cấp'}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
+                                      <span className="text-gray-600 font-medium">Sales / CTV phụ trách:</span>
+                                      <span className="font-bold text-blue-700">
+                                        {order.created_by || 'Chưa rõ'}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center justify-between py-1.5 border-t border-dashed border-gray-100 mt-1 pt-1 gap-2">
+                                      <span className="text-gray-600 font-medium flex items-center gap-1.5 whitespace-nowrap">
+                                        <FileText className="w-4 h-4 text-blue-600 shrink-0" /> Hợp đồng dịch vụ:
+                                      </span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {order.contract_url ? (
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                                              Đã tải hợp đồng
+                                            </span>
+                                            <a
+                                              href={order.contract_url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-bold text-[10px] flex items-center gap-1 transition-all whitespace-nowrap"
+                                            >
+                                              <Eye className="w-3 h-3 shrink-0" /> Xem
+                                            </a>
+                                            {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
+                                              <button
+                                                onClick={() => handleDeleteContract(order.id)}
+                                                className="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer shrink-0"
+                                                title="Gỡ hợp đồng"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <label className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm whitespace-nowrap">
+                                              <Upload className="w-3 h-3 shrink-0" />
+                                              Tải hợp đồng lên
+                                              <input
+                                                type="file"
+                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                  const file = e.target.files?.[0];
+                                                  if (file) handleUploadContract(order.id, order.id.substring(0,8), file);
+                                                }}
+                                                disabled={contractUploadProgress[order.id]}
+                                              />
+                                            </label>
+                                            {contractUploadProgress[order.id] && <Clock className="w-3 h-3 animate-spin text-blue-600 shrink-0" />}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                          </div>
+                          </>
                         )}
                       </div>
                     ) : (
@@ -3077,7 +3158,7 @@ export default function OrdersManagement() {
                     const targetTour = tours.find(t => t.id === cancelPaymentOrder.tour_id);
                     const formData = new FormData();
                     formData.append('file', cancelConfirmFile);
-                    formData.append('orderCode', cancelPaymentOrder.id);
+                    formData.append('orderCode', cancelPaymentOrder.id.substring(0, 8));
                     if (targetTour?.code) {
                       formData.append('tourCode', targetTour.code);
                     }

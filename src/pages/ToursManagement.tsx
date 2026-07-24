@@ -116,6 +116,40 @@ const getFormattedCode = (currentCode: string, departureDateIso: string) => {
   return `${basePart}${separator}${dd}${mm}${yy}`;
 };
 
+export const safeIsoString = (val: string | null | undefined): string | undefined => {
+  if (!val || !val.trim()) return undefined;
+  const str = val.trim();
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  } catch (e) {
+    // ignore
+  }
+  const parts = str.split(' ');
+  const dateParts = parts[0].split('/');
+  if (dateParts.length === 3) {
+    const day = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1;
+    const year = parseInt(dateParts[2], 10);
+    let hours = 0;
+    let minutes = 0;
+    if (parts[1]) {
+      const timeParts = parts[1].split(':');
+      if (timeParts.length >= 2) {
+        hours = parseInt(timeParts[0], 10) || 0;
+        minutes = parseInt(timeParts[1], 10) || 0;
+      }
+    }
+    const d2 = new Date(year, month, day, hours, minutes);
+    if (!isNaN(d2.getTime())) {
+      return d2.toISOString();
+    }
+  }
+  return str;
+};
+
 // Custom fully Vietnamese Date and Time Picker component
 interface VietnameseDateTimePickerProps {
   label: string;
@@ -502,6 +536,14 @@ export default function ToursManagement() {
         generatedVisaDeadline = new Date(date.getTime() - visaDiffMs).toISOString();
       }
 
+      // Ticket deadline (if base tour had one, shift it by same difference)
+      let generatedTicketDeadline: string | undefined = undefined;
+      if (bulkBaseTour.ticket_deadline) {
+        const baseTicket = new Date(bulkBaseTour.ticket_deadline);
+        const ticketDiffMs = baseDep.getTime() - baseTicket.getTime();
+        generatedTicketDeadline = new Date(date.getTime() - ticketDiffMs).toISOString();
+      }
+
       // Clone notice sections
       let noticeSecs = DEFAULT_NOTICE_SECTIONS;
       if (bulkBaseTour.notice_sections) {
@@ -535,6 +577,7 @@ export default function ToursManagement() {
         guide_phone: bulkBaseTour.guide_phone || undefined,
         ticket_status: bulkBaseTour.ticket_status || 'CHỜ XUẤT VÉ',
         visa_deadline: generatedVisaDeadline,
+        ticket_deadline: generatedTicketDeadline,
         description: bulkBaseTour.description || undefined,
         tour_status: 'available' as TourStatus,
         category: bulkBaseTour.category || categories[0],
@@ -599,6 +642,26 @@ export default function ToursManagement() {
   const [priceInfant, setPriceInfant] = useState<number | ''>('');
   const [singleRoomSurcharge, setSingleRoomSurcharge] = useState<number | ''>(7500000);
   const [totalSeats, setTotalSeats] = useState(30);
+
+  const handlePriceChange = (val: number | '') => {
+    setPrice(val);
+    if (tourType !== 'visa') {
+      const effectivePrice = (val === '' ? 0 : Number(val)) - (discount === '' ? 0 : Number(discount));
+      setPriceAdult(effectivePrice);
+      setPriceChild(Math.round(effectivePrice * 0.8));
+      setPriceInfant(Math.round(effectivePrice * 0.3));
+    }
+  };
+
+  const handleDiscountChange = (val: number | '') => {
+    setDiscount(val);
+    if (tourType !== 'visa') {
+      const effectivePrice = (price === '' ? 0 : Number(price)) - (val === '' ? 0 : Number(val));
+      setPriceAdult(effectivePrice);
+      setPriceChild(Math.round(effectivePrice * 0.8));
+      setPriceInfant(Math.round(effectivePrice * 0.3));
+    }
+  };
   const [overbookLimit, setOverbookLimit] = useState(0);
   const [holdDuration, setHoldDuration] = useState(48);
   const [flightOut, setFlightOut] = useState('');
@@ -1064,6 +1127,7 @@ export default function ToursManagement() {
     }
 
     const calculatedPrice = price === '' ? 0 : Number(price);
+    const effectivePrice = calculatedPrice - (discount === '' ? 0 : Number(discount));
     const calculatedCommission = commission === '' ? 0 : Number(commission);
 
     const tourData = {
@@ -1073,8 +1137,8 @@ export default function ToursManagement() {
       start_date: (tourType !== 'visa' && departureTime) ? departureTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
       end_date: (tourType !== 'visa' && returnTime) ? returnTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
       duration,
-      departure_time: (tourType !== 'visa' && departureTime) ? new Date(departureTime).toISOString() : null,
-      return_time: (tourType !== 'visa' && returnTime) ? new Date(returnTime).toISOString() : null,
+      departure_time: (tourType !== 'visa' && departureTime) ? (safeIsoString(departureTime) || null) : null,
+      return_time: (tourType !== 'visa' && returnTime) ? (safeIsoString(returnTime) || null) : null,
       airline,
       hotel,
       price: calculatedPrice,
@@ -1091,15 +1155,15 @@ export default function ToursManagement() {
       guide_name: guideName || undefined,
       guide_phone: guidePhone || undefined,
       ticket_status: ticketStatus || undefined,
-      visa_deadline: visaDeadline ? new Date(visaDeadline).toISOString() : undefined,
-      ticket_deadline: ticketDeadline ? new Date(ticketDeadline).toISOString() : undefined,
+      visa_deadline: safeIsoString(visaDeadline),
+      ticket_deadline: safeIsoString(ticketDeadline),
       description: description || undefined,
       tour_status: tourStatus,
       category: category || categories[0],
       hold_duration_hours: Number(holdDuration),
-      price_adult: priceAdult !== '' ? Number(priceAdult) : calculatedPrice,
-      price_child: priceChild !== '' ? Number(priceChild) : Math.round(calculatedPrice * 0.8),
-      price_infant: priceInfant !== '' ? Number(priceInfant) : Math.round(calculatedPrice * 0.3),
+      price_adult: priceAdult !== '' ? Number(priceAdult) : effectivePrice,
+      price_child: priceChild !== '' ? Number(priceChild) : Math.round(effectivePrice * 0.8),
+      price_infant: priceInfant !== '' ? Number(priceInfant) : Math.round(effectivePrice * 0.3),
       single_room_surcharge: singleRoomSurcharge !== '' ? Number(singleRoomSurcharge) : 7500000,
       itinerary_pdf_url: itineraryPdfUrl || undefined,
       notice_sections: JSON.stringify(noticeSections),
@@ -1241,40 +1305,40 @@ export default function ToursManagement() {
       )}
 
       {/* Header section with Tabs */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900" style={{ fontSize: '28px' }}>Bảng điều hành Tour & Danh mục</h2>
+          <h2 className="text-xl font-bold text-gray-900">Bảng điều hành Tour & Danh mục</h2>
           <p className="text-sm text-gray-500 mt-1">Quản lý quỹ phòng, nhân bản ngày khởi hành, thiết lập cấu hình biểu mẫu lưu ý đi tour chi tiết.</p>
         </div>
         
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-2 self-stretch md:self-auto shrink-0">
+          <div className="flex flex-wrap md:flex-nowrap bg-gray-100 p-1.5 rounded-lg border border-gray-200 gap-1 md:gap-0 flex-1 md:flex-initial">
             <button
               onClick={() => setActiveTab('tours')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
                 activeTab === 'tours' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white text-blue-700 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Quản lý Tour ({tours.filter(t => t.tour_type !== 'visa').length})
             </button>
             <button
               onClick={() => setActiveTab('categories')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
                 activeTab === 'categories' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white text-blue-700 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Danh mục Tour ({categories.length})
             </button>
             <button
               onClick={() => setActiveTab('costs')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
                 activeTab === 'costs' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white text-blue-700 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Chi phí & Lãi lỗ
@@ -1287,7 +1351,7 @@ export default function ToursManagement() {
                 resetForm();
                 setShowAddForm(true);
               }}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
             >
               <Plus className="w-4 h-4 mr-1.5" /> Thêm Tour Mới
             </button>
@@ -1759,12 +1823,12 @@ export default function ToursManagement() {
                       label={tourType === 'visa' ? "Giá visa (VND) *" : "Giá Tour niêm yết (VND) *"}
                       required
                       value={price}
-                      onChange={setPrice}
+                      onChange={handlePriceChange}
                     />
                     <NumericFormatInput
                       label="Giảm giá tour (VND)"
                       value={discount}
-                      onChange={setDiscount}
+                      onChange={handleDiscountChange}
                     />
                     <NumericFormatInput
                       label="Hoa hồng Sales / Đại lý *"
@@ -1795,19 +1859,19 @@ export default function ToursManagement() {
                         label="Giá người lớn"
                         value={priceAdult}
                         onChange={setPriceAdult}
-                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Number(price))}` : 'Như giá tour'}
+                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Number(price) - Number(discount || 0))}` : 'Như giá tour'}
                       />
                       <NumericFormatInput
                         label="Giá trẻ em (2-10T)"
                         value={priceChild}
                         onChange={setPriceChild}
-                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round(Number(price) * 0.8))}` : '80% giá tour'}
+                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round((Number(price) - Number(discount || 0)) * 0.8))}` : '80% giá tour'}
                       />
                       <NumericFormatInput
                         label="Giá trẻ nhỏ (<2T)"
                         value={priceInfant}
                         onChange={setPriceInfant}
-                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round(Number(price) * 0.3))}` : '30% giá tour'}
+                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round((Number(price) - Number(discount || 0)) * 0.3))}` : '30% giá tour'}
                       />
                       <NumericFormatInput
                         label="Phụ thu phòng đơn"
@@ -2146,21 +2210,21 @@ export default function ToursManagement() {
 
           {/* LIST OF ACTIVE TOURS WITH FULL CRUD OPERATIONS */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Danh sách điều phối chỗ & Lịch trình</h3>
+                <h3 className="text-base font-bold text-gray-900">Danh sách điều phối chỗ & Lịch trình</h3>
                 <span className="text-xs text-gray-500 mt-1 block">Quản lý ngày khởi hành, quỹ phòng và các chiến dịch mở bán hiệu quả.</span>
               </div>
 
               {/* View mode toggle switcher */}
-              <div className="flex bg-slate-200/60 p-1 rounded-lg border border-slate-300/40 shrink-0">
+              <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setViewMode('grouped')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                     viewMode === 'grouped' 
                       ? 'bg-white text-blue-700 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
+                      : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Gom nhóm theo Hành Trình
@@ -2168,10 +2232,10 @@ export default function ToursManagement() {
                 <button
                   type="button"
                   onClick={() => setViewMode('flat')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                     viewMode === 'flat' 
                       ? 'bg-white text-blue-700 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
+                      : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Danh sách phẳng
@@ -2193,43 +2257,43 @@ export default function ToursManagement() {
                     const totalSeatsSum = groupTours.reduce((sum, t) => sum + t.total_seats, 0);
 
                     return (
-                      <div key={groupName} className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white hover:shadow transition-all duration-200">
+                      <div key={groupName} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white hover:border-gray-300 hover:shadow transition-all duration-200">
                         {/* Group Header (Accordion toggle) */}
                         <div 
                           onClick={() => toggleGroup(groupName)}
-                          className="bg-slate-50 hover:bg-slate-100/80 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none transition-colors border-b border-slate-150"
+                          className="bg-gray-50/80 hover:bg-gray-100/90 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none transition-colors border-b border-gray-200/80"
                         >
-                          <div className="space-y-1 flex-1">
+                          <div className="space-y-1.5 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[10px] font-black text-blue-700 bg-blue-100/75 border border-blue-200 px-2 py-0.5 rounded uppercase tracking-wider">
+                              <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-md uppercase tracking-wider">
                                 {firstTour.category || 'Chưa phân mục'}
                               </span>
-                              <span className="text-xs font-bold text-gray-500 flex items-center">
-                                <Plane className="w-3.5 h-3.5 mr-1 text-slate-400" />
+                              <span className="text-xs font-semibold text-gray-600 flex items-center">
+                                <Plane className="w-3.5 h-3.5 mr-1 text-gray-400" />
                                 {firstTour.airline}
                               </span>
-                              <span className="text-xs font-bold text-gray-500 flex items-center">
-                                <Building className="w-3.5 h-3.5 mr-1 text-slate-400" />
+                              <span className="text-xs font-semibold text-gray-600 flex items-center">
+                                <Building className="w-3.5 h-3.5 mr-1 text-gray-400" />
                                 {firstTour.hotel}
                               </span>
                               {firstTour.itinerary_pdf_url && (
-                                <span className="text-[10px] font-black text-emerald-700 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                                  <FileText className="w-3 h-3 mr-1" />
+                                <span className="text-xs font-bold text-emerald-700 flex items-center bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                  <FileText className="w-3.5 h-3.5 mr-1" />
                                   LỊCH TRÌNH PDF
                                 </span>
                               )}
                             </div>
-                            <h4 className="text-sm font-black text-gray-900 leading-snug uppercase tracking-wide">
+                            <h4 className="text-base font-bold text-gray-900 leading-snug uppercase tracking-wide">
                               {groupName}
                             </h4>
-                            <div className="text-xs text-gray-500 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span>Thời lượng: <strong className="text-gray-700 font-bold">{firstTour.duration}</strong></span>
+                            <div className="text-xs text-gray-600 font-medium flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span>Thời lượng: <strong className="text-gray-900 font-semibold">{firstTour.duration}</strong></span>
                               <span className="text-gray-300">|</span>
                               <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} {firstTour.tour_type === 'visa' ? 'phiên bản' : 'đợt khởi hành'}</strong></span>
                               {firstTour.tour_type !== 'visa' && (
                                 <>
                                   <span className="text-gray-300">|</span>
-                                  <span>Đã bán chuỗi: <strong className="text-emerald-700 font-bold">{totalSold}</strong> — Giữ chỗ: <strong className="text-amber-700 font-bold">{totalHold}</strong> — Trống: <strong className="text-slate-800 font-bold">{totalSeatsSum - totalSold - totalHold}</strong></span>
+                                  <span>Đã bán chuỗi: <strong className="text-emerald-700 font-bold">{totalSold}</strong> — Giữ chỗ: <strong className="text-amber-700 font-bold">{totalHold}</strong> — Trống: <strong className="text-gray-900 font-bold">{totalSeatsSum - totalSold - totalHold}</strong></span>
                                 </>
                               )}
                             </div>
@@ -2241,7 +2305,7 @@ export default function ToursManagement() {
                               <button
                                 type="button"
                                 onClick={() => handleAddDepartureQuick(firstTour)}
-                                className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
+                                className="inline-flex items-center px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
                               >
                                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                                 Thêm ngày đi mới
@@ -2253,7 +2317,7 @@ export default function ToursManagement() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenBulkModal(firstTour)}
-                                className="inline-flex items-center px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
+                                className="inline-flex items-center px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
                               >
                                 <Grid className="w-3.5 h-3.5 mr-1.5" />
                                 Tạo hàng loạt (Series)
@@ -2264,7 +2328,7 @@ export default function ToursManagement() {
                             <button
                               type="button"
                               onClick={() => toggleGroup(groupName)}
-                              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200/50 transition-colors"
+                              className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200/60 transition-colors"
                             >
                               {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -2273,77 +2337,77 @@ export default function ToursManagement() {
 
                         {/* Group Content: Departure Dates Table */}
                         {isExpanded && (
-                          <div className="overflow-x-auto border-t border-slate-100 bg-white">
+                          <div className="overflow-x-auto border-t border-gray-200 bg-white">
                             <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                              <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 <tr>
-                                  <th className="px-6 py-3 text-left w-36">Mã Tour</th>
-                                  <th className="px-6 py-3 text-left">Khởi hành & Hạn Visa</th>
-                                  <th className="px-6 py-3 text-right">Giá Tour & HH</th>
-                                  <th className="px-6 py-3 text-center">Giờ Giữ & Vé</th>
-                                  <th className="px-6 py-3 text-center">Trạng thái chỗ</th>
-                                  <th className="px-6 py-3 text-center w-28">Hành động</th>
+                                  <th className="px-6 py-3.5 text-left w-36">Mã Tour</th>
+                                  <th className="px-6 py-3.5 text-left">Khởi hành & Hạn Visa</th>
+                                  <th className="px-6 py-3.5 text-right">Giá Tour & HH</th>
+                                  <th className="px-6 py-3.5 text-center">Giờ Giữ & Vé</th>
+                                  <th className="px-6 py-3.5 text-center">Trạng thái chỗ</th>
+                                  <th className="px-6 py-3.5 text-center w-28">Hành động</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-150 text-xs text-gray-700">
+                              <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
                                 {groupTours.map(t => (
-                                  <tr key={t.id} className="hover:bg-slate-50/40 transition-colors">
-                                    <td className="px-6 py-3">
-                                      <span className="font-mono font-bold text-blue-700 tracking-tight bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-md inline-block">
+                                  <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                                    <td className="px-6 py-3.5">
+                                      <span className="font-mono font-bold text-blue-700 tracking-tight bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md text-xs inline-block">
                                         {t.code}
                                       </span>
                                     </td>
-                                    <td className="px-6 py-3">
-                                      <div className="font-semibold text-gray-800 text-xs">
+                                    <td className="px-6 py-3.5">
+                                      <div className="font-semibold text-gray-900 text-xs">
                                         {t.tour_type === 'visa' ? t.duration : (t.departure_time ? format(new Date(t.departure_time), 'dd/MM/yyyy HH:mm') : '-')}
                                       </div>
                                       {t.visa_deadline && (
-                                        <div className="text-[9px] text-red-600 font-bold mt-1 uppercase tracking-wide bg-red-50 border border-red-100 px-1.5 py-0.5 rounded inline-block">
+                                        <div className="text-xs text-rose-700 font-medium mt-1 uppercase tracking-wide bg-rose-50 border border-rose-200 px-2 py-0.5 rounded inline-block">
                                           Hạn visa: {format(new Date(t.visa_deadline), 'dd/MM')}
                                         </div>
                                       )}
                                     </td>
-                                    <td className="px-6 py-3 text-right font-bold text-rose-600 whitespace-nowrap">
+                                    <td className="px-6 py-3.5 text-right font-bold text-rose-600 text-xs whitespace-nowrap">
                                       {t.discount && t.discount > 0 ? (
                                         <>
-                                          <div className="line-through text-gray-400 font-medium text-[11px] mb-0.5">{new Intl.NumberFormat('vi-VN').format(t.price)} đ</div>
+                                          <div className="line-through text-gray-400 font-normal text-xs mb-0.5">{new Intl.NumberFormat('vi-VN').format(t.price)} đ</div>
                                           <div>{new Intl.NumberFormat('vi-VN').format(t.price - t.discount)} VND</div>
                                         </>
                                       ) : (
                                         <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
                                       )}
-                                      <div className="text-[10px] text-gray-400 font-medium mt-0.5">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
+                                      <div className="text-xs text-gray-400 font-medium mt-0.5">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
                                     </td>
-                                    <td className="px-6 py-3 text-center whitespace-nowrap">
+                                    <td className="px-6 py-3.5 text-center whitespace-nowrap">
                                       {t.tour_type === 'visa' ? (
-                                        <span className="text-[10px] text-gray-400 italic">Không áp dụng</span>
+                                        <span className="text-xs text-gray-400 italic">Không áp dụng</span>
                                       ) : (
                                         <>
-                                          <div className="text-[11px] font-semibold text-gray-900 bg-gray-100 px-1.5 py-0.5 rounded inline-block">
+                                          <div className="text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md inline-block">
                                             {t.hold_duration_hours || 48}h
                                           </div>
-                                          <div className="text-[10px] text-slate-500 mt-1 italic max-w-[100px] truncate mx-auto" title={t.ticket_status}>
+                                          <div className="text-xs text-gray-500 mt-1 italic max-w-[120px] truncate mx-auto" title={t.ticket_status}>
                                             {t.ticket_status || 'Chờ xuất vé'}
                                           </div>
                                         </>
                                       )}
                                     </td>
-                                    <td className="px-6 py-3 text-center whitespace-nowrap">
+                                    <td className="px-6 py-3.5 text-center whitespace-nowrap">
                                       {t.tour_type === 'visa' ? (
-                                        <span className="text-[10px] text-gray-400 italic">Không giới hạn</span>
+                                        <span className="text-xs text-gray-400 italic">Không giới hạn</span>
                                       ) : (
-                                        <div className="inline-flex gap-1.5 font-bold text-[10px] items-center">
-                                          <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100" title="Đã bán chắc chắn">
+                                        <div className="inline-flex gap-1.5 font-semibold text-xs items-center">
+                                          <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200" title="Đã bán chắc chắn">
                                             {t.sold_seats} Sure
                                           </span>
-                                          <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title="Đang giữ tạm">
+                                          <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200" title="Đang giữ tạm">
                                             {t.hold_seats} Hold
                                           </span>
-                                          <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100" title="Còn trống để đăng ký">
+                                          <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200" title="Còn trống để đăng ký">
                                             {t.available_seats} Trống
                                           </span>
                                           {t.overbook_limit ? (
-                                            <span className="text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100" title="Overbooking tối đa được cho phép">
+                                            <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200" title="Overbooking tối đa được cho phép">
                                               +{t.overbook_limit} OB
                                             </span>
                                           ) : null}
@@ -2392,52 +2456,52 @@ export default function ToursManagement() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-slate-50 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                  <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <tr>
-                      <th className="px-6 py-4 text-left">Mã tour / Danh mục</th>
-                      <th className="px-6 py-4 text-left">Tên Hành Trình</th>
-                      <th className="px-6 py-4 text-center">Khởi Hành</th>
-                      <th className="px-6 py-4 text-center">Giá Tour</th>
-                      <th className="px-6 py-4 text-center">Hold / Vé</th>
-                      <th className="px-6 py-4 text-center">Ghế (Bán / Giữ / Trống)</th>
-                      <th className="px-6 py-4 text-center">Hành động</th>
+                      <th className="px-6 py-3.5 text-left">Mã tour / Danh mục</th>
+                      <th className="px-6 py-3.5 text-left">Tên Hành Trình</th>
+                      <th className="px-6 py-3.5 text-center">Khởi Hành</th>
+                      <th className="px-6 py-3.5 text-center">Giá Tour</th>
+                      <th className="px-6 py-3.5 text-center">Hold / Vé</th>
+                      <th className="px-6 py-3.5 text-center">Ghế (Bán / Giữ / Trống)</th>
+                      <th className="px-6 py-3.5 text-center">Hành động</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
                     {tours.filter(t => t.tour_type !== 'visa').map(t => (
-                      <tr key={t.id} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md inline-block">
+                      <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="px-6 py-3.5">
+                          <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md inline-block">
                             {t.code}
                           </div>
-                          <div className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-wider">{t.category || 'Chưa phân mục'}</div>
+                          <div className="text-xs text-gray-500 mt-1 font-semibold uppercase tracking-wider">{t.category || 'Chưa phân mục'}</div>
                           {/* Tour Type Badge */}
                           <div className="mt-1.5">
                             {t.tour_type === 'partner' && (
-                              <span className="text-[9px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                              <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-semibold uppercase">
                                 🤝 Gửi khách đối tác
                               </span>
                             )}
                             {t.tour_type === 'private' && (
-                              <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold uppercase">
                                 👑 Tour đoàn riêng
                               </span>
                             )}
                             {t.tour_type === 'visa' && (
-                              <span className="text-[9px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                              <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold uppercase">
                                 🛂 Dịch vụ Visa lẻ
                               </span>
                             )}
                             {(t.tour_type === 'internal' || !t.tour_type) && (
-                              <span className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                              <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full font-semibold uppercase">
                                 🏢 Tour tự chạy
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 max-w-xs">
-                          <div className="font-bold text-gray-900 text-xs line-clamp-2" title={t.name}>{t.name}</div>
-                          <div className="text-[10px] text-gray-400 mt-1 font-semibold flex flex-col gap-0.5">
+                        <td className="px-6 py-3.5 max-w-xs">
+                          <div className="font-bold text-gray-900 text-sm line-clamp-2" title={t.name}>{t.name}</div>
+                          <div className="text-xs text-gray-500 mt-1 font-medium flex flex-col gap-0.5">
                             <div className="flex items-center gap-1.5">
                               <span>{t.duration}</span>
                               <span>•</span>
@@ -2446,76 +2510,76 @@ export default function ToursManagement() {
                             
                             {/* Product-Specific Subtext */}
                             {t.tour_type === 'partner' && (
-                              <div className="text-[10px] text-indigo-700 font-bold bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/30 mt-1">
-                                Đối tác: <span className="underline">{t.partner_name}</span> ({t.partner_contact})
+                              <div className="text-xs text-indigo-700 font-medium bg-indigo-50/60 px-2 py-0.5 rounded border border-indigo-100 mt-1">
+                                Đối tác: <span className="underline font-semibold">{t.partner_name}</span> ({t.partner_contact})
                               </div>
                             )}
                             {t.tour_type === 'private' && (
-                              <div className="text-[10px] text-amber-800 font-bold bg-amber-50/40 px-1.5 py-0.5 rounded border border-amber-100/30 mt-1">
-                                Khách đoàn: <span className="underline">{t.organization_name}</span> | Y/C: {t.custom_requirements || 'Không có'}
+                              <div className="text-xs text-amber-800 font-medium bg-amber-50/60 px-2 py-0.5 rounded border border-amber-100 mt-1">
+                                Khách đoàn: <span className="underline font-semibold">{t.organization_name}</span> | Y/C: {t.custom_requirements || 'Không có'}
                               </div>
                             )}
                             {t.tour_type === 'visa' && (
-                              <div className="text-[10px] text-purple-800 font-bold bg-purple-50/40 px-1.5 py-0.5 rounded border border-purple-100/30 mt-1">
-                                Quốc gia: <span className="underline">{t.visa_country}</span> | {t.visa_service_type} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
+                              <div className="text-xs text-purple-800 font-medium bg-purple-50/60 px-2 py-0.5 rounded border border-purple-100 mt-1">
+                                Quốc gia: <span className="underline font-semibold">{t.visa_country}</span> | {t.visa_service_type} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center whitespace-nowrap">
-                          <div className="font-semibold text-gray-800 text-xs">
+                        <td className="px-6 py-3.5 text-center whitespace-nowrap">
+                          <div className="font-semibold text-gray-900 text-xs">
                             {t.tour_type === 'visa' 
                               ? t.duration 
                               : (t.departure_time ? format(new Date(t.departure_time), 'dd/MM/yyyy HH:mm') : '-')
                             }
                           </div>
                           {t.visa_deadline && (
-                            <div className="text-[9px] text-red-600 font-bold mt-1 uppercase tracking-wide bg-red-50 border border-red-100 px-1.5 py-0.5 rounded inline-block">
+                            <div className="text-xs text-rose-700 font-medium mt-1 uppercase tracking-wide bg-rose-50 border border-rose-200 px-2 py-0.5 rounded inline-block">
                               Hạn visa: {format(new Date(t.visa_deadline), 'dd/MM')}
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap font-bold text-rose-600 text-xs">
+                        <td className="px-6 py-3.5 text-right whitespace-nowrap font-bold text-rose-600 text-xs">
                           {t.discount && t.discount > 0 ? (
-                                        <>
-                                          <div className="line-through text-gray-400 font-medium text-[11px] mb-0.5">{new Intl.NumberFormat('vi-VN').format(t.price)} đ</div>
-                                          <div>{new Intl.NumberFormat('vi-VN').format(t.price - t.discount)} VND</div>
-                                        </>
-                                      ) : (
-                                        <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
-                                      )}
-                                      <div className="text-[10px] text-gray-400 font-medium mt-0.5">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
+                            <>
+                              <div className="line-through text-gray-400 font-normal text-xs mb-0.5">{new Intl.NumberFormat('vi-VN').format(t.price)} đ</div>
+                              <div>{new Intl.NumberFormat('vi-VN').format(t.price - t.discount)} VND</div>
+                            </>
+                          ) : (
+                            <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
+                          )}
+                          <div className="text-xs text-gray-400 font-medium mt-0.5">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-6 py-3.5 text-center">
                           {t.tour_type === 'visa' ? (
                             <span className="text-xs text-gray-400 italic">Không áp dụng</span>
                           ) : (
                             <>
-                              <div className="text-xs font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded-md inline-block">
+                              <div className="text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md inline-block">
                                 {t.hold_duration_hours || 48}h
                               </div>
-                              <div className="text-[10px] text-slate-500 mt-1 italic max-w-[100px] truncate" title={t.ticket_status}>
+                              <div className="text-xs text-gray-500 mt-1 italic max-w-[120px] truncate" title={t.ticket_status}>
                                 {t.ticket_status || 'Chờ xuất vé'}
                               </div>
                             </>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <td className="px-6 py-3.5 whitespace-nowrap text-center">
                           {t.tour_type === 'visa' ? (
                             <span className="text-xs text-gray-400 italic">Không giới hạn</span>
                           ) : (
-                            <div className="inline-flex gap-1.5 text-[11px] font-bold items-center">
-                              <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100" title="Đã bán chắc chắn">
+                            <div className="inline-flex gap-1.5 text-xs font-semibold items-center">
+                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200" title="Đã bán chắc chắn">
                                 {t.sold_seats} Sure
                               </span>
-                              <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title="Đang giữ tạm">
+                              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200" title="Đang giữ tạm">
                                 {t.hold_seats} Hold
                               </span>
-                              <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100" title="Còn trống để đăng ký">
+                              <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200" title="Còn trống để đăng ký">
                                 {t.available_seats} Trống
                               </span>
                               {t.overbook_limit ? (
-                                <span className="text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100" title="Overbooking tối đa được cho phép">
+                                <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200" title="Overbooking tối đa được cho phép">
                                   +{t.overbook_limit} OB
                                 </span>
                               ) : null}

@@ -155,6 +155,40 @@ const getFormattedCode = (currentCode: string, departureDateIso: string) => {
   return `${basePart}${separator}${dd}${mm}${yy}`;
 };
 
+const safeIsoString = (val: string | null | undefined): string | undefined => {
+  if (!val || !val.trim()) return undefined;
+  const str = val.trim();
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  } catch (e) {
+    // ignore
+  }
+  const parts = str.split(' ');
+  const dateParts = parts[0].split('/');
+  if (dateParts.length === 3) {
+    const day = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1;
+    const year = parseInt(dateParts[2], 10);
+    let hours = 0;
+    let minutes = 0;
+    if (parts[1]) {
+      const timeParts = parts[1].split(':');
+      if (timeParts.length >= 2) {
+        hours = parseInt(timeParts[0], 10) || 0;
+        minutes = parseInt(timeParts[1], 10) || 0;
+      }
+    }
+    const d2 = new Date(year, month, day, hours, minutes);
+    if (!isNaN(d2.getTime())) {
+      return d2.toISOString();
+    }
+  }
+  return str;
+};
+
 // Custom fully Vietnamese Date and Time Picker component
 interface VietnameseDateTimePickerProps {
   label: string;
@@ -1223,8 +1257,8 @@ export default function VisaServices() {
       start_date: (tourType !== 'visa' && departureTime) ? departureTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
       end_date: (tourType !== 'visa' && returnTime) ? returnTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
       duration,
-      departure_time: (tourType !== 'visa' && departureTime) ? new Date(departureTime).toISOString() : null,
-      return_time: (tourType !== 'visa' && returnTime) ? new Date(returnTime).toISOString() : null,
+      departure_time: (tourType !== 'visa' && departureTime) ? (safeIsoString(departureTime) || null) : null,
+      return_time: (tourType !== 'visa' && returnTime) ? (safeIsoString(returnTime) || null) : null,
       airline,
       hotel,
       price: calculatedPrice,
@@ -1241,7 +1275,7 @@ export default function VisaServices() {
       guide_name: guideName || undefined,
       guide_phone: guidePhone || undefined,
       ticket_status: ticketStatus || undefined,
-      visa_deadline: visaDeadline ? new Date(visaDeadline).toISOString() : undefined,
+      visa_deadline: safeIsoString(visaDeadline),
       description: description || undefined,
       tour_status: tourStatus,
       category: 'Visa',
@@ -1383,20 +1417,20 @@ export default function VisaServices() {
       )}
 
       {/* Header section */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900" style={{ fontSize: '28px' }}>Bảng điều hành Dịch vụ Visa</h2>
+          <h2 className="text-xl font-bold text-gray-900">Bảng điều hành Dịch vụ Visa</h2>
           <p className="text-sm text-gray-500 mt-1">Quản lý danh sách dịch vụ Visa, hồ sơ và các yêu cầu cấp Visa.</p>
         </div>
         
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 self-stretch md:self-auto">
           {!showAddForm && !editingTour && isVisaOrAdmin && (
             <button 
               onClick={() => {
                 resetForm();
                 setShowAddForm(true);
               }}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center justify-center w-full md:w-auto px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors whitespace-nowrap"
             >
               <Plus className="w-4 h-4 mr-1.5" /> Thêm Dịch vụ Visa mới
             </button>
@@ -1409,19 +1443,19 @@ export default function VisaServices() {
         <button 
           type="button"
           onClick={() => setCommonFilesExpanded(!commonFilesExpanded)}
-          className="w-full px-6 py-4 bg-slate-50/50 hover:bg-slate-50 border-b border-gray-100 flex items-center justify-between transition-colors"
+          className="w-full px-6 py-4.5 bg-gray-50/80 hover:bg-gray-100/90 border-b border-gray-200 flex items-center justify-between transition-colors"
         >
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-purple-100 rounded-lg text-purple-700">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-purple-100 rounded-lg text-purple-700">
               <FolderOpen className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <h3 className="text-base font-black text-gray-900">📁 Hồ Sơ & File Mẫu Visa Chung</h3>
+              <h3 className="text-base font-bold text-gray-900">📁 Hồ Sơ & File Mẫu Visa Chung</h3>
               <p className="text-xs text-gray-500 mt-0.5">Kho tài liệu hướng dẫn, tờ khai mẫu dùng chung cho tất cả các loại Visa.</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-100">
+            <span className="text-xs font-semibold px-3 py-1 bg-purple-50 text-purple-700 rounded-full border border-purple-200">
               {visaCommonFiles.length} tài liệu
             </span>
             {commonFilesExpanded ? (
@@ -2393,34 +2427,34 @@ export default function VisaServices() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500">Tổng số Dịch vụ Visa</span>
-                <div className="text-3xl font-extrabold text-gray-900 mt-1">{visaTours.length}</div>
+                <span className="text-sm font-medium text-gray-500">Tổng số Dịch vụ Visa</span>
+                <div className="text-2xl font-bold text-gray-900 mt-1">{visaTours.length}</div>
               </div>
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+              <div className="bg-blue-50 p-3.5 rounded-xl border border-blue-100">
                 <FolderOpen className="w-6 h-6 text-blue-600" />
               </div>
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500">Chỗ đã bán (Sure)</span>
-                <div className="text-3xl font-extrabold text-emerald-600 mt-1">
+                <span className="text-sm font-medium text-gray-500">Chỗ đã bán (Sure)</span>
+                <div className="text-2xl font-bold text-emerald-600 mt-1">
                   {visaTours.reduce((sum, t) => sum + t.sold_seats, 0)} chỗ
                 </div>
               </div>
-              <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+              <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-100">
                 <Check className="w-6 h-6 text-emerald-600" />
               </div>
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500">Chỗ đang giữ tạm thời</span>
-                <div className="text-3xl font-extrabold text-amber-600 mt-1">
+                <span className="text-sm font-medium text-gray-500">Chỗ đang giữ tạm thời</span>
+                <div className="text-2xl font-bold text-amber-600 mt-1">
                   {visaTours.reduce((sum, t) => sum + t.hold_seats, 0)} chỗ
                 </div>
               </div>
-              <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+              <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-100">
                 <Clock className="w-6 h-6 text-amber-600" />
               </div>
             </div>
@@ -2428,21 +2462,21 @@ export default function VisaServices() {
 
           {/* LIST OF ACTIVE TOURS WITH FULL CRUD OPERATIONS */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Danh sách điều phối chỗ & Lịch trình</h3>
+                <h3 className="text-base font-bold text-gray-900">Danh sách điều phối chỗ & Lịch trình</h3>
                 <span className="text-xs text-gray-500 mt-1 block">Tạo và quản lý các loại dịch vụ Visa lẻ.</span>
               </div>
 
               {/* View mode toggle switcher */}
-              <div className="flex bg-slate-200/60 p-1 rounded-lg border border-slate-300/40 shrink-0">
+              <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setViewMode('grouped')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                     viewMode === 'grouped' 
                       ? 'bg-white text-blue-700 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
+                      : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Gom nhóm theo Hành Trình
@@ -2450,10 +2484,10 @@ export default function VisaServices() {
                 <button
                   type="button"
                   onClick={() => setViewMode('flat')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                     viewMode === 'flat' 
                       ? 'bg-white text-blue-700 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
+                      : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Danh sách phẳng
@@ -2462,7 +2496,7 @@ export default function VisaServices() {
             </div>
 
             {/* Filters and Sorting Controls */}
-            <div className="bg-slate-50 border-b border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-gray-50/80 border-b border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Ô tìm kiếm */}
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -2473,7 +2507,7 @@ export default function VisaServices() {
                   placeholder="Tìm mã, tên dịch vụ..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
@@ -2481,7 +2515,7 @@ export default function VisaServices() {
               <select
                 value={filterCountry}
                 onChange={e => setFilterCountry(e.target.value)}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">Tất cả quốc gia</option>
                 {visaCountries.map(c => (
@@ -2493,7 +2527,7 @@ export default function VisaServices() {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 font-medium"
               >
                 <option value="newest">Sắp xếp: Mới nhất</option>
                 <option value="oldest">Sắp xếp: Cũ nhất</option>
@@ -2524,46 +2558,46 @@ export default function VisaServices() {
                     const totalSeatsSum = groupTours.reduce((sum, t) => sum + t.total_seats, 0);
 
                     return (
-                      <div key={groupName} className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white hover:shadow transition-all duration-200">
+                      <div key={groupName} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white hover:border-gray-300 hover:shadow transition-all duration-200">
                         {/* Group Header */}
-                        <div className="bg-slate-50 px-5 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-150">
+                        <div className="bg-gray-50/80 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-gray-200/80">
                           <div className="space-y-1 flex-1">
-                            <h4 className="text-sm font-black text-gray-900 leading-snug uppercase tracking-wide">
+                            <h4 className="text-base font-bold text-gray-900 leading-snug uppercase tracking-wide">
                               {groupName}
                             </h4>
-                            <div className="text-xs text-gray-500 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span>Thời gian xử lý: <strong className="text-gray-700 font-bold">{firstTour.duration}</strong></span>
+                            <div className="text-xs text-gray-600 font-medium flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span>Thời gian xử lý: <strong className="text-gray-900 font-semibold">{firstTour.duration}</strong></span>
                             </div>
                           </div>
                         </div>
 
                         {/* Group Content: Services Table (Always Expanded) */}
-                        <div className="overflow-x-auto border-t border-slate-100 bg-white">
+                        <div className="overflow-x-auto border-t border-gray-200 bg-white">
                             <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                              <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 <tr>
-                                  <th className="px-6 py-3 text-left w-36">Mã Dịch vụ</th>
-                                  <th className="px-6 py-3 text-left">Tên Dịch vụ / Chi tiết</th>
-                                  <th className="px-6 py-3 text-right">Phí dịch vụ & Hoa hồng</th>
-                                  <th className="px-6 py-3 text-center">Thông tin lưu ý</th>
-                                  {isVisaOrAdmin && <th className="px-6 py-3 text-center w-28">Hành động</th>}
+                                  <th className="px-6 py-3.5 text-left w-36">Mã Dịch vụ</th>
+                                  <th className="px-6 py-3.5 text-left">Tên Dịch vụ / Chi tiết</th>
+                                  <th className="px-6 py-3.5 text-right">Phí dịch vụ & Hoa hồng</th>
+                                  <th className="px-6 py-3.5 text-center">Thông tin lưu ý</th>
+                                  {isVisaOrAdmin && <th className="px-6 py-3.5 text-center w-28">Hành động</th>}
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-150 text-xs text-gray-700">
+                              <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
                                 {groupTours.map(t => (
-                                  <tr key={t.id} className="hover:bg-slate-50/40 transition-colors">
-                                    <td className="px-6 py-3">
-                                      <span className="font-mono font-bold text-blue-700 tracking-tight bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-md inline-block">
+                                  <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                                    <td className="px-6 py-3.5">
+                                      <span className="font-mono font-bold text-blue-700 tracking-tight bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md text-xs inline-block">
                                         {t.code}
                                       </span>
                                     </td>
-                                    <td className="px-6 py-3">
-                                      <div className="font-bold text-gray-900 text-xs">
+                                    <td className="px-6 py-3.5">
+                                      <div className="font-bold text-gray-900 text-sm">
                                         {t.name}
                                       </div>
-                                      <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5 font-semibold">
-                                        <div>Quốc gia: <span className="underline">{t.visa_country || t.destination || 'Chưa xác định'}</span> | Loại: {t.visa_service_type || 'Dịch vụ'} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})</div>
-                                        {t.custom_requirements && <div className="text-[10px] text-purple-700">Yêu cầu: {t.custom_requirements}</div>}
+                                      <div className="text-xs text-gray-500 mt-1 flex flex-col gap-0.5 font-medium">
+                                        <div>Quốc gia: <span className="underline font-semibold text-gray-800">{t.visa_country || t.destination || 'Chưa xác định'}</span> | Loại: {t.visa_service_type || 'Dịch vụ'} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})</div>
+                                        {t.custom_requirements && <div className="text-xs text-purple-700 font-medium">Yêu cầu: {t.custom_requirements}</div>}
                                         
                                         {t.itinerary_pdf_url && (() => {
                                           let files: { name: string; url: string }[] = [];
@@ -2668,46 +2702,46 @@ export default function VisaServices() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-slate-50 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                  <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <tr>
-                      <th className="px-6 py-4 text-left">Mã dịch vụ</th>
-                      <th className="px-6 py-4 text-left">Tên dịch vụ / Quốc gia</th>
-                      <th className="px-6 py-4 text-right">Phí dịch vụ</th>
-                      <th className="px-6 py-4 text-center">Thông tin lưu ý</th>
-                      {isVisaOrAdmin && <th className="px-6 py-4 text-center">Hành động</th>}
+                      <th className="px-6 py-3.5 text-left">Mã dịch vụ</th>
+                      <th className="px-6 py-3.5 text-left">Tên dịch vụ / Quốc gia</th>
+                      <th className="px-6 py-3.5 text-right">Phí dịch vụ</th>
+                      <th className="px-6 py-3.5 text-center">Thông tin lưu ý</th>
+                      {isVisaOrAdmin && <th className="px-6 py-3.5 text-center">Hành động</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
                     {filteredVisaTours.map(t => (
-                      <tr key={t.id} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md inline-block">
+                      <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="px-6 py-3.5">
+                          <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md inline-block">
                             {t.code}
                           </div>
                           {/* Tour Type Badge */}
                           <div className="mt-1.5">
                             {t.tour_type === 'visa' && (
-                              <span className="text-[9px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                              <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold uppercase">
                                 🛂 Dịch vụ Visa lẻ
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 max-w-xs">
-                          <div className="font-bold text-gray-900 text-xs line-clamp-2" title={t.name}>{t.name}</div>
-                          <div className="text-[10px] text-gray-400 mt-1 font-semibold flex flex-col gap-0.5">
+                        <td className="px-6 py-3.5 max-w-xs">
+                          <div className="font-bold text-gray-900 text-sm line-clamp-2" title={t.name}>{t.name}</div>
+                          <div className="text-xs text-gray-500 mt-1 font-medium flex flex-col gap-0.5">
                             <div className="flex items-center gap-1.5">
                               <span>Thời gian xử lý: {t.duration}</span>
                             </div>
                             
                             {/* Product-Specific Subtext */}
                             {t.tour_type === 'visa' && (
-                              <div className="text-[10px] text-purple-800 font-bold bg-purple-50/40 px-1.5 py-0.5 rounded border border-purple-100/30 mt-1">
-                                Quốc gia: <span className="underline">{t.visa_country || t.destination || 'Chưa xác định'}</span> | {t.visa_service_type || 'Dịch vụ'} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
+                              <div className="text-xs text-purple-800 font-medium bg-purple-50/60 px-2 py-0.5 rounded border border-purple-100 mt-1">
+                                Quốc gia: <span className="underline font-semibold">{t.visa_country || t.destination || 'Chưa xác định'}</span> | {t.visa_service_type || 'Dịch vụ'} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
                               </div>
                             )}
                             {t.custom_requirements && (
-                              <div className="text-[10px] text-purple-700 mt-0.5">Yêu cầu: {t.custom_requirements}</div>
+                              <div className="text-xs text-purple-700 font-medium mt-0.5">Yêu cầu: {t.custom_requirements}</div>
                             )}
 
                             {t.itinerary_pdf_url && (() => {
@@ -2732,9 +2766,9 @@ export default function VisaServices() {
                               }
                               if (files.length === 0) return null;
                               return (
-                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5 pt-1.5 border-t border-dashed border-slate-100">
-                                  <span className="text-[9px] font-black text-purple-700 bg-purple-50 px-1 py-0.5 rounded border border-purple-200 uppercase tracking-wide flex items-center shrink-0">
-                                    <Paperclip className="w-2.5 h-2.5 mr-0.5" /> File mẫu ({files.length}):
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5 pt-1.5 border-t border-dashed border-gray-200">
+                                  <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 uppercase tracking-wide flex items-center shrink-0">
+                                    <Paperclip className="w-3 h-3 mr-0.5" /> File mẫu ({files.length}):
                                   </span>
                                   <div className="flex flex-wrap gap-1">
                                     {files.map((f, idx) => (
@@ -2743,10 +2777,10 @@ export default function VisaServices() {
                                         href={f.url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="text-[9px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50/70 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-all flex items-center gap-0.5 shadow-xs max-w-[120px] truncate"
+                                        className="text-[10px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50/70 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-all flex items-center gap-0.5 shadow-xs max-w-[140px] truncate"
                                         title={f.name}
                                       >
-                                        {f.name} <ExternalLink className="w-2 h-2 shrink-0" />
+                                        {f.name} <ExternalLink className="w-2.5 h-2.5 shrink-0" />
                                       </a>
                                     ))}
                                   </div>
@@ -2755,9 +2789,9 @@ export default function VisaServices() {
                             })()}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap font-bold text-rose-600 text-xs">
+                        <td className="px-6 py-3.5 text-right whitespace-nowrap font-bold text-rose-600 text-xs">
                           <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
-                          <div className="text-[10px] text-gray-400 font-medium">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
+                          <div className="text-xs text-gray-400 font-medium">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
                         </td>
                         <td className="px-6 py-4 text-center whitespace-nowrap">
                           <button

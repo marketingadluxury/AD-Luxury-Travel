@@ -68,7 +68,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
       const targetTour = tours.find(t => t.id === order.tour_id);
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('orderCode', order.id);
+      formData.append('orderCode', order.id.substring(0, 8));
       if (targetTour?.code) {
         formData.append('tourCode', targetTour.code);
       }

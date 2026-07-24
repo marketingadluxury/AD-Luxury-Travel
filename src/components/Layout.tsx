@@ -138,7 +138,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       case 'sale_leader': return 'Sale Leader (Trưởng nhóm)';
       case 'sale': return 'Sale';
       case 'visa': return 'Bộ phận Visa';
-      case 'accounting': return 'Kế toán tài vụ';
+      case 'accounting': return 'Kế toán';
       case 'admin': return 'Quản trị viên';
       default: return role;
     }
@@ -206,7 +206,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <option value="sale_leader">⭐ Sale Leader (Trưởng nhóm)</option>
             <option value="sale">💼 Sale</option>
             <option value="visa">🛂 Bộ phận Visa</option>
-            <option value="accounting">💰 Kế toán tài vụ</option>
+            <option value="accounting">💰 Kế toán</option>
             <option value="admin">🔑 Quản trị viên (Full)</option>
           </select>
         </div>

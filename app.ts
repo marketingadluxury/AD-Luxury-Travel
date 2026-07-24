@@ -307,7 +307,7 @@ async function getOrCreateTourSubFolderV2(tourCode: string, subFolder: 'Đơn h�
 async function getOrCreateOrderFolderV2(tourCode: string, orderCode: string, token: string): Promise<string> {
   const donHangFolderId = await getOrCreateTourSubFolderV2(tourCode, 'Đơn hàng', token);
 
-  const cleanOrderCode = (orderCode || 'Don_hang').trim().replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
+  const cleanOrderCode = formatOrderCode(orderCode).replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
   let orderFolderId = await searchFolder(cleanOrderCode, donHangFolderId, token);
   if (!orderFolderId) {
     orderFolderId = await createFolder(cleanOrderCode, donHangFolderId, token);
@@ -315,6 +315,31 @@ async function getOrCreateOrderFolderV2(tourCode: string, orderCode: string, tok
   }
 
   return orderFolderId;
+}
+
+function decodeUTF8(str: string | undefined): string {
+  if (!str) return '';
+  try {
+    const decoded = Buffer.from(str, 'latin1').toString('utf8');
+    if (!decoded.includes('\uFFFD') && decoded !== str) {
+      return decoded;
+    }
+  } catch (e) {
+    // fallback
+  }
+  return str;
+}
+
+function formatOrderCode(orderIdOrCode: string | undefined): string {
+  if (!orderIdOrCode) return 'DON_HANG';
+  let str = orderIdOrCode.trim();
+  if (str.toUpperCase().startsWith('BK-')) {
+    str = str.substring(3);
+  }
+  if (str.length > 8 && !str.toUpperCase().startsWith('TOUR') && !str.toUpperCase().startsWith('CHIPHI')) {
+    str = str.substring(0, 8);
+  }
+  return str.toUpperCase();
 }
 
 async function getTourCodeFromOrderOrTour(
@@ -333,7 +358,7 @@ async function getTourCodeFromOrderOrTour(
     return {
       tourCode: cleanTourCodeParam.toUpperCase(),
       isTourCodeDirectly: isGenericOrderCode,
-      orderId: isGenericOrderCode ? undefined : cleanOrderCodeParam
+      orderId: isGenericOrderCode ? undefined : formatOrderCode(cleanOrderCodeParam)
     };
   }
 
@@ -383,7 +408,7 @@ async function getTourCodeFromOrderOrTour(
         .maybeSingle();
 
       if (tourData && tourData.code) {
-        return { tourCode: tourData.code, isTourCodeDirectly: false, orderId: targetBooking.id };
+        return { tourCode: tourData.code, isTourCodeDirectly: false, orderId: formatOrderCode(targetBooking.id) };
       }
     }
 
@@ -410,7 +435,7 @@ async function getTourCodeFromOrderOrTour(
             .maybeSingle();
 
           if (tourData && tourData.code) {
-            return { tourCode: tourData.code, isTourCodeDirectly: false, orderId: invBooking.id };
+            return { tourCode: tourData.code, isTourCodeDirectly: false, orderId: formatOrderCode(invBooking.id) };
           }
         }
       }
@@ -759,24 +784,13 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
     console.log('[API] /api/upload - File received:', req.file.originalname, 'Size:', req.file.size);
     console.log('[API] /api/upload - Body:', req.body);
 
-    // Decode UTF-8 for filename and body fields (Multer defaults to latin1 for multipart forms)
-    const decodeUTF8 = (str: string | undefined) => {
-      if (!str) return str;
-      try {
-        // Multer/busboy interprets UTF-8 as Latin1. Convert back to buffer and decode correctly.
-        return Buffer.from(str, 'latin1').toString('utf8');
-      } catch (e) {
-        return str;
-      }
-    };
-
     if (req.file) {
       req.file.originalname = decodeUTF8(req.file.originalname) || req.file.originalname;
     }
 
     // Decode relevant body fields
     const body = { ...req.body };
-    const fieldsToDecode = ['fullName', 'visaName', 'tourTitle', 'category', 'visaCode', 'tourCode'];
+    const fieldsToDecode = ['fullName', 'passportNumber', 'visaName', 'tourTitle', 'category', 'visaCode', 'tourCode', 'orderCode', 'orderId'];
     fieldsToDecode.forEach(field => {
       if (body[field]) body[field] = decodeUTF8(body[field]);
     });
@@ -954,14 +968,20 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
 app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt', '/api/drive/upload', '/drive/upload'], upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
-    const { orderCode, tourCode: bodyTourCode } = req.body;
-
     if (!file) {
       res.status(400).json({ error: 'Không tìm thấy file để tải lên.' });
       return;
     }
 
-    if (!orderCode && !bodyTourCode) {
+    // Decode UTF-8 for filename and body fields
+    if (file.originalname) {
+      file.originalname = decodeUTF8(file.originalname) || file.originalname;
+    }
+
+    const orderCodeReq = decodeUTF8(req.body.orderCode);
+    const bodyTourCodeReq = decodeUTF8(req.body.tourCode);
+
+    if (!orderCodeReq && !bodyTourCodeReq) {
       res.status(400).json({ error: 'Thiếu thông tin mã đơn hàng hoặc mã tour.' });
       return;
     }
@@ -970,15 +990,13 @@ app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt', '/api/drive/
     const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
     const driveActive = hasServiceAccount || hasOAuth;
 
-    const rawOrderCode = (orderCode || bodyTourCode || 'CHIPHI').trim();
-    const cleanOrderCode = rawOrderCode.toUpperCase().replace(/\s+/g, '_');
-    const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
-    const fileName = `${cleanOrderCode}_${Date.now()}_${cleanOriginalName}`;
-
     // Khởi tạo Supabase để tra cứu mối quan hệ giữa Booking và Tour
     const supabase = getAdminSupabaseClient(req);
-    const { tourCode, isTourCodeDirectly, orderId } = await getTourCodeFromOrderOrTour(orderCode, bodyTourCode, supabase);
-    const actualOrderCode = orderId ? orderId.substring(0, 8).toUpperCase() : cleanOrderCode;
+    const { tourCode, isTourCodeDirectly, orderId } = await getTourCodeFromOrderOrTour(orderCodeReq, bodyTourCodeReq, supabase);
+
+    const actualOrderCode = formatOrderCode(orderId || orderCodeReq || bodyTourCodeReq || 'CHIPHI');
+    const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
+    const fileName = `${actualOrderCode}_${Date.now()}_${cleanOriginalName}`;
 
     if (driveActive) {
       const token = await getGoogleDriveAccessToken();

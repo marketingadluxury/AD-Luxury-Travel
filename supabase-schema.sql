@@ -105,6 +105,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_tax_code TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_address TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_email TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS contract_url TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE CASCADE;
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -154,6 +155,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   booking_date date NULL DEFAULT CURRENT_DATE,
   payment_status text NULL DEFAULT 'pending'::text,
   seats integer NULL DEFAULT 1,
+  contract_url text NULL,
+  is_locked boolean NULL DEFAULT false,
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
   CONSTRAINT bookings_code_key UNIQUE (code),
   CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id),
@@ -400,8 +403,32 @@ EXCEPTION
     WHEN undefined_object THEN NULL;
 END $$;
 
--- NÂNG CẤP SCHEMA: Tự động thêm cột visa_amount nếu đã tồn tại bảng tour_costs trước đó
+-- NÂNG CẤP SCHEMA: Tự động thêm các cột cho bảng tours, tour_costs, profiles nếu đã tồn tại bảng trước đó
 ALTER TABLE tour_costs ADD COLUMN IF NOT EXISTS visa_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS leader_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS ticket_deadline TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_deadline TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS ticket_status TEXT DEFAULT 'CHỜ XUẤT VÉ';
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS hold_duration_hours INTEGER DEFAULT 48;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS overbook_limit INTEGER DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_adult NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_child NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_infant NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS single_room_surcharge NUMERIC DEFAULT 0;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS itinerary_pdf_url TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS notice_sections TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS departure_time TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS return_time TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_status TEXT DEFAULT 'available';
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_type TEXT DEFAULT 'internal';
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS partner_name TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS partner_contact TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS organization_name TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS group_leader_contact TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS custom_requirements TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_country TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_service_type TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_speed TEXT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_visa_tour NUMERIC DEFAULT 0;
 

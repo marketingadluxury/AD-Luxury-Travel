@@ -661,7 +661,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               discount_type: b.discount_type,
               discount_value: Number(b.discount_value || 0),
               surcharge_name: b.surcharge_name,
-              surcharge_amount: Number(b.surcharge_amount || 0)
+              surcharge_amount: Number(b.surcharge_amount || 0),
+              contract_url: b.contract_url,
+              is_locked: b.is_locked || false
             }));
             setOrders(fetchedOrders);
             console.log('Đã nạp thành công Bookings từ Supabase');
@@ -1708,9 +1710,30 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       seat_status: 'Còn chỗ',
     };
     
+    const initialChanges = [
+      { field: 'Mã Tour', old: 'Tạo mới', new: newTour.code || id },
+      { field: 'Tên Tour', old: 'Tạo mới', new: newTour.name || 'Tour mới' },
+      { field: 'Giá vé người lớn', old: '0 đ', new: `${priceAdult.toLocaleString('vi-VN')} đ` },
+      { field: 'Tổng số chỗ mở bán', old: '0 chỗ', new: `${totalSeats} chỗ` }
+    ];
+    if (newTour.ticket_deadline) {
+      initialChanges.push({ field: 'Hạn xuất vé', old: 'Chưa có', new: newTour.ticket_deadline });
+    }
+    if (newTour.visa_deadline) {
+      initialChanges.push({ field: 'Hạn nộp Visa', old: 'Chưa có', new: newTour.visa_deadline });
+    }
+    if (newTour.category) {
+      initialChanges.push({ field: 'Danh mục', old: 'Chưa chọn', new: newTour.category });
+    }
+
+    const createTourLogDetails = JSON.stringify({
+      info: `Mã tour: ${newTour.code || id} - ${newTour.name || 'Tour mới'}`,
+      changes: initialChanges
+    });
+
     // Thêm vào local state ngay lập tức
     setTours(prev => [...prev, newTour]);
-    logActivity({ action: 'Tạo Tour mới', module: 'Tour', details: `Mã tour: ${newTour.code || id} - ${newTour.name || 'Tour mới'}` });
+    logActivity({ action: 'Tạo Tour mới', module: 'Tour', details: createTourLogDetails });
 
     if (isSupabaseConfigured()) {
       try {
@@ -1855,35 +1878,191 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     const existingTour = tours.find(t => t.id === updatedTour.id);
     const tourChanges: { field: string; old: string; new: string }[] = [];
+
+    const formatLogDate = (val?: string) => {
+      if (!val || !val.trim()) return 'Chưa thiết lập';
+      const str = val.trim();
+      try {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          const day = String(d.getDate()).padStart(2, '0');
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const year = d.getFullYear();
+          if (str.includes('T') || str.includes(':')) {
+            const hours = String(d.getHours()).padStart(2, '0');
+            const mins = String(d.getMinutes()).padStart(2, '0');
+            return `${hours}:${mins} ${day}/${month}/${year}`;
+          }
+          return `${day}/${month}/${year}`;
+        }
+      } catch (e) {
+        // ignore
+      }
+      return str;
+    };
+
+    const formatMoney = (val?: number) => `${Number(val || 0).toLocaleString('vi-VN')} đ`;
+
     if (existingTour) {
-      if (existingTour.name !== updatedTour.name) {
+      if ((existingTour.name || '') !== (updatedTour.name || '')) {
         tourChanges.push({ field: 'Tên Tour', old: existingTour.name || 'Trống', new: updatedTour.name || 'Trống' });
       }
+      if ((existingTour.code || '') !== (updatedTour.code || '')) {
+        tourChanges.push({ field: 'Mã Tour', old: existingTour.code || 'Trống', new: updatedTour.code || 'Trống' });
+      }
+      if ((existingTour.category || '') !== (updatedTour.category || '')) {
+        tourChanges.push({ field: 'Danh mục sản phẩm', old: existingTour.category || 'Trống', new: updatedTour.category || 'Trống' });
+      }
+      
       const oldPrice = Number(existingTour.price_adult || existingTour.price || 0);
       const newPrice = Number(updatedTour.price_adult || updatedTour.price || 0);
       if (oldPrice !== newPrice) {
-        tourChanges.push({ field: 'Giá người lớn', old: `${oldPrice.toLocaleString('vi-VN')} đ`, new: `${newPrice.toLocaleString('vi-VN')} đ` });
+        tourChanges.push({ field: 'Giá vé người lớn', old: formatMoney(oldPrice), new: formatMoney(newPrice) });
       }
+
       const oldChild = Number(existingTour.price_child || 0);
       const newChild = Number(updatedTour.price_child || 0);
       if (oldChild !== newChild) {
-        tourChanges.push({ field: 'Giá trẻ em', old: `${oldChild.toLocaleString('vi-VN')} đ`, new: `${newChild.toLocaleString('vi-VN')} đ` });
+        tourChanges.push({ field: 'Giá vé trẻ em', old: formatMoney(oldChild), new: formatMoney(newChild) });
       }
-      if (existingTour.total_seats !== updatedTour.total_seats) {
-        tourChanges.push({ field: 'Tổng số chỗ', old: `${existingTour.total_seats} chỗ`, new: `${updatedTour.total_seats} chỗ` });
+
+      const oldInfant = Number(existingTour.price_infant || 0);
+      const newInfant = Number(updatedTour.price_infant || 0);
+      if (oldInfant !== newInfant) {
+        tourChanges.push({ field: 'Giá vé em bé', old: formatMoney(oldInfant), new: formatMoney(newInfant) });
       }
-      if (existingTour.departure_time !== updatedTour.departure_time) {
-        tourChanges.push({ field: 'Thời gian khởi hành', old: existingTour.departure_time || 'Chưa xếp', new: updatedTour.departure_time || 'Chưa xếp' });
+
+      const oldSingleRoom = Number(existingTour.single_room_surcharge || 0);
+      const newSingleRoom = Number(updatedTour.single_room_surcharge || 0);
+      if (oldSingleRoom !== newSingleRoom) {
+        tourChanges.push({ field: 'Phụ thu phòng đơn', old: formatMoney(oldSingleRoom), new: formatMoney(newSingleRoom) });
       }
-      if (existingTour.status !== updatedTour.status) {
+
+      const oldDiscount = Number(existingTour.discount || 0);
+      const newDiscount = Number(updatedTour.discount || 0);
+      if (oldDiscount !== newDiscount) {
+        tourChanges.push({ field: 'Giảm giá / Ưu đãi', old: formatMoney(oldDiscount), new: formatMoney(newDiscount) });
+      }
+
+      const oldComm = Number(existingTour.commission || 0);
+      const newComm = Number(updatedTour.commission || 0);
+      if (oldComm !== newComm) {
+        tourChanges.push({ field: 'Hoa hồng Đại lý / Sale', old: formatMoney(oldComm), new: formatMoney(newComm) });
+      }
+
+      if (Number(existingTour.total_seats || 0) !== Number(updatedTour.total_seats || 0)) {
+        tourChanges.push({ field: 'Tổng số chỗ mở bán', old: `${existingTour.total_seats || 0} chỗ`, new: `${updatedTour.total_seats || 0} chỗ` });
+      }
+
+      if (Number(existingTour.overbook_limit || 0) !== Number(updatedTour.overbook_limit || 0)) {
+        tourChanges.push({ field: 'Overbooking cho phép', old: `${existingTour.overbook_limit || 0} chỗ`, new: `${updatedTour.overbook_limit || 0} chỗ` });
+      }
+
+      if (Number(existingTour.hold_duration_hours || 48) !== Number(updatedTour.hold_duration_hours || 48)) {
+        tourChanges.push({ field: 'Mặc định Hold (Giờ)', old: `${existingTour.hold_duration_hours || 48} giờ`, new: `${updatedTour.hold_duration_hours || 48} giờ` });
+      }
+
+      if ((existingTour.ticket_deadline || '') !== (updatedTour.ticket_deadline || '')) {
+        tourChanges.push({ field: 'Hạn xuất vé', old: formatLogDate(existingTour.ticket_deadline), new: formatLogDate(updatedTour.ticket_deadline) });
+      }
+
+      if ((existingTour.visa_deadline || '') !== (updatedTour.visa_deadline || '')) {
+        tourChanges.push({ field: 'Hạn nộp Visa', old: formatLogDate(existingTour.visa_deadline), new: formatLogDate(updatedTour.visa_deadline) });
+      }
+
+      if ((existingTour.ticket_status || '') !== (updatedTour.ticket_status || '')) {
+        tourChanges.push({ field: 'Tình trạng vé', old: existingTour.ticket_status || 'CHỜ XUẤT VÉ', new: updatedTour.ticket_status || 'CHỜ XUẤT VÉ' });
+      }
+
+      if ((existingTour.tour_status || 'available') !== (updatedTour.tour_status || 'available')) {
+        tourChanges.push({ field: 'Nhãn trạng thái bán', old: existingTour.tour_status || 'available', new: updatedTour.tour_status || 'available' });
+      }
+
+      if ((existingTour.status || '') !== (updatedTour.status || '')) {
         tourChanges.push({ field: 'Trạng thái Tour', old: existingTour.status || '--', new: updatedTour.status || '--' });
+      }
+
+      if ((existingTour.departure_time || '') !== (updatedTour.departure_time || '')) {
+        tourChanges.push({ field: 'Ngày giờ khởi hành (Đi)', old: formatLogDate(existingTour.departure_time), new: formatLogDate(updatedTour.departure_time) });
+      }
+
+      if ((existingTour.return_time || '') !== (updatedTour.return_time || '')) {
+        tourChanges.push({ field: 'Ngày giờ về', old: formatLogDate(existingTour.return_time), new: formatLogDate(updatedTour.return_time) });
+      }
+
+      if ((existingTour.airline || '') !== (updatedTour.airline || '')) {
+        tourChanges.push({ field: 'Hãng hàng không', old: existingTour.airline || 'Chưa có', new: updatedTour.airline || 'Chưa có' });
+      }
+
+      if ((existingTour.hotel || '') !== (updatedTour.hotel || '')) {
+        tourChanges.push({ field: 'Khách sạn', old: existingTour.hotel || 'Chưa có', new: updatedTour.hotel || 'Chưa có' });
+      }
+
+      if ((existingTour.guide_name || '') !== (updatedTour.guide_name || '')) {
+        tourChanges.push({ field: 'Tên Hướng dẫn viên', old: existingTour.guide_name || 'Chưa có', new: updatedTour.guide_name || 'Chưa có' });
+      }
+
+      if ((existingTour.guide_phone || '') !== (updatedTour.guide_phone || '')) {
+        tourChanges.push({ field: 'SĐT Hướng dẫn viên', old: existingTour.guide_phone || 'Chưa có', new: updatedTour.guide_phone || 'Chưa có' });
+      }
+
+      if ((existingTour.flight_out || '') !== (updatedTour.flight_out || '')) {
+        tourChanges.push({ field: 'Chuyến bay đi (Chặng 1)', old: existingTour.flight_out || 'Trống', new: updatedTour.flight_out || 'Trống' });
+      }
+
+      if ((existingTour.flight_out_transit || '') !== (updatedTour.flight_out_transit || '')) {
+        tourChanges.push({ field: 'Chuyến bay đi (Chặng 2 - Quá cảnh)', old: existingTour.flight_out_transit || 'Trống', new: updatedTour.flight_out_transit || 'Trống' });
+      }
+
+      if ((existingTour.flight_in || '') !== (updatedTour.flight_in || '')) {
+        tourChanges.push({ field: 'Chuyến bay về (Chặng 1)', old: existingTour.flight_in || 'Trống', new: updatedTour.flight_in || 'Trống' });
+      }
+
+      if ((existingTour.flight_in_transit || '') !== (updatedTour.flight_in_transit || '')) {
+        tourChanges.push({ field: 'Chuyến bay về (Chặng 2 - Quá cảnh)', old: existingTour.flight_in_transit || 'Trống', new: updatedTour.flight_in_transit || 'Trống' });
+      }
+
+      if ((existingTour.transit_info || '') !== (updatedTour.transit_info || '')) {
+        tourChanges.push({ field: 'Ghi chú quá cảnh', old: existingTour.transit_info || 'Trống', new: updatedTour.transit_info || 'Trống' });
+      }
+
+      if ((existingTour.description || '') !== (updatedTour.description || '')) {
+        tourChanges.push({ field: 'Mô tả / Chi tiết Tour', old: existingTour.description || 'Trống', new: updatedTour.description || 'Trống' });
+      }
+
+      if ((existingTour.partner_name || '') !== (updatedTour.partner_name || '')) {
+        tourChanges.push({ field: 'Tên đối tác nhận khách', old: existingTour.partner_name || 'Trống', new: updatedTour.partner_name || 'Trống' });
+      }
+
+      if ((existingTour.partner_contact || '') !== (updatedTour.partner_contact || '')) {
+        tourChanges.push({ field: 'Liên hệ đối tác', old: existingTour.partner_contact || 'Trống', new: updatedTour.partner_contact || 'Trống' });
+      }
+
+      if ((existingTour.organization_name || '') !== (updatedTour.organization_name || '')) {
+        tourChanges.push({ field: 'Tên đoàn / cơ quan', old: existingTour.organization_name || 'Trống', new: updatedTour.organization_name || 'Trống' });
+      }
+
+      if ((existingTour.group_leader_contact || '') !== (updatedTour.group_leader_contact || '')) {
+        tourChanges.push({ field: 'Trưởng đoàn liên hệ', old: existingTour.group_leader_contact || 'Trống', new: updatedTour.group_leader_contact || 'Trống' });
+      }
+
+      if ((existingTour.custom_requirements || '') !== (updatedTour.custom_requirements || '')) {
+        tourChanges.push({ field: 'Yêu cầu đặc biệt', old: existingTour.custom_requirements || 'Trống', new: updatedTour.custom_requirements || 'Trống' });
       }
     }
 
-    const logDetails = tourChanges.length > 0 ? JSON.stringify({
+    if (tourChanges.length === 0) {
+      tourChanges.push({
+        field: 'Thao tác lưu thông tin',
+        old: 'Thông tin cũ',
+        new: 'Đã lưu lại dữ liệu Tour (Không phát hiện sự thay đổi ở các trường chính)'
+      });
+    }
+
+    const logDetails = JSON.stringify({
       info: `Mã tour: ${updatedTour.code || updatedTour.id} - ${updatedTour.name}`,
       changes: tourChanges
-    }) : `Mã tour: ${updatedTour.code || updatedTour.id} - ${updatedTour.name}`;
+    });
 
     setTours(prev => prev.map(t => t.id === updatedTour.id ? nextTour : t));
     logActivity({ action: 'Cập nhật Tour', module: 'Tour', details: logDetails });
@@ -3053,41 +3232,117 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           new: `${updatedData.single_room_count || 0} phòng`
         });
       }
-      if (updatedData.status !== undefined && updatedData.status !== existingOrder.status) {
+      if (updatedData.contract_url !== undefined && updatedData.contract_url !== existingOrder.contract_url) {
         orderChanges.push({
-          field: 'Trạng thái booking',
-          old: existingOrder.status === 'sure' ? 'Chắc chắn' : existingOrder.status === 'hold' ? 'Giữ chỗ' : 'Đã hủy',
-          new: updatedData.status === 'sure' ? 'Chắc chắn' : updatedData.status === 'hold' ? 'Giữ chỗ' : 'Đã hủy'
+          field: 'Hợp đồng dịch vụ',
+          old: existingOrder.contract_url ? 'Đã có hợp đồng' : 'Chưa có hợp đồng',
+          new: updatedData.contract_url ? 'Đã tải lên hợp đồng mới' : 'Đã xóa hợp đồng'
+        });
+      }
+      if (updatedData.is_locked !== undefined && updatedData.is_locked !== existingOrder.is_locked) {
+        orderChanges.push({
+          field: 'Trạng thái khóa đơn',
+          old: existingOrder.is_locked ? 'Đã khóa' : 'Đang mở',
+          new: updatedData.is_locked ? 'Đã khóa' : 'Đang mở'
+        });
+      }
+      if (updatedData.booker_name !== undefined && updatedData.booker_name !== existingOrder.booker_name) {
+        orderChanges.push({
+          field: 'Tên người đặt chỗ',
+          old: existingOrder.booker_name || 'Chưa cung cấp',
+          new: updatedData.booker_name || 'Chưa cung cấp'
+        });
+      }
+      if (updatedData.booker_phone !== undefined && updatedData.booker_phone !== existingOrder.booker_phone) {
+        orderChanges.push({
+          field: 'Số điện thoại người đặt',
+          old: existingOrder.booker_phone || 'Chưa cung cấp',
+          new: updatedData.booker_phone || 'Chưa cung cấp'
+        });
+      }
+      if (updatedData.special_requests !== undefined && updatedData.special_requests !== existingOrder.special_requests) {
+        orderChanges.push({
+          field: 'Yêu cầu đặc biệt',
+          old: existingOrder.special_requests || 'Không có',
+          new: updatedData.special_requests || 'Không có'
+        });
+      }
+      if (updatedData.room_share_info !== undefined && updatedData.room_share_info !== existingOrder.room_share_info) {
+        orderChanges.push({
+          field: 'Thông tin ghép phòng',
+          old: existingOrder.room_share_info || 'Không có',
+          new: updatedData.room_share_info || 'Không có'
+        });
+      }
+      if (updatedData.vat_company_name !== undefined && updatedData.vat_company_name !== existingOrder.vat_company_name) {
+        orderChanges.push({
+          field: 'Tên công ty xuất VAT',
+          old: existingOrder.vat_company_name || 'Chưa có',
+          new: updatedData.vat_company_name || 'Chưa có'
+        });
+      }
+      if (updatedData.vat_tax_code !== undefined && updatedData.vat_tax_code !== existingOrder.vat_tax_code) {
+        orderChanges.push({
+          field: 'Mã số thuế VAT',
+          old: existingOrder.vat_tax_code || 'Chưa có',
+          new: updatedData.vat_tax_code || 'Chưa có'
+        });
+      }
+      if (updatedData.payment_status !== undefined && updatedData.payment_status !== existingOrder.payment_status) {
+        orderChanges.push({
+          field: 'Trạng thái thanh toán',
+          old: existingOrder.payment_status === 'paid' ? 'Đã thanh toán đủ' : existingOrder.payment_status === 'partially_paid' ? 'Thanh toán 1 phần' : 'Chưa thanh toán',
+          new: updatedData.payment_status === 'paid' ? 'Đã thanh toán đủ' : updatedData.payment_status === 'partially_paid' ? 'Thanh toán 1 phần' : 'Chưa thanh toán'
+        });
+      }
+      if (updatedData.hold_expiry !== undefined && updatedData.hold_expiry !== existingOrder.hold_expiry) {
+        orderChanges.push({
+          field: 'Thời gian hết hạn giữ chỗ',
+          old: existingOrder.hold_expiry || 'Chưa thiết lập',
+          new: updatedData.hold_expiry || 'Đã giải phóng'
+        });
+      }
+    }
+
+    // Fallback in case orderChanges is empty but updatedData has fields
+    if (orderChanges.length === 0) {
+      const keys = Object.keys(updatedData).filter(k => k !== 'id');
+      if (keys.length > 0) {
+        orderChanges.push({
+          field: 'Cập nhật dữ liệu booking',
+          old: 'Thông tin cũ',
+          new: `Đã cập nhật các trường: ${keys.join(', ')}`
         });
       }
     }
 
     const displayOrderCode = (existingOrder?.id || orderId).substring(0, 8);
-    const logDetails = orderChanges.length > 0 ? JSON.stringify({
-      info: `Mã đơn: ${displayOrderCode} - Khách đặt: ${existingOrder?.booker_name || 'Khách lẻ'}`,
-      changes: orderChanges
-    }) : `Mã đơn: ${displayOrderCode}`;
+    const logDetails = JSON.stringify({
+      info: `Mã đơn: ${displayOrderCode} - Khách đặt: ${updatedData.booker_name || existingOrder?.booker_name || 'Khách lẻ'}`,
+      changes: orderChanges.length > 0 ? orderChanges : [{ field: 'Thao tác', old: 'Khởi tạo', new: 'Cập nhật booking' }]
+    });
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedData } : o));
     logActivity({ action: 'Cập nhật booking', module: 'Đơn hàng', details: logDetails });
     if (isSupabaseConfigured()) {
       try {
-        const updatePayload = {
-          single_room_count: updatedData.single_room_count !== undefined ? Number(updatedData.single_room_count) : undefined,
-          room_share_info: updatedData.room_share_info,
-          vat_option: updatedData.vat_option,
-          vat_company_name: updatedData.vat_company_name,
-          vat_tax_code: updatedData.vat_tax_code,
-          vat_address: updatedData.vat_address,
-          vat_email: updatedData.vat_email,
-          special_requests: updatedData.special_requests,
-          discount_type: updatedData.discount_type,
-          discount_value: updatedData.discount_value !== undefined ? Number(updatedData.discount_value) : undefined,
-          surcharge_name: updatedData.surcharge_name,
-          surcharge_amount: updatedData.surcharge_amount !== undefined ? Number(updatedData.surcharge_amount) : undefined,
-          total_amount: updatedData.total_price !== undefined ? Number(updatedData.total_price) : undefined,
-          contract_url: updatedData.contract_url
-        };
+        const updatePayload: Record<string, any> = {};
+        if (updatedData.single_room_count !== undefined) updatePayload.single_room_count = Number(updatedData.single_room_count);
+        if (updatedData.room_share_info !== undefined) updatePayload.room_share_info = updatedData.room_share_info;
+        if (updatedData.vat_option !== undefined) updatePayload.vat_option = updatedData.vat_option;
+        if (updatedData.vat_company_name !== undefined) updatePayload.vat_company_name = updatedData.vat_company_name;
+        if (updatedData.vat_tax_code !== undefined) updatePayload.vat_tax_code = updatedData.vat_tax_code;
+        if (updatedData.vat_address !== undefined) updatePayload.vat_address = updatedData.vat_address;
+        if (updatedData.vat_email !== undefined) updatePayload.vat_email = updatedData.vat_email;
+        if (updatedData.special_requests !== undefined) updatePayload.special_requests = updatedData.special_requests;
+        if (updatedData.discount_type !== undefined) updatePayload.discount_type = updatedData.discount_type;
+        if (updatedData.discount_value !== undefined) updatePayload.discount_value = Number(updatedData.discount_value);
+        if (updatedData.surcharge_name !== undefined) updatePayload.surcharge_name = updatedData.surcharge_name;
+        if (updatedData.surcharge_amount !== undefined) updatePayload.surcharge_amount = Number(updatedData.surcharge_amount);
+        if (updatedData.total_price !== undefined) updatePayload.total_amount = Number(updatedData.total_price);
+        if (updatedData.contract_url !== undefined) updatePayload.contract_url = updatedData.contract_url;
+        if (updatedData.is_locked !== undefined) updatePayload.is_locked = updatedData.is_locked;
+        if (updatedData.status !== undefined) updatePayload.status = updatedData.status;
         console.log('CRMContext: Updating booking with payload:', updatePayload);
         const { error } = await supabase.from('bookings').update(updatePayload).eq('id', toUuid(orderId));
         if (error) throw error;

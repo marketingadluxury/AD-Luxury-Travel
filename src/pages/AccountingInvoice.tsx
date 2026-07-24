@@ -261,9 +261,9 @@ export default function AccountingInvoice() {
 
       const formData = new FormData();
       formData.append('file', file);
-      if (targetOrder) formData.append('orderCode', targetOrder.id);
+      if (targetOrder) formData.append('orderCode', targetOrder.id.substring(0, 8));
       if (targetTour?.code) formData.append('tourCode', targetTour.code);
-      if (!targetOrder && orderCode) formData.append('orderCode', orderCode);
+      if (!targetOrder && orderCode) formData.append('orderCode', orderCode.substring(0, 8));
 
       const uploadRes = await fetch('/api/upload-invoice-receipt', {
         method: 'POST',
@@ -314,7 +314,7 @@ export default function AccountingInvoice() {
 
       const formData = new FormData();
       formData.append('file', file);
-      if (targetOrder) formData.append('orderCode', targetOrder.id);
+      if (targetOrder) formData.append('orderCode', targetOrder.id.substring(0, 8));
       if (resolvedTourCode) formData.append('tourCode', resolvedTourCode);
       if (!targetOrder && !resolvedTourCode) formData.append('orderCode', 'CHIPHI_TOUR');
 
@@ -2286,7 +2286,7 @@ export default function AccountingInvoice() {
 
                       const formData = new FormData();
                       formData.append('file', paymentFile);
-                      if (targetOrder) formData.append('orderCode', targetOrder.id);
+                      if (targetOrder) formData.append('orderCode', targetOrder.id.substring(0, 8));
                       if (resolvedTourCode) formData.append('tourCode', resolvedTourCode);
                       if (!targetOrder && !resolvedTourCode) formData.append('orderCode', 'CHIPHI_TOUR');
 
@@ -2465,7 +2465,7 @@ export default function AccountingInvoice() {
 
                     const formData = new FormData();
                     formData.append('file', paymentFile);
-                    if (targetOrder) formData.append('orderCode', targetOrder.id);
+                    if (targetOrder) formData.append('orderCode', targetOrder.id.substring(0, 8));
                     if (resolvedTourCode) formData.append('tourCode', resolvedTourCode);
                     if (!targetOrder && !resolvedTourCode) formData.append('orderCode', 'CHIPHI_TOUR');
 
