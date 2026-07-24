@@ -679,6 +679,7 @@ export default function VisaServices() {
   const [airline, setAirline] = useState('Vietnam Airlines');
   const [hotel, setHotel] = useState('Khách sạn 4*');
   const [price, setPrice] = useState<number | ''>(8500000);
+  const [discount, setDiscount] = useState<number | ''>('');
   const [priceVisaTour, setPriceVisaTour] = useState<number | ''>('');
   const [commission, setCommission] = useState<number | ''>(600000);
   const [priceAdult, setPriceAdult] = useState<number | ''>('');
@@ -947,6 +948,7 @@ export default function VisaServices() {
     setAirline(tour.airline || 'Vietnam Airlines');
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
+    setDiscount(tour.discount ?? '');
     setCommission(tour.commission);
     setPriceAdult(tour.price_adult ?? '');
     setPriceChild(tour.price_child ?? '');
@@ -1014,6 +1016,7 @@ export default function VisaServices() {
     setAirline(tour.airline || 'Vietnam Airlines');
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
+    setDiscount(tour.discount ?? '');
     setCommission(tour.commission);
     setPriceAdult(tour.price_adult ?? '');
     setPriceChild(tour.price_child ?? '');
@@ -1077,6 +1080,7 @@ export default function VisaServices() {
     setAirline(tour.airline || 'Vietnam Airlines');
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
+    setDiscount(tour.discount ?? '');
     setCommission(tour.commission);
     setPriceAdult(tour.price_adult ?? '');
     setPriceChild(tour.price_child ?? '');
@@ -1138,6 +1142,7 @@ export default function VisaServices() {
     setAirline('Vietnam Airlines');
     setHotel('Khách sạn 4*');
     setPrice(8500000);
+    setDiscount('');
     setPriceVisaTour('');
     setCommission(600000);
     setPriceAdult('');
@@ -1223,6 +1228,7 @@ export default function VisaServices() {
       airline,
       hotel,
       price: calculatedPrice,
+      discount: discount === '' ? 0 : Number(discount),
       price_visa_tour: priceVisaTour === '' ? 0 : Number(priceVisaTour),
       commission: calculatedCommission,
       total_seats: Number(totalSeats),
@@ -2034,7 +2040,7 @@ export default function VisaServices() {
                 {/* 3. Numeric inputs with dynamic thousands separator formatting */}
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-rose-600" /> Biểu giá & Hoa hồng (Phân cách hàng nghìn khi nhập)
+                    <DollarSign className="w-4 h-4 text-rose-600" /> Biểu giá & Hoa hồng
                   </h4>
                   
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -2043,6 +2049,11 @@ export default function VisaServices() {
                       required
                       value={price}
                       onChange={setPrice}
+                    />
+                    <NumericFormatInput
+                      label="Giảm giá tour (VND)"
+                      value={discount}
+                      onChange={setDiscount}
                     />
                     <NumericFormatInput
                       label="Hoa hồng Sales / Đại lý *"
@@ -2067,7 +2078,7 @@ export default function VisaServices() {
 
                   {tourType !== 'visa' && (
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
-                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-600">Cấu hình giá chi tiết theo độ tuổi (Không nhập hệ thống tự tính)</h5>
+                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-600">Cấu hình giá chi tiết theo độ tuổi</h5>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <NumericFormatInput
                         label="Giá người lớn"
@@ -2514,48 +2525,20 @@ export default function VisaServices() {
 
                     return (
                       <div key={groupName} className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white hover:shadow transition-all duration-200">
-                        {/* Group Header (Accordion toggle) */}
-                        <div 
-                          onClick={() => toggleGroup(groupName)}
-                          className="bg-slate-50 hover:bg-slate-100/80 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none transition-colors border-b border-slate-150"
-                        >
+                        {/* Group Header */}
+                        <div className="bg-slate-50 px-5 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-150">
                           <div className="space-y-1 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[10px] font-black text-purple-700 bg-purple-100/75 border border-purple-200 px-2 py-0.5 rounded uppercase tracking-wider">
-                                🛂 Dịch vụ Visa
-                              </span>
-                              {firstTour.itinerary_pdf_url && (
-                                <span className="text-[10px] font-black text-emerald-700 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                                  <FileText className="w-3 h-3 mr-1" />
-                                  LỊCH TRÌNH PDF
-                                </span>
-                              )}
-                            </div>
                             <h4 className="text-sm font-black text-gray-900 leading-snug uppercase tracking-wide">
                               {groupName}
                             </h4>
                             <div className="text-xs text-gray-500 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
                               <span>Thời gian xử lý: <strong className="text-gray-700 font-bold">{firstTour.duration}</strong></span>
-                              <span className="text-gray-300">|</span>
-                              <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} phiên bản</strong></span>
                             </div>
-                          </div>
-
-                          <div className="flex items-center gap-2.5 self-end md:self-auto" onClick={e => e.stopPropagation()}>
-                            {/* Collapse/Expand indicator */}
-                            <button
-                              type="button"
-                              onClick={() => toggleGroup(groupName)}
-                              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200/50 transition-colors"
-                            >
-                              {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                            </button>
                           </div>
                         </div>
 
-                        {/* Group Content: Departure Dates Table */}
-                        {isExpanded && (
-                          <div className="overflow-x-auto border-t border-slate-100 bg-white">
+                        {/* Group Content: Services Table (Always Expanded) */}
+                        <div className="overflow-x-auto border-t border-slate-100 bg-white">
                             <table className="min-w-full divide-y divide-gray-200">
                               <thead className="bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                                 <tr>
@@ -2677,7 +2660,6 @@ export default function VisaServices() {
                               </tbody>
                             </table>
                           </div>
-                        )}
                       </div>
                     );
                   })

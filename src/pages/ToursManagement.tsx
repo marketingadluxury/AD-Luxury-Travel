@@ -591,6 +591,7 @@ export default function ToursManagement() {
   const [airline, setAirline] = useState('Vietnam Airlines');
   const [hotel, setHotel] = useState('Khách sạn 4*');
   const [price, setPrice] = useState<number | ''>(8500000);
+  const [discount, setDiscount] = useState<number | ''>('');
   const [priceVisaTour, setPriceVisaTour] = useState<number | ''>('');
   const [commission, setCommission] = useState<number | ''>(600000);
   const [priceAdult, setPriceAdult] = useState<number | ''>('');
@@ -773,6 +774,7 @@ export default function ToursManagement() {
     setAirline(tour.airline || 'Vietnam Airlines');
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
+    setDiscount(tour.discount ?? '');
     setCommission(tour.commission);
     setPriceVisaTour(tour.price_visa_tour ?? '');
     setPriceAdult(tour.price_adult ?? '');
@@ -846,6 +848,7 @@ export default function ToursManagement() {
     setAirline(tour.airline || 'Vietnam Airlines');
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
+    setDiscount(tour.discount ?? '');
     setCommission(tour.commission);
     setPriceVisaTour(tour.price_visa_tour ?? '');
     setPriceAdult(tour.price_adult ?? '');
@@ -915,6 +918,7 @@ export default function ToursManagement() {
     setAirline(tour.airline || 'Vietnam Airlines');
     setHotel(tour.hotel || 'Khách sạn 4*');
     setPrice(tour.price);
+    setDiscount(tour.discount ?? '');
     setCommission(tour.commission);
     setPriceVisaTour(tour.price_visa_tour ?? '');
     setPriceAdult(tour.price_adult ?? '');
@@ -982,6 +986,7 @@ export default function ToursManagement() {
     setAirline('Vietnam Airlines');
     setHotel('Khách sạn 4*');
     setPrice(8500000);
+    setDiscount('');
     setPriceVisaTour('');
     setCommission(600000);
     setPriceAdult('');
@@ -1073,6 +1078,7 @@ export default function ToursManagement() {
       airline,
       hotel,
       price: calculatedPrice,
+      discount: discount === '' ? 0 : Number(discount),
       price_visa_tour: priceVisaTour === '' ? 0 : Number(priceVisaTour),
       commission: calculatedCommission,
       total_seats: Number(totalSeats),
@@ -1745,7 +1751,7 @@ export default function ToursManagement() {
                 {/* 3. Numeric inputs with dynamic thousands separator formatting */}
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-rose-600" /> Biểu giá & Hoa hồng (Phân cách hàng nghìn khi nhập)
+                    <DollarSign className="w-4 h-4 text-rose-600" /> Biểu giá & Hoa hồng
                   </h4>
                   
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1754,6 +1760,11 @@ export default function ToursManagement() {
                       required
                       value={price}
                       onChange={setPrice}
+                    />
+                    <NumericFormatInput
+                      label="Giảm giá tour (VND)"
+                      value={discount}
+                      onChange={setDiscount}
                     />
                     <NumericFormatInput
                       label="Hoa hồng Sales / Đại lý *"
@@ -1778,7 +1789,7 @@ export default function ToursManagement() {
 
                   {tourType !== 'visa' && (
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
-                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-600">Cấu hình giá chi tiết theo độ tuổi (Không nhập hệ thống tự tính)</h5>
+                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-600">Cấu hình giá chi tiết theo độ tuổi</h5>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <NumericFormatInput
                         label="Giá người lớn"
@@ -2293,8 +2304,15 @@ export default function ToursManagement() {
                                       )}
                                     </td>
                                     <td className="px-6 py-3 text-right font-bold text-rose-600 whitespace-nowrap">
-                                      <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
-                                      <div className="text-[10px] text-gray-400 font-medium">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
+                                      {t.discount && t.discount > 0 ? (
+                                        <>
+                                          <div className="line-through text-gray-400 font-medium text-[11px] mb-0.5">{new Intl.NumberFormat('vi-VN').format(t.price)} đ</div>
+                                          <div>{new Intl.NumberFormat('vi-VN').format(t.price - t.discount)} VND</div>
+                                        </>
+                                      ) : (
+                                        <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
+                                      )}
+                                      <div className="text-[10px] text-gray-400 font-medium mt-0.5">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
                                     </td>
                                     <td className="px-6 py-3 text-center whitespace-nowrap">
                                       {t.tour_type === 'visa' ? (
@@ -2458,8 +2476,15 @@ export default function ToursManagement() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-right whitespace-nowrap font-bold text-rose-600 text-xs">
-                          <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
-                          <div className="text-[10px] text-gray-400 font-medium">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
+                          {t.discount && t.discount > 0 ? (
+                                        <>
+                                          <div className="line-through text-gray-400 font-medium text-[11px] mb-0.5">{new Intl.NumberFormat('vi-VN').format(t.price)} đ</div>
+                                          <div>{new Intl.NumberFormat('vi-VN').format(t.price - t.discount)} VND</div>
+                                        </>
+                                      ) : (
+                                        <div>{new Intl.NumberFormat('vi-VN').format(t.price)} VND</div>
+                                      )}
+                                      <div className="text-[10px] text-gray-400 font-medium mt-0.5">HH: {new Intl.NumberFormat('vi-VN').format(t.commission)}</div>
                         </td>
                         <td className="px-6 py-4 text-center">
                           {t.tour_type === 'visa' ? (

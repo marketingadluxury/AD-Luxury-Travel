@@ -30,7 +30,7 @@ const navigation = [
   { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin'] },
   { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'admin'] },
-  { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'sale_leader'] },
+  { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin'] },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {

@@ -41,7 +41,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto font-sans">
+    <div className="space-y-6 max-w-7xl mx-auto font-sans">
       {/* Header section */}
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

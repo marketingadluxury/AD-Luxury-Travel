@@ -56,6 +56,7 @@ export interface Tour {
   price_child?: number;
   price_infant?: number;
   single_room_surcharge?: number;
+  discount?: number;
   itinerary_pdf_url?: string; // Link file PDF lịch trình chi tiết
   notice_sections?: string; // Bảng thông tin đi tour/Lưu ý dưới dạng JSON string
   tour_type?: 'internal' | 'partner' | 'private' | 'visa';

@@ -403,4 +403,5 @@ END $$;
 -- NÂNG CẤP SCHEMA: Tự động thêm cột visa_amount nếu đã tồn tại bảng tour_costs trước đó
 ALTER TABLE tour_costs ADD COLUMN IF NOT EXISTS visa_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS leader_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
 

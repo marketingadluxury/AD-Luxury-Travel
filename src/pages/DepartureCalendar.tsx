@@ -174,7 +174,14 @@ const TourCard: React.FC<{
 
           {/* Pricing */}
           <div className="text-right min-w-[150px]">
-            <div className="text-xl font-black text-red-600 tracking-tight">{formatCurrency(tour.price)} đ</div>
+            {tour.discount && tour.discount > 0 ? (
+              <div className="flex flex-col items-end">
+                <div className="text-xs text-gray-400 line-through">{formatCurrency(tour.price)} đ</div>
+                <div className="text-xl font-black text-red-600 tracking-tight">{formatCurrency(tour.price - tour.discount)} đ</div>
+              </div>
+            ) : (
+              <div className="text-xl font-black text-red-600 tracking-tight">{formatCurrency(tour.price)} đ</div>
+            )}
             {tour.price_visa_tour && tour.price_visa_tour > 0 && (
               <div className="mt-1">
                 <span className="text-[10px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 shadow-sm inline-flex items-center uppercase">
