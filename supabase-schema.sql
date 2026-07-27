@@ -432,3 +432,90 @@ ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_service_type TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_speed TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS price_visa_tour NUMERIC DEFAULT 0;
 
+-- ==============================================================================
+-- POSTGRESQL VIEWS CHO EXECUTIVE DASHBOARD (/dashboard/executive)
+-- ==============================================================================
+
+-- 1. View Tỉ lệ lấp đầy sát ngày bay (< 75% occupancy, khởi hành trong 30 ngày)
+CREATE OR REPLACE VIEW executive_tour_occupancy AS
+SELECT 
+  t.id AS tour_id,
+  t.code AS tour_code,
+  t.name AS tour_name,
+  t.start_date,
+  t.total_seats,
+  COALESCE(t.sold_seats, 0) AS sold_seats,
+  COALESCE(t.hold_seats, 0) AS hold_seats,
+  COALESCE(t.sold_seats, 0) + COALESCE(t.hold_seats, 0) AS filled_seats,
+  CASE 
+    WHEN COALESCE(t.total_seats, 0) > 0 THEN 
+      ROUND(((COALESCE(t.sold_seats, 0) + COALESCE(t.hold_seats, 0))::numeric / t.total_seats::numeric) * 100, 2)
+    ELSE 0 
+  END AS occupancy_rate,
+  (t.start_date - CURRENT_DATE) AS days_until_departure
+FROM tours t
+WHERE t.start_date >= CURRENT_DATE 
+  AND t.start_date <= (CURRENT_DATE + INTERVAL '30 days')
+  AND (
+    CASE 
+      WHEN COALESCE(t.total_seats, 0) > 0 THEN 
+        ((COALESCE(t.sold_seats, 0) + COALESCE(t.hold_seats, 0))::numeric / t.total_seats::numeric) * 100
+      ELSE 0 
+    END
+  ) < 75;
+
+-- 2. View Quản trị rủi ro hạn chót Visa (< 5 ngày)
+CREATE OR REPLACE VIEW executive_visa_risk AS
+SELECT 
+  p.id AS passenger_id,
+  p.full_name AS passenger_name,
+  p.passport_number,
+  p.visa_status,
+  o.id AS order_id,
+  o.created_by AS sales_person,
+  o.status AS order_status,
+  t.id AS tour_id,
+  t.code AS tour_code,
+  t.name AS tour_name,
+  t.visa_deadline
+FROM passengers p
+JOIN orders o ON p.order_id = o.id
+JOIN tours t ON o.tour_id = t.id
+WHERE (o.status = 'sure' OR o.status = 'paid')
+  AND (p.visa_status IN ('pending', 'processing') OR p.needs_visa_service = TRUE)
+  AND t.visa_deadline IS NOT NULL;
+
+-- 3. View Bảng tính Lợi nhuận thuần thực tế
+CREATE OR REPLACE VIEW executive_financial_margins AS
+SELECT 
+  COALESCE(SUM(o.total_price), 0) AS gross_revenue,
+  COALESCE(SUM(tc.flight_amount), 0) AS total_flight_cost,
+  COALESCE(SUM(tc.commission_amount), 0) AS total_commission_cost,
+  COALESCE(SUM(tc.flight_amount + tc.insurance_amount + tc.tour_guide_amount + tc.gift_amount + tc.commission_amount + tc.advertising_amount + tc.other_amount + tc.visa_amount), 0) AS total_expenses,
+  (COALESCE(SUM(o.total_price), 0) - COALESCE(SUM(tc.flight_amount + tc.insurance_amount + tc.tour_guide_amount + tc.gift_amount + tc.commission_amount + tc.advertising_amount + tc.other_amount + tc.visa_amount), 0)) AS net_profit
+FROM orders o
+LEFT JOIN tour_costs tc ON o.tour_id = tc.tour_id
+WHERE o.status IN ('sure', 'paid');
+
+-- 4. View Hiệu suất & Tỉ lệ đổi đơn Đại lý
+CREATE OR REPLACE VIEW executive_agent_performance AS
+SELECT 
+  COALESCE(o.user_id::text, o.created_by) AS agent_key,
+  o.created_by AS agent_name,
+  COUNT(CASE WHEN o.status = 'hold' THEN 1 END) AS hold_count,
+  COUNT(CASE WHEN o.status IN ('sure', 'paid') THEN 1 END) AS sure_count,
+  COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END) AS expired_count,
+  COUNT(o.id) AS total_orders,
+  COALESCE(SUM(CASE WHEN o.status IN ('sure', 'paid') THEN o.total_price ELSE 0 END), 0) AS total_revenue,
+  CASE 
+    WHEN COUNT(o.id) > 0 THEN ROUND((COUNT(CASE WHEN o.status IN ('sure', 'paid') THEN 1 END)::numeric / COUNT(o.id)::numeric) * 100, 2)
+    ELSE 0 
+  END AS conversion_rate_pct,
+  CASE 
+    WHEN COUNT(o.id) > 0 THEN ROUND((COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END)::numeric / COUNT(o.id)::numeric) * 100, 2)
+    ELSE 0 
+  END AS expired_rate_pct
+FROM orders o
+GROUP BY COALESCE(o.user_id::text, o.created_by), o.created_by;
+
+

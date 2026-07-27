@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   TrendingUp, 
   Users, 
@@ -13,7 +14,8 @@ import {
   Layers,
   Activity,
   CheckCircle,
-  Briefcase
+  Briefcase,
+  Building2
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { DatePicker } from '../components/DatePicker';
@@ -466,10 +468,19 @@ export default function Dashboard() {
       {/* Tiêu đề & Công cụ điều khiển */}
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <Activity className="w-6 h-6 text-blue-600" />
-            Bảng điều khiển & Thống kê CRM
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+              <Activity className="w-6 h-6 text-blue-600" />
+              Bảng điều khiển & Thống kê CRM
+            </h2>
+            <Link 
+              to="/dashboard/executive" 
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-2xs"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              Bảng Điều Hành Chiến Lược
+            </Link>
+          </div>
           <p className="text-sm text-gray-500 mt-1 font-medium">
             Hệ thống phân tích doanh số, số lượng tour hoàn thành và lưu lượng khách hàng theo thời gian thực.
           </p>
