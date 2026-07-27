@@ -184,20 +184,30 @@ export default function TourCostsManagement() {
   const [instAccountNameMap, setInstAccountNameMap] = useState<Record<string, string>>({});
   const [isUploadingProofFor, setIsUploadingProofFor] = useState<string | null>(null);
 
-  // Filter tours (exclude visa services)
+  // Filter tours (exclude visa services, and exclude internal tours for sale_leader)
   const filteredTours = useMemo(() => {
     return tours
       .filter(t => t.tour_type !== 'visa')
+      .filter(t => {
+        if (currentRole === 'sale_leader') {
+          return t.tour_type === 'partner' || t.tour_type === 'private';
+        }
+        return true;
+      })
       .filter(t => 
         t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.code.toLowerCase().includes(searchTerm.toLowerCase())
       );
-  }, [tours, searchTerm]);
+  }, [tours, searchTerm, currentRole]);
 
   // Selected tour object
   const selectedTour = useMemo(() => {
-    return tours.find(t => t.id === selectedTourId) || null;
-  }, [tours, selectedTourId]);
+    const tour = tours.find(t => t.id === selectedTourId) || null;
+    if (tour && currentRole === 'sale_leader' && (!tour.tour_type || tour.tour_type === 'internal')) {
+      return null;
+    }
+    return tour;
+  }, [tours, selectedTourId, currentRole]);
 
   // Orders and bookings for the selected tour
   const selectedTourOrders = useMemo(() => {
@@ -218,6 +228,10 @@ export default function TourCostsManagement() {
 
   // Load cost data when a tour is selected or when the saved costs are updated on context/server
   const handleSelectTour = (tour: Tour) => {
+    if (currentRole === 'sale_leader' && (!tour.tour_type || tour.tour_type === 'internal')) {
+      toast.error('Sale Leader không có quyền xem chi phí và lãi lỗ của Tour tự vận hành.');
+      return;
+    }
     setSelectedTourId(tour.id);
     
     // Reset input fields
