@@ -177,12 +177,14 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 │   │   ├── AuthContext.tsx # Quản lý phiên đăng nhập (Supabase Auth) và đồng bộ Profile người dùng
 │   │   └── CRMContext.tsx  # Bộ não quản lý trạng thái CRM (Đồng bộ offline/online, CRUD Tour, Đơn hàng)
 │   ├── components/
-│   │   ├── Layout.tsx      # Sidebar, Header, thanh chọn Vai trò (Role Switcher), thông báo đẩy (Real-time)
+│   │   ├── Layout.tsx      # Sidebar, Header, thanh chọn Vai trò (Role Switcher), nút Góp ý & Báo lỗi, thông báo đẩy (Real-time)
+│   │   ├── FeedbackModal.tsx # Form tiếp nhận đóng góp ý kiến & báo lỗi hệ thống
 │   │   ├── DatePicker.tsx  # Component chọn ngày chuẩn hóa giao diện và trải nghiệm
 │   │   ├── ActionModal.tsx # Hộp thoại thông báo xác nhận hành động nguy hiểm (Xóa, Hủy)
 │   │   ├── UserManagement.tsx # Trình quản lý tài khoản thành viên (Chỉ Admin mới truy cập được)
 │   │   ├── EditOrderModal.tsx # Form cập nhật thông tin Booking / Đơn hàng
 │   │   └── EditPassengerModal.tsx # Form cập nhật hồ sơ hành khách, tải lên Visa / Hộ chiếu
+
 │   └── pages/
 │       ├── DepartureCalendar.tsx # Lịch khởi hành (Bộ lọc danh mục, hiển thị trực quan dạng lịch & danh sách)
 │       ├── ToursManagement.tsx   # Quản lý Tour & Lịch trình (Form tạo Tour, Tab Danh mục sản phẩm)

@@ -39,30 +39,66 @@ app.use('/api/*', (req, res, next) => {
 
 // Google Drive Authorization & Helpers
 async function getGoogleDriveAccessToken(): Promise<string> {
+  const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  let serviceKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
 
   const hasOAuth = !!(clientId && clientSecret && refreshToken);
+  const hasServiceAccount = !!(serviceEmail && serviceKey && serviceKey.includes('PRIVATE KEY'));
 
-  if (!hasOAuth) {
-    throw new Error('Cấu hình Google Drive OAuth 2.0 chưa hoàn tất. Vui lòng định nghĩa GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, và GOOGLE_DRIVE_REFRESH_TOKEN trong biến môi trường.');
-  }
-
-  try {
-    console.log('[Drive] Authorizing using OAuth 2.0 Refresh Token...');
-    const oauth2Client = new OAuth2Client(clientId, clientSecret);
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    const tokenResponse = await oauth2Client.getAccessToken();
-    if (!tokenResponse.token) {
-      throw new Error('Failed to retrieve access token from Google OAuth Refresh Token.');
+  // 1. Ưu tiên OAuth 2.0 (Dùng dung lượng của Google Account cá nhân/công ty)
+  if (hasOAuth) {
+    try {
+      console.log('[Drive] Authorizing using OAuth 2.0 Refresh Token...');
+      const oauth2Client = new OAuth2Client(clientId, clientSecret);
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+      const tokenResponse = await oauth2Client.getAccessToken();
+      if (tokenResponse.token) {
+        console.log('[Drive] OAuth 2.0 authorization successful.');
+        return tokenResponse.token;
+      }
+    } catch (err: any) {
+      const errMsg = err.message || String(err);
+      console.error('[Drive] OAuth 2.0 authorization failed:', errMsg);
+      
+      // Nếu có cấu hình OAuth nhưng bị lỗi token/credentials, báo lỗi chi tiết hướng dẫn fix trên OAuth Playground
+      throw new Error(
+        `Xác thực OAuth 2.0 thất bại (${errMsg}). ` +
+        `Vui lòng lấy lại Refresh Token tại Google OAuth 2.0 Playground (developers.google.com/oauthplayground). ` +
+        `LƯU Ý QUAN TRỌNG: Mở bánh răng ⚙️ (Settings) góc trên bên phải OAuth Playground, tích chọn "Use your own OAuth credentials", ` +
+        `sau đó nhập đúng Client ID và Client Secret của bạn trước khi bấm Authorize APIs.`
+      );
     }
-    console.log('[Drive] OAuth 2.0 authorization successful.');
-    return tokenResponse.token;
-  } catch (err: any) {
-    console.error('[Drive] OAuth 2.0 authorization failed:', err.message || err);
-    throw new Error(`Google Drive authorization failed: ${err.message || err}`);
   }
+
+  // 2. Dự phòng Service Account (Chỉ dùng khi không có cấu hình OAuth)
+  if (hasServiceAccount) {
+    try {
+      console.log('[Drive] Authorizing using Service Account...');
+      if (serviceKey && serviceKey.includes('\\n')) {
+        serviceKey = serviceKey.replace(/\\n/g, '\n');
+      }
+      const client = new JWT({
+        email: serviceEmail,
+        key: serviceKey,
+        scopes: [
+          'https://www.googleapis.com/auth/drive',
+          'https://www.googleapis.com/auth/spreadsheets'
+        ],
+      });
+      const tokens = await client.authorize();
+      if (tokens.access_token) {
+        return tokens.access_token;
+      }
+    } catch (sErr: any) {
+      console.error('[Drive] Service Account auth failed:', sErr.message || sErr);
+      throw new Error(`Service Account auth failed: ${sErr.message || sErr}`);
+    }
+  }
+
+  throw new Error('Chưa cấu hình Google Drive credentials (vui lòng cấu hình GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET và GOOGLE_DRIVE_REFRESH_TOKEN).');
 }
 
 async function searchFolder(folderName: string, parentId?: string, token?: string): Promise<string | null> {
@@ -492,6 +528,17 @@ async function getOrCreateOrderFolder(orderCode: string, token: string): Promise
   return orderFolderId;
 }
 
+async function getOrCreateFeedbackFolder(token: string): Promise<string> {
+  const baseParentId = getDriveRootParentId();
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
+  let feedbackFolderId = await searchFolder('Góp Ý & Báo Lỗi', rootId, token);
+  if (!feedbackFolderId) {
+    feedbackFolderId = await createFolder('Góp Ý & Báo Lỗi', rootId, token);
+    await makeFolderPublic(feedbackFolderId, token);
+  }
+  return feedbackFolderId;
+}
+
 async function uploadFileToSupabase(
   bucketName: string,
   filePath: string,
@@ -772,7 +819,15 @@ app.post(['/api/create-folder', '/create-folder'], async (req, res) => {
 });
 
 // Unified File Upload API (Google Drive with Supabase Storage fallback)
-app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => {
+app.post(['/api/upload', '/upload'], (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      console.error('[Multer upload error]:', err);
+      return res.status(400).json({ error: err.message || 'Lỗi tải file lên máy chủ' });
+    }
+    next();
+  });
+}, async (req, res) => {
   console.log('[API] /api/upload - Start processing');
   try {
     if (!req.file) {
@@ -800,8 +855,39 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
     const driveActive = hasServiceAccount || hasOAuth;
 
     const file = req.file;
+    const isFeedbackUpload = body.uploadType === 'feedback' || body.category === 'feedback';
     const isTourUpload = body.uploadType === 'tour' || !!body.tourCode;
     const isVisaUpload = body.uploadType === 'visa';
+
+    if (isFeedbackUpload) {
+      const cleanFileName = file.originalname.trim().replace(/\s+/g, '_');
+      const fileName = `FB_${Date.now()}_${cleanFileName}`;
+
+      if (!driveActive) {
+        return res.status(400).json({
+          error: 'Chưa cấu hình kết nối Google Drive. Vui lòng kiểm tra biến môi trường Google Drive.'
+        });
+      }
+
+      try {
+        console.log(`[Drive] Đang tải ảnh góp ý / báo lỗi lên Google Drive: AD Luxury Travel > Góp Ý & Báo Lỗi`);
+        const token = await getGoogleDriveAccessToken();
+        const feedbackFolderId = await getOrCreateFeedbackFolder(token);
+        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, feedbackFolderId, token);
+
+        return res.json({
+          success: true,
+          url: result.webViewLink,
+          fileName: fileName,
+          storage: 'drive'
+        });
+      } catch (dErr: any) {
+        console.error('[Drive] Tải ảnh góp ý lên Google Drive không thành công:', dErr.message || dErr);
+        return res.status(500).json({
+          error: `Không thể tải ảnh đính kèm lên Google Drive: ${dErr.message || dErr}`
+        });
+      }
+    }
 
     if (isVisaUpload) {
       const fileName = file.originalname.trim(); // Giữ nguyên tên file gốc theo yêu cầu người dùng
@@ -926,19 +1012,26 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
     
     const initials = getInitials(fullName);
 
-    // Standardized file naming: {SO_HO_CHIEU}-{CHU_CAI_VIET_TAT_TEN}.{ten_file_goc}
-    const cleanFileName = file.originalname.trim().replace(/\s+/g, '_');
-    const fileName = `${cleanPassport}-${initials}.${cleanFileName}`;
+    // Keep raw original file name with full Vietnamese accent support
+    const originalName = file.originalname.trim();
+    const fileName = originalName;
+
+    const appendFilenameFragment = (linkUrl: string, name: string) => {
+      if (!linkUrl) return linkUrl;
+      if (linkUrl.includes('#filename=')) return linkUrl;
+      return `${linkUrl}#filename=${encodeURIComponent(name)}`;
+    };
 
     if (driveActive) {
-      console.log(`[Drive] Đang tải file lên Google Drive cho khách hàng: ${fullName} (${cleanPassport})`);
+      console.log(`[Drive] Đang tải file lên Google Drive cho khách hàng: ${fullName} (${cleanPassport}) - File: ${fileName}`);
       const token = await getGoogleDriveAccessToken();
       const passengerFolderId = await getOrCreatePassengerFolder(fullName, passportNumber, token);
       const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, passengerFolderId, token);
+      const finalUrl = appendFilenameFragment(result.webViewLink, originalName);
       res.json({
         success: true,
-        url: result.webViewLink,
-        fileName: fileName,
+        url: finalUrl,
+        fileName: originalName,
         storage: 'drive'
       });
     } else {
@@ -951,10 +1044,11 @@ app.post(['/api/upload', '/upload'], upload.single('file'), async (req, res) => 
         file.mimetype,
         supabase
       );
+      const finalUrl = appendFilenameFragment(publicUrl, originalName);
       res.json({
         success: true,
-        url: publicUrl,
-        fileName: fileName,
+        url: finalUrl,
+        fileName: originalName,
         storage: 'supabase'
       });
     }
@@ -1238,46 +1332,42 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     
+    const newUserObj = {
+      id: crypto.randomUUID(),
+      full_name,
+      phone: phone || '',
+      company_name: company_name || '',
+      role: role || 'CTV',
+      leader_id: leader_id || null,
+      email,
+      created_at: new Date().toISOString()
+    };
+
     if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
-      const newUser = {
-        id: crypto.randomUUID(),
-        full_name,
-        phone: phone || '',
-        company_name: company_name || '',
-        role: role || 'CTV',
-        leader_id: leader_id || null,
-        email,
-        created_at: new Date().toISOString()
-      };
-      mockUsers.unshift(newUser);
-      return res.json({ success: true, user: newUser });
-    }
-    
-    if (!hasServiceRole) {
-      return res.status(400).json({ 
-        error: 'Tính năng tạo tài khoản yêu cầu cấu hình biến môi trường SUPABASE_SERVICE_ROLE_KEY trong mục Cài đặt (Settings -> Secrets) trên AI Studio.' 
-      });
+      mockUsers.unshift(newUserObj);
+      return res.json({ success: true, user: newUserObj });
     }
     
     const client = getAdminSupabaseClient(req);
-    let userId: string = crypto.randomUUID();
+    let userId: string = newUserObj.id;
     
-    // Tạo auth user bằng Admin API
-    try {
-      const { data: authData, error: authError } = await client.auth.admin.createUser({
-        email,
-        password: password || '12345678a',
-        email_confirm: true,
-        user_metadata: { full_name }
-      });
-      
-      if (authError) throw authError;
-      if (authData && authData.user) {
-        userId = authData.user.id;
+    // Tạo auth user nếu có Service Role Key
+    if (hasServiceRole) {
+      try {
+        const { data: authData, error: authError } = await client.auth.admin.createUser({
+          email,
+          password: password || '12345678a',
+          email_confirm: true,
+          user_metadata: { full_name }
+        });
+        
+        if (authError) console.warn('Lưu ý khi tạo tài khoản Auth:', authError.message);
+        if (authData && authData.user) {
+          userId = authData.user.id;
+        }
+      } catch (authErr: any) {
+        console.warn('Không thể tạo tài khoản Auth (thiếu quyền):', authErr.message || authErr);
       }
-    } catch (authErr: any) {
-      console.error('Lỗi khi tạo tài khoản Auth:', authErr);
-      return res.status(400).json({ error: `Lỗi đăng ký tài khoản Auth: ${authErr.message || authErr}` });
     }
     
     let profileUpsertData: any = {
@@ -1299,8 +1389,12 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
     }
     
     if (pError) {
-      return res.status(400).json({ error: `Lỗi lưu thông tin profile: ${pError.message}` });
+      console.warn('Lỗi lưu profile Supabase, lưu tạm vào memory:', pError.message);
+      mockUsers.unshift(newUserObj);
+      return res.json({ success: true, user: newUserObj });
     }
+
+    mockUsers.unshift({ ...newUserObj, id: userId });
     
     res.json({
       success: true,
@@ -1330,27 +1424,25 @@ app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     
+    // Cập nhật trong memory mockUsers trước
+    const userIndex = mockUsers.findIndex(u => u.id === id);
+    if (userIndex !== -1) {
+      mockUsers[userIndex] = {
+        ...mockUsers[userIndex],
+        full_name: full_name !== undefined ? full_name : mockUsers[userIndex].full_name,
+        phone: phone !== undefined ? phone : mockUsers[userIndex].phone,
+        company_name: company_name !== undefined ? company_name : mockUsers[userIndex].company_name,
+        role: role !== undefined ? role : mockUsers[userIndex].role,
+        leader_id: leader_id !== undefined ? leader_id : (mockUsers[userIndex] as any).leader_id,
+        email: email !== undefined ? email : mockUsers[userIndex].email
+      };
+    }
+
     if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
-      const userIndex = mockUsers.findIndex(u => u.id === id);
       if (userIndex !== -1) {
-        mockUsers[userIndex] = {
-          ...mockUsers[userIndex],
-          full_name: full_name !== undefined ? full_name : mockUsers[userIndex].full_name,
-          phone: phone !== undefined ? phone : mockUsers[userIndex].phone,
-          company_name: company_name !== undefined ? company_name : mockUsers[userIndex].company_name,
-          role: role !== undefined ? role : mockUsers[userIndex].role,
-          leader_id: leader_id !== undefined ? leader_id : (mockUsers[userIndex] as any).leader_id,
-          email: email !== undefined ? email : mockUsers[userIndex].email
-        };
         return res.json({ success: true, user: mockUsers[userIndex] });
       }
-      return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
-    }
-    
-    if (!hasServiceRole) {
-      return res.status(400).json({ 
-        error: 'Tính năng cập nhật tài khoản yêu cầu cấu hình biến môi trường SUPABASE_SERVICE_ROLE_KEY trong mục Cài đặt (Settings -> Secrets) trên AI Studio.' 
-      });
+      return res.json({ success: true });
     }
     
     const client = getAdminSupabaseClient(req);
@@ -1375,20 +1467,22 @@ app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req
     }
     
     if (pError) {
-      return res.status(400).json({ error: `Lỗi cập nhật profile: ${pError.message}` });
+      console.warn('Lỗi cập nhật profile Supabase:', pError.message);
     }
     
-    try {
-      const updateData: any = {};
-      if (email) updateData.email = email;
-      if (password) updateData.password = password;
-      
-      if (Object.keys(updateData).length > 0) {
-        const { error: authError } = await client.auth.admin.updateUserById(id, updateData);
-        if (authError) console.warn('Lưu ý khi cập nhật thông tin Auth:', authError.message);
+    if (hasServiceRole) {
+      try {
+        const updateData: any = {};
+        if (email) updateData.email = email;
+        if (password) updateData.password = password;
+        
+        if (Object.keys(updateData).length > 0) {
+          const { error: authError } = await client.auth.admin.updateUserById(id, updateData);
+          if (authError) console.warn('Lưu ý khi cập nhật thông tin Auth:', authError.message);
+        }
+      } catch (authErr: any) {
+        console.warn('Không thể cập nhật thông tin Auth (thiếu quyền):', authErr.message || authErr);
       }
-    } catch (authErr: any) {
-      console.warn('Không thể cập nhật thông tin Auth (thiếu quyền):', authErr.message || authErr);
     }
     
     res.json({ success: true });
@@ -1403,34 +1497,92 @@ app.delete(['/api/admin/users/:id', '/admin/users/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     
+    // Always remove from mockUsers in memory
+    mockUsers = mockUsers.filter(u => u.id !== id);
+
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
     if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
-      mockUsers = mockUsers.filter(u => u.id !== id);
       return res.json({ success: true });
     }
     
-    if (!hasServiceRole) {
-      return res.status(400).json({ 
-        error: 'Tính năng xóa tài khoản yêu cầu cấu hình biến môi trường SUPABASE_SERVICE_ROLE_KEY trong mục Cài đặt (Settings -> Secrets) trên AI Studio.' 
-      });
-    }
-    
+    const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     const client = getAdminSupabaseClient(req);
     
-    const { error: pError } = await client.from('profiles').delete().eq('id', id);
-    if (pError) {
-      return res.status(400).json({ error: `Lỗi xóa profile: ${pError.message}` });
-    }
-    
+    // Step 1: Unassign foreign key references in related tables so Postgres won't reject deletion
     try {
-      const { error: authError } = await client.auth.admin.deleteUser(id);
-      if (authError) console.warn('Lưu ý khi xóa tài khoản Auth:', authError.message);
-    } catch (authErr: any) {
-      console.warn('Không thể xóa tài khoản Auth (thiếu quyền):', authErr.message || authErr);
+      await client.from('profiles').update({ leader_id: null }).eq('leader_id', id);
+    } catch (e: any) {
+      console.warn('[Delete User] Không thể bỏ gán leader_id:', e.message || e);
     }
-    
+
+    try {
+      await client.from('tours').update({ operator_id: null }).eq('operator_id', id);
+    } catch (e: any) {
+      console.warn('[Delete User] Không thể bỏ gán operator_id:', e.message || e);
+    }
+
+    try {
+      await client.from('bookings').update({ salesperson_id: null }).eq('salesperson_id', id);
+    } catch (e: any) {
+      console.warn('[Delete User] Không thể bỏ gán salesperson_id:', e.message || e);
+    }
+
+    try {
+      await client.from('bookings').update({ user_id: null }).eq('user_id', id);
+    } catch (e: any) {
+      console.warn('[Delete User] Không thể bỏ gán user_id:', e.message || e);
+    }
+
+    // Step 2: Delete from profiles table
+    let { error: pError } = await client.from('profiles').delete().eq('id', id);
+
+    // Fallback: If foreign key constraint prevents deletion, try reassigning salesperson_id & operator_id to current admin
+    if (pError && pError.message && (pError.message.includes('foreign key constraint') || pError.message.includes('fkey'))) {
+      console.warn('[Delete User] Bị vướng FK constraint, đang thử gán đơn hàng/tour về tài khoản Admin...', pError.message);
+      
+      let adminId: string | null = null;
+      try {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const { data: userData } = await client.auth.getUser(authHeader.substring(7));
+          if (userData?.user?.id) {
+            adminId = userData.user.id;
+          }
+        }
+      } catch (e: any) {
+        console.warn('[Delete User] Không tìm thấy admin ID từ token:', e.message);
+      }
+
+      if (adminId && adminId !== id) {
+        await client.from('bookings').update({ salesperson_id: adminId }).eq('salesperson_id', id);
+        await client.from('bookings').update({ user_id: adminId }).eq('user_id', id);
+        await client.from('tours').update({ operator_id: adminId }).eq('operator_id', id);
+        
+        // Thử xóa lại profile sau khi chuyển giao
+        const retryDelete = await client.from('profiles').delete().eq('id', id);
+        pError = retryDelete.error;
+      }
+    }
+
+    // Step 3: Delete from Auth if Service Role is available
+    if (hasServiceRole && !pError) {
+      try {
+        const { error: authError } = await client.auth.admin.deleteUser(id);
+        if (authError) console.warn('Lưu ý khi xóa tài khoản Auth:', authError.message);
+      } catch (authErr: any) {
+        console.warn('Không thể xóa tài khoản Auth (thiếu quyền):', authErr.message || authErr);
+      }
+    }
+
+    if (pError) {
+      console.error('Lỗi khi xóa profile Supabase:', pError.message);
+      let friendlyMessage = pError.message;
+      if (pError.message.includes('foreign key constraint') || pError.message.includes('fkey')) {
+        friendlyMessage = 'Không thể xóa người dùng này do đang phụ trách Đơn hàng/Tour trong hệ thống. Hệ thống đã thử gỡ liên kết. Vui lòng chuyển giao Đơn hàng của người dùng cho nhân viên khác trước khi xóa.';
+      }
+      return res.status(400).json({ error: friendlyMessage });
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     console.error('Lỗi API /api/admin/users DELETE:', err);
@@ -1438,7 +1590,370 @@ app.delete(['/api/admin/users/:id', '/admin/users/:id'], async (req, res) => {
   }
 });
 
+async function saveFeedbackToGoogleDriveCSV(
+  token: string,
+  rootFolderId: string,
+  timeStr: string,
+  typeStr: string,
+  senderStr: string,
+  contactStr: string,
+  roleStr: string,
+  contentStr: string,
+  imageUrlStr: string | null
+): Promise<{ success: boolean; webViewLink?: string; error?: string }> {
+  try {
+    const feedbackFolderId = await getOrCreateFeedbackFolder(token);
+    const csvFileName = "Góp_Ý_Và_Báo_Lỗi_Tour_CRM.csv";
+    const safeCsvName = csvFileName.replace(/'/g, "\\'");
+    const query = `name = '${safeCsvName}' and trashed = false and ('${feedbackFolderId}' in parents or '${rootFolderId}' in parents)`;
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,webViewLink)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+
+    const searchRes = await fetch(searchUrl, { headers: { Authorization: `Bearer ${token}` } });
+    let fileId: string | null = null;
+    let webViewLink = '';
+
+    if (searchRes.ok) {
+      const data: any = await searchRes.json();
+      if (data.files && data.files.length > 0) {
+        fileId = data.files[0].id;
+        webViewLink = data.files[0].webViewLink || '';
+      }
+    }
+
+    const formatCsvCell = (val: string) => {
+      if (!val) return '""';
+      const escaped = val.replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+
+    const newRow = [
+      formatCsvCell(timeStr),
+      formatCsvCell(typeStr),
+      formatCsvCell(senderStr),
+      formatCsvCell(contactStr),
+      formatCsvCell(roleStr),
+      formatCsvCell(contentStr),
+      formatCsvCell(imageUrlStr || 'Không có'),
+      formatCsvCell('Mới nhận')
+    ].join(',') + '\n';
+
+    if (fileId) {
+      let existingContent = '';
+      try {
+        const getRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (getRes.ok) {
+          existingContent = await getRes.text();
+        }
+      } catch (e) {
+        console.warn('[Drive CSV] Không thể đọc nội dung file cũ:', e);
+      }
+
+      const updatedContent = existingContent
+        ? (existingContent.endsWith('\n') ? existingContent + newRow : existingContent + '\n' + newRow)
+        : newRow;
+
+      const updateRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'text/csv; charset=utf-8'
+        },
+        body: updatedContent
+      });
+
+      if (updateRes.ok) {
+        return { success: true, webViewLink };
+      }
+    } else {
+      const header = '\uFEFF' + [
+        'Thời Gian', 'Loại Phản Hồi', 'Người Gửi', 'Email / SĐT', 'Vai Trò', 'Nội Dung Góp Ý / Báo Lỗi', 'Ảnh Đính Kèm', 'Trạng Thái'
+      ].map(formatCsvCell).join(',') + '\n';
+
+      const initialContent = header + newRow;
+
+      const createMetaRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,webViewLink', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: csvFileName,
+          mimeType: 'text/csv',
+          parents: [feedbackFolderId]
+        })
+      });
+
+      if (createMetaRes.ok) {
+        const metaData: any = await createMetaRes.json();
+        fileId = metaData.id;
+        webViewLink = metaData.webViewLink || '';
+        await makeFolderPublic(fileId, token);
+
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/csv; charset=utf-8'
+          },
+          body: initialContent
+        });
+
+        return { success: true, webViewLink };
+      }
+    }
+
+    return { success: false, error: 'Không thể khởi tạo hoặc cập nhật file CSV trên Google Drive.' };
+  } catch (err: any) {
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+// SUBMIT FEEDBACK & BUG REPORT (Ghi nhận góp ý & báo lỗi vào Google Sheet & Supabase)
+app.post('/api/submit-feedback', express.json(), async (req, res) => {
+  try {
+    const { type, content, senderName, senderEmail, senderPhone, senderRole, imageUrl, image_url } = req.body;
+    const finalImageUrl = imageUrl || image_url || null;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Nội dung phản hồi không được để trống.' });
+    }
+
+    const timeStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const finalSender = senderName || 'Thành viên / Ẩn danh';
+    const finalContact = [senderEmail, senderPhone].filter(Boolean).join(' - ') || 'Chưa cung cấp';
+    const finalRole = senderRole || 'Thành viên';
+    const finalType = type || 'Góp ý';
+
+    // 1. Lưu vào bảng feedbacks của Supabase (nếu đã cấu hình)
+    let supabaseSaved = false;
+    try {
+      const client = getAdminSupabaseClient(req);
+      const { error: pError } = await client.from('feedbacks').insert([{
+        type: finalType,
+        content: content.trim(),
+        image_url: finalImageUrl,
+        sender_name: finalSender,
+        sender_email: senderEmail || null,
+        sender_phone: senderPhone || null,
+        sender_role: finalRole,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }]);
+      if (!pError) {
+        supabaseSaved = true;
+      } else {
+        console.warn('[Feedback] Supabase insert warning:', pError.message);
+      }
+    } catch (dbErr: any) {
+      console.warn('[Feedback] Supabase insert skipped or table missing:', dbErr.message);
+    }
+
+    // 2. Ghi nhận trực tiếp vào File Google Sheet trong folder "AD Luxury Travel"
+    let sheetSaved = false;
+    let sheetUrl = '';
+    let sheetError = '';
+
+    try {
+      const token = await getGoogleDriveAccessToken();
+      const baseParentId = getDriveRootParentId();
+
+      // Tìm hoặc tạo thư mục "AD Luxury Travel"
+      const rootFolderId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
+
+      const spreadsheetName = "Góp Ý & Báo Lỗi - Tour CRM";
+      let spreadsheetId: string | null = null;
+      const safeName = spreadsheetName.replace(/'/g, "\\'");
+
+      // A. Tìm kiếm trong folder "AD Luxury Travel" trước
+      const queryInFolder = `mimeType = 'application/vnd.google-apps.spreadsheet' and name = '${safeName}' and trashed = false and '${rootFolderId}' in parents`;
+      const searchUrl1 = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(queryInFolder)}&fields=files(id,webViewLink)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+
+      try {
+        const searchRes1 = await fetch(searchUrl1, { headers: { Authorization: `Bearer ${token}` } });
+        if (searchRes1.ok) {
+          const data1: any = await searchRes1.json();
+          if (data1.files && data1.files.length > 0) {
+            spreadsheetId = data1.files[0].id;
+            sheetUrl = data1.files[0].webViewLink || '';
+          }
+        }
+      } catch (e: any) {
+        console.warn('[Drive] Tìm kiếm Google Sheet trong thư mục cha bị lỗi nhẹ:', e.message || e);
+      }
+
+      // B. Nếu chưa thấy, tìm kiếm toàn bộ Drive phòng trường hợp file nằm ở ngoài
+      if (!spreadsheetId) {
+        const queryGlobal = `mimeType = 'application/vnd.google-apps.spreadsheet' and name = '${safeName}' and trashed = false`;
+        const searchUrl2 = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(queryGlobal)}&fields=files(id,webViewLink)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+        try {
+          const searchRes2 = await fetch(searchUrl2, { headers: { Authorization: `Bearer ${token}` } });
+          if (searchRes2.ok) {
+            const data2: any = await searchRes2.json();
+            if (data2.files && data2.files.length > 0) {
+              spreadsheetId = data2.files[0].id;
+              sheetUrl = data2.files[0].webViewLink || '';
+            }
+          }
+        } catch (e: any) {
+          console.warn('[Drive] Tìm kiếm Google Sheet toàn cục bị lỗi nhẹ:', e.message || e);
+        }
+      }
+
+      // C. Nếu vẫn chưa có file Sheet, tiến hành khởi tạo mới
+      if (!spreadsheetId) {
+        console.log('[Drive] Google Sheet "Góp Ý & Báo Lỗi - Tour CRM" chưa tồn tại, đang tạo mới...');
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,webViewLink', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: spreadsheetName,
+            mimeType: 'application/vnd.google-apps.spreadsheet',
+            parents: [rootFolderId]
+          })
+        });
+
+        if (createRes.ok) {
+          const createData: any = await createRes.json();
+          spreadsheetId = createData.id;
+          sheetUrl = createData.webViewLink || '';
+          await makeFolderPublic(spreadsheetId, token);
+        } else {
+          const errText = await createRes.text();
+          sheetError = `Không thể tạo file Google Sheet mới: ${errText}`;
+          console.error('[Drive]', sheetError);
+        }
+      }
+
+      // D. Tiến hành ghi dữ liệu vào Google Sheet
+      if (spreadsheetId) {
+        // Lấy tên tab (sheet name) thực tế của file Google Sheet (ví dụ: Trang tính1 hoặc Sheet1)
+        let sheetTitle = 'Sheet1';
+        try {
+          const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties(title)`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (metaRes.ok) {
+            const metaData: any = await metaRes.json();
+            if (metaData.sheets && metaData.sheets.length > 0 && metaData.sheets[0].properties?.title) {
+              sheetTitle = metaData.sheets[0].properties.title;
+            }
+          }
+        } catch (mErr: any) {
+          console.warn('[Sheets] Không lấy được thông tin tab, dùng mặc định Sheet1:', mErr.message);
+        }
+
+        // Kiểm tra xem dòng tiêu đề 1 đã có nội dung chưa, nếu chưa thì thêm tiêu đề cột
+        try {
+          const checkHeaderUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:H1`;
+          const checkRes = await fetch(checkHeaderUrl, { headers: { Authorization: `Bearer ${token}` } });
+          let hasHeader = false;
+          if (checkRes.ok) {
+            const checkData: any = await checkRes.json();
+            if (checkData.values && checkData.values.length > 0) {
+              hasHeader = true;
+            }
+          }
+
+          if (!hasHeader) {
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:H1?valueInputOption=USER_ENTERED`, {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                range: `'${sheetTitle}'!A1:H1`,
+                majorDimension: 'ROWS',
+                values: [
+                  ['Thời Gian', 'Loại Phản Hồi', 'Người Gửi', 'Email / SĐT', 'Vai Trò', 'Nội Dung Góp Ý / Báo Lỗi', 'Ảnh Đính Kèm', 'Trạng Thái']
+                ]
+              })
+            });
+          }
+        } catch (hErr: any) {
+          console.warn('[Sheets] Lỗi kiểm tra / cập nhật dòng tiêu đề:', hErr.message);
+        }
+
+        // Thêm dòng dữ liệu phản hồi vào Google Sheet
+        const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:H1:append?valueInputOption=USER_ENTERED`;
+        const appendRes = await fetch(appendUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            range: `'${sheetTitle}'!A1:H1`,
+            majorDimension: 'ROWS',
+            values: [
+              [timeStr, finalType, finalSender, finalContact, finalRole, content.trim(), finalImageUrl || 'Không có', 'Mới nhận']
+            ]
+          })
+        });
+
+        if (appendRes.ok) {
+          sheetSaved = true;
+          console.log('[Drive] Ghi nhận góp ý vào Google Sheet thành công!');
+        } else {
+          const errText = await appendRes.text();
+          sheetError = `Google Sheets API chưa bật hoặc bị từ chối: ${errText}`;
+          console.error('[Sheets]', sheetError);
+        }
+      }
+
+      // E. Dự phòng: Nếu Google Sheets API bị lỗi / chưa bật (SERVICE_DISABLED 403), tự động ghi dữ liệu vào file CSV trên Google Drive
+      if (!sheetSaved) {
+        console.log('[Drive CSV Fallback] Đang lưu góp ý vào file CSV trên Google Drive...');
+        const csvResult = await saveFeedbackToGoogleDriveCSV(
+          token,
+          rootFolderId,
+          timeStr,
+          finalType,
+          finalSender,
+          finalContact,
+          finalRole,
+          content.trim(),
+          finalImageUrl
+        );
+
+        if (csvResult.success) {
+          sheetSaved = true;
+          sheetUrl = csvResult.webViewLink || sheetUrl;
+          sheetError = '';
+          console.log('[Drive CSV Fallback] Đã ghi dữ liệu vào file Góp_Ý_Và_Báo_Lỗi_Tour_CRM.csv trên Google Drive thành công!');
+        } else {
+          sheetError = csvResult.error || sheetError;
+        }
+      }
+    } catch (driveErr: any) {
+      sheetError = driveErr.message || String(driveErr);
+      console.warn('[Feedback] Google Drive sync error:', sheetError);
+    }
+
+    res.json({
+      success: true,
+      sheetSaved,
+      supabaseSaved,
+      sheetUrl,
+      sheetError: sheetError || null,
+      message: sheetSaved
+        ? 'Gửi đóng góp thành công! Dữ liệu đã được lưu vào Google Drive (folder "AD Luxury Travel > Góp Ý & Báo Lỗi").'
+        : `Gửi đóng góp thành công! (Lưu ý: chưa đồng bộ được Google Drive: ${sheetError || 'vui lòng kiểm tra quyền truy cập'})`
+    });
+  } catch (err: any) {
+    console.error('Lỗi API /api/submit-feedback:', err);
+    res.status(500).json({ error: err.message || 'Có lỗi xảy ra khi gửi phản hồi' });
+  }
+});
+
 // Global JSON error handler to prevent HTML error responses
+
 app.use('/api/*', (req, res, next) => {
   console.warn(`[404] API Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ error: `API route ${req.originalUrl} không tồn tại trên máy chủ.` });

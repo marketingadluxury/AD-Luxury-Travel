@@ -33,6 +33,7 @@ import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { Passenger, Order } from '../types';
 import EditPassengerModal from '../components/EditPassengerModal';
+import { PassengerDocumentList } from '../components/PassengerDocumentList';
 import ActionModal from '../components/ActionModal';
 
 interface BookingInfo {
@@ -863,42 +864,15 @@ export default function PassengersManagement() {
 
                                             {/* Documents / Visa badge */}
                                             <td className="px-5 py-3.5 whitespace-nowrap">
-                                              <div className="flex flex-col gap-1.5">
-                                                <div className="whitespace-nowrap">{getVisaBadge(b.visa_status, b.visa_disqualified_reason)}</div>
-                                                {b.passport_url && (
-                                                  <div className="flex flex-wrap gap-1.5 mt-0.5">
-                                                    {b.passport_url.split(',').map((url, uIdx) => {
-                                                      const isSupabaseFolder = url.includes('supabase.com/dashboard/project') || url.includes('supabase.co');
-                                                      const isGoogleDriveFolder = url.includes('drive.google.com');
-                                                      
-                                                      let label = `Tài liệu đính kèm #${uIdx + 1}`;
-                                                      let linkClass = "inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 font-bold bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md";
-                                                      
-                                                      if (isGoogleDriveFolder) {
-                                                        label = 'Mở tài liệu Drive';
-                                                        linkClass = "inline-flex items-center gap-1.5 text-[10px] text-emerald-800 hover:text-emerald-950 hover:bg-emerald-100 font-extrabold bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md transition-all shadow-2xs cursor-pointer";
-                                                      } else if (isSupabaseFolder) {
-                                                        label = 'Mở thư mục hồ sơ';
-                                                        linkClass = "inline-flex items-center gap-1.5 text-[10px] text-blue-800 hover:text-blue-950 hover:bg-blue-100 font-extrabold bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md transition-all shadow-2xs cursor-pointer";
-                                                      }
-                                                      
-                                                      return (
-                                                        <a 
-                                                          key={uIdx}
-                                                          href={url} 
-                                                          target="_blank" 
-                                                          rel="noopener noreferrer"
-                                                          className={linkClass}
-                                                        >
-                                                          <ExternalLink className="w-3 h-3 shrink-0" />
-                                                          <span>{label}</span>
-                                                        </a>
-                                                      );
-                                                    })}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </td>
+                                               <div className="flex flex-col gap-1.5 min-w-[150px]">
+                                                 <div className="whitespace-nowrap">{getVisaBadge(b.visa_status, b.visa_disqualified_reason)}</div>
+                                                 <PassengerDocumentList 
+                                                   passportUrl={b.passport_url}
+                                                   maxInitialDisplay={2}
+                                                   variant="compact"
+                                                 />
+                                               </div>
+                                             </td>
 
                                             {/* Action button inside this booking */}
                                             <td className="px-5 py-3.5 text-center whitespace-nowrap">

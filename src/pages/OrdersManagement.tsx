@@ -12,6 +12,7 @@ import PassengerInputModal from '../components/PassengerInputModal';
 import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
 import PaymentModal from '../components/PaymentModal';
+import { PassengerDocumentList } from '../components/PassengerDocumentList';
 import { parseRefundInfo } from '@/lib/utils';
 
 export default function OrdersManagement() {
@@ -2037,41 +2038,12 @@ export default function OrdersManagement() {
                                         </td>
                                         <td className="py-2.5 px-3 text-gray-500 whitespace-nowrap">{passenger.phone || '-'}</td>
                                         <td className="py-2.5 px-3">
-                                          {passenger.passport_url ? (
-                                            <div className="flex flex-col gap-1">
-                                              {passenger.passport_url.split(',').filter(Boolean).map((url, uIdx) => {
-                                                const isSupabaseFolder = url.includes('supabase.com/dashboard/project') || url.includes('supabase.co');
-                                                const isGoogleDriveFolder = url.includes('drive.google.com');
-
-                                                let label = `Tài liệu #${uIdx + 1}`;
-                                                let linkClass = "inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 font-bold max-w-[120px] truncate bg-blue-50/50 border border-blue-100 px-1.5 py-0.5 rounded whitespace-nowrap";
-
-                                                if (isGoogleDriveFolder) {
-                                                  label = 'Tài liệu';
-                                                  linkClass = "inline-flex items-center gap-1 text-[10px] text-emerald-700 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-1 rounded transition-colors font-bold shadow-sm max-w-[150px] truncate cursor-pointer whitespace-nowrap";
-                                                } else if (isSupabaseFolder) {
-                                                  label = 'Thư mục hồ sơ (Hệ thống)';
-                                                  linkClass = "inline-flex items-center gap-1 text-[10px] text-blue-700 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-1.5 py-1 rounded transition-colors font-bold shadow-sm max-w-[150px] truncate cursor-pointer whitespace-nowrap";
-                                                }
-
-                                                return (
-                                                  <a
-                                                    key={uIdx}
-                                                    href={url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className={linkClass}
-                                                    title={isGoogleDriveFolder ? 'Mở tài liệu' : isSupabaseFolder ? 'Mở thư mục' : `Xem tài liệu ${uIdx + 1}`}
-                                                  >
-                                                    <ExternalLink className="w-3 h-3 shrink-0" />
-                                                    <span className="truncate">{label}</span>
-                                                  </a>
-                                                );
-                                              })}
-                                            </div>
-                                          ) : (
-                                            <span className="text-gray-400 italic">Chưa tải</span>
-                                          )}
+                                          <PassengerDocumentList 
+                                            passportUrl={passenger.passport_url}
+                                            laborContractUrl={passenger.labor_contract_url}
+                                            maxInitialDisplay={2}
+                                            variant="compact"
+                                          />
                                         </td>
                                         <td className="py-2.5 px-3 text-gray-500 font-medium whitespace-nowrap">
                                           {passenger.visa_submitted_at ? format(new Date(passenger.visa_submitted_at), 'dd/MM/yyyy HH:mm') : <span className="text-gray-300 italic">-</span>}

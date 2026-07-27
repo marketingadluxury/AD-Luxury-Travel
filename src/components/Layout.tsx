@@ -13,12 +13,15 @@ import {
   User,
   LayoutDashboard,
   TrendingUp,
-  History
+  History,
+  MessageSquarePlus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Role } from '@/types';
+import { FeedbackModal } from './FeedbackModal';
+
 
 const navigation = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin'] },
@@ -41,6 +44,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { currentRole, setCurrentRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+
 
   const handleNotificationClick = (notif: any) => {
     setShowNotifications(false);
@@ -211,7 +216,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <option value="accounting">💰 Kế toán</option>
             <option value="admin">🔑 Quản trị viên (Full)</option>
           </select>
+
+          {/* Button Góp Ý & Báo Lỗi dành cho các vai trò khác quản trị viên */}
+          {currentRole !== 'admin' && (
+            <button
+              type="button"
+              onClick={() => setIsFeedbackModalOpen(true)}
+              className="mt-3 w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
+            >
+              <MessageSquarePlus className="w-4 h-4 text-emerald-100" />
+              <span>Góp ý & Báo lỗi</span>
+            </button>
+          )}
         </div>
+
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
           {navigation
@@ -369,6 +387,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {hasAccess ? children : <AccessDeniedView />}
         </main>
       </div>
+
+      {/* Modal Góp ý & Báo lỗi */}
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+      />
     </div>
   );
 }
+

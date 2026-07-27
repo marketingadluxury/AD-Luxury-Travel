@@ -276,7 +276,11 @@ export default function PassengerInputModal({
               if (contentType && contentType.includes('application/json')) {
                 const resData = await response.json();
                 if (resData.success && resData.url) {
-                  passportUrls.push(resData.url);
+                  let finalUrl = resData.url;
+                  if (!finalUrl.includes('#filename=')) {
+                    finalUrl += `#filename=${encodeURIComponent(file.name)}`;
+                  }
+                  passportUrls.push(finalUrl);
                 } else {
                   throw new Error(resData.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
                 }

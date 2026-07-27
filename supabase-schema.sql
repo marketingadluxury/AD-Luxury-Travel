@@ -406,6 +406,8 @@ END $$;
 -- NÂNG CẤP SCHEMA: Tự động thêm các cột cho bảng tours, tour_costs, profiles nếu đã tồn tại bảng trước đó
 ALTER TABLE tour_costs ADD COLUMN IF NOT EXISTS visa_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS leader_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_salesperson_id_fkey;
+ALTER TABLE bookings ADD CONSTRAINT bookings_salesperson_id_fkey FOREIGN KEY (salesperson_id) REFERENCES profiles(id) ON DELETE SET NULL;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS ticket_deadline TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS visa_deadline TEXT;
@@ -517,5 +519,22 @@ SELECT
   END AS expired_rate_pct
 FROM orders o
 GROUP BY COALESCE(o.user_id::text, o.created_by), o.created_by;
+
+-- ==============================================================================
+-- BẢNG PHẢN HỒI GÓP Ý & BÁO LỖI (FEEDBACKS & BUG REPORTS)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS feedbacks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type TEXT DEFAULT 'Góp ý',
+  content TEXT NOT NULL,
+  image_url TEXT,
+  sender_name TEXT,
+  sender_email TEXT,
+  sender_phone TEXT,
+  sender_role TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 
 

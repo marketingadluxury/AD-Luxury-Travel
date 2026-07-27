@@ -733,6 +733,12 @@ export default function UserManagement() {
                   </p>
                 </div>
 
+                {error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl text-left">
+                    {error}
+                  </div>
+                )}
+
                 <div className="pt-2 flex items-center justify-center gap-3">
                   <button
                     disabled={isDeleting}

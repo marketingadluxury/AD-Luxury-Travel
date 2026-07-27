@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, CheckCircle2, FileText, Trash2, ExternalLink, AlertTriangle, Lock } from 'lucide-react';
+import { X, Upload, CheckCircle2, FileText, Trash2, ExternalLink, AlertTriangle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { Passenger } from '../types';
 import { DatePicker } from './DatePicker';
 import { supabase } from '../lib/supabase';
 import { useCRM } from '../context/CRMContext';
+import { extractFileNameFromUrl } from './PassengerDocumentList';
 
 interface EditPassengerModalProps {
   isOpen: boolean;
@@ -55,6 +56,7 @@ export default function EditPassengerModal({
   const [deletingState, setDeletingState] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showDeletedAlert, setShowDeletedAlert] = useState(false);
+  const [isFileListExpanded, setIsFileListExpanded] = useState(false);
 
   useEffect(() => {
     if (isOpen && passenger && passenger.id !== activeId) {
@@ -117,7 +119,11 @@ export default function EditPassengerModal({
         if (contentType && contentType.includes('application/json')) {
           const data = await res.json();
           if (data.success && data.url) {
-            newUrls.push(data.url);
+            let finalUrl = data.url;
+            if (!finalUrl.includes('#filename=')) {
+              finalUrl += `#filename=${encodeURIComponent(file.name)}`;
+            }
+            newUrls.push(finalUrl);
           } else {
             throw new Error(data.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
           }
@@ -427,19 +433,35 @@ export default function EditPassengerModal({
             {/* List of uploaded files */}
             {uploadedUrls.length > 0 ? (
               <div className="space-y-2">
-                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Danh sách tài liệu đã tải lên:</div>
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
-                  {uploadedUrls.map((url, uIdx) => {
-                    // Extract file name from URL or generic name
-                    let displayFileName = `Tài liệu đính kèm #${uIdx + 1}`;
-                    if (url.includes('drive.google.com')) {
-                      displayFileName = `Tài liệu #${uIdx + 1}`;
-                    }
-
+                <div className="flex items-center justify-between text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  <span>Danh sách tài liệu đã tải lên ({uploadedUrls.length}):</span>
+                  {uploadedUrls.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsFileListExpanded(!isFileListExpanded)}
+                      className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer normal-case"
+                    >
+                      {isFileListExpanded ? (
+                        <>
+                          <span>Thu gọn</span>
+                          <ChevronUp className="w-3 h-3" />
+                        </>
+                      ) : (
+                        <>
+                          <span>Xem tất cả ({uploadedUrls.length} file)</span>
+                          <ChevronDown className="w-3 h-3" />
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                  {(isFileListExpanded ? uploadedUrls : uploadedUrls.slice(0, 3)).map((url, uIdx) => {
+                    const displayFileName = extractFileNameFromUrl(url);
                     const isConfirming = deletingUrl === url;
 
                     return (
-                      <div key={uIdx} className={`flex items-center justify-between p-3 transition-all ${isConfirming ? 'bg-rose-50/75' : 'hover:bg-slate-50'}`}>
+                      <div key={uIdx} className={`flex items-center justify-between p-2.5 transition-all ${isConfirming ? 'bg-rose-50/75' : 'hover:bg-slate-50'}`}>
                         {isConfirming ? (
                           <>
                             <div className="flex items-center gap-1.5 text-rose-700 font-bold text-xs">
@@ -451,7 +473,7 @@ export default function EditPassengerModal({
                                 type="button"
                                 disabled={deletingState}
                                 onClick={() => handleFileDelete(url)}
-                                className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white text-[10px] font-bold px-2.5 py-1 rounded-md transition-colors cursor-pointer shadow-sm"
+                                className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white text-[10px] font-bold px-2.5 py-1 rounded-md transition-colors cursor-pointer shadow-2xs"
                               >
                                 {deletingState ? 'Đang xóa...' : 'Xóa'}
                               </button>
@@ -472,6 +494,7 @@ export default function EditPassengerModal({
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[80%]"
+                              title={displayFileName}
                             >
                               <ExternalLink className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                               <span className="truncate">{displayFileName}</span>

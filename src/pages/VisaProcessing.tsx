@@ -5,6 +5,7 @@ import { useCRM } from '@/context/CRMContext';
 import { Passenger } from '@/types';
 import { FileText, Download, Check, X, Clock, HelpCircle, AlertCircle, RefreshCw, ExternalLink, Search } from 'lucide-react';
 import { format } from 'date-fns';
+import { PassengerDocumentList } from '@/components/PassengerDocumentList';
 
 interface DisqualifiedReasonInputProps {
   passengerId: string;
@@ -367,67 +368,22 @@ export default function VisaProcessing() {
                   </div>
 
                    {/* Middle block: Documents list */}
-                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2 w-full md:w-auto md:min-w-[280px]">
-                    <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Giấy tờ Sale đã upload</span>
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2 w-full md:w-auto md:min-w-[280px] md:max-w-[340px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Giấy tờ Sale đã upload</span>
+                      {passenger.passport_url && (
+                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                          {passenger.passport_url.split(',').filter(Boolean).length} file
+                        </span>
+                      )}
+                    </div>
                     
-                    {passenger.passport_url ? (
-                      <div className="space-y-1.5">
-                        {passenger.passport_url.split(',').filter(Boolean).map((url, uIdx) => {
-                          const isSupabaseFolder = url.includes('supabase.com/dashboard/project') || url.includes('supabase.co');
-                          const isGoogleDriveFolder = url.includes('drive.google.com');
-                          
-                          let displayFileName = '';
-                          let linkClass = "text-blue-600 hover:text-blue-800 flex items-center shrink-0 cursor-pointer bg-blue-50/50 p-1.5 rounded";
-                          let itemClass = "flex items-center justify-between text-sm bg-white px-3 py-1.5 rounded border border-gray-100 gap-3";
-                          
-                          if (isGoogleDriveFolder) {
-                            displayFileName = 'Tài liệu';
-                            itemClass = "flex items-center justify-between text-sm bg-emerald-50/70 px-3 py-1.5 rounded border border-emerald-100 gap-3";
-                            linkClass = "text-emerald-700 hover:text-emerald-900 flex items-center shrink-0 cursor-pointer bg-emerald-100/50 p-1.5 rounded transition-colors";
-                          } else if (isSupabaseFolder) {
-                            displayFileName = 'Thư mục hồ sơ (Hệ thống)';
-                            itemClass = "flex items-center justify-between text-sm bg-blue-50/70 px-3 py-1.5 rounded border border-blue-100 gap-3";
-                            linkClass = "text-blue-700 hover:text-blue-900 flex items-center shrink-0 cursor-pointer bg-blue-100/50 p-1.5 rounded transition-colors";
-                          } else {
-                            const fileName = url.substring(url.lastIndexOf('/') + 1);
-                            const decodedFileName = decodeURIComponent(fileName);
-                            displayFileName = decodedFileName.includes('-') ? decodedFileName.split('-').slice(2).join('-') : decodedFileName;
-                          }
-                          return (
-                            <div key={uIdx} className={itemClass}>
-                              <span className="text-gray-700 truncate font-semibold max-w-[200px]" title={displayFileName}>
-                                {displayFileName}
-                              </span>
-                              <a 
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={linkClass}
-                                title={isGoogleDriveFolder ? 'Mở thư mục tài liệu' : isSupabaseFolder ? 'Mở thư mục' : 'Xem tài liệu'}
-                              >
-                                {isGoogleDriveFolder || isSupabaseFolder ? <ExternalLink className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-                              </a>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-400 italic">Không có file Hộ chiếu</div>
-                    )}
-
-                    {passenger.labor_contract_url ? (
-                      <div className="flex items-center justify-between text-sm bg-white px-3 py-1.5 rounded border border-gray-100">
-                        <span className="text-gray-700 truncate font-medium max-w-[150px]">{passenger.labor_contract_url}</span>
-                        <button 
-                          onClick={() => handleDownloadSimulatedFile(passenger.labor_contract_url!)}
-                          className="text-blue-600 hover:text-blue-800 flex items-center"
-                        >
-                          <Download className="w-4 h-4 ml-2" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-400 italic">Không có file Hợp đồng lao động</div>
-                    )}
+                    <PassengerDocumentList 
+                      passportUrl={passenger.passport_url}
+                      laborContractUrl={passenger.labor_contract_url}
+                      maxInitialDisplay={3}
+                      variant="card"
+                    />
                   </div>
 
                   {/* Right block: Actions to update state */}
