@@ -4,7 +4,7 @@ import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, MapPin, Search, Phone, Tag, CreditCard } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, MapPin, Search, Phone, Tag, CreditCard, Copy } from 'lucide-react';
 import { format, differenceInHours } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import EditPassengerModal from '../components/EditPassengerModal';
@@ -566,7 +566,19 @@ export default function VisaOrders() {
                           </div>
                           <div className="flex justify-between items-center py-1 border-b border-gray-50">
                             <span className="text-gray-500">Mã giao dịch:</span>
-                            <span className="font-mono font-bold text-blue-600">{order.id.substring(0, 8)}</span>
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const shortCode = `#${order.id.substring(0, 8)}`;
+                                navigator.clipboard.writeText(shortCode);
+                                toast.success(`Đã sao chép mã đơn hàng: ${shortCode}`);
+                              }}
+                              className="font-mono font-bold text-blue-600 hover:text-blue-800 cursor-pointer inline-flex items-center gap-1 group/copy"
+                              title="Bấm để sao chép mã đơn hàng"
+                            >
+                              #{order.id.substring(0, 8)}
+                              <Copy className="w-3.5 h-3.5 text-gray-400 group-hover/copy:text-blue-600 opacity-60 group-hover/copy:opacity-100 transition-opacity" />
+                            </span>
                           </div>
                           <div className="flex justify-between items-center py-1 border-b border-gray-50">
                             <span className="text-gray-500">Dịch vụ:</span>

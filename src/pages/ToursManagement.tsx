@@ -1370,18 +1370,6 @@ export default function ToursManagement() {
               Chi phí & Lãi lỗ
             </button>
           </div>
-
-          {activeTab === 'tours' && !showAddForm && !editingTour && (
-            <button 
-              onClick={() => {
-                resetForm();
-                setShowAddForm(true);
-              }}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
-            >
-              <Plus className="w-4 h-4 mr-1.5" /> Thêm Tour Mới
-            </button>
-          )}
         </div>
       </div>
 
@@ -2242,30 +2230,47 @@ export default function ToursManagement() {
                 <span className="text-xs text-gray-500 mt-1 block">Quản lý ngày khởi hành, quỹ phòng và các chiến dịch mở bán hiệu quả.</span>
               </div>
 
-              {/* View mode toggle switcher */}
-              <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('grouped')}
-                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                    viewMode === 'grouped' 
-                      ? 'bg-white text-blue-700 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Gom nhóm theo Hành Trình
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('flat')}
-                  className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                    viewMode === 'flat' 
-                      ? 'bg-white text-blue-700 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Danh sách phẳng
-                </button>
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 shrink-0">
+                {/* View mode toggle switcher */}
+                <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('grouped')}
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      viewMode === 'grouped' 
+                        ? 'bg-white text-blue-700 shadow-sm' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Gom nhóm theo Hành Trình
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('flat')}
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      viewMode === 'flat' 
+                        ? 'bg-white text-blue-700 shadow-sm' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Danh sách phẳng
+                  </button>
+                </div>
+
+                {!showAddForm && !editingTour && (
+                  <button 
+                    onClick={() => {
+                      resetForm();
+                      setShowAddForm(true);
+                      setTimeout(() => {
+                        document.getElementById('tour-form-section')?.scrollIntoView({ behavior: 'smooth' });
+                      }, 100);
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Plus className="w-4 h-4 mr-1.5" /> Thêm Tour Mới
+                  </button>
+                )}
               </div>
             </div>
 

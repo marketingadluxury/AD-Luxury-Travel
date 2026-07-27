@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { X, Bed, DollarSign, FileText, Percent, Info, ShieldAlert, CheckCircle2, RefreshCw, Lock } from 'lucide-react';
+import { X, Bed, DollarSign, FileText, Percent, Info, ShieldAlert, CheckCircle2, RefreshCw, Lock, Copy } from 'lucide-react';
 import { Order } from '../types';
 import { useCRM, canUnlockOrder } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
@@ -159,7 +159,20 @@ export default function EditOrderModal({
         <div className="bg-slate-50 border-b border-slate-150 px-6 py-4 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-base font-black text-slate-800 flex items-center gap-1.5">
-              <span>Chỉnh sửa thông tin booking #{order.id.substring(0, 8)}</span>
+              <span>Chỉnh sửa thông tin booking</span>
+              <span 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const code = `#${order.id.substring(0, 8)}`;
+                  navigator.clipboard.writeText(code);
+                  toast.success(`Đã sao chép mã booking: ${code}`);
+                }}
+                className="hover:text-blue-600 cursor-pointer inline-flex items-center gap-1 group/copy text-blue-700 font-mono"
+                title="Bấm để sao chép mã booking"
+              >
+                #{order.id.substring(0, 8)}
+                <Copy className="w-3.5 h-3.5 text-gray-400 group-hover/copy:text-blue-600 opacity-70 group-hover/copy:opacity-100 transition-opacity" />
+              </span>
             </h2>
             <p className="text-xs text-gray-400 mt-0.5 font-medium">
               Cập nhật phụ thu phòng đơn, VAT, ghi chú hoặc điều chỉnh tổng tiền

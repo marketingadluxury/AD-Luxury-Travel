@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { 
   Users, 
   Search, 
@@ -27,7 +28,8 @@ import {
   CreditCard,
   Sparkles,
   UserCheck,
-  Globe
+  Globe,
+  Copy
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
@@ -829,7 +831,22 @@ export default function PassengersManagement() {
                                           <tr key={b.passenger_id} className="hover:bg-slate-50/60 transition-colors">
                                             {/* Order ID */}
                                             <td className="px-5 py-3.5 text-xs font-black text-blue-600 font-mono whitespace-nowrap">
-                                              #{b.order_id ? b.order_id.substring(0, 8) : ''}
+                                              {b.order_id ? (
+                                                 <button
+                                                   type="button"
+                                                   onClick={(e) => {
+                                                     e.stopPropagation();
+                                                     const code = `#${b.order_id.substring(0, 8)}`;
+                                                     navigator.clipboard.writeText(code);
+                                                     toast.success(`Đã sao chép mã đơn hàng: ${code}`);
+                                                   }}
+                                                   className="hover:text-blue-800 hover:underline inline-flex items-center gap-1 cursor-pointer group/copy"
+                                                   title="Bấm để sao chép mã đơn hàng"
+                                                 >
+                                                   #{b.order_id.substring(0, 8)}
+                                                   <Copy className="w-3 h-3 text-gray-400 group-hover/copy:text-blue-600 opacity-60 group-hover/copy:opacity-100 transition-opacity" />
+                                                 </button>
+                                               ) : ''}
                                             </td>
 
                                             {/* Tour Code & Name */}
@@ -1018,7 +1035,22 @@ export default function PassengersManagement() {
                                                   </span>
                                                 )}
                                               </td>
-                                              <td className="px-5 py-3 font-mono font-bold text-slate-500">#{rel.order_id ? rel.order_id.substring(0, 8) : ''}</td>
+                                              <td className="px-5 py-3 font-mono font-bold text-slate-500">{rel.order_id ? (
+                                                 <button
+                                                   type="button"
+                                                   onClick={(e) => {
+                                                     e.stopPropagation();
+                                                     const code = `#${rel.order_id.substring(0, 8)}`;
+                                                     navigator.clipboard.writeText(code);
+                                                     toast.success(`Đã sao chép mã đơn hàng: ${code}`);
+                                                   }}
+                                                   className="hover:text-blue-800 hover:underline inline-flex items-center gap-1 cursor-pointer group/copy"
+                                                   title="Bấm để sao chép mã đơn hàng"
+                                                 >
+                                                   #{rel.order_id.substring(0, 8)}
+                                                   <Copy className="w-3 h-3 text-gray-400 group-hover/copy:text-blue-600 opacity-60 group-hover/copy:opacity-100 transition-opacity" />
+                                                 </button>
+                                               ) : ''}</td>
                                               <td className="px-5 py-3 font-mono font-bold text-slate-700">{rel.passport || '-'}</td>
                                               <td className="px-5 py-3 font-semibold text-slate-700">{rel.phone || '-'}</td>
                                               <td className="px-5 py-3">{getVisaBadge(rel.visa_status, rel.visa_disqualified_reason)}</td>

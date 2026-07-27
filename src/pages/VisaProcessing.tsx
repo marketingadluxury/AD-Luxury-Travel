@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Passenger } from '@/types';
-import { FileText, Download, Check, X, Clock, HelpCircle, AlertCircle, RefreshCw, ExternalLink, Search } from 'lucide-react';
+import { FileText, Download, Check, X, Clock, HelpCircle, AlertCircle, RefreshCw, ExternalLink, Search, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { PassengerDocumentList } from '@/components/PassengerDocumentList';
 
@@ -318,7 +318,20 @@ export default function VisaProcessing() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-gray-600">
                       <div>
-                        <span className="text-gray-400">Mã đơn:</span> <span className="font-semibold text-gray-800">#{passenger.order_id.substring(0, 8)}</span>
+                        <span className="text-gray-400">Mã đơn:</span>{' '}
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const code = `#${passenger.order_id.substring(0, 8)}`;
+                            navigator.clipboard.writeText(code);
+                            toast.success(`Đã sao chép mã đơn hàng: ${code}`);
+                          }}
+                          className="font-semibold text-gray-800 hover:text-blue-600 cursor-pointer inline-flex items-center gap-1 group/copy"
+                          title="Bấm để sao chép mã đơn hàng"
+                        >
+                          #{passenger.order_id.substring(0, 8)}
+                          <Copy className="w-3.5 h-3.5 text-gray-400 group-hover/copy:text-blue-600 opacity-60 group-hover/copy:opacity-100 transition-opacity" />
+                        </span>
                       </div>
                       <div>
                         {tour?.tour_type === 'visa' ? (

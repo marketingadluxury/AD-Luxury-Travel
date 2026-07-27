@@ -33,6 +33,7 @@ import {
   Info,
   Percent,
   Trash2,
+  Copy,
   Eye,
   Coins,
   Download,
@@ -1372,8 +1373,18 @@ export default function AccountingInvoice() {
                         {inv.order_id && (
                           <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 mb-3 font-semibold flex items-center justify-between">
                             <span>Booking liên kết:</span>
-                            <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold">
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const code = `#${inv.order_id.substring(0, 8).toUpperCase()}`;
+                                navigator.clipboard.writeText(code);
+                                toast.success(`Đã sao chép mã booking: ${code}`);
+                              }}
+                              className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold hover:bg-blue-50 hover:text-blue-900 cursor-pointer inline-flex items-center gap-1 group/copy transition-colors"
+                              title="Bấm để sao chép mã booking"
+                            >
                               #{inv.order_id.substring(0, 8).toUpperCase()}
+                              <Copy className="w-3 h-3 text-blue-400 group-hover/copy:text-blue-700 transition-colors" />
                             </span>
                           </div>
                         )}

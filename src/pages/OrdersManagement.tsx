@@ -5,7 +5,7 @@ import Select from 'react-select';
 import { useCRM, canUnlockOrder } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy } from 'lucide-react';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
@@ -93,6 +93,13 @@ export default function OrdersManagement() {
     }
   }, [location.state]);
 
+  const handleCopyOrderCode = (e: React.MouseEvent, orderId: string) => {
+    e.stopPropagation();
+    const shortCode = `#${orderId.substring(0, 8)}`;
+    navigator.clipboard.writeText(shortCode);
+    toast.success(`Đã sao chép mã đơn hàng: ${shortCode}`);
+  };
+
   const orders = React.useMemo(() => {
     // 1. Filter by role/ownership
     let filtered = ['admin', 'operator', 'sale_leader'].includes(currentRole)
@@ -107,14 +114,15 @@ export default function OrdersManagement() {
 
     // 3. Search term filter (code, booker_name, booker_phone, tour code, tour name)
     if (orderSearchTerm.trim() !== '') {
-      const q = orderSearchTerm.toLowerCase().trim();
+      const rawQ = orderSearchTerm.toLowerCase().trim();
+      const q = rawQ.replace(/^#/, '').replace(/^bk-/i, '');
       filtered = filtered.filter(o => {
         const tour = tours.find(t => t.id === o.tour_id);
-        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(q);
-        const phoneMatch = o.booker_phone && o.booker_phone.includes(q);
-        const codeMatch = o.id && o.id.toLowerCase().includes(q);
-        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
-        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(q);
+        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(rawQ);
+        const phoneMatch = o.booker_phone && o.booker_phone.includes(rawQ);
+        const codeMatch = o.id && (o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(rawQ));
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(rawQ);
+        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(rawQ);
         return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch;
       });
     }
@@ -278,14 +286,15 @@ export default function OrdersManagement() {
 
     // 3. Search term filter
     if (orderSearchTerm.trim() !== '') {
-      const q = orderSearchTerm.toLowerCase().trim();
+      const rawQ = orderSearchTerm.toLowerCase().trim();
+      const q = rawQ.replace(/^#/, '').replace(/^bk-/i, '');
       base = base.filter(o => {
         const tour = tours.find(t => t.id === o.tour_id);
-        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(q);
-        const phoneMatch = o.booker_phone && o.booker_phone.includes(q);
-        const codeMatch = o.id && o.id.toLowerCase().includes(q);
-        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
-        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(q);
+        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(rawQ);
+        const phoneMatch = o.booker_phone && o.booker_phone.includes(rawQ);
+        const codeMatch = o.id && (o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(rawQ));
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(rawQ);
+        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(rawQ);
         return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch;
       });
     }
@@ -1529,7 +1538,14 @@ export default function OrdersManagement() {
                           <ShoppingCart className="w-5 h-5" />
                         </div>
                         <div>
-                          <div className="font-black text-gray-900 text-sm tracking-tight">#{order.id.substring(0, 8)}</div>
+                          <div 
+                            onClick={(e) => handleCopyOrderCode(e, order.id)}
+                            className="font-black text-gray-900 text-sm tracking-tight hover:text-blue-600 cursor-pointer inline-flex items-center gap-1 group/copy transition-colors"
+                            title="Bấm để sao chép mã đơn hàng"
+                          >
+                            #{order.id.substring(0, 8)}
+                            <Copy className="w-3.5 h-3.5 text-gray-400 group-hover/copy:text-blue-600 opacity-60 group-hover/copy:opacity-100 transition-opacity" />
+                          </div>
                           <div className="text-[11px] text-gray-400 font-medium mt-0.5">
                             {format(new Date(order.created_at), 'dd/MM/yyyy HH:mm')}
                           </div>
