@@ -631,14 +631,14 @@ export default function PassengersManagement() {
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50/90">
               <tr>
-                <th scope="col" className="w-[40px] px-3 py-4 text-center text-[11px] font-extrabold text-slate-500 uppercase tracking-wider"></th>
-                <th scope="col" className="px-5 py-4 text-left text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Khách hàng</th>
-                <th scope="col" className="px-4 py-4 text-left text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Số điện thoại</th>
-                <th scope="col" className="px-4 py-4 text-left text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Số hộ chiếu</th>
-                <th scope="col" className="px-4 py-4 text-center text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Hạng thành viên</th>
-                <th scope="col" className="px-4 py-4 text-center text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Số Tour</th>
-                <th scope="col" className="px-4 py-4 text-left text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Visa (Gần nhất)</th>
-                <th scope="col" className="px-5 py-4 text-center text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Lịch sử Tour</th>
+                <th scope="col" className="w-[36px] px-1.5 py-3 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider"></th>
+                <th scope="col" className="px-2.5 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Khách hàng</th>
+                <th scope="col" className="px-2.5 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Số điện thoại</th>
+                <th scope="col" className="px-2.5 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Số hộ chiếu</th>
+                <th scope="col" className="px-2 py-3 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Hạng thành viên</th>
+                <th scope="col" className="px-2 py-3 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Số Tour</th>
+                <th scope="col" className="px-2.5 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Visa (Gần nhất)</th>
+                <th scope="col" className="px-2.5 py-3 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
@@ -664,11 +664,11 @@ export default function PassengersManagement() {
                       {/* Main Customer Row */}
                       <tr className={`hover:bg-slate-50/80 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''}`}>
                         {/* Expand / Collapse Button */}
-                        <td className="px-3 py-4 text-center">
+                        <td className="px-1.5 py-2.5 text-center">
                           <button
                             type="button"
                             onClick={() => toggleExpand(c.id)}
-                            className={`p-1.5 rounded-lg transition-all ${
+                            className={`p-1 rounded-lg transition-all ${
                               isExpanded 
                                 ? 'bg-blue-600 text-white shadow-xs' 
                                 : 'hover:bg-slate-100 text-slate-500'
@@ -684,14 +684,14 @@ export default function PassengersManagement() {
                         </td>
 
                         {/* Customer Name - NO Avatar, No Line Wrap */}
-                        <td className="px-5 py-4 whitespace-nowrap">
+                        <td className="px-2.5 py-3 whitespace-nowrap">
                           <span className="font-black text-slate-900 text-xs tracking-tight uppercase whitespace-nowrap block">
                             {c.full_name}
                           </span>
                         </td>
 
                         {/* Phone */}
-                        <td className="px-4 py-4 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                        <td className="px-2.5 py-3 text-xs font-semibold text-slate-700 whitespace-nowrap">
                           {c.phone ? (
                             <span className="inline-flex items-center gap-1 font-semibold">
                               <Phone className="w-3 h-3 text-slate-400" />
@@ -703,7 +703,7 @@ export default function PassengersManagement() {
                         </td>
 
                         {/* Passport */}
-                        <td className="px-4 py-4 text-xs whitespace-nowrap">
+                        <td className="px-2.5 py-3 text-xs whitespace-nowrap">
                           {c.passport_number ? (
                             <span className="font-mono font-bold text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md uppercase text-[11px]">
                               {c.passport_number}
@@ -714,7 +714,7 @@ export default function PassengersManagement() {
                         </td>
 
                         {/* Membership Tier */}
-                        <td className="px-4 py-4 text-center whitespace-nowrap">
+                        <td className="px-2 py-3 text-center whitespace-nowrap">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wide border ${tierInfo.badge}`}>
                             <TierIcon className="w-3 h-3 shrink-0" />
                             {tierInfo.name}
@@ -722,7 +722,7 @@ export default function PassengersManagement() {
                         </td>
 
                         {/* Booking Count */}
-                        <td className="px-4 py-4 text-center whitespace-nowrap">
+                        <td className="px-2 py-3 text-center whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 border border-blue-200/80">
                             <History className="w-3 h-3" />
                             {c.bookings.length} Tour
@@ -730,12 +730,12 @@ export default function PassengersManagement() {
                         </td>
 
                         {/* Latest Visa */}
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="px-2.5 py-3 whitespace-nowrap">
                           {latestBooking ? getVisaBadge(latestBooking.visa_status, latestBooking.visa_disqualified_reason) : <span className="text-slate-300">-</span>}
                         </td>
 
                         {/* Toggle Expand View Button */}
-                        <td className="px-5 py-4 text-center whitespace-nowrap">
+                        <td className="px-2.5 py-3 text-center whitespace-nowrap">
                           <button
                             type="button"
                             onClick={() => toggleExpand(c.id)}
@@ -745,7 +745,7 @@ export default function PassengersManagement() {
                                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                             }`}
                           >
-                            {isExpanded ? 'Đóng chi tiết' : 'Chi tiết & Lịch sử'}
+                            {isExpanded ? 'Đóng' : 'Chi tiết'}
                           </button>
                         </td>
                       </tr>
@@ -754,11 +754,11 @@ export default function PassengersManagement() {
                       {isExpanded && (
                         <tr>
                           <td colSpan={8} className="p-0 bg-slate-50/90 border-b border-slate-200/90 shadow-inner">
-                            <div className="p-6 md:p-8 space-y-6">
+                            <div className="p-3 sm:p-4 md:p-5 space-y-4">
                               
                               {/* Expanded Customer Overview Header */}
                               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                                   <div>
                                     <h4 className="text-base font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
                                       {c.full_name}
@@ -771,7 +771,7 @@ export default function PassengersManagement() {
                                     </p>
                                   </div>
 
-                                  <div className="flex items-center gap-6">
+                                  <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                                     <div className="text-left lg:text-right">
                                       <span className="text-[10px] font-extrabold uppercase text-slate-400 block">Tổng chi tiêu tích lũy</span>
                                       <span className="text-lg font-black text-emerald-600">{c.totalSpent.toLocaleString('vi-VN')} đ</span>
@@ -813,16 +813,16 @@ export default function PassengersManagement() {
                                   </h4>
                                 </div>
                                 
-                                <div className="overflow-hidden border border-slate-200/90 rounded-xl shadow-xs bg-white">
+                                <div className="overflow-x-auto border border-slate-200/90 rounded-xl shadow-xs bg-white">
                                   <table className="min-w-full divide-y divide-slate-150">
                                     <thead className="bg-slate-100/80">
                                       <tr className="whitespace-nowrap">
-                                        <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-slate-600 uppercase">Mã booking</th>
-                                        <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-slate-600 uppercase">Tour tham gia</th>
-                                        <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-slate-600 uppercase">Ngày đi</th>
-                                        <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-slate-600 uppercase">Vai trò</th>
-                                        <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-slate-600 uppercase">Hồ sơ / Visa</th>
-                                        <th scope="col" className="px-5 py-3 text-center text-[10px] font-extrabold text-slate-600 uppercase">Thao tác</th>
+                                        <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-slate-600 uppercase">Mã booking</th>
+                                        <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-slate-600 uppercase">Tour tham gia</th>
+                                        <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-slate-600 uppercase">Ngày đi</th>
+                                        <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-slate-600 uppercase">Vai trò</th>
+                                        <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-slate-600 uppercase">Hồ sơ / Visa</th>
+                                        <th scope="col" className="px-3 py-2.5 text-center text-[10px] font-extrabold text-slate-600 uppercase">Thao tác</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -830,7 +830,7 @@ export default function PassengersManagement() {
                                         return (
                                           <tr key={b.passenger_id} className="hover:bg-slate-50/60 transition-colors">
                                             {/* Order ID */}
-                                            <td className="px-5 py-3.5 text-xs font-black text-blue-600 font-mono whitespace-nowrap">
+                                            <td className="px-3 py-2.5 text-xs font-black text-blue-600 font-mono whitespace-nowrap">
                                               {b.order_id ? (
                                                  <button
                                                    type="button"
@@ -850,7 +850,7 @@ export default function PassengersManagement() {
                                             </td>
 
                                             {/* Tour Code & Name */}
-                                            <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <td className="px-3 py-2.5 whitespace-nowrap">
                                               <div className="flex flex-col">
                                                 <span className="inline-block self-start px-2 py-0.5 text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-200 rounded uppercase whitespace-nowrap">
                                                   {b.tour_code || 'TOUR'}
@@ -862,12 +862,12 @@ export default function PassengersManagement() {
                                             </td>
 
                                             {/* Date */}
-                                            <td className="px-5 py-3.5 text-xs font-semibold text-slate-600 whitespace-nowrap">
+                                            <td className="px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">
                                               {b.created_at ? formatDob(b.created_at) : '-'}
                                             </td>
 
                                             {/* Role */}
-                                            <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <td className="px-3 py-2.5 whitespace-nowrap">
                                               {b.is_payer ? (
                                                 <span className="px-2.5 py-1 rounded text-[10px] font-extrabold bg-blue-100 text-blue-900 uppercase tracking-wide border border-blue-200 whitespace-nowrap inline-block">
                                                   Trưởng đoàn
@@ -880,7 +880,7 @@ export default function PassengersManagement() {
                                             </td>
 
                                             {/* Documents / Visa badge */}
-                                            <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <td className="px-3 py-2.5 whitespace-nowrap">
                                                <div className="flex flex-col gap-1.5 min-w-[150px]">
                                                  <div className="whitespace-nowrap">{getVisaBadge(b.visa_status, b.visa_disqualified_reason)}</div>
                                                  <PassengerDocumentList 
@@ -892,7 +892,7 @@ export default function PassengersManagement() {
                                              </td>
 
                                             {/* Action button inside this booking */}
-                                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                            <td className="px-3 py-2.5 text-center whitespace-nowrap">
                                               <div className="flex items-center justify-center gap-2">
                                                 <button
                                                   type="button"
@@ -1008,16 +1008,16 @@ export default function PassengersManagement() {
                                       <Users className="w-4 h-4 text-emerald-600" />
                                       Hành khách liên quan (Đi cùng đoàn trong booking)
                                     </h5>
-                                    <div className="overflow-hidden border border-emerald-200/80 rounded-xl shadow-2xs bg-white">
+                                    <div className="overflow-x-auto border border-emerald-200/80 rounded-xl shadow-2xs bg-white">
                                       <table className="min-w-full divide-y divide-slate-150">
                                         <thead className="bg-emerald-50/50">
                                           <tr>
-                                            <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Họ và tên</th>
-                                            <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Mối quan hệ booking</th>
-                                            <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Mã đơn</th>
-                                            <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Hộ chiếu</th>
-                                            <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Điện thoại</th>
-                                            <th scope="col" className="px-5 py-3 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Visa</th>
+                                            <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Họ và tên</th>
+                                            <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Mối quan hệ booking</th>
+                                            <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Mã đơn</th>
+                                            <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Hộ chiếu</th>
+                                            <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Điện thoại</th>
+                                            <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-extrabold text-emerald-900 uppercase">Visa</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 bg-white text-xs">
