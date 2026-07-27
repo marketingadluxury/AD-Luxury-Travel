@@ -1,16 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  TrendingUp, 
-  Users, 
-  MapPin, 
-  DollarSign, 
-  Calendar, 
-  Award, 
-  ArrowUpRight, 
-  ArrowDownRight,
+import {
+  TrendingUp,
+  Users,
+  DollarSign,
+  Calendar,
+  Award,
   Filter,
-  RefreshCw,
   Layers,
   Activity,
   CheckCircle,
@@ -19,22 +15,21 @@ import {
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { DatePicker } from '../components/DatePicker';
-import { 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area, 
-  BarChart, 
-  Bar, 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  PieChart, 
-  Pie, 
-  Cell 
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 import { motion } from 'motion/react';
 
@@ -827,7 +822,7 @@ export default function Dashboard() {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {destinationData.map((entry, index) => (
+                  {destinationData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>

@@ -1,19 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { useCRM } from '../context/CRMContext';
 import { format, differenceInDays } from 'date-fns';
-import { 
-  Calendar, 
-  Clock, 
-  CheckCircle, 
-  PlaneTakeoff, 
-  Ticket, 
+import {
+  PlaneTakeoff,
+  Ticket,
   FileCheck,
   Filter,
   X,
   Download,
   Users,
-  Search,
-  ArrowRight
+  Search
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 

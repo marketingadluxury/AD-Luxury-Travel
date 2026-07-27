@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, User, TourStatus, MembershipSettings, Invoice, TourCost, LandtourCost, PartnerPayment, ActivityLog } from '../types';
+import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 
@@ -594,7 +594,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
                   price_child: Number(t.price_child || 0),
                   price_infant: Number(t.price_infant || 0),
                   single_room_surcharge: Number(t.single_room_surcharge || 0),
-
 
                  itinerary_pdf_url: t.itinerary_pdf_url,
                   notice_sections: t.notice_sections,
@@ -2695,7 +2694,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled', cancel_reason: reason } : o));
     logActivity({ action: 'Hủy Booking', module: 'Đơn hàng', details: `Mã booking: ${orderId.substring(0, 8)} - Lý do: ${reason || 'Không ghi'}` });
-
 
     const newNotif = {
       id: 'N-' + Date.now(),

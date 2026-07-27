@@ -1,16 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { Order } from '@/types';
 import { useCRM } from '@/context/CRMContext';
-import { 
-  Users, 
-  Search, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock, 
-  XCircle, 
-  TrendingUp, 
-  Award, 
-  ArrowUpDown,
+import {
+  Users,
+  Search,
+  AlertTriangle,
+  CheckCircle,
   Filter,
   ShieldAlert
 } from 'lucide-react';

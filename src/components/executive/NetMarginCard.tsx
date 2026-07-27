@@ -1,18 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { Tour, Order, TourCost } from '@/types';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown, 
-  PieChart, 
-  Layers, 
-  Plane, 
-  Building2, 
-  Users, 
-  Percent, 
-  ChevronDown, 
-  ChevronUp, 
-  ShieldCheck, 
+import {
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  PieChart,
+  Plane,
+  Building2,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  ShieldCheck,
   Info,
   Briefcase
 } from 'lucide-react';

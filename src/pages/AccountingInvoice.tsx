@@ -6,21 +6,20 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { motion } from 'motion/react';
 import { Order, Invoice } from '@/types';
 import { parseRefundInfo } from '@/lib/utils';
-import { 
-  Receipt, 
-  Check, 
+import {
+  Receipt,
+  Check,
   X,
-  FileText, 
-  Filter, 
-  DollarSign, 
-  Calendar, 
-  ExternalLink, 
-  Clock, 
+  FileText,
+  Filter,
+  DollarSign,
+  Calendar,
+  ExternalLink,
+  Clock,
   AlertCircle,
   TrendingUp,
   User,
   Hash,
-  ArrowRight,
   ChevronDown,
   ChevronUp,
   Upload,
@@ -29,15 +28,10 @@ import {
   FolderOpen,
   FileCheck,
   Briefcase,
-  Shield,
   Info,
-  Percent,
-  Trash2,
   Copy,
   Eye,
   Coins,
-  Download,
-  Plus,
   Compass,
   ChevronRight
 } from 'lucide-react';
@@ -597,12 +591,12 @@ export default function AccountingInvoice() {
               : 'Yêu cầu hoàn tiền cho booking bị hủy, đề xuất các phiếu chi và theo dõi trạng thái phê duyệt từ kế toán.'}
           </p>
         </div>
-        <div className="flex flex-wrap md:flex-nowrap bg-gray-100 p-1.5 rounded-lg border border-gray-200 self-stretch md:self-auto gap-1 md:gap-0">
+        <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 w-full md:w-auto overflow-x-auto scrollbar-none gap-1 shrink-0">
           {isAccountantOrAdmin && (
             <>
               <button
                 onClick={() => setActiveTab('receipts')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+                className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
                   activeTab === 'receipts'
                     ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
@@ -612,7 +606,7 @@ export default function AccountingInvoice() {
               </button>
               <button
                 onClick={() => setActiveTab('vat')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+                className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
                   activeTab === 'vat'
                     ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
@@ -624,7 +618,7 @@ export default function AccountingInvoice() {
           )}
           <button
             onClick={() => setActiveTab('payments')}
-            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+            className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'payments'
                 ? 'bg-white text-blue-700 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -635,7 +629,7 @@ export default function AccountingInvoice() {
           {isAccountantOrAdmin && (
             <button
               onClick={() => setActiveTab('tours')}
-              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
                 activeTab === 'tours'
                   ? 'bg-white text-blue-700 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -647,7 +641,6 @@ export default function AccountingInvoice() {
         </div>
       </div>
 
-      
       {/* Filters and Search */}
       <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         <div className="relative w-full md:w-96">

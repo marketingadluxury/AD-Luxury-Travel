@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCRM } from '../context/CRMContext';
-import { Settings as SettingsIcon, Award, ShieldAlert, Save, RefreshCw, Sparkles, Users } from 'lucide-react';
+import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
 
 export default function Settings() {

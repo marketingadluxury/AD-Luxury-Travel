@@ -1,18 +1,12 @@
 import React, { useState } from 'react';
 import { Tour } from '@/types';
 import { useCRM } from '@/context/CRMContext';
-import { 
-  AlertTriangle, 
-  Percent, 
-  Calendar, 
-  Users, 
-  TrendingUp, 
-  Flame, 
-  DollarSign, 
-  Check, 
-  ArrowRight,
-  Clock,
-  Sparkles
+import {
+  AlertTriangle,
+  TrendingUp,
+  Flame,
+  Check,
+  Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 

@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
 import { Tour, Order, Passenger } from '@/types';
 import { useCRM } from '@/context/CRMContext';
-import { 
-  FileText, 
-  AlertCircle, 
-  Bell, 
-  Clock, 
-  CheckCircle, 
-  Send, 
-  User, 
+import {
+  Bell,
+  CheckCircle,
+  User,
   Phone,
   Calendar,
   ShieldAlert

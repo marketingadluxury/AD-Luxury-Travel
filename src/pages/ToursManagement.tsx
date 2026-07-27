@@ -3,23 +3,21 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Tour, TourStatus } from '@/types';
-import { 
-  Plus, 
-  User, 
-  Phone, 
-  Check, 
-  X, 
-  Clock, 
-  HelpCircle, 
-  Edit3, 
-  Trash2, 
-  Copy, 
-  FileText, 
-  FolderOpen, 
-  ExternalLink, 
-  Tag, 
+import {
+  Plus,
+  User,
+  Check,
+  X,
+  Clock,
+  HelpCircle,
+  Edit3,
+  Trash2,
+  Copy,
+  FileText,
+  FolderOpen,
+  ExternalLink,
+  Tag,
   Grid,
-  MapPin,
   Plane,
   Building,
   DollarSign,
@@ -422,9 +420,7 @@ export default function ToursManagement() {
     addCategory,
     deleteCategory,
     updateCategory,
-    currentRole,
-    tourCosts,
-    updateTourCost
+    currentRole
   } = useCRM();
 
   // Navigation tabs: 'tours' | 'categories' | 'costs'

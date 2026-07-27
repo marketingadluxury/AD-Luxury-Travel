@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { X, Bed, DollarSign, FileText, Percent, Info, ShieldAlert, CheckCircle2, RefreshCw, Lock, Copy } from 'lucide-react';
+import { X, Bed, Percent, Info, RefreshCw, Lock, Copy } from 'lucide-react';
 import { Order } from '../types';
 import { useCRM, canUnlockOrder } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';

@@ -1,4 +1,4 @@
-import { Users, Tag, Award, Percent, Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin } from 'lucide-react';
 
 const MOCK_AGENTS = [
   {

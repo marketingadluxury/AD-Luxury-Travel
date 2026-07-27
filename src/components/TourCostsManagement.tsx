@@ -2,46 +2,39 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
-import { Tour, TourCost, LandtourCost, PartnerPayment, PartnerPaymentInstallment } from '@/types';
+import { Tour, LandtourCost, PartnerPayment, PartnerPaymentInstallment } from '@/types';
 import { DatePicker } from '@/components/DatePicker';
-import { 
-  Plus, 
-  Trash2, 
-  Calendar, 
-  FileText, 
-  Upload, 
-  CheckCircle2, 
-  AlertCircle, 
-  TrendingUp, 
-  DollarSign, 
-  User, 
-  Shield, 
-  Gift, 
-  Megaphone, 
-  Plane, 
-  Tag, 
-  ArrowRight, 
-  Eye, 
-  UploadCloud, 
-  Percent, 
+import {
+  Plus,
+  Trash2,
+  Calendar,
+  FileText,
+  Upload,
+  CheckCircle2,
+  AlertCircle,
+  DollarSign,
+  User,
+  Shield,
+  Gift,
+  Megaphone,
+  Plane,
+  Tag,
+  Eye,
+  UploadCloud,
   Search,
   Check,
   Briefcase,
-  Send,
   RefreshCw,
   Coins,
   FolderOpen,
   ChevronRight,
   Folder,
   Camera,
-  Image as ImageIcon,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
   Layers,
   Edit3,
-  Building2,
-  Loader2
+  Building2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 

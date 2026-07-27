@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, CheckCircle2, FileText, Trash2, ExternalLink, AlertTriangle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { Passenger } from '../types';
 import { DatePicker } from './DatePicker';
-import { supabase } from '../lib/supabase';
+
 import { useCRM } from '../context/CRMContext';
 import { extractFileNameFromUrl } from './PassengerDocumentList';
 

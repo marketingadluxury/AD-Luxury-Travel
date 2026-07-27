@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
-import { Tour, TourStatus } from '@/types';
+import { Tour } from '@/types';
 import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '../components/DatePicker';
@@ -405,10 +405,8 @@ export default function DepartureCalendar() {
 
   // States for Booking Modal Popup
   const [selectedTourForBooking, setSelectedTourForBooking] = useState<Tour | null>(null);
-  const [orderStatus, setOrderStatus] = useState<'hold' | 'sure'>('hold');
   const [bookerName, setBookerName] = useState('');
   const [bookerPhone, setBookerPhone] = useState('');
-  const [createdByPartnerName, setCreatedByPartnerName] = useState('');
   const [adultCount, setAdultCount] = useState(1);
   const [childCount, setChildCount] = useState(0);
   const [infantCount, setInfantCount] = useState(0);
@@ -746,11 +744,11 @@ export default function DepartureCalendar() {
             />
           </div>
           
-          <div className="flex items-center gap-3 w-full lg:w-auto shrink-0 justify-end">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto shrink-0">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="inline-flex items-center pl-4 pr-10 py-2.5 border text-sm font-medium rounded-lg transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full sm:w-auto px-3 py-2.5 border text-xs sm:text-sm font-medium rounded-lg transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-nowrap"
             >
               <option value="date_asc">Khởi hành gần nhất</option>
               <option value="date_desc">Khởi hành xa nhất</option>
@@ -759,22 +757,22 @@ export default function DepartureCalendar() {
             </select>
             <button 
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`inline-flex items-center px-4 py-2.5 border text-sm font-medium rounded-lg transition-colors ${
+              className={`inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border text-xs sm:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                 showAdvancedFilters 
                   ? 'bg-blue-50 text-blue-700 border-blue-300' 
                   : 'bg-white text-slate-700 border-gray-300 hover:bg-gray-50'
               }`}
             >
-              <Filter className="h-4 w-4 mr-2" />
-              Bộ lọc nâng cao
+              <Filter className="h-4 w-4 mr-1.5 shrink-0" />
+              <span>Bộ lọc nâng cao</span>
             </button>
             {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
               <button 
                 onClick={() => navigate('/tours', { state: { openCreateModal: true } })}
-                className="inline-flex items-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-[#0038A8] hover:bg-[#002a80] transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border border-transparent shadow-xs text-xs sm:text-sm font-bold rounded-lg text-white bg-[#0038A8] hover:bg-[#002a80] transition-colors cursor-pointer whitespace-nowrap"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Tạo Tour mới
+                <Plus className="h-4 w-4 mr-1.5 shrink-0" />
+                <span>Tạo Tour mới</span>
               </button>
             )}
           </div>

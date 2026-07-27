@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Passenger } from '@/types';
-import { FileText, Download, Check, X, Clock, HelpCircle, AlertCircle, RefreshCw, ExternalLink, Search, Copy } from 'lucide-react';
+import { FileText, Check, AlertCircle, Search, Copy, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { PassengerDocumentList } from '@/components/PassengerDocumentList';
 
@@ -15,52 +15,109 @@ interface DisqualifiedReasonInputProps {
 
 function DisqualifiedReasonInput({ passengerId, initialReason, onSave }: DisqualifiedReasonInputProps) {
   const [val, setVal] = useState(initialReason);
+  const [isEditing, setIsEditing] = useState(!initialReason || initialReason.trim() === '');
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     setVal(initialReason);
+    if (!initialReason || initialReason.trim() === '') {
+      setIsEditing(true);
+    } else {
+      setIsEditing(false);
+    }
   }, [initialReason]);
 
   const handleSave = () => {
-    onSave(passengerId, 'disqualified', val);
+    if (!val.trim()) {
+      toast.error('Vui lòng nhập nội dung giải trình!');
+      return;
+    }
+    onSave(passengerId, 'disqualified', val.trim());
     setShowSuccess(true);
+    setIsEditing(false);
     const timer = setTimeout(() => {
       setShowSuccess(false);
     }, 3000);
     return () => clearTimeout(timer);
   };
 
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
   return (
     <div className="space-y-2">
-      <div className="flex flex-col">
-        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1.5 block">
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide block">
           NỘI DUNG GIẢI TRÌNH (PHẢI)
         </label>
-        <textarea
-          rows={3}
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          placeholder="Nhập nội dung giải trình chi tiết về lý do hồ sơ của khách hàng chưa đạt yêu cầu..."
-          className="w-full px-3 py-2 text-xs border-2 border-gray-900 rounded-lg bg-white focus:outline-none focus:border-gray-950 font-medium text-gray-800 shadow-sm resize-y leading-relaxed"
-        />
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={handleEdit}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer border border-blue-200 shadow-2xs"
+            title="Chỉnh sửa nội dung giải trình"
+          >
+            <Pencil className="w-3 h-3 text-blue-600" />
+            Sửa
+          </button>
+        )}
       </div>
-      <div className="flex items-center justify-between gap-2 pt-0.5">
-        <div className="min-h-[20px] flex items-center">
+
+      {!isEditing ? (
+        <div className="bg-white border-2 border-rose-200 rounded-lg p-3 shadow-2xs relative group">
+          <p className="text-xs font-semibold text-rose-950 whitespace-pre-wrap leading-relaxed break-words">
+            {val || 'Chưa có nội dung giải trình.'}
+          </p>
           {showSuccess && (
-            <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1 animate-pulse">
+            <div className="mt-2 pt-2 border-t border-rose-100 flex items-center gap-1 text-[11px] text-emerald-600 font-bold">
               <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
-              Đã lưu lý do thành công!
-            </span>
+              Đã lưu nội dung giải trình thành công!
+            </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-sm hover:shadow active:scale-95 transition-all shrink-0 cursor-pointer"
-        >
-          Lưu
-        </button>
-      </div>
+      ) : (
+        <>
+          <textarea
+            rows={3}
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            placeholder="Nhập nội dung giải trình chi tiết về lý do hồ sơ của khách hàng chưa đạt yêu cầu..."
+            className="w-full px-3 py-2 text-xs border-2 border-gray-900 rounded-lg bg-white focus:outline-none focus:border-gray-950 font-medium text-gray-800 shadow-2xs resize-y leading-relaxed"
+          />
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <div className="min-h-[20px] flex items-center">
+              {showSuccess && (
+                <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1 animate-pulse">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                  Đã lưu thành công!
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {initialReason && initialReason.trim() !== '' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVal(initialReason);
+                    setIsEditing(false);
+                  }}
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Hủy
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSave}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-2xs hover:shadow-xs active:scale-95 transition-all shrink-0 cursor-pointer"
+              >
+                Lưu
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -85,7 +142,6 @@ export default function VisaProcessing() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
-
 
   // Filter passengers who have uploaded documents (passport or labor contract)
   const visaPassengers = passengers
@@ -195,14 +251,6 @@ export default function VisaProcessing() {
         );
       default:
         return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Không yêu cầu</span>;
-    }
-  };
-
-  const handleDownloadSimulatedFile = (fileName: string) => {
-    if (fileName.startsWith('http://') || fileName.startsWith('https://')) {
-      window.open(fileName, '_blank');
-    } else {
-      toast(`Đang tải xuống tài liệu giả lập: ${fileName}`);
     }
   };
 

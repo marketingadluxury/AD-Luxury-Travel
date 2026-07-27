@@ -1,22 +1,13 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import OccupancyWarningWidget from '@/components/executive/OccupancyWarningWidget';
 import VisaRiskWidget from '@/components/executive/VisaRiskWidget';
 import NetMarginCard from '@/components/executive/NetMarginCard';
 import AgentConversionTable from '@/components/executive/AgentConversionTable';
-import { 
-  Building2, 
-  TrendingUp, 
-  ShieldAlert, 
-  RefreshCw, 
-  Calendar, 
-  DollarSign, 
-  Award, 
-  Briefcase,
-  Users,
-  CheckCircle,
-  Clock
+import {
+  Building2,
+  RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 

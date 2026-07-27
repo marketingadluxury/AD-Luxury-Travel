@@ -4,25 +4,21 @@ import ActionModal from '@/components/ActionModal';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Tour, TourStatus } from '@/types';
-import { 
-  Plus, 
-  User, 
-  Phone, 
-  Check, 
-  X, 
-  Clock, 
-  HelpCircle, 
-  Edit3, 
-  Trash2, 
-  Copy, 
-  FileText, 
-  FolderOpen, 
-  ExternalLink, 
-  Tag, 
+import {
+  Plus,
+  User,
+  Check,
+  X,
+  Clock,
+  HelpCircle,
+  Edit3,
+  Trash2,
+  Copy,
+  FileText,
+  FolderOpen,
+  ExternalLink,
   Grid,
-  MapPin,
   Plane,
-  Building,
   DollarSign,
   ChevronDown,
   ChevronUp,
@@ -33,20 +29,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
-
-const getFileExtensionFromUrl = (url: string) => {
-  if (!url) return '';
-  try {
-    const cleanUrl = url.split('?')[0];
-    const filename = cleanUrl.split('/').pop() || '';
-    if (filename.includes('.')) {
-      return '.' + filename.split('.').pop()?.toLowerCase();
-    }
-  } catch (e) {
-    console.error(e);
-  }
-  return '';
-};
 
 const getItineraryFiles = (urlStr: string): { name: string; url: string }[] => {
   if (!urlStr) return [];
@@ -533,17 +515,6 @@ export default function VisaServices() {
       return 0;
     });
   }, [tours, searchTerm, filterCountry, sortBy]);
-
-  const toggleGroup = (groupName: string) => {
-    setExpandedGroups(prev => {
-      const isCurrentlyExpanded = prev[groupName];
-      const newExpanded: { [key: string]: boolean } = {};
-      if (!isCurrentlyExpanded) {
-        newExpanded[groupName] = true;
-      }
-      return newExpanded;
-    });
-  };
 
   // Group tours by name for easier bulk management
   const groupedTours = React.useMemo<Record<string, Tour[]>>(() => {
@@ -1043,70 +1014,6 @@ export default function VisaServices() {
   const handleCloneTour = (tour: Tour) => {
     setCode(`${tour.code}-CLONE`);
     setName(`[Sao chép] ${tour.name}`);
-    setDestination(tour.destination || '');
-    setDuration(tour.duration);
-    setDepartureTime('');
-    setReturnTime('');
-    setAirline(tour.airline || 'Vietnam Airlines');
-    setHotel(tour.hotel || 'Khách sạn 4*');
-    setPrice(tour.price);
-    setDiscount(tour.discount ?? '');
-    setCommission(tour.commission);
-    setPriceAdult(tour.price_adult ?? '');
-    setPriceChild(tour.price_child ?? '');
-    setPriceInfant(tour.price_infant ?? '');
-    setSingleRoomSurcharge(tour.single_room_surcharge ?? '');
-    setTotalSeats(tour.total_seats);
-    setOverbookLimit(tour.overbook_limit || 0);
-    setHoldDuration(tour.hold_duration_hours || 48);
-    setFlightOut(tour.flight_out || '');
-    setFlightOutTransit(tour.flight_out_transit || '');
-    setFlightIn(tour.flight_in || '');
-    setFlightInTransit(tour.flight_in_transit || '');
-    setTransitInfo(tour.transit_info || '');
-    setGuideName(tour.guide_name || '');
-    setGuidePhone(tour.guide_phone || '');
-    setTicketStatus(tour.ticket_status || 'CHỜ XUẤT VÉ');
-    setVisaDeadline('');
-    setDescription(tour.description || '');
-    setTourStatus('available');
-    setCategory(tour.category || 'Visa');
-    setItineraryPdfUrl(tour.itinerary_pdf_url || '');
-
-    setTourType(tour.tour_type || 'internal');
-    setPartnerName(tour.partner_name || '');
-    setPartnerContact(tour.partner_contact || '');
-    setOrganizationName(tour.organization_name || '');
-    setGroupLeaderContact(tour.group_leader_contact || '');
-    setCustomRequirements(tour.custom_requirements || '');
-    setVisaCountry(tour.visa_country || '');
-    setVisaServiceType(tour.visa_service_type || '');
-    setVisaSpeed(tour.visa_speed || 'standard');
-
-    if (tour.notice_sections) {
-      try {
-        setNoticeSections(JSON.parse(tour.notice_sections));
-      } catch (e) {
-        setNoticeSections(DEFAULT_NOTICE_SECTIONS);
-      }
-    } else {
-      setNoticeSections(DEFAULT_NOTICE_SECTIONS);
-    }
-
-    setEditingTour(null);
-    setShowAddForm(true);
-    
-    setTimeout(() => {
-      document.getElementById('tour-form-section')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-  };
-
-  // Pre-fill form to quickly add a new departure under the same Tour series
-  const handleAddDepartureQuick = (tour: Tour) => {
-    // Try to strip any date suffix or clone suffix from the code
-    const baseCode = tour.code.replace(/-CLONE/g, '').replace(/-\d{6}$/g, '');
-    setCode(baseCode);
-    setName(tour.name);
     setDestination(tour.destination || '');
     setDuration(tour.duration);
     setDepartureTime('');
@@ -2068,9 +1975,6 @@ export default function VisaServices() {
                   </div>
                 )}
 
-
-
-                
                 {/* 3. Numeric inputs with dynamic thousands separator formatting */}
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
@@ -2551,11 +2455,7 @@ export default function VisaServices() {
                     })
                     .map(([groupName, groupToursList]) => {
                     const groupTours = groupToursList as Tour[];
-                    const isExpanded = expandedGroups[groupName];
                     const firstTour = groupTours[0];
-                    const totalSold = groupTours.reduce((sum, t) => sum + t.sold_seats, 0);
-                    const totalHold = groupTours.reduce((sum, t) => sum + t.hold_seats, 0);
-                    const totalSeatsSum = groupTours.reduce((sum, t) => sum + t.total_seats, 0);
 
                     return (
                       <div key={groupName} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white hover:border-gray-300 hover:shadow transition-all duration-200">
@@ -2626,7 +2526,7 @@ export default function VisaServices() {
                                                 <Paperclip className="w-2.5 h-2.5 mr-0.5" /> File mẫu ({files.length}):
                                               </span>
                                               <div className="flex flex-wrap gap-1">
-                                                {files.map((f, idx) => (
+                                                {files.map((f) => (
                                                   <a
                                                     key={f.url}
                                                     href={f.url}
@@ -2771,7 +2671,7 @@ export default function VisaServices() {
                                     <Paperclip className="w-3 h-3 mr-0.5" /> File mẫu ({files.length}):
                                   </span>
                                   <div className="flex flex-wrap gap-1">
-                                    {files.map((f, idx) => (
+                                    {files.map((f) => (
                                       <a
                                         key={f.url}
                                         href={f.url}

@@ -1,22 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
-  XCircle, 
-  AlertCircle, 
-  Edit, 
-  Map, 
-  ExternalLink,
+import {
+  Users,
+  Search,
+  Filter,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  AlertCircle,
+  Edit,
   ChevronDown,
   ChevronUp,
   Info,
-  Smartphone,
-  Calendar,
   Key,
   ShieldAlert,
   History,
@@ -25,9 +20,7 @@ import {
   Crown,
   Award,
   Phone,
-  CreditCard,
   Sparkles,
-  UserCheck,
   Globe,
   Copy
 } from 'lucide-react';
@@ -379,13 +372,6 @@ export default function PassengersManagement() {
   };
 
   // Get initials for avatar display
-  const getInitials = (name: string) => {
-    if (!name) return 'KH';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
   // Blocked Screen UI for restricted roles
   if (isDenied) {
     return (

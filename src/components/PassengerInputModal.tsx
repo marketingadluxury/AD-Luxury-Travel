@@ -4,7 +4,6 @@ import { X, Upload, CheckCircle2, FileText, Trash2 } from 'lucide-react';
 import { Passenger } from '../types';
 import { DatePicker } from './DatePicker';
 import { useCRM } from '../context/CRMContext';
-import { supabase } from '../lib/supabase';
 
 interface PassengerInputModalProps {
   isOpen: boolean;

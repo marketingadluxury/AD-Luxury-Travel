@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { User, Save, Building, Phone, Mail, Loader2, Key, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Save, Mail, Loader2, Key, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Profile() {

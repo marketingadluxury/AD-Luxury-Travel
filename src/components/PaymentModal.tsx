@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, Loader2, DollarSign, FileText, CheckCircle } from 'lucide-react';
+import { X, Upload, Loader2 } from 'lucide-react';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order } from '@/types';

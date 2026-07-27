@@ -3,9 +3,9 @@ import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
-import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, MapPin, Search, Phone, Tag, CreditCard, Copy } from 'lucide-react';
-import { format, differenceInHours } from 'date-fns';
+import { Order, Passenger } from '@/types';
+import { ShoppingCart, Users, Plus, ChevronDown, ChevronUp, Trash2, Info, Edit, Search, Phone, Tag, CreditCard, Copy } from 'lucide-react';
+import { format } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
@@ -521,7 +521,7 @@ export default function VisaOrders() {
                           Danh sách hồ sơ hành khách
                         </h4>
                         <div className="space-y-2">
-                          {orderPassengers.map((p, pIdx) => (
+                          {orderPassengers.map((p) => (
                             <div key={p.id} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
                               <div>
                                 <div className="text-sm font-bold text-gray-800 uppercase">{p.full_name}</div>

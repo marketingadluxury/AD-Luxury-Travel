@@ -1,22 +1,20 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import { useCRM, canUnlockOrder } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
-import { Tour, Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, AlertTriangle, FileText, Check, X, ShieldAlert, Plus, ArrowUpRight, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy } from 'lucide-react';
-import { format, differenceInHours, differenceInMinutes } from 'date-fns';
+import { Order, Passenger } from '@/types';
+import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy } from 'lucide-react';
+import { format, differenceInHours } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
 import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
 import PaymentModal from '../components/PaymentModal';
 import { PassengerDocumentList } from '../components/PassengerDocumentList';
-import { parseRefundInfo } from '@/lib/utils';
 
 export default function OrdersManagement() {
-  const navigate = useNavigate();
   const location = useLocation();
   const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, createInvoiceReceipt, currentRole, profilesList } = useCRM();
   const { profile, user } = useAuth();
@@ -1359,20 +1357,20 @@ export default function OrdersManagement() {
         </div>
 
         {/* Tabs phân loại trạng thái trực quan và sang trọng */}
-        <div className="flex border-b border-gray-200 bg-white">
+        <div className="flex border-b border-gray-200 bg-white overflow-x-auto scrollbar-none">
           <button
             onClick={() => setOrderFilterStatus('hold')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+            className={`flex-1 min-w-[110px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-3 sm:px-6 text-xs sm:text-sm font-bold border-b-2 transition-all relative shrink-0 whitespace-nowrap ${
               orderFilterStatus === 'hold'
                 ? 'border-amber-500 text-amber-600 bg-amber-50/10'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
             }`}
           >
-            <Clock className={`w-4.5 h-4.5 ${orderFilterStatus === 'hold' ? 'text-amber-500' : 'text-gray-400'}`} />
+            <Clock className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${orderFilterStatus === 'hold' ? 'text-amber-500' : 'text-gray-400'}`} />
             <span>Giữ chỗ</span>
             <span className={orderFilterStatus === 'hold'
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-800'
-              : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
+              ? 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-800'
+              : 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
               {tabCounts.hold}
             </span>
@@ -1380,17 +1378,17 @@ export default function OrdersManagement() {
 
           <button
             onClick={() => setOrderFilterStatus('paid')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+            className={`flex-1 min-w-[130px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-3 sm:px-6 text-xs sm:text-sm font-bold border-b-2 transition-all relative shrink-0 whitespace-nowrap ${
               orderFilterStatus === 'paid'
                 ? 'border-blue-500 text-blue-600 bg-blue-50/10'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
             }`}
           >
-            <CreditCard className={`w-4.5 h-4.5 ${orderFilterStatus === 'paid' ? 'text-blue-500' : 'text-gray-400'}`} />
+            <CreditCard className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${orderFilterStatus === 'paid' ? 'text-blue-500' : 'text-gray-400'}`} />
             <span>Đã thanh toán</span>
             <span className={orderFilterStatus === 'paid'
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-blue-100 text-blue-800'
-              : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
+              ? 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-blue-100 text-blue-800'
+              : 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
               {tabCounts.paid}
             </span>
@@ -1398,17 +1396,17 @@ export default function OrdersManagement() {
 
           <button
             onClick={() => setOrderFilterStatus('cancelled')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+            className={`flex-1 min-w-[100px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-3 sm:px-6 text-xs sm:text-sm font-bold border-b-2 transition-all relative shrink-0 whitespace-nowrap ${
               orderFilterStatus === 'cancelled'
                 ? 'border-slate-500 text-slate-700 bg-slate-50/20'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
             }`}
           >
-            <X className={`w-4.5 h-4.5 ${orderFilterStatus === 'cancelled' ? 'text-slate-500' : 'text-gray-400'}`} />
+            <X className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${orderFilterStatus === 'cancelled' ? 'text-slate-500' : 'text-gray-400'}`} />
             <span>Đã hủy</span>
             <span className={orderFilterStatus === 'cancelled'
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-slate-100 text-slate-700'
-              : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
+              ? 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-slate-100 text-slate-700'
+              : 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
               {tabCounts.cancelled}
             </span>
@@ -1416,17 +1414,17 @@ export default function OrdersManagement() {
 
           <button
             onClick={() => setOrderFilterStatus('refund')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 py-4 px-6 text-sm font-bold border-b-2 transition-all relative ${
+            className={`flex-1 min-w-[120px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-3 sm:px-6 text-xs sm:text-sm font-bold border-b-2 transition-all relative shrink-0 whitespace-nowrap ${
               orderFilterStatus === 'refund'
                 ? 'border-rose-500 text-rose-600 bg-rose-50/10'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/30'
             }`}
           >
-            <DollarSign className={`w-4.5 h-4.5 ${orderFilterStatus === 'refund' ? 'text-rose-500' : 'text-gray-400'}`} />
+            <DollarSign className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${orderFilterStatus === 'refund' ? 'text-rose-500' : 'text-gray-400'}`} />
             <span>Hủy hoàn tiền</span>
             <span className={orderFilterStatus === 'refund'
-              ? 'text-[11px] px-2 py-0.5 rounded-full font-black bg-rose-100 text-rose-800'
-              : 'text-[11px] px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
+              ? 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-rose-100 text-rose-800'
+              : 'text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-black bg-gray-100 text-gray-600'
             }>
               {tabCounts.refund}
             </span>

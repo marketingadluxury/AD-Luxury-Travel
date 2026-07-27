@@ -1,0 +1,18 @@
+{
+  "short_name": "Tour CRM",
+  "name": "Tour CRM - AD Luxury Travel",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "description": "Hệ thống quản lý Tour, Đơn hàng, Visa và Kế toán AD Luxury Travel"
+}
