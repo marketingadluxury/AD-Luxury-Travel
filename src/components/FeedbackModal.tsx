@@ -328,7 +328,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
 
           {/* Footer Notice */}
           <p className="text-[11px] text-center text-gray-400 pt-2 border-t border-gray-100 leading-relaxed font-medium">
-            Phản hồi & ảnh minh họa của bạn sẽ tự động được lưu vào file <strong className="text-gray-600 font-semibold">Google Sheet</strong> trong folder <strong className="text-gray-700 font-semibold font-mono text-[10.5px]">AD Luxury Travel</strong> để Ban Quản Trị giải đáp thắc mắc.
+            Phản hồi & ảnh minh họa của bạn sẽ được lưu để Quản trị viên giải đáp thắc mắc.
           </p>
         </form>
       </div>
