@@ -340,7 +340,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </button>
 
             <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-900 truncate">
+              <h1 className="text-[28px] font-bold text-gray-900 truncate" style={{ fontSize: '28px' }}>
                 {navigation.find(n => n.href === location.pathname)?.name || 'Tour CRM'}
               </h1>
               <span className="hidden sm:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">

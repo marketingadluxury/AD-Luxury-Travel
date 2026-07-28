@@ -113,8 +113,8 @@ export default function Auth() {
               <span className="text-2xl font-bold tracking-tight">AD Luxury Travel</span>
             </div>
             
-            <h1 className="text-4xl font-bold mb-4 leading-tight">
-              Quản lý Tour <br/> & Dịch vụ chuyên nghiệp
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 leading-snug">
+              Quản lý Tour &amp; Dịch vụ chuyên nghiệp
             </h1>
             <p className="text-blue-100 mb-8 text-sm">
               Hệ thống CRM dành riêng cho công ty du lịch. Quản lý điều hành, quỹ chỗ, visa và khách hàng một cách liền mạch.
