@@ -21,13 +21,14 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 function AppContent() {
   const { user, profile, loading } = useAuth();
+  const isRecoveryInUrl = typeof window !== 'undefined' && (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery'));
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-500">Đang tải...</div>;
+    return <div className="min-h-screen flex items-center justify-center text-gray-500 font-medium">Đang tải...</div>;
   }
 
-  if (!user) {
-    return <Auth />;
+  if (!user || isRecoveryInUrl) {
+    return <Auth initialIsUpdatePassword={isRecoveryInUrl} />;
   }
 
   return (
