@@ -390,7 +390,7 @@ const TourCard: React.FC<{
 
 export default function DepartureCalendar() {
   const navigate = useNavigate();
-  const { tours, createOrder, currentRole, passengers = [], categories = [] } = useCRM();
+  const { tours, orders: allOrders = [], createOrder, currentRole, passengers = [], categories = [] } = useCRM();
   const { profile, user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [noticeTour, setNoticeTour] = useState<Tour | null>(null);
@@ -444,9 +444,16 @@ export default function DepartureCalendar() {
   };
 
   const uniqueCustomers = React.useMemo(() => {
+    const isFullAccess = ['admin', 'operator', 'visa'].includes(currentRole);
+    const userOrderIds = new Set(
+      isFullAccess 
+        ? allOrders.map(o => o.id)
+        : allOrders.filter(o => o.user_id === profile?.id || o.salesperson_id === profile?.id).map(o => o.id)
+    );
+
     const map = new Map<string, any>();
     passengers.forEach(p => {
-      if (p.full_name) {
+      if (p.full_name && userOrderIds.has(p.order_id)) {
         const key = `${p.full_name.trim().toUpperCase()}|${p.phone ? normalizePhone(p.phone) : ''}`;
         if (!map.has(key)) {
           map.set(key, p);
@@ -454,7 +461,7 @@ export default function DepartureCalendar() {
       }
     });
     return Array.from(map.values());
-  }, [passengers]);
+  }, [passengers, allOrders, currentRole, profile]);
 
   useEffect(() => {
     if (focusedInput === 'phone') {

@@ -405,11 +405,18 @@ export default function OrdersManagement() {
       .replace(/Đ/g, 'D');
   };
 
-  // Get unique customers from all passengers in database
+  // Get unique customers from passengers belonging to the user's orders (or all orders for admin/operator/visa)
   const uniqueCustomers = React.useMemo(() => {
+    const isFullAccess = ['admin', 'operator', 'visa'].includes(currentRole);
+    const userOrderIds = new Set(
+      isFullAccess 
+        ? allOrders.map(o => o.id)
+        : allOrders.filter(o => o.user_id === profile?.id || o.salesperson_id === profile?.id).map(o => o.id)
+    );
+
     const map = new Map<string, Passenger>();
     passengers.forEach(p => {
-      if (p.full_name) {
+      if (p.full_name && userOrderIds.has(p.order_id)) {
         const key = `${p.full_name.trim().toUpperCase()}|${p.phone ? normalizePhone(p.phone) : ''}`;
         if (!map.has(key)) {
           map.set(key, p);
@@ -417,7 +424,7 @@ export default function OrdersManagement() {
       }
     });
     return Array.from(map.values());
-  }, [passengers]);
+  }, [passengers, allOrders, currentRole, profile]);
 
   useEffect(() => {
     if (focusedInput === 'phone') {

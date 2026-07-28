@@ -350,18 +350,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-            {/* PWA Install Button Header shortcut if available */}
-            {showPwaBanner && !isStandalone && (
-              <button
-                type="button"
-                onClick={handleInstallPWA}
-                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all"
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Cài App</span>
-              </button>
-            )}
-
             {/* Notification Dropdown */}
             <div className="relative">
               <button 
@@ -451,43 +439,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-
-        {/* Banner PWA Onboarding trên Mobile / Web */}
-        {showPwaBanner && !isStandalone && (
-          <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white px-3.5 py-2.5 flex items-center justify-between text-xs font-medium shadow-sm shrink-0">
-            <div className="flex items-center gap-2.5 min-w-0 pr-2">
-              <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
-                <Smartphone className="w-4 h-4 text-white" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-bold text-white leading-tight truncate">Cài đặt App Tour CRM</p>
-                <p className="text-[11px] text-blue-100 leading-tight truncate">Trải nghiệm như ứng dụng Mobile App mượt mà</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {isIOS ? (
-                <span className="text-[11px] bg-white/20 px-2 py-1 rounded-lg text-white font-bold">
-                  Thêm vào Màn hình chính
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleInstallPWA}
-                  className="px-3 py-1 bg-white text-blue-700 hover:bg-blue-50 font-bold rounded-lg shadow-xs active:scale-95 transition-all text-xs"
-                >
-                  Cài ngay
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowPwaBanner(false)}
-                className="p-1 hover:bg-white/20 rounded-lg text-blue-100 hover:text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
         
         {/* Main scrollable view */}
         <main className="flex-1 overflow-y-auto bg-gray-50 p-3 sm:p-6 md:p-8 pb-20 md:pb-8">
