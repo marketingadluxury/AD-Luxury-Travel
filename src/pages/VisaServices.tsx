@@ -2271,7 +2271,7 @@ export default function VisaServices() {
                               </div>
                               <div className="lg:col-span-2 flex items-start gap-2.5">
                                 <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Nội dung giải trình (Phải)</label>
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Nội dung giải trình</label>
                                   <textarea
                                     rows={2}
                                     required

@@ -1663,26 +1663,14 @@ export default function ToursManagement() {
                       />
                     )}
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-sm font-medium text-gray-700">Danh mục sản phẩm *</label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowInlineCatForm(!showInlineCatForm);
-                            setInlineCatName('');
-                          }}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          {showInlineCatForm ? "Hủy" : "+ Tạo danh mục mới"}
-                        </button>
-                      </div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục sản phẩm *</label>
                       
                       {showInlineCatForm ? (
                         <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
                           <input
                             type="text"
-                            placeholder="Tên danh mục mới..."
-                            className="flex-1 px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                            placeholder="Nhập tên danh mục mới..."
+                            className="flex-1 px-3 py-2 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
                             value={inlineCatName}
                             onChange={e => setInlineCatName(e.target.value)}
                             onKeyDown={e => {
@@ -1691,25 +1679,46 @@ export default function ToursManagement() {
                                 handleAddInlineCategory();
                               }
                             }}
+                            autoFocus
                           />
                           <button
                             type="button"
                             onClick={handleAddInlineCategory}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
                           >
                             Thêm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowInlineCatForm(false);
+                              setInlineCatName('');
+                            }}
+                            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
+                          >
+                            Hủy
                           </button>
                         </div>
                       ) : (
                         <select 
                           required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-medium"
                           value={category}
-                          onChange={e => setCategory(e.target.value)}
+                          onChange={e => {
+                            if (e.target.value === '__ADD_NEW_CAT__') {
+                              setShowInlineCatForm(true);
+                              setInlineCatName('');
+                            } else {
+                              setCategory(e.target.value);
+                            }
+                          }}
                         >
                           {categories.map(cat => (
                             <option key={cat} value={cat}>{cat}</option>
                           ))}
+                          <option value="__ADD_NEW_CAT__" className="font-bold text-blue-600 bg-blue-50">
+                            + Tạo danh mục mới...
+                          </option>
                         </select>
                       )}
                     </div>
@@ -2125,7 +2134,7 @@ export default function ToursManagement() {
                               </div>
                               <div className="lg:col-span-2 flex items-start gap-2.5">
                                 <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Nội dung giải trình (Phải)</label>
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Nội dung giải trình</label>
                                   <textarea
                                     rows={2}
                                     required
