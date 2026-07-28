@@ -20,7 +20,8 @@ import {
   Smartphone,
   MoreHorizontal,
   ChevronRight,
-  LogOut
+  LogOut,
+  Ticket
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -238,7 +239,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col shrink-0 h-full">
         <div className="h-16 flex items-center px-6 border-b border-gray-200 shrink-0">
-          <Map className="h-6 w-6 text-blue-600 mr-2" />
+          <Ticket className="h-6 w-6 text-blue-600 mr-2 shrink-0" />
           <span className="text-xl font-bold text-gray-900">Tour CRM</span>
         </div>
         
@@ -553,7 +554,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* Drawer Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-slate-900 text-white">
               <div className="flex items-center gap-2">
-                <Map className="h-5 w-5 text-blue-400" />
+                <Ticket className="h-5 w-5 text-blue-400 shrink-0" />
                 <span className="text-base font-bold">Tour CRM Mobile</span>
               </div>
               <button

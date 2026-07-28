@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, User, Phone, ArrowRight, Building2, Map, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Lock, Mail, User, Phone, ArrowRight, Building2, Map, Eye, EyeOff, CheckCircle2, AlertCircle, Ticket } from 'lucide-react';
 
 interface AuthProps {
   initialIsUpdatePassword?: boolean;
@@ -208,7 +208,7 @@ export default function Auth({ initialIsUpdatePassword = false }: AuthProps) {
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-12">
               <div className="bg-white p-2 rounded-lg">
-                <Map className="w-6 h-6 text-blue-700" />
+                <Ticket className="w-6 h-6 text-blue-700" />
               </div>
               <span className="text-2xl font-bold tracking-tight">AD Luxury Travel</span>
             </div>
