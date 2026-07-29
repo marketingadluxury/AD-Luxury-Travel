@@ -381,8 +381,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
       const res = await fetch('/api/admin/users');
       if (res.ok) {
-        const data = await res.json();
-        setProfilesList(data);
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            if (Array.isArray(data)) {
+              setProfilesList(data);
+            }
+          } catch (e) {
+            console.warn('Lỗi parse JSON danh sách profiles:', e);
+          }
+        }
       }
     } catch (err) {
       console.warn('Lỗi khi tải danh sách profiles:', err);

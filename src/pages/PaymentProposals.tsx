@@ -172,8 +172,23 @@ export default function PaymentProposals() {
         body: uploadData
       });
 
-      if (!res.ok) throw new Error('Tải file thất bại');
-      const data = await res.json();
+      if (!res.ok) {
+        const errText = await res.text();
+        let errMsg = 'Tải file thất bại';
+        try {
+          const errObj = JSON.parse(errText);
+          if (errObj.error) errMsg = errObj.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        throw new Error('Định dạng phản hồi từ máy chủ không đúng.');
+      }
 
       if (isProof) {
         setProofFileUrl(data.url || data.webViewLink);
