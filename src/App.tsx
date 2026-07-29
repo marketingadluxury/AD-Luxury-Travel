@@ -8,6 +8,7 @@ import VisaProcessing from './pages/VisaProcessing';
 import VisaOrders from './pages/VisaOrders';
 import VisaServices from './pages/VisaServices';
 import AccountingInvoice from './pages/AccountingInvoice';
+import PaymentProposals from './pages/PaymentProposals';
 import CustomersManagement from './pages/CustomersManagement';
 import PassengersManagement from './pages/PassengersManagement';
 import Profile from './pages/Profile';
@@ -45,6 +46,7 @@ function AppContent() {
             <Route path="/orders" element={<OrdersManagement />} />
             <Route path="/visa" element={<VisaProcessing />} />
             <Route path="/accounting" element={<AccountingInvoice />} />
+            <Route path="/payment-proposals" element={<PaymentProposals />} />
             <Route path="/customers" element={<CustomersManagement />} />
             <Route path="/passengers" element={<PassengersManagement />} />
             <Route path="/profile" element={<Profile />} />

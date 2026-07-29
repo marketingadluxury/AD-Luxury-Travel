@@ -41,7 +41,7 @@ export default function AgentConversionTable({ orders }: AgentConversionTablePro
       const agentKey = order.user_id || order.created_by || 'Khách/Đại lý khác';
       const agentProfile = profilesList.find(p => p.id === order.user_id || p.full_name === order.created_by);
       const agentName = agentProfile?.full_name || order.created_by || 'Đại lý / CTV';
-      const agentRole = agentProfile?.role || 'Đại lý';
+      const agentRole = agentProfile?.role || 'CTV';
 
       if (!statsMap[agentKey]) {
         statsMap[agentKey] = {
@@ -174,7 +174,7 @@ export default function AgentConversionTable({ orders }: AgentConversionTablePro
             className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="all">Tất cả vai trò</option>
-            <option value="Đại lý">Đại lý</option>
+            <option value="bod">BOD (Ban Giám đốc)</option>
             <option value="CTV">Cộng tác viên (CTV)</option>
             <option value="sale">Sales</option>
             <option value="sale_leader">Sale Leader</option>

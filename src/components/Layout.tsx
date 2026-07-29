@@ -6,6 +6,7 @@ import {
   ShoppingCart, 
   FileText, 
   Receipt,
+  FileCheck,
   Users,
   Settings,
   Bell,
@@ -31,24 +32,25 @@ import { FeedbackModal } from './FeedbackModal';
 
 
 const navigation = [
-  { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin'] },
-  { name: 'Điều hành chiến lược', href: '/dashboard/executive', icon: TrendingUp, roleAccess: ['admin'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'Đại lý', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'admin'] },
-  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader'] },
-  { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa'] },
-  { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'sale_leader', 'visa', 'admin'] },
-  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'Đại lý', 'sale', 'sale_leader', 'operator', 'admin'] },
-  { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin'] },
-  { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin'] },
-  { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin'] },
-  { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'admin'] },
-  { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin'] },
+  { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
+  { name: 'Điều hành chiến lược', href: '/dashboard/executive', icon: TrendingUp, roleAccess: ['admin', 'bod'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'admin'] },
+  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod'] },
+  { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
+  { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
+  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'operator', 'admin'] },
+  { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin', 'bod'] },
+  { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
+  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'admin', 'bod'] },
+  { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin', 'bod'] },
+  { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'admin', 'bod'] },
+  { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers } = useCRM();
+  const { currentRole, setCurrentRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [] } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -103,6 +105,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       markNotificationAsRead(notif.id);
     }
 
+    const titleLower = (notif.title || '').toLowerCase();
+    const msgLower = (notif.message || '').toLowerCase();
+    const isPaymentProposalNotif = 
+      titleLower.includes('đề nghị thanh toán') || 
+      msgLower.includes('đề nghị thanh toán') || 
+      msgLower.includes('dntt-') ||
+      (notif.targetId && String(notif.targetId).startsWith('DNTT-'));
+
+    if (isPaymentProposalNotif) {
+      let proposalSearch = '';
+      const dnttMatch = (notif.message || '').match(/DNTT-\d+-\d+/i) || (notif.title || '').match(/DNTT-\d+-\d+/i);
+      if (dnttMatch) {
+        proposalSearch = dnttMatch[0];
+      } else if (notif.targetId) {
+        proposalSearch = notif.targetId;
+      }
+      navigate('/payment-proposals', { state: { searchTarget: proposalSearch } });
+      return;
+    }
+
     let searchTarget = '';
     const hashMatch = (notif.message || '').match(/#([a-zA-Z0-9-]+)/) || (notif.title || '').match(/#([a-zA-Z0-9-]+)/);
     if (hashMatch && hashMatch[1]) {
@@ -148,7 +170,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const notifications = React.useMemo(() => {
-    if (['admin', 'sale_leader'].includes(currentRole)) {
+    if (['admin', 'sale_leader', 'bod'].includes(currentRole)) {
       return allNotifications;
     }
     
@@ -156,13 +178,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       return allNotifications.filter(n => n.type === 'visa');
     }
     if (currentRole === 'accounting') {
-      return allNotifications.filter(n => n.type === 'accounting');
+      return allNotifications.filter(n => 
+        n.type === 'accounting' || 
+        (n.title || '').toLowerCase().includes('đề nghị thanh toán') || 
+        (n.message || '').toLowerCase().includes('đề nghị thanh toán')
+      );
     }
     if (currentRole === 'operator') {
       return allNotifications.filter(n => n.type === 'extension');
     }
     
-    if (['sale', 'CTV', 'Đại lý'].includes(currentRole)) {
+    if (['sale', 'CTV'].includes(currentRole)) {
       const myOrderIds = orders
         .filter(o => o.user_id === profile?.id || o.created_by === profile?.full_name)
         .map(o => o.id);
@@ -170,14 +196,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       const myPassengerIds = passengers
         .filter(p => myOrderIds.includes(p.order_id))
         .map(p => p.id);
+
+      const myProposalIds = (paymentProposals || [])
+        .filter(p => p.created_by_id === profile?.id || p.created_by_name === profile?.full_name)
+        .map(p => p.id);
         
       return allNotifications.filter(n => {
-        return myOrderIds.includes(n.targetId) || myPassengerIds.includes(n.targetId);
+        return myOrderIds.includes(n.targetId) || myPassengerIds.includes(n.targetId) || myProposalIds.includes(n.targetId);
       });
     }
     
     return [];
-  }, [allNotifications, currentRole, orders, passengers, profile]);
+  }, [allNotifications, currentRole, orders, passengers, paymentProposals, profile]);
 
   const unreadNotifications = React.useMemo(() => {
     return notifications.filter(n => !n.read);
@@ -186,7 +216,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const getRoleLabel = (role: Role) => {
     switch (role) {
       case 'CTV': return 'Cộng tác viên (CTV)';
-      case 'Đại lý': return 'Đại lý';
+      case 'bod': return 'BOD (Ban Giám đốc)';
       case 'operator': return 'Điều hành Tour';
       case 'sale_leader': return 'Sale Leader';
       case 'sale': return 'Sale';
@@ -238,9 +268,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col shrink-0 h-full">
-        <div className="h-16 flex items-center px-6 border-b border-gray-200 shrink-0">
-          <Ticket className="h-6 w-6 text-blue-600 mr-2 shrink-0" />
-          <span className="text-xl font-bold text-gray-900">Tour CRM</span>
+        <div className="h-16 flex items-center px-5 border-b border-gray-200 shrink-0 gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center p-1.5 text-white shadow-sm shrink-0">
+            <img src="/favicon.svg" alt="Vé máy bay logo" className="w-full h-full object-contain" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-base font-black text-gray-900 tracking-tight block leading-none truncate">Tour CRM</span>
+            <span className="text-[10px] text-blue-600 font-extrabold uppercase tracking-wider block mt-0.5 truncate">AD Luxury Travel</span>
+          </div>
         </div>
         
         {/* Active Role Card */}
@@ -256,7 +291,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
           >
             <option value="CTV">🤝 Cộng tác viên (CTV)</option>
-            <option value="Đại lý">🏢 Đại lý</option>
+            <option value="bod">👔 BOD (Ban Giám đốc)</option>
             <option value="operator">👷 Điều hành Tour</option>
             <option value="sale_leader">⭐ Sale Leader (Trưởng nhóm)</option>
             <option value="sale">💼 Sale</option>
@@ -389,23 +424,35 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     {notifications.length === 0 ? (
                       <div className="p-4 text-center text-xs text-gray-500">Chưa có thông báo nào</div>
                     ) : (
-                      notifications.map(notif => (
-                        <div 
-                          key={notif.id} 
-                          onClick={() => handleNotificationClick(notif)}
-                          className="p-3 hover:bg-gray-50 transition-colors cursor-pointer"
-                        >
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            notif.type === 'visa' ? 'bg-purple-50 text-purple-600' :
-                            notif.type === 'accounting' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'
-                          }`}>
-                            {notif.type === 'visa' ? 'VISA' :
-                             notif.type === 'accounting' ? 'KẾ TOÁN' : 'ĐIỀU HÀNH'}
-                          </span>
-                          <p className="text-xs font-semibold text-gray-800 mt-1">{notif.title}</p>
-                          <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
-                        </div>
-                      ))
+                      notifications.map(notif => {
+                        const isProposalNotif = (notif.title || '').toLowerCase().includes('đề nghị thanh toán') || 
+                                                (notif.message || '').toLowerCase().includes('đề nghị thanh toán') || 
+                                                (notif.message || '').includes('DNTT-');
+                        return (
+                          <div 
+                            key={notif.id} 
+                            onClick={() => handleNotificationClick(notif)}
+                            className={`p-3 hover:bg-gray-50 transition-colors cursor-pointer ${!notif.read ? 'bg-blue-50/40' : ''}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                isProposalNotif ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                notif.type === 'visa' ? 'bg-purple-50 text-purple-600' :
+                                notif.type === 'accounting' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'
+                              }`}>
+                                {isProposalNotif ? 'ĐỀ NGHỊ TT' :
+                                 notif.type === 'visa' ? 'VISA' :
+                                 notif.type === 'accounting' ? 'KẾ TOÁN' : 'ĐIỀU HÀNH'}
+                              </span>
+                              {!notif.read && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+                              )}
+                            </div>
+                            <p className="text-xs font-semibold text-gray-800 mt-1">{notif.title}</p>
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -553,9 +600,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="relative flex-1 max-w-xs w-full bg-white h-full flex flex-col shadow-2xl z-10 animate-in slide-in-from-left duration-200">
             {/* Drawer Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-slate-900 text-white">
-              <div className="flex items-center gap-2">
-                <Ticket className="h-5 w-5 text-blue-400 shrink-0" />
-                <span className="text-base font-bold">Tour CRM Mobile</span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center p-1 text-white shadow-xs shrink-0">
+                  <img src="/favicon.svg" alt="Vé máy bay logo" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <span className="text-sm font-black tracking-tight block leading-none">Tour CRM</span>
+                  <span className="text-[9px] text-blue-400 font-bold uppercase tracking-wider block mt-0.5">AD Luxury Travel</span>
+                </div>
               </div>
               <button
                 type="button"
@@ -582,7 +634,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 className="w-full px-2.5 py-2 border border-gray-300 rounded-xl text-xs font-bold bg-white text-gray-800 shadow-xs focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="CTV">🤝 Cộng tác viên (CTV)</option>
-                <option value="Đại lý">🏢 Đại lý</option>
+                <option value="bod">👔 BOD (Ban Giám đốc)</option>
                 <option value="operator">👷 Điều hành Tour</option>
                 <option value="sale_leader">⭐ Sale Leader (Trưởng nhóm)</option>
                 <option value="sale">💼 Sale</option>

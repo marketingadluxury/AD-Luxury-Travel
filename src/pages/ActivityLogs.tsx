@@ -135,7 +135,7 @@ export default function ActivityLogs() {
   const getRoleLabel = (role: Role) => {
     switch (role) {
       case 'CTV': return 'CTV';
-      case 'Đại lý': return 'Đại lý';
+      case 'bod': return 'BOD';
       case 'operator': return 'Điều hành';
       case 'sale_leader': return 'Sale Leader';
       case 'sale': return 'Sale';
@@ -149,6 +149,7 @@ export default function ActivityLogs() {
   const getRoleBadgeStyle = (role: Role) => {
     switch (role) {
       case 'admin': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'bod': return 'bg-violet-100 text-violet-800 border-violet-200';
       case 'sale_leader': return 'bg-amber-100 text-amber-800 border-amber-300';
       case 'operator': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'accounting': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
@@ -483,7 +484,7 @@ export default function ActivityLogs() {
               <option value="accounting">💰 Kế toán</option>
               <option value="visa">🛂 Bộ phận Visa</option>
               <option value="CTV">🤝 Cộng tác viên (CTV)</option>
-              <option value="Đại lý">🏢 Đại lý</option>
+              <option value="bod">👔 BOD (Ban Giám đốc)</option>
             </select>
           </div>
 

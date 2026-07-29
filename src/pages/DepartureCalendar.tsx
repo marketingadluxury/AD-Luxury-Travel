@@ -444,7 +444,7 @@ export default function DepartureCalendar() {
   };
 
   const uniqueCustomers = React.useMemo(() => {
-    const isFullAccess = ['admin', 'operator', 'visa'].includes(currentRole);
+    const isFullAccess = ['admin', 'operator', 'visa', 'bod'].includes(currentRole);
     const userOrderIds = new Set(
       isFullAccess 
         ? allOrders.map(o => o.id)
@@ -605,7 +605,7 @@ export default function DepartureCalendar() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
     createOrder({
@@ -661,7 +661,7 @@ export default function DepartureCalendar() {
     }
 
     // 0. Only show internal tours for external roles
-    const isInternalUser = ['admin', 'operator', 'sale', 'sale_leader', 'accounting', 'visa'].includes(currentRole);
+    const isInternalUser = ['admin', 'operator', 'sale', 'sale_leader', 'accounting', 'visa', 'bod'].includes(currentRole);
     if (!isInternalUser && tour.tour_type && tour.tour_type !== 'internal') return false;
 
     // 1. Search term match code or name
@@ -773,7 +773,7 @@ export default function DepartureCalendar() {
               <Filter className="h-4 w-4 mr-1.5 shrink-0" />
               <span>Bộ lọc nâng cao</span>
             </button>
-            {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
+            {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader' || currentRole === 'bod') && (
               <button 
                 onClick={() => navigate('/tours', { state: { openCreateModal: true } })}
                 className="inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border border-transparent shadow-xs text-xs sm:text-sm font-bold rounded-lg text-white bg-[#0038A8] hover:bg-[#002a80] transition-colors cursor-pointer whitespace-nowrap"

@@ -27,7 +27,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'CTV': return 'Cộng tác viên';
-      case 'Đại lý': return 'Đại lý';
+      case 'bod': return 'BOD (Ban Giám đốc)';
       case 'operator': return 'Điều hành Tour';
       case 'sale_leader': return 'Sale Leader';
       case 'sale': return 'Sale';

@@ -26,7 +26,7 @@ const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; bord
   visa: { label: 'Phòng Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
   accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
   CTV: { label: 'Cộng tác viên', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
-  'Đại lý': { label: 'Đại lý du lịch', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' }
+  bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' }
 };
 
 export default function UserManagement() {

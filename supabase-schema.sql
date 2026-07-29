@@ -536,5 +536,53 @@ CREATE TABLE IF NOT EXISTS feedbacks (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ==============================================================================
+-- BẢNG ĐỀ NGHỊ THANH TOÁN (PAYMENT PROPOSALS)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS payment_proposals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  proposal_type TEXT DEFAULT 'individual',
+  title TEXT NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  payment_method TEXT NOT NULL DEFAULT 'Chuyển khoản',
+  bank_name TEXT,
+  account_number TEXT,
+  account_name TEXT,
+  tour_id UUID REFERENCES tours(id) ON DELETE SET NULL,
+  tour_code TEXT,
+  tour_name TEXT,
+  due_date TEXT,
+  file_url TEXT,
+  note TEXT,
+  created_by_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_by_name TEXT,
+  created_by_role TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  leader_status TEXT DEFAULT 'pending',
+  leader_approved_by TEXT,
+  leader_approved_at TIMESTAMPTZ,
+  leader_note TEXT,
+  accounting_status TEXT DEFAULT 'pending',
+  accounting_approved_by TEXT,
+  accounting_approved_at TIMESTAMPTZ,
+  accounting_note TEXT,
+  accounting_proof_url TEXT,
+  status TEXT DEFAULT 'pending_leader'
+);
+
+-- ==============================================================================
+-- BẢNG THÔNG BÁO HỆ THỐNG (SYSTEM NOTIFICATIONS)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS system_notifications (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  target_id TEXT,
+  read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 
 

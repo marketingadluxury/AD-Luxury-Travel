@@ -43,7 +43,7 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - `full_name` (text)
 - `phone` (text)
 - `company_name` (text)
-- `role` (text: 'admin', 'sales', 'operating', 'accounting', 'agency', 'collaborator', 'CTV')
+- `role` (text: 'admin', 'sale', 'sale_leader', 'operator', 'accounting', 'visa', 'CTV', 'bod')
 - `created_at` (timestamp)
 
 ### 4.2 Bảng `tours` (Danh sách Tour du lịch & Lịch khởi hành)

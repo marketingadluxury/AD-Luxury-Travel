@@ -1,4 +1,4 @@
-export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'Đại lý';
+export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'bod';
 
 export interface User {
   id: string;
@@ -165,6 +165,40 @@ export interface Invoice {
   refund_account_name?: string;
 }
 
+export type ProposalStatus = 'pending_leader' | 'approved_leader' | 'rejected_leader' | 'approved_accounting' | 'rejected_accounting';
+
+export interface PaymentProposal {
+  id: string;
+  code: string;
+  proposal_type: 'individual' | 'tour' | 'general';
+  title: string;
+  amount: number;
+  payment_method: 'Chuyển khoản' | 'Tiền mặt';
+  bank_name?: string;
+  account_number?: string;
+  account_name?: string;
+  tour_id?: string;
+  tour_code?: string;
+  tour_name?: string;
+  due_date?: string;
+  file_url?: string;
+  note?: string;
+  created_by_id?: string;
+  created_by_name: string;
+  created_by_role: Role;
+  created_at: string;
+  leader_status: 'pending' | 'approved' | 'rejected';
+  leader_approved_by?: string;
+  leader_approved_at?: string;
+  leader_note?: string;
+  accounting_status: 'pending' | 'approved' | 'rejected';
+  accounting_approved_by?: string;
+  accounting_approved_at?: string;
+  accounting_note?: string;
+  accounting_proof_url?: string;
+  status: ProposalStatus;
+}
+
 export interface LandtourCost {
   id: string;
   supplierName: string;
@@ -212,6 +246,16 @@ export interface TourCost {
   landtours: LandtourCost[];
   partnerPayments: PartnerPayment[];
   updatedAt: string;
+}
+
+export interface Notification {
+  id: string;
+  type: 'accounting' | 'visa' | 'extension' | 'order' | 'system';
+  title: string;
+  message: string;
+  targetId?: string;
+  createdAt: string;
+  read: boolean;
 }
 
 export interface ActivityLog {

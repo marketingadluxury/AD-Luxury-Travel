@@ -70,7 +70,7 @@ export default function PassengersManagement() {
 
   // Guard access
   const isDenied = useMemo(() => {
-    return ['CTV', 'Đại lý', 'accounting'].includes(currentRole);
+    return ['CTV', 'accounting'].includes(currentRole);
   }, [currentRole]);
 
   // Filters state
@@ -128,7 +128,7 @@ export default function PassengersManagement() {
 
   // 1. Filter orders based on user permissions
   const myOrders = useMemo(() => {
-    if (['admin', 'operator', 'visa', 'sale_leader'].includes(currentRole)) {
+    if (['admin', 'operator', 'visa', 'sale_leader', 'bod'].includes(currentRole)) {
       return allOrders;
     }
     return allOrders.filter(o => o.user_id === profile?.id);

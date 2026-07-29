@@ -407,7 +407,7 @@ export default function OrdersManagement() {
 
   // Get unique customers from passengers belonging to the user's orders (or all orders for admin/operator/visa)
   const uniqueCustomers = React.useMemo(() => {
-    const isFullAccess = ['admin', 'operator', 'visa'].includes(currentRole);
+    const isFullAccess = ['admin', 'operator', 'visa', 'bod'].includes(currentRole);
     const userOrderIds = new Set(
       isFullAccess 
         ? allOrders.map(o => o.id)
@@ -608,7 +608,7 @@ export default function OrdersManagement() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'Đại lý' ? 'Đại lý' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
     const executeCreateOrder = () => {
@@ -655,7 +655,7 @@ export default function OrdersManagement() {
       setShowCreateForm(false);
     };
 
-    if (!['admin', 'sale_leader'].includes(currentRole)) {
+    if (!['admin', 'sale_leader', 'bod'].includes(currentRole)) {
       setConfirmModalData({
         isOpen: true,
         title: '🔒 Cảnh báo: Tự động khóa booking sau khi lưu',
@@ -718,11 +718,11 @@ export default function OrdersManagement() {
               <TrendingUp className="w-5 h-5 text-blue-600" />
               <span>Bảng Tổng quan Giữ chỗ & Doanh thu</span>
               <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
-                ['admin', 'operator', 'sale_leader'].includes(currentRole)
+                ['admin', 'operator', 'sale_leader', 'bod'].includes(currentRole)
                   ? 'bg-blue-50 text-blue-700 border-blue-200'
                   : 'bg-indigo-50 text-indigo-700 border-indigo-200'
               }`}>
-                {['admin', 'operator', 'sale_leader'].includes(currentRole) ? 'Toàn hệ thống (Admin/Leader/Điều hành)' : 'Cá nhân (Sales/CTV)'}
+                {['admin', 'operator', 'sale_leader', 'bod'].includes(currentRole) ? 'Toàn hệ thống (Admin/Leader/Điều hành/BOD)' : 'Cá nhân (Sales/CTV)'}
               </span>
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">Tổng số chỗ giữ tạm, số chỗ đã xác nhận chắc chắn, doanh số và dư nợ cần nộp.</p>
@@ -822,7 +822,7 @@ export default function OrdersManagement() {
       </div>
 
       {/* Hold Statistics Dashboard */}
-      {['admin', 'operator', 'sale_leader'].includes(currentRole) && holdStatistics.length > 0 && (
+      {['admin', 'operator', 'sale_leader', 'bod'].includes(currentRole) && holdStatistics.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4 font-sans">
           <div className="flex justify-between items-center border-b border-gray-100 pb-3">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">

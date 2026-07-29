@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog } from '../types';
+import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 
@@ -50,7 +50,7 @@ function isSupabaseConfigured(): boolean {
 
 export interface Notification {
   id: string;
-  type: 'visa' | 'accounting' | 'extension';
+  type: 'visa' | 'accounting' | 'extension' | 'order' | 'system';
   title: string;
   message: string;
   targetId: string; // ID of order or passenger
@@ -129,6 +129,13 @@ interface CRMContextType {
   activityLogs: ActivityLog[];
   logActivity: (logData: { action: string; module: ActivityLog['module']; details?: string }) => Promise<void>;
   clearActivityLogs: () => Promise<void>;
+  paymentProposals: PaymentProposal[];
+  createPaymentProposal: (proposalData: Omit<PaymentProposal, 'id' | 'code' | 'created_at' | 'leader_status' | 'accounting_status' | 'status'>) => Promise<PaymentProposal>;
+  approvePaymentProposalLeader: (id: string, leaderName: string, leaderNote?: string) => Promise<void>;
+  rejectPaymentProposalLeader: (id: string, leaderName: string, leaderNote?: string) => Promise<void>;
+  approvePaymentProposalAccounting: (id: string, accountingName: string, accountingNote?: string, proofUrl?: string) => Promise<void>;
+  rejectPaymentProposalAccounting: (id: string, accountingName: string, accountingNote?: string) => Promise<void>;
+  deletePaymentProposal: (id: string) => Promise<void>;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -403,6 +410,34 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
     }
   };
+
+  const addSystemNotification = async (notif: Notification) => {
+    setNotifications(prev => {
+      const updated = [notif, ...prev];
+      try {
+        localStorage.setItem('crm_notifications', JSON.stringify(updated.slice(0, 100)));
+      } catch (e) {
+        console.error('Lỗi khi lưu notification vào LocalStorage:', e);
+      }
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('system_notifications').insert({
+          id: notif.id,
+          type: notif.type,
+          title: notif.title,
+          message: notif.message,
+          target_id: notif.targetId || null,
+          created_at: notif.createdAt,
+          read: notif.read
+        });
+      } catch (e) {
+        console.warn('Lưu notification vào DB thất bại:', e);
+      }
+    }
+  };
   const [categories, setCategories] = useState<string[]>([]);
   const [membershipSettings, setMembershipSettings] = useState<MembershipSettings>({
     silverMin: 20000000,
@@ -414,6 +449,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tourCosts, setTourCosts] = useState<TourCost[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [paymentProposals, setPaymentProposals] = useState<PaymentProposal[]>([]);
 
   const logActivity = async (logData: {
     action: string;
@@ -996,6 +1032,30 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           setInvoices(fetchedInvoices);
         }
 
+        // 3.6. Payment Proposals
+        try {
+          const { data: proposalsData, error: proposalsErr } = await supabase
+            .from('payment_proposals')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (proposalsErr) throw proposalsErr;
+
+          if (proposalsData && proposalsData.length > 0) {
+            setPaymentProposals(proposalsData.map(p => ({
+              ...p,
+              amount: Number(p.amount)
+            })));
+            console.log('Đã nạp thành công Payment Proposals từ Supabase');
+          } else {
+            const savedProps = localStorage.getItem('crm_payment_proposals');
+            if (savedProps) setPaymentProposals(JSON.parse(savedProps));
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Payment Proposals từ Supabase (sử dụng fallback local):', err);
+          const savedProps = localStorage.getItem('crm_payment_proposals');
+          if (savedProps) setPaymentProposals(JSON.parse(savedProps));
+        }
+
         // 4. Notifications
         try {
           const { data: notifsData, error: notifsErr } = await supabase
@@ -1406,6 +1466,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       localStorage.setItem('crm_invoices', JSON.stringify(invoices));
     }
   }, [invoices]);
+
+  useEffect(() => {
+    if (paymentProposals.length > 0) {
+      localStorage.setItem('crm_payment_proposals', JSON.stringify(paymentProposals));
+    }
+  }, [paymentProposals]);
 
   useEffect(() => {
     if (tourCosts.length > 0) {
@@ -2267,7 +2333,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     const creatorName = orderData.created_by || (
       currentRole === 'CTV' ? 'CTV' :
-      currentRole === 'Đại lý' ? 'Đại lý' :
+      currentRole === 'bod' ? 'BOD' :
       currentRole === 'sale' ? 'Sale' :
       currentRole === 'sale_leader' ? 'Sale Leader' :
       currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên'
@@ -2699,7 +2765,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       id: 'N-' + Date.now(),
       type: 'accounting' as const,
       title: 'Booking đã huỷ',
-      message: `Booking ${orderId.substring(0, 8)} đã được huỷ bỏ bởi Sale/Đại lý.${reason ? ` Lý do: ${reason}` : ''}`,
+      message: `Booking ${orderId.substring(0, 8)} đã được huỷ bỏ bởi Sale/CTV/BOD.${reason ? ` Lý do: ${reason}` : ''}`,
       targetId: orderId,
       createdAt: new Date().toISOString(),
       read: false
@@ -4153,6 +4219,281 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const createPaymentProposal = async (proposalData: Omit<PaymentProposal, 'id' | 'code' | 'created_at' | 'leader_status' | 'accounting_status' | 'status'>): Promise<PaymentProposal> => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const countToday = paymentProposals.filter(p => p.code && p.code.includes(dateStr)).length + 1;
+    const code = `DNTT-${dateStr}-${String(countToday).padStart(3, '0')}`;
+    
+    const newProposal: PaymentProposal = {
+      ...proposalData,
+      id: generateSafeUUID(),
+      code,
+      created_at: now.toISOString(),
+      leader_status: 'pending',
+      accounting_status: 'pending',
+      status: 'pending_leader'
+    };
+
+    setPaymentProposals(prev => [newProposal, ...prev]);
+
+    logActivity({
+      action: 'Tạo Đề nghị thanh toán',
+      module: 'Kế toán',
+      details: `Mã đề nghị: ${code} - Nội dung: ${proposalData.title} - Số tiền: ${proposalData.amount.toLocaleString('vi-VN')} đ`
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('payment_proposals').insert({
+          id: toUuid(newProposal.id),
+          code: newProposal.code,
+          proposal_type: newProposal.proposal_type,
+          title: newProposal.title,
+          amount: newProposal.amount,
+          payment_method: newProposal.payment_method,
+          bank_name: newProposal.bank_name || null,
+          account_number: newProposal.account_number || null,
+          account_name: newProposal.account_name || null,
+          tour_id: newProposal.tour_id ? toUuid(newProposal.tour_id) : null,
+          tour_code: newProposal.tour_code || null,
+          tour_name: newProposal.tour_name || null,
+          due_date: newProposal.due_date || null,
+          file_url: newProposal.file_url || null,
+          note: newProposal.note || null,
+          created_by_id: newProposal.created_by_id ? toUuid(newProposal.created_by_id) : null,
+          created_by_name: newProposal.created_by_name,
+          created_by_role: newProposal.created_by_role,
+          leader_status: 'pending',
+          accounting_status: 'pending',
+          status: 'pending_leader'
+        });
+      } catch (err) {
+        console.warn('Lỗi khi lưu payment_proposal vào Supabase:', err);
+      }
+    }
+
+    addSystemNotification({
+      id: 'N-' + Date.now(),
+      type: 'accounting',
+      title: 'Đề nghị thanh toán mới',
+      message: `${newProposal.created_by_name} (${newProposal.created_by_role}) vừa gửi đề nghị thanh toán ${newProposal.code}: ${newProposal.title} (${newProposal.amount.toLocaleString('vi-VN')} đ). Cần Leader duyệt.`,
+      targetId: newProposal.id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+
+    return newProposal;
+  };
+
+  const approvePaymentProposalLeader = async (id: string, leaderName: string, leaderNote?: string) => {
+    const target = paymentProposals.find(p => p.id === id);
+    if (!target) return;
+
+    const now = new Date().toISOString();
+    const updatedProps: Partial<PaymentProposal> = {
+      leader_status: 'approved',
+      leader_approved_by: leaderName,
+      leader_approved_at: now,
+      leader_note: leaderNote,
+      status: 'approved_leader'
+    };
+
+    setPaymentProposals(prev => prev.map(p => p.id === id ? { ...p, ...updatedProps } : p));
+
+    logActivity({
+      action: 'Leader Duyệt Đề nghị thanh toán',
+      module: 'Kế toán',
+      details: `Mã đề nghị: ${target.code} - Duyệt bởi: ${leaderName}`
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('payment_proposals').update(updatedProps).eq('id', toUuid(id));
+      } catch (e) {
+        console.warn('DB update failed:', e);
+      }
+    }
+
+    addSystemNotification({
+      id: 'N-' + Date.now(),
+      type: 'accounting',
+      title: 'Đề nghị thanh toán đã qua vòng duyệt Leader',
+      message: `Leader ${leaderName} đã duyệt đề nghị ${target.code} của ${target.created_by_name}. Đã chuyển thông tin tới Kế toán để chi tiền.`,
+      targetId: target.id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+  };
+
+  const rejectPaymentProposalLeader = async (id: string, leaderName: string, leaderNote?: string) => {
+    const target = paymentProposals.find(p => p.id === id);
+    if (!target) return;
+
+    const now = new Date().toISOString();
+    const updatedProps: Partial<PaymentProposal> = {
+      leader_status: 'rejected',
+      leader_approved_by: leaderName,
+      leader_approved_at: now,
+      leader_note: leaderNote,
+      status: 'rejected_leader'
+    };
+
+    setPaymentProposals(prev => prev.map(p => p.id === id ? { ...p, ...updatedProps } : p));
+
+    logActivity({
+      action: 'Leader Từ chối Đề nghị thanh toán',
+      module: 'Kế toán',
+      details: `Mã đề nghị: ${target.code} - Từ chối bởi: ${leaderName} - Lý do: ${leaderNote || 'Không có'}`
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('payment_proposals').update(updatedProps).eq('id', toUuid(id));
+      } catch (e) {
+        console.warn('DB update failed:', e);
+      }
+    }
+
+    addSystemNotification({
+      id: 'N-' + Date.now(),
+      type: 'accounting',
+      title: 'Đề nghị thanh toán bị từ chối bởi Leader',
+      message: `Leader ${leaderName} đã từ chối đề nghị ${target.code}.${leaderNote ? ` Lý do: ${leaderNote}` : ''}`,
+      targetId: target.id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+  };
+
+  const approvePaymentProposalAccounting = async (id: string, accountingName: string, accountingNote?: string, proofUrl?: string) => {
+    const target = paymentProposals.find(p => p.id === id);
+    if (!target) return;
+
+    const now = new Date().toISOString();
+    const updatedProps: Partial<PaymentProposal> = {
+      accounting_status: 'approved',
+      accounting_approved_by: accountingName,
+      accounting_approved_at: now,
+      accounting_note: accountingNote,
+      accounting_proof_url: proofUrl,
+      status: 'approved_accounting'
+    };
+
+    setPaymentProposals(prev => prev.map(p => p.id === id ? { ...p, ...updatedProps } : p));
+
+    logActivity({
+      action: 'Kế toán Duyệt & Chi tiền Đề nghị thanh toán',
+      module: 'Kế toán',
+      details: `Mã đề nghị: ${target.code} - Số tiền: ${target.amount.toLocaleString('vi-VN')} đ - Duyệt bởi Kế toán: ${accountingName}`
+    });
+
+    try {
+      let transferDetails = '';
+      if (target.payment_method === 'Chuyển khoản') {
+        transferDetails = ` [CK: ${target.bank_name || ''} - STK: ${target.account_number || ''} - Chủ TK: ${target.account_name || ''}]`;
+      }
+      await createInvoiceReceipt({
+        order_id: null,
+        tour_id: target.tour_id,
+        tour_code: target.tour_code,
+        tour_name: target.tour_name,
+        amount: target.amount,
+        type: 'payment',
+        payment_method: target.payment_method,
+        description: `Chi theo Đề nghị thanh toán ${target.code}: ${target.title}${transferDetails}. Người đề nghị: ${target.created_by_name}. ${accountingNote ? `Ghi chú: ${accountingNote}` : ''}`,
+        invoice_code: `PC-${target.code}`,
+        file_url: proofUrl || target.file_url,
+        created_by: accountingName,
+        refund_method: target.payment_method,
+        refund_bank_name: target.bank_name,
+        refund_account_number: target.account_number,
+        refund_account_name: target.account_name
+      });
+    } catch (err) {
+      console.warn('Lỗi khi tự động tạo phiếu chi từ Đề nghị thanh toán:', err);
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('payment_proposals').update(updatedProps).eq('id', toUuid(id));
+      } catch (e) {
+        console.warn('DB update failed:', e);
+      }
+    }
+
+    addSystemNotification({
+      id: 'N-' + Date.now(),
+      type: 'accounting',
+      title: 'Đề nghị thanh toán đã được Chi tiền',
+      message: `Kế toán ${accountingName} đã duyệt & thực hiện chi tiền cho đề nghị ${target.code} (${target.amount.toLocaleString('vi-VN')} đ).`,
+      targetId: target.id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+  };
+
+  const rejectPaymentProposalAccounting = async (id: string, accountingName: string, accountingNote?: string) => {
+    const target = paymentProposals.find(p => p.id === id);
+    if (!target) return;
+
+    const now = new Date().toISOString();
+    const updatedProps: Partial<PaymentProposal> = {
+      accounting_status: 'rejected',
+      accounting_approved_by: accountingName,
+      accounting_approved_at: now,
+      accounting_note: accountingNote,
+      status: 'rejected_accounting'
+    };
+
+    setPaymentProposals(prev => prev.map(p => p.id === id ? { ...p, ...updatedProps } : p));
+
+    logActivity({
+      action: 'Kế toán Từ chối Đề nghị thanh toán',
+      module: 'Kế toán',
+      details: `Mã đề nghị: ${target.code} - Từ chối bởi Kế toán: ${accountingName} - Lý do: ${accountingNote || 'Không có'}`
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('payment_proposals').update(updatedProps).eq('id', toUuid(id));
+      } catch (e) {
+        console.warn('DB update failed:', e);
+      }
+    }
+
+    addSystemNotification({
+      id: 'N-' + Date.now(),
+      type: 'accounting',
+      title: 'Đề nghị thanh toán bị Kế toán từ chối',
+      message: `Kế toán ${accountingName} đã từ chối chi đề nghị ${target.code}.${accountingNote ? ` Lý do: ${accountingNote}` : ''}`,
+      targetId: target.id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+  };
+
+  const deletePaymentProposal = async (id: string) => {
+    const target = paymentProposals.find(p => p.id === id);
+    if (!target) return;
+
+    setPaymentProposals(prev => prev.filter(p => p.id !== id));
+
+    logActivity({
+      action: 'Xóa Đề nghị thanh toán',
+      module: 'Kế toán',
+      details: `Mã đề nghị: ${target.code}`
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('payment_proposals').delete().eq('id', toUuid(id));
+      } catch (e) {
+        console.warn('DB delete failed:', e);
+      }
+    }
+  };
+
   return (
     <CRMContext.Provider value={{
       tours,
@@ -4198,7 +4539,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       updateTourCost,
       activityLogs,
       logActivity,
-      clearActivityLogs
+      clearActivityLogs,
+      paymentProposals,
+      createPaymentProposal,
+      approvePaymentProposalLeader,
+      rejectPaymentProposalLeader,
+      approvePaymentProposalAccounting,
+      rejectPaymentProposalAccounting,
+      deletePaymentProposal
     }}>
       {children}
     </CRMContext.Provider>
