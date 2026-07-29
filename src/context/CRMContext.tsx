@@ -4221,9 +4221,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
   const createPaymentProposal = async (proposalData: Omit<PaymentProposal, 'id' | 'code' | 'created_at' | 'leader_status' | 'accounting_status' | 'status'>): Promise<PaymentProposal> => {
     const now = new Date();
-    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-    const countToday = paymentProposals.filter(p => p.code && p.code.includes(dateStr)).length + 1;
-    const code = `DNTT-${dateStr}-${String(countToday).padStart(3, '0')}`;
+    const mmStr = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyyStr = String(now.getFullYear());
+    const mmyyyy = `${mmStr}${yyyyStr}`;
+    const countThisMonth = paymentProposals.filter(p => {
+      if (!p.code) return false;
+      return p.code.includes(`DNTT-${mmyyyy}-`) || p.code.includes(`DNTT-${yyyyStr}${mmStr}`);
+    }).length + 1;
+    const code = `DNTT-${mmyyyy}-${String(countThisMonth).padStart(3, '0')}`;
     
     const newProposal: PaymentProposal = {
       ...proposalData,

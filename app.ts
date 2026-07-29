@@ -353,6 +353,37 @@ async function getOrCreateOrderFolderV2(tourCode: string, orderCode: string, tok
   return orderFolderId;
 }
 
+async function getOrCreateAccountingExpenseFolder(mmyyyyStr: string, token: string): Promise<string> {
+  const baseParentId = getDriveRootParentId();
+
+  // 1. Get or create AD Luxury Travel root folder
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
+
+  // 2. Get or create "Kế toán" folder inside AD Luxury Travel
+  let keToanFolderId = await searchFolder('Kế toán', rootId, token);
+  if (!keToanFolderId) {
+    keToanFolderId = await createFolder('Kế toán', rootId, token);
+    await makeFolderPublic(keToanFolderId, token);
+  }
+
+  // 3. Get or create "Tháng MM-YYYY" folder inside "Kế toán" (ví dụ: "Tháng 07-2026")
+  const monthFolderName = `Tháng ${mmyyyyStr}`;
+  let monthFolderId = await searchFolder(monthFolderName, keToanFolderId, token);
+  if (!monthFolderId) {
+    monthFolderId = await createFolder(monthFolderName, keToanFolderId, token);
+    await makeFolderPublic(monthFolderId, token);
+  }
+
+  // 4. Get or create "Chi phí" folder inside "Tháng MM-YYYY"
+  let chiPhiFolderId = await searchFolder('Chi phí', monthFolderId, token);
+  if (!chiPhiFolderId) {
+    chiPhiFolderId = await createFolder('Chi phí', monthFolderId, token);
+    await makeFolderPublic(chiPhiFolderId, token);
+  }
+
+  return chiPhiFolderId;
+}
+
 function decodeUTF8(str: string | undefined): string {
   if (!str) return '';
   try {
@@ -845,7 +876,7 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
 
     // Decode relevant body fields
     const body = { ...req.body };
-    const fieldsToDecode = ['fullName', 'passportNumber', 'visaName', 'tourTitle', 'category', 'visaCode', 'tourCode', 'orderCode', 'orderId'];
+    const fieldsToDecode = ['fullName', 'passportNumber', 'visaName', 'tourTitle', 'category', 'visaCode', 'tourCode', 'orderCode', 'orderId', 'proposalCode', 'proposalType', 'proposal_code', 'proposal_type', 'tour_code'];
     fieldsToDecode.forEach(field => {
       if (body[field]) body[field] = decodeUTF8(body[field]);
     });
@@ -856,8 +887,71 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
 
     const file = req.file;
     const isFeedbackUpload = body.uploadType === 'feedback' || body.category === 'feedback';
+    const isPaymentProposal = body.uploadType === 'payment_proposal' || body.folder === 'payment_proposals' || !!body.proposalCode || !!body.proposal_code;
     const isTourUpload = body.uploadType === 'tour' || !!body.tourCode;
     const isVisaUpload = body.uploadType === 'visa';
+
+    if (isPaymentProposal) {
+      const now = new Date();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const yyyy = String(now.getFullYear());
+      const mmyyyy = `${mm}${yyyy}`;
+      const mmyyyyStr = `${mm}-${yyyy}`;
+
+      const rawProposalCode = (body.proposalCode || body.proposal_code || '').trim().toUpperCase();
+      const proposalCode = rawProposalCode || `DNTT-${mmyyyy}-001`;
+      const proposalType = body.proposalType || body.proposal_type || (body.tourCode ? 'tour' : 'general');
+      const tourCode = (body.tourCode || body.tour_code || body.tourCodeReq || '').trim().toUpperCase();
+
+      const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
+      const fileName = cleanOriginalName.startsWith(proposalCode) ? cleanOriginalName : `${proposalCode}_${cleanOriginalName}`;
+
+      const isTourExpense = proposalType === 'tour' && tourCode && tourCode !== 'CHUNG' && tourCode !== 'CHIPHI_TOUR';
+
+      if (driveActive) {
+        const token = await getGoogleDriveAccessToken();
+        let targetFolderId = '';
+
+        if (isTourExpense) {
+          console.log(`[Drive] Đang tải file đề nghị thanh toán tour lên Google Drive: AD Luxury Travel > Tour > ${tourCode} > Chi phí`);
+          targetFolderId = await getOrCreateTourSubFolderV2(tourCode, 'Chi phí', token);
+        } else {
+          console.log(`[Drive] Đang tải file đề nghị thanh toán chung/lẻ lên Google Drive: AD Luxury Travel > Kế toán > Tháng ${mmyyyyStr} > Chi phí`);
+          targetFolderId = await getOrCreateAccountingExpenseFolder(mmyyyyStr, token);
+        }
+
+        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, targetFolderId, token);
+        return res.json({
+          success: true,
+          url: result.webViewLink,
+          fileName: fileName,
+          storage: 'drive'
+        });
+      } else {
+        let storagePath = '';
+        if (isTourExpense) {
+          storagePath = `Tour/${tourCode}/Chi_phi/${fileName}`;
+        } else {
+          storagePath = `Ke_toan/Thang_${mmyyyyStr}/Chi_phi/${fileName}`;
+        }
+
+        console.log(`[Supabase Fallback] Đang tải file đề nghị thanh toán lên Supabase: ${storagePath}`);
+        const supabase = getSupabaseClient(req);
+        const publicUrl = await uploadFileToSupabase(
+          'crm-attachments',
+          storagePath,
+          file.buffer,
+          file.mimetype,
+          supabase
+        );
+        return res.json({
+          success: true,
+          url: publicUrl,
+          fileName: fileName,
+          storage: 'supabase'
+        });
+      }
+    }
 
     if (isFeedbackUpload) {
       const cleanFileName = file.originalname.trim().replace(/\s+/g, '_');

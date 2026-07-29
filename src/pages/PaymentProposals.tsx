@@ -124,6 +124,18 @@ export default function PaymentProposals() {
   // Uploading status
   const [isUploading, setIsUploading] = useState(false);
 
+  const getNextProposalCode = () => {
+    const now = new Date();
+    const mmStr = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyyStr = String(now.getFullYear());
+    const mmyyyy = `${mmStr}${yyyyStr}`;
+    const countThisMonth = paymentProposals.filter(p => {
+      if (!p.code) return false;
+      return p.code.includes(`DNTT-${mmyyyy}-`) || p.code.includes(`DNTT-${yyyyStr}${mmStr}`);
+    }).length + 1;
+    return `DNTT-${mmyyyy}-${String(countThisMonth).padStart(3, '0')}`;
+  };
+
   // File Upload handler for attached invoice / quote / proof
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isProof = false) => {
     const file = e.target.files?.[0];
@@ -135,7 +147,25 @@ export default function PaymentProposals() {
     try {
       const uploadData = new FormData();
       uploadData.append('file', file);
-      uploadData.append('folder', 'payment_proposals');
+      uploadData.append('uploadType', 'payment_proposal');
+
+      if (isProof && actionModal.proposal) {
+        uploadData.append('proposalCode', actionModal.proposal.code);
+        uploadData.append('proposalType', actionModal.proposal.proposal_type);
+        if (actionModal.proposal.tour_code) {
+          uploadData.append('tourCode', actionModal.proposal.tour_code);
+        }
+      } else {
+        const nextCode = getNextProposalCode();
+        uploadData.append('proposalCode', nextCode);
+        uploadData.append('proposalType', formData.proposal_type);
+        if (formData.proposal_type === 'tour') {
+          const selectedTour = tours.find(t => t.id === formData.tour_id);
+          if (selectedTour?.code) {
+            uploadData.append('tourCode', selectedTour.code);
+          }
+        }
+      }
 
       const res = await fetch('/api/upload', {
         method: 'POST',

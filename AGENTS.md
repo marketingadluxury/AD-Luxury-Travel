@@ -149,6 +149,11 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
   3. **Tài liệu Visa & File Hướng dẫn Mẫu:**
      - **File mẫu từng dịch vụ visa lẻ:** Lưu tại thư mục dịch vụ riêng biệt (`AD Luxury Travel > Visa > {MÃ_DỊCH_VỤ}` - VD: `AD Luxury Travel > Visa > VIAU`).
      - **File mẫu dùng chung tất cả loại visa:** Lưu trực tiếp tại thư mục gốc Visa (`AD Luxury Travel > Visa`).
+  4. **Đề nghị Thanh toán, Hóa đơn & Minh chứng Chi tiền (Payment Proposals):**
+     - **Chi phí theo Tour:** Lưu tự động vào `AD Luxury Travel > Tour > {MÃ_TOUR} > Chi phí`.
+     - **Chi phí chung / Chi lẻ:** Lưu tự động vào `AD Luxury Travel > Kế toán > Tháng {MM-YYYY} > Chi phí` (VD: `AD Luxury Travel > Kế toán > Tháng 07-2026 > Chi phí`).
+     - **Mã Đề nghị Thanh toán:** Chuẩn hóa theo công thức `DNTT-mmyyyy-stt` (VD: `DNTT-072026-001`).
+     - **Tên File:** Chuẩn hóa tự động theo công thức: `{MÃ_ĐỀ_NGHỊ}_{TÊN_FILE_GỐC}` (VD: `DNTT-072026-001_HoaDonTraSua.pdf`).
 
 - **Quyền Truy Cập & Xóa File Vĩnh Viễn:**
   - **Quyền truy cập:** Khi file được tải lên Google Drive, backend tự động thiết lập quyền xem công khai (`role: reader, type: anyone`) và trả về đường dẫn `webViewLink`. Người dùng có thể click trực tiếp để xem trước, phóng to, in ấn hoặc tải xuống.
