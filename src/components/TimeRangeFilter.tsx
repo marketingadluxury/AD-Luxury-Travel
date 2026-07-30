@@ -104,9 +104,9 @@ export const TimeRangeFilter: React.FC<TimeRangeFilterProps> = ({
             setIsDropdownOpen(!isDropdownOpen);
             if (isCustomOpen) setIsCustomOpen(false);
           }}
-          className={`flex items-center justify-between gap-2 text-left whitespace-nowrap transition-all cursor-pointer ${
+          className={`flex items-center justify-between gap-2 text-left whitespace-nowrap transition-all cursor-pointer h-[38px] ${
             selectClassName ||
-            'px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white hover:bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold text-slate-800 shadow-2xs min-w-[140px]'
+            'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50/50 hover:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-slate-800 shadow-2xs'
           }`}
         >
           <span className="truncate flex items-center gap-1.5 min-w-0">
@@ -141,7 +141,7 @@ export const TimeRangeFilter: React.FC<TimeRangeFilterProps> = ({
         <div
           className={`absolute top-full ${
             alignPopover === 'right' ? 'right-0' : 'left-0'
-          } mt-1.5 z-50 bg-white border border-slate-200 shadow-xl rounded-xl p-1 text-xs w-56 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150`}
+          } mt-1.5 z-50 bg-white border border-slate-200 shadow-xl rounded-xl p-1 text-xs min-w-full w-max max-w-xs sm:max-w-sm flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150`}
         >
           {options.map((opt) => {
             let itemText = opt.label;

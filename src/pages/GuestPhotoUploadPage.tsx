@@ -43,12 +43,21 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
 
   // Fetch photos for current tour
   useEffect(() => {
-    if (currentTour?.id) {
-      fetchTourMedia(currentTour.id);
+    if (currentTour?.id || currentTour?.code) {
+      fetchTourMedia(currentTour.id || currentTour.code);
     }
-  }, [currentTour?.id]);
+  }, [currentTour?.id, currentTour?.code]);
 
-  const currentTourPhotos = tourMedia.filter(m => m.tour_id === currentTour?.id || m.tour_code === currentTour?.code);
+  const currentTourPhotos = tourMedia.filter(m => {
+    if (!currentTour) return false;
+    const matchId = m.tour_id && currentTour.id && (m.tour_id === currentTour.id);
+    const matchCode = m.tour_code && currentTour.code && (m.tour_code.toUpperCase() === currentTour.code.toUpperCase());
+    const matchDefault = defaultTourId && (
+      m.tour_id === defaultTourId || 
+      (m.tour_code && m.tour_code.toUpperCase() === defaultTourId.toUpperCase())
+    );
+    return Boolean(matchId || matchCode || matchDefault);
+  });
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
 
   // Check pending offline items and handle auto-sync on network reconnect
@@ -178,6 +187,7 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
         if (uploadedUrl) {
           // Add to local state (server already saved record to database)
           await addTourMedia({
+            id: data.media?.id,
             tour_id: currentTour?.id || data.media?.tour_id || defaultTourId || '',
             tour_code: data.tourCode || currentTour?.code || defaultTourId || '',
             file_url: uploadedUrl,
@@ -223,17 +233,20 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
 
     setIsUploading(false);
 
+    // Refresh media from server
+    if (currentTour?.id || currentTour?.code) {
+      fetchTourMedia(currentTour.id || currentTour.code);
+    }
+
     if (offlineSavedCount > 0) {
       toast.success(`💾 Đã lưu tạm ${offlineSavedCount} ảnh offline! Hệ thống sẽ tự động đồng bộ khi có mạng.`, { duration: 6000 });
       setSelectedFiles([]);
       setCaption('');
-      if (currentTour?.id) fetchTourMedia(currentTour.id);
       checkAndSyncOfflineItems();
     } else if (successCount > 0) {
       toast.success(`🎉 Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`, { duration: 5000 });
       setSelectedFiles([]);
       setCaption('');
-      if (currentTour?.id) fetchTourMedia(currentTour.id);
     } else {
       toast.error('❌ Không thể tải lên ảnh. Vui lòng kiểm tra lại kết nối và thử lại!', { duration: 5000 });
     }

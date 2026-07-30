@@ -138,7 +138,7 @@ interface CRMContextType {
   deletePaymentProposal: (id: string) => Promise<void>;
   tourMedia: TourMedia[];
   fetchTourMedia: (tourId?: string) => Promise<TourMedia[]>;
-  addTourMedia: (mediaData: Omit<TourMedia, 'id' | 'created_at'>) => Promise<TourMedia>;
+  addTourMedia: (mediaData: Omit<TourMedia, 'id' | 'created_at'> & { id?: string }) => Promise<TourMedia>;
   deleteTourMedia: (mediaId: string, fileUrl?: string) => Promise<void>;
 }
 
@@ -4525,12 +4525,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
-  const fetchTourMedia = async (tourId?: string): Promise<TourMedia[]> => {
+  const fetchTourMedia = async (tourIdOrCode?: string): Promise<TourMedia[]> => {
     if (isSupabaseConfigured()) {
       try {
         let query = supabase.from('tour_media').select('*').order('created_at', { ascending: false });
-        if (tourId) {
-          query = query.eq('tour_id', toUuid(tourId));
+        if (tourIdOrCode) {
+          const codeUpper = tourIdOrCode.trim().toUpperCase();
+          const uuidVal = toUuid(tourIdOrCode);
+          query = query.or(`tour_id.eq.${uuidVal},tour_code.ilike.${codeUpper}`);
         }
         const { data, error } = await query;
         if (!error && data) {
@@ -4539,8 +4541,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             file_size: Number(m.file_size || 0)
           }));
           setTourMedia(prev => {
-            const other = tourId ? prev.filter(m => m.tour_id !== tourId) : [];
-            return [...mapped, ...other];
+            const newIds = new Set(mapped.map(m => m.id));
+            const remaining = prev.filter(m => !newIds.has(m.id));
+            return [...mapped, ...remaining];
           });
           return mapped;
         }
@@ -4548,18 +4551,30 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         console.warn('Lỗi fetchTourMedia:', e);
       }
     }
-    return tourId ? tourMedia.filter(m => m.tour_id === tourId) : tourMedia;
+    return tourIdOrCode
+      ? tourMedia.filter(m => 
+          (m.tour_id && (m.tour_id === tourIdOrCode || m.tour_id === toUuid(tourIdOrCode))) || 
+          (m.tour_code && m.tour_code.toUpperCase() === tourIdOrCode.toUpperCase())
+        )
+      : tourMedia;
   };
 
-  const addTourMedia = async (mediaData: Omit<TourMedia, 'id' | 'created_at'>): Promise<TourMedia> => {
+  const addTourMedia = async (mediaData: Omit<TourMedia, 'id' | 'created_at'> & { id?: string }): Promise<TourMedia> => {
     const newMedia: TourMedia = {
       ...mediaData,
-      id: generateSafeUUID(),
+      id: mediaData.id || generateSafeUUID(),
       created_at: new Date().toISOString()
     };
 
     setTourMedia(prev => {
-      const updated = [newMedia, ...prev];
+      const existingIndex = prev.findIndex(m => m.id === newMedia.id || (m.file_url && newMedia.file_url && m.file_url === newMedia.file_url));
+      let updated: TourMedia[];
+      if (existingIndex >= 0) {
+        updated = [...prev];
+        updated[existingIndex] = newMedia;
+      } else {
+        updated = [newMedia, ...prev];
+      }
       try {
         localStorage.setItem('crm_tour_media', JSON.stringify(updated));
       } catch (e) {
@@ -4570,7 +4585,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('tour_media').insert({
+        await supabase.from('tour_media').upsert({
           id: newMedia.id,
           tour_id: toUuid(newMedia.tour_id),
           tour_code: newMedia.tour_code,
@@ -4582,7 +4597,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           uploader_role: newMedia.uploader_role,
           caption: newMedia.caption || null,
           created_at: newMedia.created_at
-        });
+        }, { onConflict: 'id' });
       } catch (err) {
         console.warn('Lỗi lưu tour_media lên Supabase:', err);
       }
