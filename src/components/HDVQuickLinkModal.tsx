@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Share2, Copy, Check, ExternalLink, X, QrCode, Sparkles, Smartphone, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -8,32 +8,42 @@ interface HDVQuickLinkModalProps {
   isOpen: boolean;
   onClose: () => void;
   tours: Tour[];
+  defaultTourId?: string;
 }
 
 export const HDVQuickLinkModal: React.FC<HDVQuickLinkModalProps> = ({
   isOpen,
   onClose,
-  tours
+  tours,
+  defaultTourId
 }) => {
   const [copied, setCopied] = useState(false);
+  const validTours = tours.filter(t => t.tour_type !== 'visa');
   const [selectedTourId, setSelectedTourId] = useState<string>(
-    tours.length > 0 ? tours[0].id : ''
+    defaultTourId || (validTours.length > 0 ? validTours[0].id : '')
   );
+
+  useEffect(() => {
+    if (defaultTourId) {
+      setSelectedTourId(defaultTourId);
+    } else if (validTours.length > 0) {
+      setSelectedTourId(validTours[0].id);
+    }
+  }, [defaultTourId, isOpen]);
 
   if (!isOpen) return null;
 
-  const validTours = tours.filter(t => t.tour_type !== 'visa');
   const selectedTour = validTours.find(t => t.id === selectedTourId) || validTours[0];
 
   const appOrigin = window.location.origin;
   const quickLink = selectedTour
-    ? `${appOrigin}/tours?tab=gallery&tourId=${selectedTour.id}&role=tour_guide`
-    : `${appOrigin}/tours?tab=gallery&role=tour_guide`;
+    ? `${appOrigin}/tour-media?uploadTourId=${selectedTour.id}`
+    : `${appOrigin}/tour-media`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(quickLink);
     setCopied(true);
-    toast.success('Đã sao chép link truy cập nhanh cho HDV Freelance!');
+    toast.success('Đã sao chép link upload trực tiếp cho HDV Freelance!');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -57,7 +67,7 @@ export const HDVQuickLinkModal: React.FC<HDVQuickLinkModalProps> = ({
               </div>
               <div>
                 <h3 className="font-bold text-base leading-snug">Link & Mã QR Cho HDV Freelance</h3>
-                <p className="text-xs text-slate-400">Cho phép HDV mở nhanh app & tải ảnh không cần thao tác nhiều</p>
+                <p className="text-xs text-slate-400">Quét mã hoặc click link sẽ mở ngay mục upload ảnh của tour</p>
               </div>
             </div>
             <button
@@ -69,25 +79,36 @@ export const HDVQuickLinkModal: React.FC<HDVQuickLinkModalProps> = ({
           </div>
 
           <div className="p-5 space-y-4">
-            {/* Tour selector */}
+            {/* Tour selector / locked display */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-                Chọn Tour Cần Gửi Cho HDV Freelance:
+                Tour Gửi Cho HDV Freelance:
               </label>
-              <select
-                value={selectedTourId}
-                onChange={(e) => setSelectedTourId(e.target.value)}
-                className="w-full max-w-full overflow-hidden text-ellipsis px-3.5 py-2 rounded-xl border border-gray-300 text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500"
-              >
-                {validTours.map(t => {
-                  const shortName = t.name.length > 28 ? `${t.name.slice(0, 28)}...` : t.name;
-                  return (
-                    <option key={t.id} value={t.id} title={`[${t.code}] ${t.name}`}>
-                      [{t.code}] {shortName}
-                    </option>
-                  );
-                })}
-              </select>
+              {defaultTourId && selectedTour ? (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-mono font-black text-xs tracking-wide shadow-xs shrink-0">
+                      {selectedTour.code}
+                    </span>
+                    <span className="font-bold text-xs text-blue-950">{selectedTour.name}</span>
+                  </div>
+                </div>
+              ) : (
+                <select
+                  value={selectedTourId}
+                  onChange={(e) => setSelectedTourId(e.target.value)}
+                  className="w-full max-w-full overflow-hidden text-ellipsis px-3.5 py-2 rounded-xl border border-gray-300 text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500"
+                >
+                  {validTours.map(t => {
+                    const shortName = t.name.length > 28 ? `${t.name.slice(0, 28)}...` : t.name;
+                    return (
+                      <option key={t.id} value={t.id} title={`[${t.code}] ${t.name}`}>
+                        [{t.code}] {shortName}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
             </div>
 
             {/* QR Code display */}
@@ -101,7 +122,7 @@ export const HDVQuickLinkModal: React.FC<HDVQuickLinkModalProps> = ({
               </div>
               <div className="text-[11px] font-medium text-slate-600 flex items-center gap-1">
                 <Smartphone className="w-3.5 h-3.5 text-blue-600" />
-                Quét mã QR bằng camera điện thoại để vào thẳng album đoàn
+                Quét mã QR bằng camera điện thoại để mở trực tiếp mục upload ảnh
               </div>
             </div>
 
@@ -136,7 +157,7 @@ export const HDVQuickLinkModal: React.FC<HDVQuickLinkModalProps> = ({
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs text-amber-900">
               <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <span>
-                <strong>Tối ưu trải nghiệm HDV Freelance:</strong> HDV chỉ cần bấm link hoặc quét QR để mở ngay giao diện Album ảnh đoàn và tải ảnh lên nhanh chóng ngay trên điện thoại!
+                <strong>Tối ưu trải nghiệm HDV Freelance:</strong> HDV chỉ cần bấm link hoặc quét QR để mở trực tiếp mục upload ảnh đoàn và tải ảnh lên ngay!
               </span>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -29,6 +29,14 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+
+  useEffect(() => {
+    if (defaultTourId) {
+      setSelectedTourId(defaultTourId);
+    } else if (availableTours.length > 0) {
+      setSelectedTourId(availableTours[0].id);
+    }
+  }, [defaultTourId, isOpen]);
 
   if (!isOpen) return null;
 
@@ -146,31 +154,49 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
             {/* Tour selection */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-                Chọn Tour Cần Tải Ảnh: <span className="text-red-500">*</span>
+                Tour Cần Tải Ảnh: <span className="text-red-500">*</span>
               </label>
-              <select
-                value={selectedTourId}
-                onChange={(e) => setSelectedTourId(e.target.value)}
-                className="w-full max-w-full overflow-hidden text-ellipsis px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs sm:text-sm font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-teal-500 shadow-xs"
-              >
-                {availableTours.length === 0 ? (
-                  <option value="">(Chưa có danh sách Tour nào)</option>
-                ) : (
-                  availableTours.map(t => {
-                    const shortName = t.name.length > 28 ? `${t.name.slice(0, 28)}...` : t.name;
-                    return (
-                      <option key={t.id} value={t.id} title={`[${t.code}] ${t.name}`}>
-                        [{t.code}] {shortName}
-                      </option>
-                    );
-                  })
-                )}
-              </select>
-              {currentTour && (
-                <div className="mt-1.5 px-3 py-1.5 bg-teal-50 border border-teal-200/80 rounded-lg text-xs text-teal-800 flex items-center justify-between">
-                  <span className="font-bold">Mã tour: {currentTour.code}</span>
-                  <span className="text-[11px] text-teal-600">HDV: {currentTour.guide_name || 'Chưa gán'}</span>
+              {defaultTourId && currentTour ? (
+                <div className="p-3 bg-teal-50 border border-teal-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-lg bg-teal-700 text-white font-mono font-black text-xs tracking-wide shadow-xs shrink-0">
+                      {currentTour.code}
+                    </span>
+                    <span className="font-bold text-xs text-teal-950">{currentTour.name}</span>
+                  </div>
+                  {currentTour.guide_name && (
+                    <span className="text-[11px] font-bold text-teal-700 bg-teal-100/80 px-2 py-0.5 rounded-md self-start sm:self-auto shrink-0">
+                      HDV: {currentTour.guide_name}
+                    </span>
+                  )}
                 </div>
+              ) : (
+                <>
+                  <select
+                    value={selectedTourId}
+                    onChange={(e) => setSelectedTourId(e.target.value)}
+                    className="w-full max-w-full overflow-hidden text-ellipsis px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs sm:text-sm font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-teal-500 shadow-xs"
+                  >
+                    {availableTours.length === 0 ? (
+                      <option value="">(Chưa có danh sách Tour nào)</option>
+                    ) : (
+                      availableTours.map(t => {
+                        const shortName = t.name.length > 28 ? `${t.name.slice(0, 28)}...` : t.name;
+                        return (
+                          <option key={t.id} value={t.id} title={`[${t.code}] ${t.name}`}>
+                            [{t.code}] {shortName}
+                          </option>
+                        );
+                      })
+                    )}
+                  </select>
+                  {currentTour && (
+                    <div className="mt-1.5 px-3 py-1.5 bg-teal-50 border border-teal-200/80 rounded-lg text-xs text-teal-800 flex items-center justify-between">
+                      <span className="font-bold">Mã tour: {currentTour.code}</span>
+                      <span className="text-[11px] text-teal-600">HDV: {currentTour.guide_name || 'Chưa gán'}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

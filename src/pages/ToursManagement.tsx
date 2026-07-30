@@ -24,13 +24,11 @@ import {
   ChevronDown,
   ChevronUp,
   UploadCloud,
-  Camera,
   Image as ImageIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 import DashboardOperator from '@/components/DashboardOperator';
 import TourCostsManagement from '@/components/TourCostsManagement';
-import { TourGallery } from '@/components/TourGallery';
 
 // Formatted numeric input component with thousands separators on input
 const NumericFormatInput: React.FC<{
@@ -427,9 +425,8 @@ export default function ToursManagement() {
     tourMedia
   } = useCRM();
 
-  // Navigation tabs: 'tours' | 'categories' | 'costs' | 'gallery'
-  const [activeTab, setActiveTab] = useState<'tours' | 'categories' | 'costs' | 'gallery'>('tours');
-  const [selectedGalleryTour, setSelectedGalleryTour] = useState<Tour | null>(null);
+  // Navigation tabs: 'tours' | 'categories' | 'costs'
+  const [activeTab, setActiveTab] = useState<'tours' | 'categories' | 'costs'>('tours');
 
   // View mode for tour listing: 'grouped' (default) | 'flat'
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
@@ -1370,59 +1367,11 @@ export default function ToursManagement() {
             >
               Chi phí & Lãi lỗ
             </button>
-            <button
-              onClick={() => setActiveTab('gallery')}
-              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === 'gallery' 
-                  ? 'bg-white text-blue-700 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Camera className="w-4 h-4 text-blue-600" />
-              Ảnh Đoàn HDV ({tourMedia.length})
-            </button>
           </div>
         </div>
       </div>
 
-      {activeTab === 'gallery' ? (
-        /* TOUR GALLERY / HDV PHOTO ALBUM TAB */
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-gray-900 text-lg">Chọn Tour Để Xem Album Ảnh Đoàn</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Chọn một Tour từ danh sách để xem album hoặc tải ảnh kỷ niệm mới</p>
-            </div>
-            <div className="w-full md:w-80">
-              <select
-                value={selectedGalleryTour?.id || ''}
-                onChange={(e) => {
-                  const found = tours.filter(t => t.tour_type !== 'visa').find(t => t.id === e.target.value);
-                  setSelectedGalleryTour(found || null);
-                }}
-                className="w-full px-3.5 py-2 rounded-xl border border-gray-300 text-sm font-medium bg-white focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Chọn Tour cần xem ảnh --</option>
-                {tours.filter(t => t.tour_type !== 'visa').map(t => (
-                  <option key={t.id} value={t.id}>
-                    [{t.code}] {t.name} ({format(new Date(t.departure_time), 'dd/MM/yyyy')})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {selectedGalleryTour ? (
-            <TourGallery tour={selectedGalleryTour} canUpload={true} />
-          ) : tours.filter(t => t.tour_type !== 'visa').length > 0 ? (
-            <TourGallery tour={tours.filter(t => t.tour_type !== 'visa')[0]} canUpload={true} />
-          ) : (
-            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-              <p className="text-gray-500 text-sm">Chưa có dữ liệu tour.</p>
-            </div>
-          )}
-        </div>
-      ) : activeTab === 'categories' ? (
+      {activeTab === 'categories' ? (
         /* CATEGORIES MANAGEMENT TAB */
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit space-y-4">
@@ -2513,17 +2462,6 @@ export default function ToursManagement() {
                                           title="Sao chép ngày khởi hành"
                                         >
                                           <Copy className="w-4 h-4" />
-                                        </button>
-                                        {/* Gallery */}
-                                        <button
-                                          onClick={() => {
-                                            setSelectedGalleryTour(t);
-                                            setActiveTab('gallery');
-                                          }}
-                                          className="p-1.5 text-indigo-600 rounded-lg transition-colors border border-indigo-100 bg-indigo-50/40 hover:bg-indigo-50"
-                                          title="Xem & Upload Ảnh Đoàn HDV"
-                                        >
-                                          <Camera className="w-4 h-4" />
                                         </button>
                                         {/* Edit */}
                                         <button
