@@ -255,9 +255,9 @@ export default function VisaProcessing() {
       </div>
 
       {/* Filter and Overview tabs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-0">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm space-y-0 relative z-20">
         {/* Hàng 1: Bộ lọc trạng thái */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-gray-100 bg-white">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-gray-100 bg-white rounded-t-xl">
           <div className="flex items-center space-x-2">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Trạng thái Visa:</span>
             <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg">
@@ -288,7 +288,7 @@ export default function VisaProcessing() {
         </div>
 
         {/* Hàng 2: Tìm kiếm, lọc thời gian và sắp xếp */}
-        <div className="p-4 bg-slate-50 border-t border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="p-4 bg-slate-50 border-t border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-3 rounded-b-xl">
           {/* Ô tìm kiếm */}
           <div className="relative">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
