@@ -97,6 +97,19 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - `created_by` (uuid, tham chiếu `profiles.id`)
 - `created_at` (timestamp)
 
+### 4.6 Bảng `tour_media` (Lưu Album Ảnh Kỷ Niệm Đoàn Của HDV)
+- `id` (uuid, primary key)
+- `tour_id` (uuid, tham chiếu `tours.id`)
+- `tour_code` (text)
+- `file_url` (text - link ảnh trên Storage/Drive)
+- `file_id` (text)
+- `file_name` (text)
+- `file_size` (numeric)
+- `uploaded_by` (text)
+- `uploader_role` (text)
+- `caption` (text)
+- `created_at` (timestamp)
+
 ---
 
 ## 5. Cấu Hình Supabase Storage (Yêu Cầu)
@@ -129,6 +142,10 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - **Phân Quyền Sale Leader khi Tạo, Thao Tác & Xem Lãi Lỗ Tour:** Vai trò **Sale Leader (`sale_leader`)** chỉ có thể tạo, chỉnh sửa, sao chép và xem bảng hạch toán chi phí/lãi lỗ đối với các loại **Tour gửi khách đối tác (`partner`)** và **Tour đoàn riêng (`private`)**. Sale Leader hoàn toàn **không có quyền** tạo mới, sửa, sao chép, xóa hoặc **xem báo cáo lãi lỗ/chi phí** của các **Tour tự vận hành (`internal`)**. Các nút thao tác và danh sách hạch toán cho loại tour tự vận hành sẽ tự động bị vô hiệu hóa hoặc ẩn khỏi vai trò Sale Leader.
 - **Tạo Danh Mục Sản Phẩm Mới Khi Tạo Tour:** Ngay tại form khai báo/cập nhật Tour du lịch mới, hệ thống cho phép tạo nhanh danh mục sản phẩm mới ngay lập tức mà không cần chuyển sang tab danh mục riêng biệt. Khi tạo thành công, danh mục này sẽ tự động được chọn làm danh mục hiện tại cho Tour đó.
 - **Tự Động Đồng Bộ Bộ Lọc Danh Mục:** Bộ lọc danh mục sản phẩm tại trang *Lịch khởi hành* (Departure Calendar) tự động cập nhật danh sách và thêm danh mục mới ngay khi có bất kỳ danh mục nào được khởi tạo thêm (từ tab Danh mục hoặc trực tiếp từ biểu mẫu Tạo Tour).
+- **Phân Loại Dịch Vụ Visa:** Dịch vụ visa lẻ (`tour_type === 'visa'`) **không tính là Tour du lịch**. Tất cả các bộ lọc, số lượng đếm Tour, và danh sách chọn album ảnh đoàn đều tự động loại trừ các sản phẩm dịch vụ visa.
+- **Giao Diện & Tính Năng Dành Cho Hướng Dẫn Viên (HDV / `tour_guide`) & Ảnh Khách Đoàn:**
+  - **Trang & Tab Riêng "Ảnh khách đoàn" (`/tour-media`):** Được hiển thị trên thanh Sidebar cho người dùng công ty (Admin, Operator, Sale, Visa, Kế toán, BOD, HDV) và **ẩn đối với Cộng Tác Viên (`CTV`)**. Trang này chứa danh sách đoàn tour kèm nút duy nhất **"📂 Mở Thư Mục Google Drive"** để truy cập thẳng thư mục `AD Luxury Travel > Tour > {MÃ_TOUR} > Ảnh đoàn`.
+  - **Phân Quyền Thao Tác Upload & Link HDV:** Chỉ có vai trò **Điều hành (`operator`)**, **HDV (`tour_guide`)** và **Quản trị viên (`admin`)** mới có quyền thao tác các nút **"📸 Upload Ảnh Đoàn"** và **"🔗 Link HDV Freelance"**. Các vai trò khác (Sale, Kế toán, Visa, BOD) chỉ xem và mở thư mục Drive.
 
 ---
 

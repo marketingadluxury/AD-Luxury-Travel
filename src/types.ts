@@ -1,4 +1,4 @@
-export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'bod';
+export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'bod' | 'tour_guide';
 
 export interface User {
   id: string;
@@ -43,6 +43,7 @@ export interface Tour {
   transit_info?: string; // Ghi chú quá cảnh
   guide_name?: string; // Tên HDV
   guide_phone?: string; // SĐT HDV
+  tour_guide_id?: string; // ID tài khoản HDV phụ trách tour
   ticket_status?: string; // Tình trạng vé
   ticket_deadline?: string; // Hạn xuất vé
   visa_deadline?: string; // Hạn nhận hồ sơ visa
@@ -271,5 +272,20 @@ export interface ActivityLog {
   details?: string;
   created_at: string;
 }
+
+export interface TourMedia {
+  id: string;
+  tour_id: string;
+  tour_code?: string;
+  file_url: string;
+  file_id?: string;
+  file_name: string;
+  file_size?: number;
+  uploaded_by: string;
+  uploader_role?: string;
+  caption?: string;
+  created_at: string;
+}
+
 
 

@@ -22,13 +22,17 @@ import {
   MoreHorizontal,
   ChevronRight,
   LogOut,
-  Ticket
+  Ticket,
+  Camera,
+  Share2
 } from 'lucide-react';
 import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { CustomSelect } from './CustomSelect';
 import { Role } from '@/types';
+import { HDVQuickUploadModal } from './HDVQuickUploadModal';
+import { HDVQuickLinkModal } from './HDVQuickLinkModal';
 
 const roleOptions = [
   { value: 'CTV', label: '🤝 Cộng tác viên (CTV)' },
@@ -38,6 +42,7 @@ const roleOptions = [
   { value: 'sale', label: '💼 Sale' },
   { value: 'visa', label: '🛂 Bộ phận Visa' },
   { value: 'accounting', label: '💰 Kế toán' },
+  { value: 'tour_guide', label: '🚩 Hướng Dẫn Viên (HDV)' },
   { value: 'admin', label: '🔑 Quản trị viên (Full)' },
 ];
 import { FeedbackModal } from './FeedbackModal';
@@ -46,16 +51,17 @@ import { FeedbackModal } from './FeedbackModal';
 const navigation = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
   { name: 'Điều hành chiến lược', href: '/dashboard/executive', icon: TrendingUp, roleAccess: ['admin', 'bod'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'admin'] },
-  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
+  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide'] },
+  { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
   { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
   { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
   { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'admin'] },
   { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin', 'bod'] },
   { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
-  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'admin', 'bod'] },
+  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin', 'bod'] },
-  { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'admin', 'bod'] },
+  { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
 
@@ -67,6 +73,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isHdvQuickUploadOpen, setIsHdvQuickUploadOpen] = useState(false);
+  const [isHdvQuickLinkOpen, setIsHdvQuickLinkOpen] = useState(false);
+
+  // Auto detect HDV role or quick upload tab from URL query params
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('role') === 'tour_guide' && currentRole !== 'tour_guide') {
+      setCurrentRole('tour_guide');
+    }
+  }, [location.search]);
 
   // PWA Install state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -605,7 +621,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Link
             to="/"
             className={cn(
-              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[56px]',
+              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
               location.pathname === '/' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
             )}
           >
@@ -613,80 +629,47 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-[10px] leading-tight">Lịch Tour</span>
           </Link>
 
-          {(['operator', 'admin', 'sale_leader'].includes(currentRole)) ? (
-            <Link
-              to="/tours"
-              className={cn(
-                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[56px]',
-                location.pathname === '/tours' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-              )}
-            >
-              <Map className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] leading-tight">Tour</span>
-            </Link>
-          ) : (
-            <Link
-              to="/visa-services"
-              className={cn(
-                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[56px]',
-                location.pathname === '/visa-services' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-              )}
-            >
-              <FileText className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] leading-tight">DV Visa</span>
-            </Link>
-          )}
-
           <Link
-            to="/orders"
+            to="/tours"
             className={cn(
-              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[56px] relative',
-              location.pathname === '/orders' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
+              location.pathname === '/tours' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
             )}
           >
-            <ShoppingCart className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Booking</span>
+            <Map className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px] leading-tight">Quản Lý Tour</span>
           </Link>
 
-          {(['visa', 'admin'].includes(currentRole)) ? (
-            <Link
-              to="/visa"
-              className={cn(
-                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[56px]',
-                location.pathname === '/visa' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-              )}
-            >
-              <FileText className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] leading-tight">Xử lý Visa</span>
-            </Link>
-          ) : (['accounting'].includes(currentRole)) ? (
-            <Link
-              to="/accounting"
-              className={cn(
-                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[56px]',
-                location.pathname === '/accounting' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-              )}
-            >
-              <Receipt className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] leading-tight">Kế toán</span>
-            </Link>
-          ) : (
-            <Link
-              to="/passengers"
-              className={cn(
-                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[56px]',
-                location.pathname === '/passengers' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-              )}
-            >
-              <Users className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] leading-tight">Khách hàng</span>
-            </Link>
-          )}
+          {/* Big Center Action Camera Button for HDV Quick Upload */}
+          <button
+            type="button"
+            onClick={() => setIsHdvQuickUploadOpen(true)}
+            className="flex flex-col items-center justify-center -mt-5 relative z-10 focus:outline-none"
+            title="Upload Ảnh Đoàn Nhanh"
+          >
+            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 p-0.5 shadow-lg shadow-blue-500/25 ring-4 ring-white active:scale-95 transition-transform flex items-center justify-center">
+              <div className="w-full h-full rounded-full bg-blue-600 flex items-center justify-center text-white">
+                <Camera className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <span className="text-[10px] font-bold text-blue-600 tracking-tight mt-0.5">Chụp Ảnh</span>
+          </button>
+
+          <Link
+            to="/payment-proposals"
+            className={cn(
+              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
+              location.pathname === '/payment-proposals' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+            )}
+          >
+            <FileCheck className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px] leading-tight">Đề Nghị TT</span>
+          </Link>
 
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-slate-500 hover:text-slate-800 min-w-[56px]"
+            className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-slate-500 hover:text-slate-800 min-w-[52px]"
           >
             <MoreHorizontal className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] leading-tight">Menu</span>
@@ -838,6 +821,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <FeedbackModal
         isOpen={isFeedbackModalOpen}
         onClose={() => setIsFeedbackModalOpen(false)}
+      />
+
+      {/* Modal Upload Ảnh Nhanh cho HDV */}
+      <HDVQuickUploadModal
+        isOpen={isHdvQuickUploadOpen}
+        onClose={() => setIsHdvQuickUploadOpen(false)}
+      />
+
+      {/* Modal Link & QR cho HDV Freelance */}
+      <HDVQuickLinkModal
+        isOpen={isHdvQuickLinkOpen}
+        onClose={() => setIsHdvQuickLinkOpen(false)}
+        tours={useCRM().tours}
       />
     </div>
   );

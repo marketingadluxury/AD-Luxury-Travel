@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal } from '../types';
+import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 
@@ -136,6 +136,10 @@ interface CRMContextType {
   approvePaymentProposalAccounting: (id: string, accountingName: string, accountingNote?: string, proofUrl?: string) => Promise<void>;
   rejectPaymentProposalAccounting: (id: string, accountingName: string, accountingNote?: string) => Promise<void>;
   deletePaymentProposal: (id: string) => Promise<void>;
+  tourMedia: TourMedia[];
+  fetchTourMedia: (tourId?: string) => Promise<TourMedia[]>;
+  addTourMedia: (mediaData: Omit<TourMedia, 'id' | 'created_at'>) => Promise<TourMedia>;
+  deleteTourMedia: (mediaId: string, fileUrl?: string) => Promise<void>;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -460,6 +464,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const [tourCosts, setTourCosts] = useState<TourCost[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [paymentProposals, setPaymentProposals] = useState<PaymentProposal[]>([]);
+  const [tourMedia, setTourMedia] = useState<TourMedia[]>([]);
 
   const logActivity = async (logData: {
     action: string;
@@ -1064,6 +1069,28 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           console.warn('Lỗi khi tải Payment Proposals từ Supabase (sử dụng fallback local):', err);
           const savedProps = localStorage.getItem('crm_payment_proposals');
           if (savedProps) setPaymentProposals(JSON.parse(savedProps));
+        }
+
+        // 3.7. Tour Media
+        try {
+          const { data: mediaData, error: mediaErr } = await supabase
+            .from('tour_media')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (!mediaErr && mediaData && mediaData.length > 0) {
+            setTourMedia(mediaData.map(m => ({
+              ...m,
+              file_size: Number(m.file_size || 0)
+            })));
+            console.log('Đã nạp thành công Tour Media từ Supabase');
+          } else {
+            const savedMedia = localStorage.getItem('crm_tour_media');
+            if (savedMedia) setTourMedia(JSON.parse(savedMedia));
+          }
+        } catch (err) {
+          console.warn('Lỗi khi tải Tour Media từ Supabase (fallback local):', err);
+          const savedMedia = localStorage.getItem('crm_tour_media');
+          if (savedMedia) setTourMedia(JSON.parse(savedMedia));
         }
 
         // 4. Notifications
@@ -4498,6 +4525,116 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const fetchTourMedia = async (tourId?: string): Promise<TourMedia[]> => {
+    if (isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('tour_media').select('*').order('created_at', { ascending: false });
+        if (tourId) {
+          query = query.eq('tour_id', toUuid(tourId));
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          const mapped: TourMedia[] = data.map(m => ({
+            ...m,
+            file_size: Number(m.file_size || 0)
+          }));
+          setTourMedia(prev => {
+            const other = tourId ? prev.filter(m => m.tour_id !== tourId) : [];
+            return [...mapped, ...other];
+          });
+          return mapped;
+        }
+      } catch (e) {
+        console.warn('Lỗi fetchTourMedia:', e);
+      }
+    }
+    return tourId ? tourMedia.filter(m => m.tour_id === tourId) : tourMedia;
+  };
+
+  const addTourMedia = async (mediaData: Omit<TourMedia, 'id' | 'created_at'>): Promise<TourMedia> => {
+    const newMedia: TourMedia = {
+      ...mediaData,
+      id: generateSafeUUID(),
+      created_at: new Date().toISOString()
+    };
+
+    setTourMedia(prev => {
+      const updated = [newMedia, ...prev];
+      try {
+        localStorage.setItem('crm_tour_media', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Lỗi lưu crm_tour_media:', e);
+      }
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('tour_media').insert({
+          id: newMedia.id,
+          tour_id: toUuid(newMedia.tour_id),
+          tour_code: newMedia.tour_code,
+          file_url: newMedia.file_url,
+          file_id: newMedia.file_id || null,
+          file_name: newMedia.file_name,
+          file_size: newMedia.file_size || 0,
+          uploaded_by: newMedia.uploaded_by,
+          uploader_role: newMedia.uploader_role,
+          caption: newMedia.caption || null,
+          created_at: newMedia.created_at
+        });
+      } catch (err) {
+        console.warn('Lỗi lưu tour_media lên Supabase:', err);
+      }
+    }
+
+    logActivity({
+      action: 'Upload ảnh kỷ niệm tour',
+      module: 'Tour',
+      details: `Tải lên ảnh: ${newMedia.file_name} cho Tour mã ${newMedia.tour_code || newMedia.tour_id}`
+    });
+
+    return newMedia;
+  };
+
+  const deleteTourMedia = async (mediaId: string, fileUrl?: string): Promise<void> => {
+    setTourMedia(prev => {
+      const updated = prev.filter(m => m.id !== mediaId);
+      try {
+        localStorage.setItem('crm_tour_media', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Lỗi lưu crm_tour_media:', e);
+      }
+      return updated;
+    });
+
+    if (fileUrl) {
+      try {
+        await fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: fileUrl })
+        });
+      } catch (e) {
+        console.warn('Lỗi xóa file trên server:', e);
+      }
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('tour_media').delete().eq('id', toUuid(mediaId));
+      } catch (err) {
+        console.warn('Lỗi xóa tour_media trên Supabase:', err);
+      }
+    }
+
+    logActivity({
+      action: 'Xóa ảnh kỷ niệm tour',
+      module: 'Tour',
+      details: `Xóa ảnh kỷ niệm ID: ${mediaId}`
+    });
+  };
+
   const syncedTours = React.useMemo(() => {
     if (!tours || tours.length === 0) return tours;
     return tours.map(t => {
@@ -4604,7 +4741,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       rejectPaymentProposalLeader,
       approvePaymentProposalAccounting,
       rejectPaymentProposalAccounting,
-      deletePaymentProposal
+      deletePaymentProposal,
+      tourMedia,
+      fetchTourMedia,
+      addTourMedia,
+      deleteTourMedia
     }}>
       {children}
     </CRMContext.Provider>

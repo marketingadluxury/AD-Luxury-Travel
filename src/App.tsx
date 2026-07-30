@@ -17,6 +17,7 @@ import ActivityLogs from './pages/ActivityLogs';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
+import TourMediaManagement from './pages/TourMediaManagement';
 import { CRMProvider } from './context/CRMContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -41,6 +42,7 @@ function AppContent() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dashboard/executive" element={<ExecutiveDashboard />} />
             <Route path="/tours" element={<ToursManagement />} />
+            <Route path="/tour-media" element={<TourMediaManagement />} />
             <Route path="/visa-services" element={<VisaServices />} />
             <Route path="/visa-orders" element={<VisaOrders />} />
             <Route path="/orders" element={<OrdersManagement />} />

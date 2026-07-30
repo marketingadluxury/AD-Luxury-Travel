@@ -25,6 +25,7 @@ const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; bord
   operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
   visa: { label: 'Phòng Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
   accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  tour_guide: { label: 'Hướng dẫn viên (HDV)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
   CTV: { label: 'Cộng tác viên', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
   bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' }
 };

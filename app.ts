@@ -328,10 +328,13 @@ async function getOrCreateTourFolderV2(tourCode: string, token: string): Promise
   return targetTourFolderId;
 }
 
-async function getOrCreateTourSubFolderV2(tourCode: string, subFolder: 'Đơn hàng' | 'Chi phí', token: string): Promise<string> {
+async function getOrCreateTourSubFolderV2(tourCode: string, subFolder: 'Đơn hàng' | 'Chi phí' | 'Anh_Doan' | 'Ảnh đoàn' | string, token: string): Promise<string> {
   const tourFolderId = await getOrCreateTourFolderV2(tourCode, token);
 
   let subFolderId = await searchFolder(subFolder, tourFolderId, token);
+  if (!subFolderId && (subFolder === 'Ảnh đoàn' || subFolder === 'Anh_Doan')) {
+    subFolderId = await searchFolder(subFolder === 'Ảnh đoàn' ? 'Anh_Doan' : 'Ảnh đoàn', tourFolderId, token);
+  }
   if (!subFolderId) {
     subFolderId = await createFolder(subFolder, tourFolderId, token);
     await makeFolderPublic(subFolderId, token);
@@ -886,10 +889,51 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
     const driveActive = hasServiceAccount || hasOAuth;
 
     const file = req.file;
+    const isTourMediaUpload = body.uploadType === 'tour_media' || body.category === 'tour_media' || body.category === 'tour_photos';
     const isFeedbackUpload = body.uploadType === 'feedback' || body.category === 'feedback';
     const isPaymentProposal = body.uploadType === 'payment_proposal' || body.folder === 'payment_proposals' || !!body.proposalCode || !!body.proposal_code;
-    const isTourUpload = body.uploadType === 'tour' || !!body.tourCode;
+    const isTourUpload = (body.uploadType === 'tour' || !!body.tourCode) && !isTourMediaUpload;
     const isVisaUpload = body.uploadType === 'visa';
+
+    if (isTourMediaUpload) {
+      const tourCode = (body.tourCode || body.tour_code || 'TOUR').trim().toUpperCase();
+      const stt = body.stt || '1';
+      const ext = path.extname(file.originalname) || '.jpg';
+      const timestamp = Date.now();
+      const fileName = `${tourCode}_HDV_${timestamp}_${stt}${ext}`;
+
+      if (driveActive) {
+        console.log(`[Drive] Đang tải ảnh đoàn HDV lên Google Drive: AD Luxury Travel > Tour > ${tourCode} > Ảnh đoàn`);
+        const token = await getGoogleDriveAccessToken();
+        const targetFolderId = await getOrCreateTourSubFolderV2(tourCode, 'Ảnh đoàn', token);
+        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, targetFolderId, token);
+
+        return res.json({
+          success: true,
+          url: result.webViewLink,
+          fileName: fileName,
+          fileId: result.id,
+          storage: 'drive'
+        });
+      } else {
+        const storagePath = `Tour/${tourCode}/Anh_Doan/${fileName}`;
+        console.log(`[Supabase Fallback] Đang tải ảnh đoàn HDV lên Supabase: ${storagePath}`);
+        const supabase = getSupabaseClient(req);
+        const publicUrl = await uploadFileToSupabase(
+          'crm-attachments',
+          storagePath,
+          file.buffer,
+          file.mimetype,
+          supabase
+        );
+        return res.json({
+          success: true,
+          url: publicUrl,
+          fileName: fileName,
+          storage: 'supabase'
+        });
+      }
+    }
 
     if (isPaymentProposal) {
       const now = new Date();
@@ -1231,6 +1275,33 @@ app.post(['/api/upload-invoice-receipt', '/upload-invoice-receipt', '/api/drive/
   } catch (error: any) {
     console.error('Lỗi API /api/upload-invoice-receipt:', error);
     res.status(500).json({ error: error.message || 'Lỗi tải hóa đơn thanh toán lên hệ thống' });
+  }
+});
+
+// Get Google Drive folder URL for a tour and subfolder
+app.post('/api/get-tour-folder', async (req, res) => {
+  try {
+    const { tourCode, subFolder = 'Ảnh đoàn' } = req.body;
+    if (!tourCode) {
+      res.status(400).json({ error: 'Thiếu mã tour' });
+      return;
+    }
+    const cleanTourCode = String(tourCode).trim().toUpperCase();
+    const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
+    const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+    const driveActive = hasServiceAccount || hasOAuth;
+
+    if (driveActive) {
+      const token = await getGoogleDriveAccessToken();
+      const folderId = await getOrCreateTourSubFolderV2(cleanTourCode, subFolder, token);
+      const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+      res.json({ success: true, folderUrl, folderId, storage: 'drive' });
+    } else {
+      res.json({ success: true, folderUrl: null, storage: 'supabase' });
+    }
+  } catch (error: any) {
+    console.error('Lỗi API /api/get-tour-folder:', error);
+    res.status(500).json({ error: error.message || 'Lỗi khi lấy thư mục Drive' });
   }
 });
 

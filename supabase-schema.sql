@@ -572,6 +572,29 @@ CREATE TABLE IF NOT EXISTS payment_proposals (
 );
 
 -- ==============================================================================
+-- BẢNG ẢNH ĐOÀN / ALBUM KỶ NIỆM TOUR (TOUR MEDIA)
+-- ==============================================================================
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS tour_guide_id UUID REFERENCES profiles(id);
+
+CREATE TABLE IF NOT EXISTS tour_media (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tour_id UUID REFERENCES tours(id) ON DELETE CASCADE,
+  tour_code TEXT,
+  file_url TEXT NOT NULL,
+  file_id TEXT,
+  file_name TEXT NOT NULL,
+  file_size NUMERIC,
+  uploaded_by TEXT NOT NULL,
+  uploader_role TEXT,
+  caption TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index cho tour_media
+CREATE INDEX IF NOT EXISTS idx_tour_media_tour_id ON tour_media(tour_id);
+CREATE INDEX IF NOT EXISTS idx_tour_media_tour_code ON tour_media(tour_code);
+
+-- ==============================================================================
 -- BẢNG THÔNG BÁO HỆ THỐNG (SYSTEM NOTIFICATIONS)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS system_notifications (
