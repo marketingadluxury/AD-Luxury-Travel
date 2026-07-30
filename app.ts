@@ -931,26 +931,98 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
     const isVisaUpload = body.uploadType === 'visa';
 
     if (isTourMediaUpload) {
-      const tourCode = (body.tourCode || body.tour_code || 'TOUR').trim().toUpperCase();
+      const supabaseAdmin = getAdminSupabaseClient(req);
+      const rawTourCode = (body.tourCode || body.tour_code || body.tourId || body.uploadTourId || '').trim();
+      const rawTourId = (body.tourId || body.tour_id || body.uploadTourId || '').trim();
+      const uploaderName = (body.uploader || body.uploadedBy || body.uploaded_by || 'HDV Freelance').trim();
+      const uploaderRole = (body.uploaderRole || body.uploader_role || 'tour_guide').trim();
+      const caption = (body.caption || '').trim();
+
+      let resolvedTourCode = 'TOUR_CHUNG';
+      let resolvedTourId: string | null = null;
+
+      // Tra cứu thông tin Tour trong CSDL nếu thiếu mã tour hoặc truyền sang dạng UUID
+      try {
+        if (rawTourId && rawTourId.length >= 20) {
+          const { data: tourById } = await supabaseAdmin
+            .from('tours')
+            .select('id, code')
+            .eq('id', rawTourId)
+            .maybeSingle();
+
+          if (tourById) {
+            resolvedTourId = tourById.id;
+            resolvedTourCode = tourById.code || resolvedTourCode;
+          }
+        }
+
+        if (resolvedTourCode === 'TOUR_CHUNG' && rawTourCode) {
+          const { data: tourByCode } = await supabaseAdmin
+            .from('tours')
+            .select('id, code')
+            .eq('code', rawTourCode.toUpperCase())
+            .maybeSingle();
+
+          if (tourByCode) {
+            resolvedTourId = tourByCode.id;
+            resolvedTourCode = tourByCode.code;
+          } else if (!rawTourCode.includes('-') || rawTourCode.length < 20) {
+            resolvedTourCode = rawTourCode.toUpperCase();
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[Upload Tour Media] Lỗi tra cứu Tour trong database:', dbErr);
+      }
+
       const stt = body.stt || '1';
       const ext = path.extname(file.originalname) || '.jpg';
       const timestamp = Date.now();
-      const fileName = `${tourCode}_HDV_${timestamp}_${stt}${ext}`;
+      const fileName = `${resolvedTourCode}_HDV_${timestamp}_${stt}${ext}`;
 
       const resData = await uploadWith3TierFallback(
         req,
         file,
         fileName,
-        (token) => getOrCreateTourSubFolderV2(tourCode, 'Ảnh đoàn', token),
-        `Tour/${tourCode}/Anh_Doan/${fileName}`
+        (token) => getOrCreateTourSubFolderV2(resolvedTourCode, 'Ảnh đoàn', token),
+        `Tour/${resolvedTourCode}/Anh_Doan/${fileName}`
       );
+
+      // Lưu ngay siêu dữ liệu ảnh kỷ niệm vào bảng tour_media trên Supabase bằng Admin Client
+      let insertedRecord = null;
+      try {
+        const { data: inserted, error: insertErr } = await supabaseAdmin
+          .from('tour_media')
+          .insert({
+            tour_id: resolvedTourId,
+            tour_code: resolvedTourCode,
+            file_url: resData.url,
+            file_id: resData.fileId || null,
+            file_name: fileName,
+            file_size: file.size || 0,
+            uploaded_by: uploaderName,
+            uploader_role: uploaderRole,
+            caption: caption || null
+          })
+          .select()
+          .maybeSingle();
+
+        if (insertErr) {
+          console.warn('[Upload Tour Media] Lưu ý khi chèn bản ghi tour_media:', insertErr.message);
+        } else {
+          insertedRecord = inserted;
+        }
+      } catch (insertCatchErr) {
+        console.warn('[Upload Tour Media] Lỗi khi tạo bản ghi tour_media:', insertCatchErr);
+      }
 
       return res.json({
         success: true,
         url: resData.url,
         fileName: fileName,
         fileId: resData.fileId || '',
-        storage: resData.storage
+        storage: resData.storage,
+        media: insertedRecord,
+        tourCode: resolvedTourCode
       });
     }
 

@@ -37,8 +37,8 @@ export const HDVQuickLinkModal: React.FC<HDVQuickLinkModalProps> = ({
 
   const appOrigin = window.location.origin;
   const quickLink = selectedTour
-    ? `${appOrigin}/tour-media?uploadTourId=${selectedTour.id}`
-    : `${appOrigin}/tour-media`;
+    ? `${appOrigin}/guest-upload?uploadTourId=${selectedTour.id}`
+    : `${appOrigin}/guest-upload`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(quickLink);

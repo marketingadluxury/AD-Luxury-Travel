@@ -594,6 +594,15 @@ CREATE TABLE IF NOT EXISTS tour_media (
 CREATE INDEX IF NOT EXISTS idx_tour_media_tour_id ON tour_media(tour_id);
 CREATE INDEX IF NOT EXISTS idx_tour_media_tour_code ON tour_media(tour_code);
 
+-- Enable RLS & add policies for tour_media and public access
+ALTER TABLE tour_media ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read access to tours" ON tours;
+CREATE POLICY "Allow public read access to tours" ON tours FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Allow public access to tour_media" ON tour_media;
+CREATE POLICY "Allow public access to tour_media" ON tour_media FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
 -- ==============================================================================
 -- BẢNG THÔNG BÁO HỆ THỐNG (SYSTEM NOTIFICATIONS)
 -- ==============================================================================

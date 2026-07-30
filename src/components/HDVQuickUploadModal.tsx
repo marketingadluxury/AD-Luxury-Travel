@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle } from 'lucide-react';
+import { Camera, UploadCloud, X, Check, Image as ImageIcon, FileImage, Sparkles, FolderCheck, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Tour } from '../types';
@@ -19,7 +19,7 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
   onClose,
   defaultTourId
 }) => {
-  const { tours, addTourMedia, currentRole } = useCRM();
+  const { tours, tourMedia, fetchTourMedia, addTourMedia, currentRole } = useCRM();
   const { user } = useAuth();
 
   // Filter valid tours (exclude visa)
@@ -40,9 +40,19 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
     }
   }, [defaultTourId, isOpen]);
 
+  useEffect(() => {
+    if (isOpen && selectedTourId && fetchTourMedia) {
+      fetchTourMedia(selectedTourId);
+    }
+  }, [isOpen, selectedTourId]);
+
   if (!isOpen) return null;
 
   const currentTour = availableTours.find(t => t.id === selectedTourId) || availableTours[0];
+  const currentTourPhotos = (tourMedia || []).filter(
+    m => (m.tour_id && currentTour?.id && m.tour_id === currentTour.id) ||
+         (m.tour_code && currentTour?.code && m.tour_code.toUpperCase() === currentTour.code.toUpperCase())
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -105,8 +115,12 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
         formData.append('file', compressedFile);
         formData.append('uploadType', 'tour_media');
         formData.append('tourCode', currentTour.code);
+        formData.append('tourId', currentTour.id);
         formData.append('category', 'tour_media');
         formData.append('stt', String(i + 1));
+        formData.append('uploader', uploaderName);
+        formData.append('uploaderRole', currentRole);
+        formData.append('caption', caption.trim());
 
         // Upload to server endpoint
         const response = await fetch('/api/upload', {
@@ -178,16 +192,18 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
 
     setIsUploading(false);
 
+    if (currentTour?.id && fetchTourMedia) {
+      fetchTourMedia(currentTour.id);
+    }
+
     if (offlineSavedCount > 0) {
       toast.success(`💾 Đã lưu tạm ${offlineSavedCount} ảnh offline! Hệ thống sẽ tự động đồng bộ khi có mạng.`, { duration: 6000 });
       setSelectedFiles([]);
       setCaption('');
-      // Không tự động tắt modal theo yêu cầu
     } else if (successCount > 0) {
       toast.success(`🎉 Tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`, { duration: 5000 });
       setSelectedFiles([]);
       setCaption('');
-      // Không tự động tắt modal theo yêu cầu
     } else {
       toast.error('❌ Tải ảnh thất bại. Vui lòng kiểm tra lại kết nối và thử lại!', { duration: 5000 });
     }
@@ -306,18 +322,23 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto p-1.5 bg-gray-50 border border-gray-200 rounded-xl">
+                <div className="space-y-1.5 max-h-40 overflow-y-auto p-1 bg-gray-50 border border-gray-200 rounded-xl">
                   {selectedFiles.map((file, idx) => (
-                    <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden bg-gray-200 border border-gray-300">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`Preview ${idx}`}
-                        className="w-full h-full object-cover"
-                      />
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white border border-gray-200 shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <div className="w-7 h-7 rounded-md bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                          <FileImage className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-gray-800 truncate">{file.name}</p>
+                          <p className="text-[10px] text-gray-500 font-medium">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
-                        className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 shadow-md opacity-80 hover:opacity-100 transition-opacity"
+                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shrink-0"
+                        title="Xóa khỏi danh sách"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -354,6 +375,72 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
                     style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* List of Photos Uploaded to Server for this Tour */}
+            {currentTour && (
+              <div className="pt-3 border-t border-gray-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-gray-800 flex items-center gap-1.5">
+                    <FolderCheck className="w-4 h-4 text-teal-600" />
+                    <span>Ảnh đoàn đã tải lên ({currentTourPhotos.length} ảnh):</span>
+                  </h4>
+                  {fetchTourMedia && (
+                    <button
+                      type="button"
+                      onClick={() => fetchTourMedia(currentTour.id)}
+                      className="text-[11px] text-teal-600 hover:text-teal-800 hover:underline font-bold flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Làm mới</span>
+                    </button>
+                  )}
+                </div>
+
+                {currentTourPhotos.length === 0 ? (
+                  <div className="p-3 text-center bg-gray-50 border border-dashed border-gray-200 rounded-xl text-xs text-gray-400 font-medium">
+                    Chưa có ảnh nào được tải lên cho tour {currentTour.code}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {currentTourPhotos.map((item, idx) => (
+                      <div
+                        key={item.id || idx}
+                        className="flex items-center justify-between p-2 rounded-xl bg-gray-50 border border-gray-200 hover:border-teal-300 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
+                          <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                            <FileImage className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-800 truncate">
+                              {item.file_name || item.caption || `Ảnh đoàn ${idx + 1}`}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                              {item.caption && (
+                                <span className="text-gray-700 font-semibold truncate max-w-[140px]">{item.caption} • </span>
+                              )}
+                              <span>{item.uploaded_by || 'HDV'}</span>
+                              {item.created_at && (
+                                <span>• {new Date(item.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <a
+                          href={item.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 text-[11px] font-bold text-teal-700 bg-white border border-teal-200 hover:bg-teal-50 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                        >
+                          <span>Xem</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

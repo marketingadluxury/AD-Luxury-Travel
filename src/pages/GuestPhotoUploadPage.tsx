@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle, ArrowLeft, RefreshCw, ZoomIn, ShieldCheck, WifiOff } from 'lucide-react';
+import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle, ArrowLeft, RefreshCw, ZoomIn, ShieldCheck, WifiOff, ExternalLink, FileImage } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCRM } from '../context/CRMContext';
@@ -144,9 +144,13 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
         const formData = new FormData();
         formData.append('file', compressedFile);
         formData.append('uploadType', 'tour_media');
-        formData.append('tourCode', currentTour.code);
+        formData.append('tourCode', currentTour?.code || defaultTourId || '');
+        formData.append('tourId', currentTour?.id || defaultTourId || '');
+        formData.append('uploadTourId', defaultTourId || currentTour?.id || '');
         formData.append('category', 'tour_media');
         formData.append('stt', String(i + 1));
+        formData.append('uploader', 'HDV Freelance');
+        formData.append('caption', caption.trim());
 
         const response = await fetch('/api/upload', {
           method: 'POST',
@@ -172,12 +176,13 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
         }
 
         if (uploadedUrl) {
+          // Add to local state (server already saved record to database)
           await addTourMedia({
-            tour_id: currentTour.id,
-            tour_code: currentTour.code,
+            tour_id: currentTour?.id || data.media?.tour_id || defaultTourId || '',
+            tour_code: data.tourCode || currentTour?.code || defaultTourId || '',
             file_url: uploadedUrl,
-            file_id: data.fileId || '',
-            file_name: compressedFile.name,
+            file_id: data.fileId || data.media?.file_id || '',
+            file_name: data.fileName || compressedFile.name,
             file_size: compressedFile.size,
             uploaded_by: 'HDV Freelance',
             uploader_role: 'tour_guide',
@@ -222,12 +227,13 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
       toast.success(`💾 Đã lưu tạm ${offlineSavedCount} ảnh offline! Hệ thống sẽ tự động đồng bộ khi có mạng.`, { duration: 6000 });
       setSelectedFiles([]);
       setCaption('');
+      if (currentTour?.id) fetchTourMedia(currentTour.id);
       checkAndSyncOfflineItems();
     } else if (successCount > 0) {
       toast.success(`🎉 Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`, { duration: 5000 });
       setSelectedFiles([]);
       setCaption('');
-      fetchTourMedia(currentTour.id);
+      if (currentTour?.id) fetchTourMedia(currentTour.id);
     } else {
       toast.error('❌ Không thể tải lên ảnh. Vui lòng kiểm tra lại kết nối và thử lại!', { duration: 5000 });
     }
@@ -373,20 +379,25 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
                     Xóa tất cả
                   </button>
                 </div>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-48 overflow-y-auto p-1">
+                <div className="space-y-1.5 max-h-48 overflow-y-auto p-1">
                   {selectedFiles.map((file, idx) => (
-                    <div key={idx} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200 group">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`Preview ${idx}`}
-                        className="w-full h-full object-cover"
-                      />
+                    <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                          <FileImage className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{file.name}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
-                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                        title="Xóa khỏi danh sách"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
@@ -475,27 +486,44 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
                 <p className="text-xs text-slate-500 font-medium">Chưa có ảnh nào được tải lên cho đoàn này.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {currentTourPhotos.map((item) => (
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                {currentTourPhotos.map((item, idx) => (
                   <div
-                    key={item.id}
-                    onClick={() => setPreviewImage(item.file_url)}
-                    className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer shadow-2xs hover:shadow-md transition-all"
+                    key={item.id || idx}
+                    className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-teal-50/70 border border-slate-200/80 transition-all group"
                   >
-                    <img
-                      src={item.file_url}
-                      alt={item.file_name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <ZoomIn className="w-6 h-6 text-white" />
-                    </div>
-                    {item.caption && (
-                      <div className="absolute bottom-0 inset-x-0 bg-black/70 p-1.5 text-[10px] text-white truncate font-medium">
-                        {item.caption}
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                        <FileImage className="w-5 h-5" />
                       </div>
-                    )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate group-hover:text-teal-700 transition-colors">
+                          {item.file_name || item.caption || `Ảnh đoàn ${idx + 1}`}
+                        </p>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                          {item.caption && item.file_name && (
+                            <span className="font-semibold text-slate-600 truncate max-w-[180px]">{item.caption}</span>
+                          )}
+                          {item.created_at && (
+                            <span>• {format(new Date(item.created_at), 'HH:mm dd/MM/yyyy')}</span>
+                          )}
+                          {item.uploaded_by && (
+                            <span className="hidden sm:inline">• {item.uploaded_by}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <a
+                        href={item.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-white border border-slate-200 hover:border-teal-500 text-slate-700 hover:text-teal-700 rounded-xl transition-all shadow-2xs flex items-center gap-1 text-xs font-bold"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Xem</span>
+                      </a>
+                    </div>
                   </div>
                 ))}
               </div>

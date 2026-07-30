@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Camera, Image as ImageIcon, Upload, X, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Image as ImageIcon, FileImage, Upload, X, CheckCircle2, AlertCircle, Loader2, Sparkles, ExternalLink, FolderCheck, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCRM } from '../context/CRMContext';
@@ -72,7 +72,7 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
   onUploadSuccess,
   onClose
 }) => {
-  const { addTourMedia, currentRole } = useCRM();
+  const { tourMedia, fetchTourMedia, addTourMedia, currentRole } = useCRM();
   const { profile, user } = useAuth();
   
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +82,17 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUploadingIndex, setCurrentUploadingIndex] = useState(0);
+
+  useEffect(() => {
+    if (tourId && fetchTourMedia) {
+      fetchTourMedia(tourId);
+    }
+  }, [tourId]);
+
+  const currentTourPhotos = (tourMedia || []).filter(
+    m => (m.tour_id && m.tour_id === tourId) ||
+         (m.tour_code && tourCode && m.tour_code.toUpperCase() === tourCode.toUpperCase())
+  );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -228,6 +239,10 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
 
     setIsUploading(false);
 
+    if (fetchTourMedia && tourId) {
+      fetchTourMedia(tourId);
+    }
+
     if (offlineSavedCount > 0) {
       toast.success(`💾 Đã lưu tạm ${offlineSavedCount} ảnh offline! Hệ thống sẽ tự động đồng bộ khi có mạng.`, { duration: 6000 });
       setSelectedFiles([]);
@@ -340,32 +355,37 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1 scrollbar-thin">
+            <div className="space-y-2 max-h-64 overflow-y-auto p-1 scrollbar-thin">
               {selectedFiles.map((item, idx) => (
-                <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shadow-sm">
-                  <img
-                    src={item.preview}
-                    alt={`Preview ${idx + 1}`}
-                    className="w-full h-28 object-cover"
-                  />
-                  {!isUploading && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFile(idx)}
-                      className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-full transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <div className="p-1.5 bg-white">
+                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                      <FileImage className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">{item.file.name}</p>
+                      <p className="text-[10px] text-slate-500 font-medium">{(item.file.size / (1024 * 1024)).toFixed(2)} MB</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 grow max-w-full sm:max-w-xs">
                     <input
                       type="text"
                       placeholder="Ghi chú ảnh..."
                       value={item.caption}
                       disabled={isUploading}
                       onChange={(e) => handleCaptionChange(idx, e.target.value)}
-                      className="w-full text-xs px-2 py-1 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                     />
+                    {!isUploading && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                        title="Xóa khỏi danh sách"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -396,6 +416,70 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
             </p>
           </div>
         )}
+
+        {/* List of Photos Uploaded to Server for this Tour */}
+        <div className="pt-4 border-t border-slate-200 space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+              <FolderCheck className="w-4 h-4 text-teal-600" />
+              <span>Danh sách ảnh đã tải lên ({currentTourPhotos.length} ảnh):</span>
+            </h4>
+            {fetchTourMedia && (
+              <button
+                type="button"
+                onClick={() => fetchTourMedia(tourId)}
+                className="text-[11px] text-teal-600 hover:text-teal-800 hover:underline font-bold flex items-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Làm mới</span>
+              </button>
+            )}
+          </div>
+
+          {currentTourPhotos.length === 0 ? (
+            <div className="p-3 text-center bg-slate-50 border border-dashed border-slate-200 rounded-xl text-xs text-slate-400 font-medium">
+              Chưa có ảnh nào được tải lên cho tour {tourCode}
+            </div>
+          ) : (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              {currentTourPhotos.map((item, idx) => (
+                <div
+                  key={item.id || idx}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-teal-300 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                      <FileImage className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {item.file_name || item.caption || `Ảnh đoàn ${idx + 1}`}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                        {item.caption && (
+                          <span className="text-slate-700 font-semibold truncate max-w-[140px]">{item.caption} • </span>
+                        )}
+                        <span>{item.uploaded_by || 'HDV'}</span>
+                        {item.created_at && (
+                          <span>• {new Date(item.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    href={item.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 text-[11px] font-bold text-teal-700 bg-white border border-teal-200 hover:bg-teal-50 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                  >
+                    <span>Xem</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Action Footer */}
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
