@@ -1555,9 +1555,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
             const notif: Notification = {
               id: notifId,
-              type: 'accounting',
+              type: 'order',
               title: 'Huỷ giữ chỗ tự động',
-              message: `Đơn giữ chỗ #${shortCode} đã hết hạn và tự động giải phóng chỗ.`,
+              message: `Đơn giữ chỗ #${shortCode} (${order.booker_name || order.customer_name || 'Khách hàng'}) đã hết hạn và tự động giải phóng chỗ.`,
               targetId: order.id,
               createdAt: new Date().toISOString(),
               read: false
@@ -2750,11 +2750,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled', cancel_reason: reason } : o));
     logActivity({ action: 'Hủy Booking', module: 'Đơn hàng', details: `Mã booking: ${orderId.substring(0, 8)} - Lý do: ${reason || 'Không ghi'}` });
 
-    const newNotif = {
-      id: 'N-' + Date.now(),
-      type: 'accounting' as const,
+    const shortCode = orderId.includes('-') ? orderId.split('-')[0] : orderId.substring(0, 8);
+    const bookerName = order?.booker_name || order?.customer_name || 'Khách hàng';
+    const targetTour = tours.find(t => t.id === order?.tour_id);
+    const tourLabel = targetTour ? ` (Tour ${targetTour.code || targetTour.name})` : '';
+
+    const newNotif: Notification = {
+      id: generateSafeUUID(),
+      type: 'order',
       title: 'Booking đã huỷ',
-      message: `Booking ${orderId.substring(0, 8)} đã được huỷ bỏ bởi Sale/CTV/BOD.${reason ? ` Lý do: ${reason}` : ''}`,
+      message: `Booking #${shortCode} (${bookerName})${tourLabel} đã bị huỷ bỏ.${reason ? ` Lý do: ${reason}` : ''}`,
       targetId: orderId,
       createdAt: new Date().toISOString(),
       read: false
@@ -2796,6 +2801,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           title: newNotif.title,
           message: newNotif.message,
           target_id: newNotif.targetId,
+          created_at: newNotif.createdAt,
           read: newNotif.read
         });
       } catch (err) {

@@ -145,10 +145,12 @@ export function isOrderInLeaderTeam(order: any, leaderProfile: any, profilesList
   const orderUserId = order.user_id || order.salesperson_id;
   if (orderUserId && orderUserId === leaderId) return true;
 
-  const createdBy = (order.created_by || '').toLowerCase().trim();
-  if (createdBy) {
-    if (leaderName && createdBy.includes(leaderName)) return true;
-    if (leaderEmail && createdBy.includes(leaderEmail)) return true;
+  const rawCreatedBy = (order.created_by || '').toLowerCase().trim();
+  const cleanCreatedBy = rawCreatedBy.replace(/^(sale leader|sale|ctv|cộng tác viên|điều hành|quản trị viên|admin|bod)\s*-\s*/i, '').trim();
+
+  if (rawCreatedBy) {
+    if (leaderName && (rawCreatedBy.includes(leaderName) || leaderName.includes(cleanCreatedBy))) return true;
+    if (leaderEmail && rawCreatedBy.includes(leaderEmail)) return true;
   }
 
   // 2. Created by a team member under this leader
@@ -157,8 +159,12 @@ export function isOrderInLeaderTeam(order: any, leaderProfile: any, profilesList
       if (p.id && orderUserId && p.id === orderUserId) return true;
       const pName = (p.full_name || '').toLowerCase().trim();
       const pEmail = (p.email || '').toLowerCase().trim();
-      if (pName && createdBy && createdBy.includes(pName)) return true;
-      if (pEmail && createdBy && createdBy.includes(pEmail)) return true;
+      if (pName) {
+        if (rawCreatedBy && rawCreatedBy.includes(pName)) return true;
+        if (cleanCreatedBy && pName.includes(cleanCreatedBy)) return true;
+        if (cleanCreatedBy && cleanCreatedBy.includes(pName)) return true;
+      }
+      if (pEmail && rawCreatedBy && rawCreatedBy.includes(pEmail)) return true;
       return false;
     });
 

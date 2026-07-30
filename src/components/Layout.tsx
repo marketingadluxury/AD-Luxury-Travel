@@ -241,10 +241,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       const title = (n.title || '').toLowerCase();
 
       // Check if notification targets an order/passenger/proposal in user's scope
-      const matchesUserOrder = Array.from(myOrderIds).some(id => {
+      const targetOrder = n.targetId ? orders.find(o => o.id === n.targetId || (n.targetId && (o.id.toLowerCase().startsWith(n.targetId.toLowerCase()) || n.targetId.toLowerCase().startsWith(o.id.toLowerCase())))) : undefined;
+      const isTargetOrderInScope = targetOrder ? myOrderIds.has(targetOrder.id) : false;
+
+      const matchesUserOrder = isTargetOrderInScope || Array.from(myOrderIds).some(id => {
         if (!id) return false;
         const shortId = id.includes('-') ? id.split('-')[0] : id;
-        return n.targetId === id || msg.includes(shortId.toLowerCase()) || msg.includes(id.toLowerCase());
+        const targetId = (n.targetId || '').toLowerCase();
+        const fullId = id.toLowerCase();
+        const sId = shortId.toLowerCase();
+        
+        return (
+          targetId === fullId ||
+          targetId === sId ||
+          (targetId && fullId.includes(targetId)) ||
+          (targetId && targetId.includes(sId)) ||
+          msg.includes(sId) ||
+          msg.includes(fullId) ||
+          title.includes(sId)
+        );
       });
 
       const matchesUserPassenger = n.targetId ? myPassengerIds.has(n.targetId) : false;
