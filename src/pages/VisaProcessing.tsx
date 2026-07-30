@@ -6,6 +6,8 @@ import { Passenger } from '@/types';
 import { FileText, Check, AlertCircle, Search, Copy, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { PassengerDocumentList } from '@/components/PassengerDocumentList';
+import { TimeRangeFilter } from '@/components/TimeRangeFilter';
+import { isDateInTimeRange } from '@/lib/dateUtils';
 
 interface DisqualifiedReasonInputProps {
   passengerId: string;
@@ -131,6 +133,8 @@ export default function VisaProcessing() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTimeRange, setFilterTimeRange] = useState('all');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const [sortBy, setSortBy] = useState('newest_created');
 
   // Xử lý click từ thông báo
@@ -174,24 +178,9 @@ export default function VisaProcessing() {
 
       // 3. Time Range Filter (based on visa_submitted_at or created_at)
       if (filterTimeRange !== 'all') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
         const dateToCheckStr = p.visa_submitted_at || p.created_at;
-        if (!dateToCheckStr) return false;
-        
-        const dateToCheck = new Date(dateToCheckStr);
-        dateToCheck.setHours(0, 0, 0, 0);
-
-        if (filterTimeRange === 'today') {
-          return dateToCheck.getTime() === today.getTime();
-        } else if (filterTimeRange === 'this_week') {
-          const firstDay = new Date(today);
-          firstDay.setDate(today.getDate() - today.getDay() + 1);
-          const lastDay = new Date(firstDay);
-          lastDay.setDate(firstDay.getDate() + 6);
-          return dateToCheck >= firstDay && dateToCheck <= lastDay;
-        } else if (filterTimeRange === 'this_month') {
-          return dateToCheck.getMonth() === today.getMonth() && dateToCheck.getFullYear() === today.getFullYear();
+        if (!isDateInTimeRange(dateToCheckStr, filterTimeRange, filterStartDate, filterEndDate)) {
+          return false;
         }
       }
 
@@ -315,16 +304,16 @@ export default function VisaProcessing() {
           </div>
 
           {/* Lọc thời gian nộp */}
-          <select
+          <TimeRangeFilter
             value={filterTimeRange}
-            onChange={e => setFilterTimeRange(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">Mọi thời gian nộp/tạo</option>
-            <option value="today">Nộp/Tạo hôm nay</option>
-            <option value="this_week">Nộp/Tạo tuần này</option>
-            <option value="this_month">Nộp/Tạo tháng này</option>
-          </select>
+            onChange={setFilterTimeRange}
+            startDate={filterStartDate}
+            onChangeStartDate={setFilterStartDate}
+            endDate={filterEndDate}
+            onChangeEndDate={setFilterEndDate}
+            prefixText="Nộp/Tạo"
+            selectClassName="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+          />
 
           {/* Sắp xếp */}
           <select

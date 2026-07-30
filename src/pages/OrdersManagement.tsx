@@ -13,6 +13,9 @@ import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
 import PaymentModal from '../components/PaymentModal';
 import { PassengerDocumentList } from '../components/PassengerDocumentList';
+import { TimeRangeFilter } from '../components/TimeRangeFilter';
+import { CustomSelect } from '../components/CustomSelect';
+import { isDateInTimeRange } from '../lib/dateUtils';
 
 export default function OrdersManagement() {
   const location = useLocation();
@@ -22,6 +25,8 @@ export default function OrdersManagement() {
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [orderFilterStatus, setOrderFilterStatus] = useState('hold');
   const [orderFilterTimeRange, setOrderFilterTimeRange] = useState('this_month');
+  const [orderFilterStartDate, setOrderFilterStartDate] = useState('');
+  const [orderFilterEndDate, setOrderFilterEndDate] = useState('');
   const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
   const [orderSortBy, setOrderSortBy] = useState('newest');
   const [orderFilterTourId, setOrderFilterTourId] = useState('all');
@@ -249,26 +254,8 @@ export default function OrdersManagement() {
 
     // 9. Time range filter
     if (orderFilterTimeRange !== 'all') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       filtered = filtered.filter(o => {
-        if (!o.created_at) return false;
-        const orderDate = new Date(o.created_at);
-        orderDate.setHours(0, 0, 0, 0);
-
-        if (orderFilterTimeRange === 'today') {
-          return orderDate.getTime() === today.getTime();
-        } else if (orderFilterTimeRange === 'this_week') {
-          const firstDay = new Date(today);
-          firstDay.setDate(today.getDate() - today.getDay() + 1);
-          const lastDay = new Date(firstDay);
-          lastDay.setDate(firstDay.getDate() + 6);
-          return orderDate >= firstDay && orderDate <= lastDay;
-        } else if (orderFilterTimeRange === 'this_month') {
-          return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
-        }
-        return true;
+        return isDateInTimeRange(o.created_at, orderFilterTimeRange, orderFilterStartDate, orderFilterEndDate);
       });
     }
 
@@ -373,27 +360,8 @@ export default function OrdersManagement() {
 
     // 6. Time range filter
     if (orderFilterTimeRange !== 'all') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       baseOrders = baseOrders.filter(o => {
-        if (!o.created_at) return false;
-        const cDate = new Date(o.created_at);
-        if (orderFilterTimeRange === 'today') {
-          return cDate >= today;
-        }
-        if (orderFilterTimeRange === 'this_week') {
-          const firstDayOfWeek = new Date(today);
-          const day = today.getDay();
-          const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-          firstDayOfWeek.setDate(diff);
-          return cDate >= firstDayOfWeek;
-        }
-        if (orderFilterTimeRange === 'this_month') {
-          const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-          return cDate >= firstDayOfMonth;
-        }
-        return true;
+        return isDateInTimeRange(o.created_at, orderFilterTimeRange, orderFilterStartDate, orderFilterEndDate);
       });
     }
 
@@ -632,26 +600,8 @@ export default function OrdersManagement() {
 
     // 8. Time range filter
     if (orderFilterTimeRange !== 'all') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       base = base.filter(o => {
-        if (!o.created_at) return false;
-        const orderDate = new Date(o.created_at);
-        orderDate.setHours(0, 0, 0, 0);
-
-        if (orderFilterTimeRange === 'today') {
-          return orderDate.getTime() === today.getTime();
-        } else if (orderFilterTimeRange === 'this_week') {
-          const firstDay = new Date(today);
-          firstDay.setDate(today.getDate() - today.getDay() + 1);
-          const lastDay = new Date(firstDay);
-          lastDay.setDate(firstDay.getDate() + 6);
-          return orderDate >= firstDay && orderDate <= lastDay;
-        } else if (orderFilterTimeRange === 'this_month') {
-          return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
-        }
-        return true;
+        return isDateInTimeRange(o.created_at, orderFilterTimeRange, orderFilterStartDate, orderFilterEndDate);
       });
     }
 
@@ -662,7 +612,7 @@ export default function OrdersManagement() {
       refund: base.filter(o => o.status === 'cancelled' && invoices.some(inv => inv.order_id === o.id && inv.type === 'payment')).length,
       total: base.length
     };
-  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange, invoices, orderFilterTourId, orderFilterCreator, orderFilterPaymentStatus, orderFilterHoldStatus]);
+  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange, orderFilterStartDate, orderFilterEndDate, invoices, orderFilterTourId, orderFilterCreator, orderFilterPaymentStatus, orderFilterHoldStatus]);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -1091,18 +1041,17 @@ export default function OrdersManagement() {
 
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             {/* Quick Time Range Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs shadow-2xs">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-gray-200 rounded-lg px-2 py-1 text-xs shadow-2xs">
               <span className="text-gray-500 font-medium whitespace-nowrap">Thời gian:</span>
-              <select
+              <TimeRangeFilter
                 value={orderFilterTimeRange}
-                onChange={e => setOrderFilterTimeRange(e.target.value)}
-                className="bg-transparent font-bold text-blue-700 focus:outline-none cursor-pointer"
-              >
-                <option value="this_month">📅 Tháng này (Mặc định)</option>
-                <option value="today">Hôm nay</option>
-                <option value="this_week">Tuần này</option>
-                <option value="all">Mọi thời gian</option>
-              </select>
+                onChange={setOrderFilterTimeRange}
+                startDate={orderFilterStartDate}
+                onChangeStartDate={setOrderFilterStartDate}
+                endDate={orderFilterEndDate}
+                onChangeEndDate={setOrderFilterEndDate}
+                selectClassName="bg-transparent font-bold text-blue-700 focus:outline-none cursor-pointer text-xs"
+              />
             </div>
 
             {/* Reset filter button if active */}
@@ -1189,90 +1138,97 @@ export default function OrdersManagement() {
 
               {/* 2. Lọc Tour */}
               <div>
-                <select
+                <CustomSelect
                   value={orderFilterTourId}
-                  onChange={e => setOrderFilterTourId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="all">🗺️ Tất cả các Tour ({tourFilterOptions.length})</option>
-                  {tourFilterOptions.map(t => (
-                    <option key={t.id} value={t.id}>
-                      [{t.code || 'CHƯA_MÃ'}] {t.name} ({t.start_date ? format(new Date(t.start_date), 'dd/MM') : ''})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setOrderFilterTourId}
+                  options={[
+                    { value: 'all', label: `🗺️ Tất cả các Tour (${tourFilterOptions.length})` },
+                    ...tourFilterOptions.map((t) => ({
+                      value: t.id,
+                      label: `[${t.code || 'CHƯA_MÃ'}] ${t.name} (${t.start_date ? format(new Date(t.start_date), 'dd/MM') : ''})`,
+                    })),
+                  ]}
+                  className="w-full"
+                  buttonClassName="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white hover:bg-slate-50 focus:ring-2 focus:ring-blue-500 font-medium"
+                />
               </div>
 
               {/* 3. Lọc Người tạo / Sale */}
               <div>
-                <select
+                <CustomSelect
                   value={orderFilterCreator}
-                  onChange={e => setOrderFilterCreator(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="all">👤 Tất cả người tạo / Sale ({uniqueCreators.length})</option>
-                  {uniqueCreators.map(c => (
-                    <option key={c} value={c}>
-                      Sale/CTV: {c}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setOrderFilterCreator}
+                  options={[
+                    { value: 'all', label: `👤 Tất cả người tạo / Sale (${uniqueCreators.length})` },
+                    ...uniqueCreators.map((c) => ({
+                      value: c,
+                      label: `Sale/CTV: ${c}`,
+                    })),
+                  ]}
+                  className="w-full"
+                  buttonClassName="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white hover:bg-slate-50 focus:ring-2 focus:ring-blue-500 font-medium"
+                />
               </div>
 
               {/* 4. Lọc Trạng thái Thanh toán */}
               <div>
-                <select
+                <CustomSelect
                   value={orderFilterPaymentStatus}
-                  onChange={e => setOrderFilterPaymentStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="all">💳 Tất cả thanh toán</option>
-                  <option value="unpaid">🔴 Chưa thanh toán (Chưa cọc)</option>
-                  <option value="partially_paid">🟡 Đã cọc (Thanh toán 1 phần)</option>
-                  <option value="paid_full">🟢 Đã thanh toán đủ (100%)</option>
-                </select>
+                  onChange={setOrderFilterPaymentStatus}
+                  options={[
+                    { value: 'all', label: '💳 Tất cả thanh toán' },
+                    { value: 'unpaid', label: '🔴 Chưa thanh toán (Chưa cọc)' },
+                    { value: 'partially_paid', label: '🟡 Đã cọc (Thanh toán 1 phần)' },
+                    { value: 'paid_full', label: '🟢 Đã thanh toán đủ (100%)' },
+                  ]}
+                  className="w-full"
+                  buttonClassName="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white hover:bg-slate-50 focus:ring-2 focus:ring-blue-500 font-medium"
+                />
               </div>
 
               {/* 5. Lọc Hạn Hold */}
               <div>
-                <select
+                <CustomSelect
                   value={orderFilterHoldStatus}
-                  onChange={e => setOrderFilterHoldStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="all">⏳ Tất cả hạn Hold</option>
-                  <option value="expiring_soon">⚠️ Sắp hết hạn Hold (&lt; 6 giờ)</option>
-                  <option value="expired">🚨 Đã quá hạn Hold</option>
-                </select>
+                  onChange={setOrderFilterHoldStatus}
+                  options={[
+                    { value: 'all', label: '⏳ Tất cả hạn Hold' },
+                    { value: 'expiring_soon', label: '⚠️ Sắp hết hạn Hold (< 6 giờ)' },
+                    { value: 'expired', label: '🚨 Đã quá hạn Hold' },
+                  ]}
+                  className="w-full"
+                  buttonClassName="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white hover:bg-slate-50 focus:ring-2 focus:ring-blue-500 font-medium"
+                />
               </div>
 
               {/* 6. Lọc Thời gian tạo */}
               <div>
-                <select
+                <TimeRangeFilter
                   value={orderFilterTimeRange}
-                  onChange={e => setOrderFilterTimeRange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-                >
-                  <option value="this_month">📅 Tháng này (Mặc định)</option>
-                  <option value="today">Hôm nay</option>
-                  <option value="this_week">Tuần này</option>
-                  <option value="all">Mọi thời gian tạo</option>
-                </select>
+                  onChange={setOrderFilterTimeRange}
+                  startDate={orderFilterStartDate}
+                  onChangeStartDate={setOrderFilterStartDate}
+                  endDate={orderFilterEndDate}
+                  onChangeEndDate={setOrderFilterEndDate}
+                  selectClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                />
               </div>
 
               {/* 7. Sắp xếp */}
               <div>
-                <select
+                <CustomSelect
                   value={orderSortBy}
-                  onChange={e => setOrderSortBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-semibold text-gray-800"
-                >
-                  <option value="newest">↕️ Sắp xếp: Mới nhất</option>
-                  <option value="oldest">↕️ Sắp xếp: Cũ nhất</option>
-                  <option value="highest_price">↕️ Giá trị cao nhất</option>
-                  <option value="lowest_price">↕️ Giá trị thấp nhất</option>
-                  <option value="hold_expiry">↕️ Hạn giữ chỗ gần nhất</option>
-                </select>
+                  onChange={setOrderSortBy}
+                  options={[
+                    { value: 'newest', label: '↕️ Sắp xếp: Mới nhất' },
+                    { value: 'oldest', label: '↕️ Sắp xếp: Cũ nhất' },
+                    { value: 'highest_price', label: '↕️ Giá trị cao nhất' },
+                    { value: 'lowest_price', label: '↕️ Giá trị thấp nhất' },
+                    { value: 'hold_expiry', label: '↕️ Hạn giữ chỗ gần nhất' },
+                  ]}
+                  className="w-full"
+                  buttonClassName="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white hover:bg-slate-50 focus:ring-2 focus:ring-blue-500 font-semibold text-slate-800"
+                />
               </div>
             </div>
           </div>

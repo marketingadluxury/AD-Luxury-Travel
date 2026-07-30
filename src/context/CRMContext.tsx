@@ -3557,16 +3557,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
 
     // Trigger notification to accounting team (Kế toán)
-    const order = orders.find(o => o.id === (invoiceData as any).order_id);
-    const bookingCode = order ? order.id.substring(0, 8) : 'Chưa rõ';
+    const targetOrderId = (invoiceData as any).order_id || '';
+    const order = orders.find(o => o.id === targetOrderId || (o.id && targetOrderId && o.id.toLowerCase().includes(targetOrderId.toLowerCase())));
+    const bookingCode = order ? (order.id.includes('-') ? order.id.split('-')[0] : order.id.substring(0, 8)) : (targetOrderId ? (targetOrderId.includes('-') ? targetOrderId.split('-')[0] : targetOrderId.substring(0, 8)) : '');
+    const bookingStr = bookingCode ? ` cho booking #${bookingCode}` : '';
     const amountStr = new Intl.NumberFormat('vi-VN').format(invoiceData.amount);
     
     const newNotif: Notification = {
       id: generateSafeUUID(),
       type: 'accounting',
       title: 'Hóa đơn thanh toán mới',
-      message: `Nhân viên ${invoiceData.created_by || 'Sale'} đã tải hóa đơn chuyển khoản ${amountStr}đ cho booking #${bookingCode}. Vui lòng kiểm tra và duyệt.`,
-      targetId: (invoiceData as any).order_id || '',
+      message: `Nhân viên ${invoiceData.created_by || 'Sale'} đã tải hóa đơn chuyển khoản ${amountStr}đ${bookingStr}. Vui lòng kiểm tra và duyệt.`,
+      targetId: targetOrderId,
       createdAt: nowStr,
       read: false
     };
@@ -3779,15 +3781,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       toast.success('Duyệt phiếu chi/thu thành công (Chế độ ngoại tuyến)! Đã lưu trữ trong mục "Công ty đã nhận".');
     }
 
-    const orderObj = bookingId ? orders.find(o => o.id === bookingId) : null;
-    const bookingCode = orderObj ? orderObj.id.substring(0, 8) : 'Chưa rõ';
+    const orderObj = bookingId ? orders.find(o => o.id === bookingId || o.id.toLowerCase().includes(bookingId.toLowerCase())) : null;
+    const bookingCode = orderObj ? (orderObj.id.includes('-') ? orderObj.id.split('-')[0] : orderObj.id.substring(0, 8)) : (bookingId ? (bookingId.includes('-') ? bookingId.split('-')[0] : bookingId.substring(0, 8)) : '');
+    const bookingStr = bookingCode ? ` cho booking #${bookingCode}` : '';
     const amountStr = new Intl.NumberFormat('vi-VN').format(targetInvoice.amount);
 
     const salesNotif: Notification = {
       id: generateSafeUUID(),
-      type: 'extension',
+      type: 'order',
       title: 'Hóa đơn thanh toán được duyệt',
-      message: `Kế toán ${verifierName} đã duyệt phiếu thu ${amountStr}đ cho booking #${bookingCode}.`,
+      message: `Kế toán ${verifierName} đã duyệt phiếu thu ${amountStr}đ${bookingStr}.`,
       targetId: bookingId || '',
       createdAt: nowStr,
       read: false
@@ -3799,7 +3802,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       try {
         await supabase.from('system_notifications').insert({
           id: salesNotif.id,
-          type: 'extension',
+          type: 'order',
           title: salesNotif.title,
           message: salesNotif.message,
           target_id: salesNotif.targetId,
@@ -3899,15 +3902,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       toast.success('Từ chối phiếu thu thành công (Chế độ ngoại tuyến)! Bản ghi được lưu trong mục "Bị từ chối".');
     }
 
-    const orderObj = bookingId ? orders.find(o => o.id === bookingId) : null;
-    const bookingCode = orderObj ? orderObj.id.substring(0, 8) : 'Chưa rõ';
+    const orderObj = bookingId ? orders.find(o => o.id === bookingId || o.id.toLowerCase().includes(bookingId.toLowerCase())) : null;
+    const bookingCode = orderObj ? (orderObj.id.includes('-') ? orderObj.id.split('-')[0] : orderObj.id.substring(0, 8)) : (bookingId ? (bookingId.includes('-') ? bookingId.split('-')[0] : bookingId.substring(0, 8)) : '');
+    const bookingStr = bookingCode ? ` cho booking #${bookingCode}` : '';
     const amountStr = new Intl.NumberFormat('vi-VN').format(targetInvoice.amount);
 
     const salesNotif: Notification = {
       id: generateSafeUUID(),
-      type: 'extension',
+      type: 'order',
       title: 'Hóa đơn thanh toán bị từ chối',
-      message: `Phiếu thu ${amountStr}đ cho booking #${bookingCode} đã bị kế toán từ chối. Vui lòng kiểm tra lại.`,
+      message: `Phiếu thu ${amountStr}đ${bookingStr} đã bị kế toán từ chối. Vui lòng kiểm tra lại.`,
       targetId: bookingId || '',
       createdAt: nowStr,
       read: false
@@ -3919,7 +3923,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       try {
         await supabase.from('system_notifications').insert({
           id: salesNotif.id,
-          type: 'extension',
+          type: 'order',
           title: salesNotif.title,
           message: salesNotif.message,
           target_id: salesNotif.targetId,

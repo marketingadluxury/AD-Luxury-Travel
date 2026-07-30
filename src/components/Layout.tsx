@@ -27,7 +27,19 @@ import {
 import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
+import { CustomSelect } from './CustomSelect';
 import { Role } from '@/types';
+
+const roleOptions = [
+  { value: 'CTV', label: '🤝 Cộng tác viên (CTV)' },
+  { value: 'bod', label: '👔 BOD (Ban Giám đốc)' },
+  { value: 'operator', label: '👷 Điều hành Tour' },
+  { value: 'sale_leader', label: '⭐ Sale Leader (Trưởng nhóm)' },
+  { value: 'sale', label: '💼 Sale' },
+  { value: 'visa', label: '🛂 Bộ phận Visa' },
+  { value: 'accounting', label: '💰 Kế toán' },
+  { value: 'admin', label: '🔑 Quản trị viên (Full)' },
+];
 import { FeedbackModal } from './FeedbackModal';
 
 
@@ -212,66 +224,82 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     );
 
     return allNotifications.filter(n => {
-      // Filter out legacy mock sample notifications
+      // Filter out legacy mock sample notifications or unlinked invalid notifications
       if (n.id === 'N-1' || n.id === 'N-2' || n.targetId === 'P-101' || n.targetId === 'O-1001') {
         return false;
       }
+      if ((n.message || '').includes('#Chưa rõ') || (n.title || '').includes('#Chưa rõ')) {
+        return false;
+      }
 
-      // 1. Executive Management (Admin, BOD): Full visibility over sales, bookings, proposals & system alerts
+      // 1. Executive Management (Admin, BOD): Full visibility over valid notifications
       if (['admin', 'bod'].includes(currentRole)) {
         return true;
       }
 
+      const msg = (n.message || '').toLowerCase();
+      const title = (n.title || '').toLowerCase();
+
+      // Check if notification targets an order/passenger/proposal in user's scope
+      const matchesUserOrder = Array.from(myOrderIds).some(id => {
+        if (!id) return false;
+        const shortId = id.includes('-') ? id.split('-')[0] : id;
+        return n.targetId === id || msg.includes(shortId.toLowerCase()) || msg.includes(id.toLowerCase());
+      });
+
+      const matchesUserPassenger = n.targetId ? myPassengerIds.has(n.targetId) : false;
+      const matchesUserProposal = n.targetId ? myProposalIds.has(n.targetId) : false;
+      const isDirectlyRelevant = matchesUserOrder || matchesUserPassenger || matchesUserProposal;
+
       // 2. Sale Leader: Notifications for their own + team members' orders, passengers, proposals, plus system alerts
       if (currentRole === 'sale_leader') {
-        if (n.type === 'system' || !n.targetId) return true;
-
-        const msg = (n.message || '').toLowerCase();
-        const matchesMyOrder = Array.from(myOrderIds).some(id => {
-          const shortId = id.includes('-') ? id.split('-')[0] : id;
-          return n.targetId === id || msg.includes(shortId.toLowerCase());
-        });
-        return (
-          matchesMyOrder ||
-          myPassengerIds.has(n.targetId) ||
-          myProposalIds.has(n.targetId)
-        );
+        if (n.type === 'system' && !n.targetId) return true;
+        return isDirectlyRelevant;
       }
 
-      // 3. Regular Sale & CTV: Notifications for their own orders, passengers, proposals
+      // 3. Regular Sale & CTV: Notifications strictly for their own orders, passengers, proposals
       if (['sale', 'CTV'].includes(currentRole)) {
-        const msg = (n.message || '').toLowerCase();
-        const matchesMyOrder = Array.from(myOrderIds).some(id => {
-          const shortId = id.includes('-') ? id.split('-')[0] : id;
-          return n.targetId === id || msg.includes(shortId.toLowerCase());
-        });
-        return (
-          matchesMyOrder ||
-          myPassengerIds.has(n.targetId) ||
-          myProposalIds.has(n.targetId)
-        );
+        if (n.type === 'system' && !n.targetId) return true;
+        return isDirectlyRelevant;
       }
 
-      // 4. Visa department
+      // 4. Visa department: Visa related or directly relevant
       if (currentRole === 'visa') {
-        return n.type === 'visa';
+        if (n.type === 'visa' || title.includes('visa') || msg.includes('visa')) return true;
+        return isDirectlyRelevant;
       }
 
-      // 5. Accounting department
+      // 5. Accounting department: Accounting, proposals, invoices, receipts
       if (currentRole === 'accounting') {
-        return (
+        if (n.type === 'system') return true;
+        if (
           n.type === 'accounting' || 
-          (n.title || '').toLowerCase().includes('đề nghị thanh toán') || 
-          (n.message || '').toLowerCase().includes('đề nghị thanh toán')
-        );
+          title.includes('đề nghị thanh toán') || 
+          msg.includes('đề nghị thanh toán') ||
+          title.includes('hóa đơn') ||
+          title.includes('phiếu thu') ||
+          title.includes('phiếu chi')
+        ) {
+          return true;
+        }
+        return isDirectlyRelevant;
       }
 
-      // 6. Operator department
+      // 6. Operator department: Extension requests, hold status, tour operations, cancellations
       if (currentRole === 'operator') {
-        return n.type === 'extension' || n.type === 'visa' || n.type === 'accounting';
+        if (n.type === 'system') return true;
+        if (
+          n.type === 'extension' || 
+          title.includes('gia hạn') || 
+          title.includes('chốt sure') || 
+          title.includes('huỷ')
+        ) {
+          return true;
+        }
+        return isDirectlyRelevant;
       }
 
-      return true;
+      return isDirectlyRelevant;
     });
   }, [allNotifications, currentRole, orders, passengers, paymentProposals, profile, user]);
 
@@ -350,21 +378,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <UserCheck className="w-4 h-4 text-blue-600" />
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Vai trò đang xem</span>
           </div>
-          <select
+          <CustomSelect
+            options={roleOptions}
             value={currentRole}
-            onChange={(e) => setCurrentRole(e.target.value as Role)}
+            onChange={(val) => setCurrentRole(val as Role)}
             disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}
-            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <option value="CTV">🤝 Cộng tác viên (CTV)</option>
-            <option value="bod">👔 BOD (Ban Giám đốc)</option>
-            <option value="operator">👷 Điều hành Tour</option>
-            <option value="sale_leader">⭐ Sale Leader (Trưởng nhóm)</option>
-            <option value="sale">💼 Sale</option>
-            <option value="visa">🛂 Bộ phận Visa</option>
-            <option value="accounting">💰 Kế toán</option>
-            <option value="admin">🔑 Quản trị viên (Full)</option>
-          </select>
+            className="w-full"
+            buttonClassName="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+          />
 
           {/* Button Góp Ý & Báo Lỗi */}
           {currentRole !== 'admin' && (
@@ -504,11 +525,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                                 isProposalNotif ? 'bg-amber-100 text-amber-800 border border-amber-200' :
                                 notif.type === 'visa' ? 'bg-purple-50 text-purple-600' :
-                                notif.type === 'accounting' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'
+                                notif.type === 'accounting' ? 'bg-red-50 text-red-600' :
+                                notif.type === 'extension' ? 'bg-orange-50 text-orange-600' :
+                                'bg-blue-50 text-blue-600 border border-blue-200'
                               }`}>
                                 {isProposalNotif ? 'ĐỀ NGHỊ TT' :
                                  notif.type === 'visa' ? 'VISA' :
-                                 notif.type === 'accounting' ? 'KẾ TOÁN' : 'ĐIỀU HÀNH'}
+                                 notif.type === 'accounting' ? 'KẾ TOÁN' :
+                                 notif.type === 'extension' ? 'ĐIỀU HÀNH' : 'ĐƠN HÀNG'}
                               </span>
                               {!notif.read && (
                                 <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
@@ -692,24 +716,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <UserCheck className="w-4 h-4 text-blue-600" />
                 <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Vai trò đang xem</span>
               </div>
-              <select
+              <CustomSelect
+                options={roleOptions}
                 value={currentRole}
-                onChange={(e) => {
-                  setCurrentRole(e.target.value as Role);
+                onChange={(val) => {
+                  setCurrentRole(val as Role);
                   setIsMobileMenuOpen(false);
                 }}
                 disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-xl text-xs font-bold bg-white text-gray-800 shadow-xs focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                <option value="CTV">🤝 Cộng tác viên (CTV)</option>
-                <option value="bod">👔 BOD (Ban Giám đốc)</option>
-                <option value="operator">👷 Điều hành Tour</option>
-                <option value="sale_leader">⭐ Sale Leader (Trưởng nhóm)</option>
-                <option value="sale">💼 Sale</option>
-                <option value="visa">🛂 Bộ phận Visa</option>
-                <option value="accounting">💰 Kế toán</option>
-                <option value="admin">🔑 Quản trị viên (Full)</option>
-              </select>
+                className="w-full"
+                buttonClassName="w-full px-2.5 py-2 border border-gray-300 rounded-xl text-xs font-bold bg-white text-gray-800 shadow-xs focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
 
               {currentRole !== 'admin' && (
                 <button

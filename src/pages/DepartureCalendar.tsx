@@ -7,6 +7,9 @@ import { Tour } from '@/types';
 import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '../components/DatePicker';
+import { TimeRangeFilter } from '../components/TimeRangeFilter';
+import { CustomSelect } from '../components/CustomSelect';
+import { isDateInTimeRange } from '../lib/dateUtils';
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('vi-VN').format(amount);
@@ -399,7 +402,8 @@ export default function DepartureCalendar() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedTourStatus, setSelectedTourStatus] = useState('all');
   const [selectedTimeRange, setSelectedTimeRange] = useState('all');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedStartDate, setSelectedStartDate] = useState('');
+  const [selectedEndDate, setSelectedEndDate] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState('date_asc');
 
@@ -677,41 +681,9 @@ export default function DepartureCalendar() {
 
     // 4. Time Range match
     if (selectedTimeRange !== 'all') {
-      const departureDate = new Date(tour.departure_time);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const tourDate = new Date(departureDate);
-      tourDate.setHours(0, 0, 0, 0);
-
-      if (selectedTimeRange === 'today') {
-        if (tourDate.getTime() !== today.getTime()) return false;
-      } else if (selectedTimeRange === 'this_week') {
-        const firstDayOfWeek = new Date(today);
-        firstDayOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
-        const lastDayOfWeek = new Date(firstDayOfWeek);
-        lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 6); // Sunday
-        
-        if (tourDate < firstDayOfWeek || tourDate > lastDayOfWeek) return false;
-      } else if (selectedTimeRange === 'this_month') {
-        if (tourDate.getMonth() !== today.getMonth() || tourDate.getFullYear() !== today.getFullYear()) return false;
-      } else if (selectedTimeRange === 'next_month') {
-        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-        if (tourDate.getMonth() !== nextMonth.getMonth() || tourDate.getFullYear() !== nextMonth.getFullYear()) return false;
-      } else if (selectedTimeRange === 'next_3_months') {
-        const next3Months = new Date(today.getFullYear(), today.getMonth() + 3, 0);
-        if (tourDate < today || tourDate > next3Months) return false;
-      }
-    }
-
-    // 5. Specific Date match (Calendar picker)
-    if (selectedDate) {
-      try {
-        const depDateStr = tour.departure_time ? format(new Date(tour.departure_time), 'yyyy-MM-dd') : '';
-        const startDateStr = tour.start_date ? format(new Date(tour.start_date), 'yyyy-MM-dd') : '';
-        if (depDateStr !== selectedDate && startDateStr !== selectedDate) return false;
-      } catch (e) {
-        // Fallback or ignore parse errors
+      const targetDate = tour.departure_time || tour.start_date;
+      if (!isDateInTimeRange(targetDate, selectedTimeRange, selectedStartDate, selectedEndDate)) {
+        return false;
       }
     }
 
@@ -752,16 +724,17 @@ export default function DepartureCalendar() {
           </div>
           
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto shrink-0">
-            <select
+            <CustomSelect
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2.5 border text-xs sm:text-sm font-medium rounded-lg transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-nowrap"
-            >
-              <option value="date_asc">Khởi hành gần nhất</option>
-              <option value="date_desc">Khởi hành xa nhất</option>
-              <option value="price_asc">Giá tăng dần</option>
-              <option value="price_desc">Giá giảm dần</option>
-            </select>
+              onChange={(val) => setSortBy(val)}
+              options={[
+                { value: 'date_asc', label: 'Khởi hành gần nhất' },
+                { value: 'date_desc', label: 'Khởi hành xa nhất' },
+                { value: 'price_asc', label: 'Giá tăng dần' },
+                { value: 'price_desc', label: 'Giá giảm dần' },
+              ]}
+              buttonClassName="w-full sm:w-auto px-3.5 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+            />
             <button 
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               className={`inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border text-xs sm:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
@@ -787,77 +760,66 @@ export default function DepartureCalendar() {
 
         {/* Advanced Filters section */}
         {showAdvancedFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-150 animate-in fade-in duration-150">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-150 animate-in fade-in duration-150">
             {/* Filter by Time */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Thời gian khởi hành</label>
-              <select
-                className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              <TimeRangeFilter
+                label="Thời gian khởi hành"
                 value={selectedTimeRange}
-                onChange={e => setSelectedTimeRange(e.target.value)}
-              >
-                <option value="all">Tất cả thời gian</option>
-                <option value="today">Hôm nay</option>
-                <option value="this_week">Tuần này</option>
-                <option value="this_month">Tháng này</option>
-                <option value="next_month">Tháng sau</option>
-                <option value="next_3_months">3 tháng tới</option>
-              </select>
+                onChange={setSelectedTimeRange}
+                startDate={selectedStartDate}
+                onChangeStartDate={setSelectedStartDate}
+                endDate={selectedEndDate}
+                onChangeEndDate={setSelectedEndDate}
+                selectClassName="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+              />
             </div>
 
             {/* Filter by Category */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Danh mục sản phẩm</label>
-              <select
-                className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              <CustomSelect
                 value={selectedCategory}
-                onChange={e => setSelectedCategory(e.target.value)}
-              >
-                <option value="all">Tất cả danh mục</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+                onChange={setSelectedCategory}
+                options={[
+                  { value: 'all', label: 'Tất cả danh mục' },
+                  ...categories.map((cat) => ({ value: cat, label: cat })),
+                ]}
+                className="w-full"
+              />
             </div>
 
             {/* Filter by Tour Status */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tình trạng tour</label>
-              <select
-                className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              <CustomSelect
                 value={selectedTourStatus}
-                onChange={e => setSelectedTourStatus(e.target.value)}
-              >
-                <option value="all">Tất cả tình trạng</option>
-                <option value="available">Còn chỗ</option>
-                <option value="noshop">No-shop</option>
-                <option value="last_minute">Giờ chót</option>
-                <option value="holiday">Lễ Tết</option>
-                <option value="on_sale">Đang giảm giá</option>
-                <option value="full">Kín chỗ</option>
-              </select>
-            </div>
-
-            {/* Filter by Calendar Date */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Chọn ngày khởi hành (Lịch)</label>
-              <DatePicker
-                value={selectedDate}
-                onChange={val => setSelectedDate(val)}
+                onChange={setSelectedTourStatus}
+                options={[
+                  { value: 'all', label: 'Tất cả tình trạng' },
+                  { value: 'available', label: 'Còn chỗ' },
+                  { value: 'noshop', label: 'No-shop' },
+                  { value: 'last_minute', label: 'Giờ chót' },
+                  { value: 'holiday', label: 'Lễ Tết' },
+                  { value: 'on_sale', label: 'Đang giảm giá' },
+                  { value: 'full', label: 'Kín chỗ' },
+                ]}
+                className="w-full"
               />
             </div>
 
             {/* Reset Filters */}
-            <div className="md:col-span-4 flex justify-end">
+            <div className="md:col-span-3 flex justify-end">
               <button
                 onClick={() => {
                   setSelectedTimeRange('all');
+                  setSelectedStartDate('');
+                  setSelectedEndDate('');
                   setSelectedCategory('all');
                   setSelectedTourStatus('all');
-                  setSelectedDate('');
                   setSearchTerm('');
                 }}
-                className="text-xs font-semibold text-red-600 hover:text-red-800 flex items-center"
+                className="text-xs font-semibold text-red-600 hover:text-red-800 flex items-center cursor-pointer"
               >
                 <X className="w-3.5 h-3.5 mr-1" /> Xóa bộ lọc
               </button>

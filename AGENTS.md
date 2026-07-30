@@ -217,5 +217,17 @@ Khi thực hiện nâng cấp hoặc sửa đổi bất kỳ file nào trong h�
 4. **Nhất quán Ngôn ngữ:**
    - Toàn bộ giao diện người dùng, thông báo thành công, lỗi và hướng dẫn cài đặt phải viết bằng **Tiếng Việt** chuẩn xác, chuyên nghiệp.
 
+---
+
+## 10. Quy Tắc Giao Diện Bộ Lọc, Dropdown & Popover (UI Rules)
+- **Thiết kế Dropdown Tùy Chỉnh (Custom UI Dropdown):**
+  - Sử dụng giao diện Menu Dropdown tùy chỉnh theo chuẩn Tailwind CSS (`bg-white border border-slate-200 shadow-xl rounded-xl`) thay cho thẻ `<select>` mặc định của trình duyệt để đảm bảo màu sắc, icon, góc bo tròn và hiệu ứng hover đồng bộ hoàn toàn với ứng dụng.
+  - **Chống xuống dòng (No-Wrap Layout):** Đảm bảo tất cả các button kích hoạt dropdown luôn sử dụng `flex items-center justify-between gap-2 whitespace-nowrap min-w-0` để tiêu đề và icon mũi tên (`ChevronDown`) luôn nằm trên cùng một hàng duy nhất, không bao giờ bị rớt icon xuống dòng dưới.
+- **Cơ chế hoạt động Bộ lọc thời gian (`TimeRangeFilter`):**
+  - **Menu Lựa Chọn Tùy Chỉnh:** Hiển thị nút bấm kích hoạt dropdown với icon lịch và chevron xoay mượt mà, danh sách tùy chọn có dấu tích xanh (`Check`) đánh dấu mục đang chọn.
+  - **Nút Chỉnh Sửa Ngày Tùy Chỉnh:** Khi ở chế độ "Chọn ngày", hiển thị khoảng ngày đã chọn kèm nút icon cây bút ✏️ (`Edit2`) bên cạnh để mở/đóng Popover tùy chỉnh mượt mà mà không đè lên menu dropdown.
+  - **Tự động đóng Menu & Popover:** Click ra ngoài vùng chọn (click-outside) sẽ tự động ẩn menu dropdown và popover ngày.
+
+
 
 

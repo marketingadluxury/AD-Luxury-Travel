@@ -5,6 +5,8 @@ import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { PaymentProposal, ProposalStatus } from '@/types';
 import { DatePicker } from '@/components/DatePicker';
+import { TimeRangeFilter } from '@/components/TimeRangeFilter';
+import { isDateInTimeRange } from '@/lib/dateUtils';
 import {
   FileCheck,
   Plus,
@@ -88,6 +90,9 @@ export default function PaymentProposals() {
   const [statusFilter, setStatusFilter] = useState<'all' | ProposalStatus>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'individual' | 'tour' | 'general'>('all');
   const [viewScope, setViewScope] = useState<'all' | 'my'>('all');
+  const [timeRange, setTimeRange] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -349,9 +354,15 @@ export default function PaymentProposals() {
       // Type filter
       if (typeFilter !== 'all' && p.proposal_type !== typeFilter) return false;
 
+      // Time range filter
+      if (timeRange !== 'all') {
+        const dateStr = p.created_at;
+        if (!isDateInTimeRange(dateStr, timeRange, startDate, endDate)) return false;
+      }
+
       return true;
     });
-  }, [paymentProposals, viewScope, searchTerm, statusFilter, typeFilter, profile]);
+  }, [paymentProposals, viewScope, searchTerm, statusFilter, typeFilter, timeRange, startDate, endDate, profile]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -542,6 +553,17 @@ export default function PaymentProposals() {
               <option value="tour">✈️ Chi Theo Tour</option>
               <option value="general">🏢 Chi Phí Chung</option>
             </select>
+
+            <TimeRangeFilter
+              value={timeRange}
+              onChange={setTimeRange}
+              startDate={startDate}
+              onChangeStartDate={setStartDate}
+              endDate={endDate}
+              onChangeEndDate={setEndDate}
+              prefixText="Tạo"
+              selectClassName="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            />
           </div>
         </div>
       </div>

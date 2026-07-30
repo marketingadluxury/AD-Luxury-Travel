@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { isOrderInLeaderTeam } from '../lib/utils';
+import { TimeRangeFilter } from '../components/TimeRangeFilter';
+import { isDateInTimeRange } from '../lib/dateUtils';
 import {
   Users,
   Search,
@@ -80,6 +82,9 @@ export default function PassengersManagement() {
   const [selectedTourId, setSelectedTourId] = useState('all');
   const [selectedVisaStatus, setSelectedVisaStatus] = useState('all');
   const [selectedTier, setSelectedTier] = useState('all');
+  const [selectedTimeRange, setSelectedTimeRange] = useState('all');
+  const [selectedStartDate, setSelectedStartDate] = useState('');
+  const [selectedEndDate, setSelectedEndDate] = useState('');
 
   const getMembershipTier = (spent: number) => {
     const silver = membershipSettings?.silverMin ?? 20000000;
@@ -262,9 +267,16 @@ export default function PassengersManagement() {
         matchesTier = tierInfo.name === selectedTier;
       }
 
-      return matchesSearch && matchesTour && matchesVisa && matchesTier;
+      // Time range match (based on latest booking creation date)
+      let matchesTime = true;
+      if (selectedTimeRange !== 'all') {
+        const dateToCheck = latestBooking?.created_at;
+        matchesTime = isDateInTimeRange(dateToCheck, selectedTimeRange, selectedStartDate, selectedEndDate);
+      }
+
+      return matchesSearch && matchesTour && matchesVisa && matchesTier && matchesTime;
     });
-  }, [customerProfiles, searchTerm, selectedTourId, selectedVisaStatus, selectedTier, membershipSettings]);
+  }, [customerProfiles, searchTerm, selectedTourId, selectedVisaStatus, selectedTier, selectedTimeRange, selectedStartDate, selectedEndDate, membershipSettings]);
 
   // Stats derived from Customer Profiles
   const stats = useMemo(() => {
@@ -542,7 +554,21 @@ export default function PassengersManagement() {
           </div>
 
           {/* Filters Container */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full lg:w-auto shrink-0">
+            {/* Time Range Filter */}
+            <div className="w-full">
+              <TimeRangeFilter
+                value={selectedTimeRange}
+                onChange={setSelectedTimeRange}
+                startDate={selectedStartDate}
+                onChangeStartDate={setSelectedStartDate}
+                endDate={selectedEndDate}
+                onChangeEndDate={setSelectedEndDate}
+                prefixText="Đăng ký"
+                selectClassName="w-full pl-3 pr-8 py-2.5 border border-slate-300/90 rounded-xl text-xs font-bold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
             {/* Membership Tier Filter */}
             <div className="w-full">
               <select
