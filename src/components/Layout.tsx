@@ -24,7 +24,7 @@ import {
   LogOut,
   Ticket
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Role } from '@/types';
@@ -38,7 +38,7 @@ const navigation = [
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod'] },
   { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
   { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
-  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'operator', 'admin'] },
+  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'admin'] },
   { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin', 'bod'] },
   { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'admin', 'bod'] },
@@ -50,7 +50,7 @@ const navigation = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [] } = useCRM();
+  const { currentRole, setCurrentRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [] } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -170,44 +170,110 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const notifications = React.useMemo(() => {
-    if (['admin', 'sale_leader', 'bod'].includes(currentRole)) {
-      return allNotifications;
-    }
-    
-    if (currentRole === 'visa') {
-      return allNotifications.filter(n => n.type === 'visa');
-    }
-    if (currentRole === 'accounting') {
-      return allNotifications.filter(n => 
-        n.type === 'accounting' || 
-        (n.title || '').toLowerCase().includes('đề nghị thanh toán') || 
-        (n.message || '').toLowerCase().includes('đề nghị thanh toán')
-      );
-    }
-    if (currentRole === 'operator') {
-      return allNotifications.filter(n => n.type === 'extension');
-    }
-    
-    if (['sale', 'CTV'].includes(currentRole)) {
-      const myOrderIds = orders
-        .filter(o => o.user_id === profile?.id || o.created_by === profile?.full_name)
-        .map(o => o.id);
-        
-      const myPassengerIds = passengers
-        .filter(p => myOrderIds.includes(p.order_id))
-        .map(p => p.id);
+    const currentUserId = profile?.id || user?.id || '';
+    const userFullName = (profile?.full_name || '').trim().toLowerCase();
+    const userEmail = (user?.email || profile?.email || '').trim().toLowerCase();
 
-      const myProposalIds = (paymentProposals || [])
-        .filter(p => p.created_by_id === profile?.id || p.created_by_name === profile?.full_name)
-        .map(p => p.id);
-        
-      return allNotifications.filter(n => {
-        return myOrderIds.includes(n.targetId) || myPassengerIds.includes(n.targetId) || myProposalIds.includes(n.targetId);
-      });
-    }
-    
-    return [];
-  }, [allNotifications, currentRole, orders, passengers, paymentProposals, profile]);
+    // Map order IDs relevant to the logged-in user or sale leader's team
+    const myOrderIds = new Set(
+      orders.filter(o => {
+        if (currentRole === 'sale_leader') {
+          return isOrderInLeaderTeam(o, profile, profilesList);
+        }
+        const cb = (o.created_by || '').toLowerCase();
+        const uid = o.user_id || '';
+        return (
+          uid === currentUserId ||
+          (userFullName && cb.includes(userFullName)) ||
+          (userEmail && cb.includes(userEmail))
+        );
+      }).map(o => o.id)
+    );
+
+    const myPassengerIds = new Set(
+      passengers.filter(p => myOrderIds.has(p.order_id)).map(p => p.id)
+    );
+
+    const myProposalIds = new Set(
+      (paymentProposals || [])
+        .filter(p => {
+          if (currentRole === 'sale_leader') {
+            const isMyProposal = p.created_by_id === currentUserId || (userFullName && (p.created_by_name || '').toLowerCase().includes(userFullName));
+            if (isMyProposal) return true;
+            const creator = profilesList.find(prof => prof.id === p.created_by_id || (prof.full_name && (p.created_by_name || '').toLowerCase().includes(prof.full_name.toLowerCase())));
+            if (creator && (creator.leader_id === currentUserId || (!creator.leader_id && (creator.role === 'sale' || creator.role === 'CTV')))) {
+              return true;
+            }
+            return false;
+          }
+          return p.created_by_id === currentUserId || (userFullName && (p.created_by_name || '').toLowerCase().includes(userFullName));
+        })
+        .map(p => p.id)
+    );
+
+    return allNotifications.filter(n => {
+      // Filter out legacy mock sample notifications
+      if (n.id === 'N-1' || n.id === 'N-2' || n.targetId === 'P-101' || n.targetId === 'O-1001') {
+        return false;
+      }
+
+      // 1. Executive Management (Admin, BOD): Full visibility over sales, bookings, proposals & system alerts
+      if (['admin', 'bod'].includes(currentRole)) {
+        return true;
+      }
+
+      // 2. Sale Leader: Notifications for their own + team members' orders, passengers, proposals, plus system alerts
+      if (currentRole === 'sale_leader') {
+        if (n.type === 'system' || !n.targetId) return true;
+
+        const msg = (n.message || '').toLowerCase();
+        const matchesMyOrder = Array.from(myOrderIds).some(id => {
+          const shortId = id.includes('-') ? id.split('-')[0] : id;
+          return n.targetId === id || msg.includes(shortId.toLowerCase());
+        });
+        return (
+          matchesMyOrder ||
+          myPassengerIds.has(n.targetId) ||
+          myProposalIds.has(n.targetId)
+        );
+      }
+
+      // 3. Regular Sale & CTV: Notifications for their own orders, passengers, proposals
+      if (['sale', 'CTV'].includes(currentRole)) {
+        const msg = (n.message || '').toLowerCase();
+        const matchesMyOrder = Array.from(myOrderIds).some(id => {
+          const shortId = id.includes('-') ? id.split('-')[0] : id;
+          return n.targetId === id || msg.includes(shortId.toLowerCase());
+        });
+        return (
+          matchesMyOrder ||
+          myPassengerIds.has(n.targetId) ||
+          myProposalIds.has(n.targetId)
+        );
+      }
+
+      // 4. Visa department
+      if (currentRole === 'visa') {
+        return n.type === 'visa';
+      }
+
+      // 5. Accounting department
+      if (currentRole === 'accounting') {
+        return (
+          n.type === 'accounting' || 
+          (n.title || '').toLowerCase().includes('đề nghị thanh toán') || 
+          (n.message || '').toLowerCase().includes('đề nghị thanh toán')
+        );
+      }
+
+      // 6. Operator department
+      if (currentRole === 'operator') {
+        return n.type === 'extension' || n.type === 'visa' || n.type === 'accounting';
+      }
+
+      return true;
+    });
+  }, [allNotifications, currentRole, orders, passengers, paymentProposals, profile, user]);
 
   const unreadNotifications = React.useMemo(() => {
     return notifications.filter(n => !n.read);
@@ -449,7 +515,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                               )}
                             </div>
                             <p className="text-xs font-semibold text-gray-800 mt-1">{notif.title}</p>
-                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">
+                              {(notif.message || '').replace(/\b([0-9a-fA-F]{8})-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g, '$1')}
+                            </p>
                           </div>
                         );
                       })

@@ -95,6 +95,8 @@ export interface Order {
   is_extended?: boolean;
   booker_name?: string;
   booker_phone?: string;
+  customer_name?: string;
+  customer_phone?: string;
   adult_count?: number;
   child_count?: number;
   infant_count?: number;

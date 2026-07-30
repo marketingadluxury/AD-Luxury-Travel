@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useCRM } from '../context/CRMContext';
-import { format, differenceInDays } from 'date-fns';
+import { useAuth } from '../context/AuthContext';
+import { isOrderInLeaderTeam } from '../lib/utils';
+import { format, differenceInDays, differenceInMinutes } from 'date-fns';
 import {
   PlaneTakeoff,
   Ticket,
@@ -9,7 +11,10 @@ import {
   X,
   Download,
   Users,
-  Search
+  Search,
+  Clock,
+  UserCheck,
+  AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,7 +28,8 @@ const removeDiacritics = (str: string): string => {
 };
 
 export default function DashboardOperator() {
-  const { tours, orders, passengers } = useCRM();
+  const { tours, orders, passengers, currentRole, profilesList } = useCRM();
+  const { profile } = useAuth();
   const navigate = useNavigate();
 
   const [daysFilter, setDaysFilter] = useState<number>(30);
@@ -31,6 +37,7 @@ export default function DashboardOperator() {
   const [selectedTour, setSelectedTour] = useState<any | null>(null);
   const [showPassengersModal, setShowPassengersModal] = useState<boolean>(false);
   const [modalSearchTerm, setModalSearchTerm] = useState<string>('');
+  const [modalActiveTab, setModalActiveTab] = useState<'sold' | 'hold'>('sold');
 
   const destinationsList = useMemo(() => {
     const list = new Set<string>();
@@ -44,7 +51,20 @@ export default function DashboardOperator() {
   const tourData = useMemo(() => {
     if (!selectedTour) return { ordersList: [], passengersList: [] };
 
-    const ordersList = orders.filter(o => o.tour_id === selectedTour.id && o.status !== 'cancelled');
+    let ordersList = orders.filter(o => o.tour_id === selectedTour.id && ['sure', 'paid'].includes(o.status));
+
+    // Filter by role: sale_leader only sees their own and team members' orders
+    if (currentRole === 'sale_leader') {
+      ordersList = ordersList.filter(o => isOrderInLeaderTeam(o, profile, profilesList));
+    } else if (['sale', 'CTV'].includes(currentRole)) {
+      ordersList = ordersList.filter(o => {
+        const uid = o.user_id || o.salesperson_id;
+        const cb = (o.created_by || '').toLowerCase().trim();
+        const pName = (profile?.full_name || '').toLowerCase().trim();
+        const pEmail = (profile?.email || '').toLowerCase().trim();
+        return uid === profile?.id || (pName && cb.includes(pName)) || (pEmail && cb.includes(pEmail));
+      });
+    }
 
     const passengersList: { 
       passenger: any | null; 
@@ -75,7 +95,7 @@ export default function DashboardOperator() {
     });
 
     return { ordersList, passengersList };
-  }, [selectedTour, orders, passengers]);
+  }, [selectedTour, orders, passengers, currentRole, profile, profilesList]);
 
   const filteredModalPassengers = useMemo(() => {
     const { passengersList } = tourData;
@@ -92,6 +112,80 @@ export default function DashboardOperator() {
       return nameMatch || passportMatch || phoneMatch || orderMatch || saleMatch;
     });
   }, [tourData, modalSearchTerm]);
+
+  // Danh sách giữ chỗ (Hold orders) của Tour được chọn
+  const holdOrders = useMemo(() => {
+    if (!selectedTour) return [];
+    let list = orders.filter(o => o.tour_id === selectedTour.id && o.status === 'hold');
+
+    if (currentRole === 'sale_leader') {
+      list = list.filter(o => isOrderInLeaderTeam(o, profile, profilesList));
+    } else if (['sale', 'CTV'].includes(currentRole)) {
+      list = list.filter(o => {
+        const uid = o.user_id || o.salesperson_id;
+        const cb = (o.created_by || '').toLowerCase().trim();
+        const pName = (profile?.full_name || '').toLowerCase().trim();
+        const pEmail = (profile?.email || '').toLowerCase().trim();
+        return uid === profile?.id || (pName && cb.includes(pName)) || (pEmail && cb.includes(pEmail));
+      });
+    }
+
+    return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }, [selectedTour, orders, currentRole, profile, profilesList]);
+
+
+  const filteredHoldOrders = useMemo(() => {
+    if (!modalSearchTerm.trim()) return holdOrders;
+    const q = modalSearchTerm.toLowerCase().trim();
+    return holdOrders.filter(o => {
+      const idMatch = o.id?.toLowerCase().includes(q);
+      const bookerMatch = o.booker_name?.toLowerCase().includes(q) || o.created_by?.toLowerCase().includes(q);
+      const customerMatch = o.customer_name?.toLowerCase().includes(q);
+      const phoneMatch = o.booker_phone?.includes(q) || o.customer_phone?.includes(q);
+      return idMatch || bookerMatch || customerMatch || phoneMatch;
+    });
+  }, [holdOrders, modalSearchTerm]);
+
+  const formatRemainingTime = (expiryIso?: string) => {
+    if (!expiryIso) {
+      return { 
+        text: 'Không thời hạn', 
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-200' 
+      };
+    }
+    const expiryDate = new Date(expiryIso);
+    const now = new Date();
+    const diffInMinutes = differenceInMinutes(expiryDate, now);
+
+    if (diffInMinutes <= 0) {
+      return { 
+        text: 'Đã hết hạn', 
+        badgeClass: 'bg-red-100 text-red-800 border-red-300 font-bold' 
+      };
+    }
+
+    const days = Math.floor(diffInMinutes / (24 * 60));
+    const hours = Math.floor((diffInMinutes % (24 * 60)) / 60);
+    const mins = diffInMinutes % 60;
+
+    let text = '';
+    if (days > 0) {
+      text = `Còn ${days} ngày ${hours} giờ`;
+    } else if (hours > 0) {
+      text = `Còn ${hours} giờ ${mins} phút`;
+    } else {
+      text = `Còn ${mins} phút`;
+    }
+
+    let badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold';
+    if (diffInMinutes < 180) { // < 3h
+      badgeClass = 'bg-rose-100 text-rose-700 border-rose-300 font-bold animate-pulse';
+    } else if (diffInMinutes < 720) { // < 12h
+      badgeClass = 'bg-amber-100 text-amber-800 border-amber-300 font-bold';
+    }
+
+    return { text, badgeClass };
+  };
 
   const handleExportExcel = () => {
     if (!selectedTour) return;
@@ -304,7 +398,13 @@ export default function DashboardOperator() {
       if (tour?.tour_type === 'visa') return; // Exclude visa services
       if (selectedDestination !== 'all' && tour?.destination !== selectedDestination) return;
 
-      const seats = (o.adult_count || 0) + (o.child_count || 0);
+      let seats = (o.adult_count !== undefined || o.child_count !== undefined)
+        ? ((o.adult_count || 0) + (o.child_count || 0))
+        : 0;
+      if (seats === 0) {
+        const pCount = passengers.filter(p => p.order_id === o.id).length;
+        seats = pCount > 0 ? pCount : 1;
+      }
 
       if (o.status === 'hold') hold += seats;
       if (o.status === 'sure' || o.status === 'paid') sure += seats;
@@ -522,7 +622,7 @@ export default function DashboardOperator() {
 
       </div>
 
-      {/* MODAL DANH SÁCH HÀNH KHÁCH ĐÃ BÁN */}
+      {/* MODAL DANH SÁCH HÀNH KHÁCH & ĐƠN GIỮ CHỖ */}
       {showPassengersModal && selectedTour && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -536,11 +636,13 @@ export default function DashboardOperator() {
                   <span className="text-sm text-blue-100 font-medium">| Lịch khởi hành: {selectedTour.start_date ? format(new Date(selectedTour.start_date), 'dd/MM/yyyy') : 'N/A'}</span>
                 </div>
                 <h3 className="text-lg md:text-xl font-bold tracking-tight text-white line-clamp-1">{selectedTour.name}</h3>
-                <p className="text-xs text-blue-100 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <p className="text-xs text-blue-100 mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
                   {selectedTour.airline && <span>✈️ Hãng bay: <strong className="text-white">{selectedTour.airline}</strong></span>}
-                  <span>👥 Chỗ bán: <strong className="text-white">{selectedTour.sold_seats}/{selectedTour.total_seats}</strong></span>
-                  <span>⏳ Đang giữ (Hold): <strong className="text-white">{selectedTour.hold_seats || 0}</strong></span>
-                  <span>🟢 Chỗ còn lại: <strong className="text-white">{Math.max(0, (selectedTour.total_seats || 0) - (selectedTour.sold_seats || 0) - (selectedTour.hold_seats || 0))}</strong></span>
+                  <span>🎯 Mở bán (+OB): <strong className="text-white">{selectedTour.total_seats}{selectedTour.overbook_limit ? ` (+${selectedTour.overbook_limit} OB)` : ''}</strong></span>
+                  <span>👥 Cho phép giữ/bán: <strong className="text-white">{(selectedTour.total_seats || 0) + (selectedTour.overbook_limit || 0)}</strong></span>
+                  <span>✅ Đã bán: <strong className="text-emerald-300 font-bold">{selectedTour.sold_seats}</strong></span>
+                  <span>⏳ Đang giữ (Hold): <strong className="text-amber-300 font-bold">{selectedTour.hold_seats || 0}</strong></span>
+                  <span>🟢 Chỗ còn lại: <strong className="text-cyan-300 font-bold">{selectedTour.available_seats !== undefined ? selectedTour.available_seats : Math.max(0, (selectedTour.total_seats || 0) + (selectedTour.overbook_limit || 0) - (selectedTour.sold_seats || 0) - (selectedTour.hold_seats || 0))}</strong></span>
                 </p>
               </div>
 
@@ -557,6 +659,7 @@ export default function DashboardOperator() {
                     setShowPassengersModal(false);
                     setSelectedTour(null);
                     setModalSearchTerm('');
+                    setModalActiveTab('sold');
                   }}
                   className="p-2.5 bg-blue-900/40 hover:bg-blue-900/60 text-blue-100 hover:text-white rounded-xl transition-all cursor-pointer"
                 >
@@ -565,13 +668,44 @@ export default function DashboardOperator() {
               </div>
             </div>
 
+            {/* Navigation Tabs */}
+            <div className="flex border-b border-gray-200 bg-slate-100/90 px-5 pt-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setModalActiveTab('sold')}
+                className={`px-4 py-2.5 font-bold text-xs md:text-sm rounded-t-xl transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+                  modalActiveTab === 'sold'
+                    ? 'border-blue-600 text-blue-700 bg-white font-black shadow-sm'
+                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <Users className="w-4 h-4 text-blue-600" />
+                <span>Khách đã bán ({filteredModalPassengers.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalActiveTab('hold')}
+                className={`px-4 py-2.5 font-bold text-xs md:text-sm rounded-t-xl transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+                  modalActiveTab === 'hold'
+                    ? 'border-amber-600 text-amber-800 bg-white font-black shadow-sm'
+                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <Clock className="w-4 h-4 text-amber-600" />
+                <span>
+                  Danh sách giữ chỗ (Hold: {holdOrders.reduce((sum, o) => sum + ((o.adult_count !== undefined || o.child_count !== undefined) ? ((o.adult_count || 0) + (o.child_count || 0)) : (passengers.filter(p => p.order_id === o.id).length || 1)), 0)} chỗ / {holdOrders.length} đơn)
+                </span>
+              </button>
+            </div>
+
             {/* Sub-bar / Search */}
             <div className="p-4 bg-slate-50 border-b border-gray-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
               <div className="relative w-full sm:w-80">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Tìm hành khách, SĐT, hộ chiếu, mã ĐH..."
+                  placeholder={modalActiveTab === 'sold' ? "Tìm hành khách, SĐT, hộ chiếu, mã ĐH..." : "Tìm người giữ chỗ, SĐT, tên khách, mã ĐH..."}
                   value={modalSearchTerm}
                   onChange={(e) => setModalSearchTerm(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -584,137 +718,233 @@ export default function DashboardOperator() {
               </div>
 
               <div className="text-xs text-gray-500 font-medium">
-                Tìm thấy <span className="text-blue-600 font-bold">{filteredModalPassengers.length}</span> hành khách phù hợp
+                {modalActiveTab === 'sold' ? (
+                  <>Tìm thấy <span className="text-blue-600 font-bold">{filteredModalPassengers.length}</span> hành khách phù hợp</>
+                ) : (
+                  <>Tìm thấy <span className="text-amber-700 font-bold">{filteredHoldOrders.length}</span> đơn giữ chỗ phù hợp</>
+                )}
               </div>
             </div>
 
-            {/* Table Area */}
+            {/* Content Area */}
             <div className="p-5 overflow-y-auto flex-1 bg-white">
-              {filteredModalPassengers.length === 0 ? (
-                <div className="text-center py-12">
-                  <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm font-medium">Chưa có hành khách nào được bán hoặc không tìm thấy hành khách khớp bộ lọc</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs md:text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-gray-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
-                        <th className="py-3 px-3 text-center w-12 border-r border-gray-200">NO</th>
-                        <th className="py-3 px-3 w-16 text-center border-r border-gray-200">SEX</th>
-                        <th className="py-3 px-4 w-56 border-r border-gray-200">FULLNAME</th>
-                        <th className="py-3 px-4 w-32 border-r border-gray-200">Mã booking</th>
-                        <th className="py-3 px-4 w-40 border-r border-gray-200">Sale/CTV</th>
-                        <th className="py-3 px-3 w-28 text-center border-r border-gray-200">Phòng đơn</th>
-                        <th className="py-3 px-4 w-52 border-r border-gray-200">Ghi chú</th>
-                        <th className="py-3 px-3 w-36 text-center">Tình trạng Visa</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-150">
-                      {filteredModalPassengers.map((item, idx) => {
-                        const { passenger, order } = item;
-                        
-                        const orderIdx = tourData.ordersList.findIndex(o => o.id === order.id);
-                        const isEvenOrder = orderIdx % 2 === 0;
-                        
-                        const isLeader = passenger?.full_name?.toLowerCase().includes('tour leader') || 
-                                         passenger?.full_name?.toLowerCase().includes('leader') ||
-                                         order?.special_requests?.toLowerCase().includes('tour leader') ||
-                                         order?.special_requests?.toLowerCase().includes('leader');
-                        
-                        const isChild = passenger?.full_name?.toLowerCase().includes('chd') || 
-                                        passenger?.full_name?.toLowerCase().includes('child') ||
-                                        passenger?.full_name?.toLowerCase().includes('trẻ em') ||
-                                        order?.special_requests?.toLowerCase().includes('chd');
-                        
-                        let bgClass = isEvenOrder ? 'bg-white' : 'bg-slate-50/60';
-                        if (isLeader) bgClass = 'bg-yellow-100/70 text-amber-900 border-l-2 border-l-amber-500';
-                        else if (isChild) bgClass = 'bg-emerald-50/80 text-emerald-900 border-l-2 border-l-emerald-500';
+              {modalActiveTab === 'sold' ? (
+                /* TAB 1: DANH SÁCH HÀNH KHÁCH ĐÃ BÁN */
+                filteredModalPassengers.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm font-medium">Chưa có hành khách nào được bán hoặc không tìm thấy hành khách khớp bộ lọc</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                    <table className="w-full text-left border-collapse text-xs md:text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-gray-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+                          <th className="py-3 px-3 text-center w-12 border-r border-gray-200">NO</th>
+                          <th className="py-3 px-3 w-16 text-center border-r border-gray-200">SEX</th>
+                          <th className="py-3 px-4 w-56 border-r border-gray-200">FULLNAME</th>
+                          <th className="py-3 px-4 w-32 border-r border-gray-200">Mã booking</th>
+                          <th className="py-3 px-4 w-40 border-r border-gray-200">Sale/CTV</th>
+                          <th className="py-3 px-3 w-28 text-center border-r border-gray-200">Phòng đơn</th>
+                          <th className="py-3 px-4 w-52 border-r border-gray-200">Ghi chú</th>
+                          <th className="py-3 px-3 w-36 text-center">Tình trạng Visa</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-150">
+                        {filteredModalPassengers.map((item, idx) => {
+                          const { passenger, order } = item;
+                          
+                          const orderIdx = tourData.ordersList.findIndex(o => o.id === order.id);
+                          const isEvenOrder = orderIdx % 2 === 0;
+                          
+                          const isLeader = passenger?.full_name?.toLowerCase().includes('tour leader') || 
+                                           passenger?.full_name?.toLowerCase().includes('leader') ||
+                                           order?.special_requests?.toLowerCase().includes('tour leader') ||
+                                           order?.special_requests?.toLowerCase().includes('leader');
+                          
+                          const isChild = passenger?.full_name?.toLowerCase().includes('chd') || 
+                                          passenger?.full_name?.toLowerCase().includes('child') ||
+                                          passenger?.full_name?.toLowerCase().includes('trẻ em') ||
+                                          order?.special_requests?.toLowerCase().includes('chd');
+                          
+                          let bgClass = isEvenOrder ? 'bg-white' : 'bg-slate-50/60';
+                          if (isLeader) bgClass = 'bg-yellow-100/70 text-amber-900 border-l-2 border-l-amber-500';
+                          else if (isChild) bgClass = 'bg-emerald-50/80 text-emerald-900 border-l-2 border-l-emerald-500';
 
-                        let visaBadge = (
-                          <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200">
-                            Chưa có
-                          </span>
-                        );
-                        if (passenger?.visa_status === 'approved') {
-                          visaBadge = (
-                            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                              Đã duyệt
+                          let visaBadge = (
+                            <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200">
+                              Chưa có
                             </span>
                           );
-                        } else if (passenger?.visa_status === 'processing') {
-                          visaBadge = (
-                            <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                              Đang xử lý
-                            </span>
-                          );
-                        } else if (passenger?.visa_status === 'rejected') {
-                          visaBadge = (
-                            <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200">
-                              Từ chối
-                            </span>
-                          );
-                        } else if (passenger?.visa_status === 'not_required') {
-                          visaBadge = (
-                            <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200">
-                              Miễn visa
-                            </span>
-                          );
-                        }
-
-                        return (
-                          <tr key={`${order.id}-${passenger?.id || idx}`} className={`${bgClass} hover:brightness-95 transition-all`}>
-                            <td className="py-3 px-3 text-center border-r border-gray-200/50 font-medium text-gray-500">
-                              {idx + 1}
-                            </td>
-                            <td className="py-3 px-3 text-center border-r border-gray-200/50 font-bold text-gray-600 uppercase">
-                              {passenger?.gender || 'Mr'}
-                            </td>
-                            <td className="py-3 px-4 border-r border-gray-200/50">
-                              <div className="font-bold text-gray-950 uppercase tracking-tight">
-                                {passenger?.full_name || order.booker_name || 'Khách đại diện'}
-                              </div>
-                              {passenger?.phone && (
-                                <div className="text-[10px] text-gray-500 font-mono mt-0.5">📞 {passenger.phone}</div>
-                              )}
-                              {passenger?.dob && (
-                                <div className="text-[10px] text-gray-500 font-mono mt-0.5">🎂 {format(new Date(passenger.dob), 'dd/MM/yyyy')}</div>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 border-r border-gray-200/50">
-                              <span className="font-mono bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[11px] border border-blue-100 font-bold">
-                                {order.id ? order.id.substring(0, 8).toUpperCase() : ''}
+                          if (passenger?.visa_status === 'approved') {
+                            visaBadge = (
+                              <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                Đã duyệt
                               </span>
-                              <div className="text-[10px] text-gray-400 mt-1 font-mono">{format(new Date(order.created_at), 'dd/MM/yyyy')}</div>
-                            </td>
-                            <td className="py-3 px-4 border-r border-gray-200/50 font-semibold text-gray-800">
-                              {order.created_by || 'Chưa rõ'}
-                            </td>
-                            <td className="py-3 px-3 text-center border-r border-gray-200/50 font-medium text-gray-700">
-                              {order.single_room_count > 0 ? (
-                                <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200 font-bold text-[11px]">
-                                  Có ({order.single_room_count} phòng)
+                            );
+                          } else if (passenger?.visa_status === 'processing') {
+                            visaBadge = (
+                              <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                                Đang xử lý
+                              </span>
+                            );
+                          } else if (passenger?.visa_status === 'rejected') {
+                            visaBadge = (
+                              <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200">
+                                Từ chối
+                              </span>
+                            );
+                          } else if (passenger?.visa_status === 'not_required') {
+                            visaBadge = (
+                              <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                                Miễn visa
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <tr key={`${order.id}-${passenger?.id || idx}`} className={`${bgClass} hover:brightness-95 transition-all`}>
+                              <td className="py-3 px-3 text-center border-r border-gray-200/50 font-medium text-gray-500">
+                                {idx + 1}
+                              </td>
+                              <td className="py-3 px-3 text-center border-r border-gray-200/50 font-bold text-gray-600 uppercase">
+                                {passenger?.gender || 'Mr'}
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50">
+                                <div className="font-bold text-gray-950 uppercase tracking-tight">
+                                  {passenger?.full_name || order.booker_name || 'Khách đại diện'}
+                                </div>
+                                {passenger?.phone && (
+                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5">📞 {passenger.phone}</div>
+                                )}
+                                {passenger?.dob && (
+                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5">🎂 {format(new Date(passenger.dob), 'dd/MM/yyyy')}</div>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50">
+                                <span className="font-mono bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[11px] border border-blue-100 font-bold">
+                                  {order.id ? order.id.substring(0, 8).toUpperCase() : ''}
                                 </span>
-                              ) : (
-                                <span className="text-gray-400">Không</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 border-r border-gray-200/50 text-xs text-gray-600 italic">
-                              {order.special_requests || order.room_share_info || 'Không có ghi chú'}
-                            </td>
-                            <td className="py-3 px-3 text-center">
-                              {visaBadge}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                                <div className="text-[10px] text-gray-400 mt-1 font-mono">{format(new Date(order.created_at), 'dd/MM/yyyy')}</div>
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50 font-semibold text-gray-800">
+                                {order.created_by || 'Chưa rõ'}
+                              </td>
+                              <td className="py-3 px-3 text-center border-r border-gray-200/50 font-medium text-gray-700">
+                                {order.single_room_count > 0 ? (
+                                  <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200 font-bold text-[11px]">
+                                    Có ({order.single_room_count} phòng)
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">Không</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50 text-xs text-gray-600 italic">
+                                {order.special_requests || order.room_share_info || 'Không có ghi chú'}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                {visaBadge}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : (
+                /* TAB 2: DANH SÁCH GIỮ CHỖ (HOLD) */
+                filteredHoldOrders.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm font-medium">Chưa có đơn nào đang giữ chỗ (Hold) cho tour này</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                    <table className="w-full text-left border-collapse text-xs md:text-sm">
+                      <thead>
+                        <tr className="bg-amber-50/80 border-b border-amber-200/80 text-amber-900 font-bold uppercase tracking-wider text-[11px]">
+                          <th className="py-3 px-3 text-center w-12 border-r border-amber-200/60">STT</th>
+                          <th className="py-3 px-4 w-32 border-r border-amber-200/60">Mã Booking</th>
+                          <th className="py-3 px-4 w-48 border-r border-amber-200/60">Người giữ chỗ</th>
+                          <th className="py-3 px-4 w-52 border-r border-amber-200/60">Khách hàng đại diện</th>
+                          <th className="py-3 px-3 text-center w-36 border-r border-amber-200/60">Số lượng giữ chỗ</th>
+                          <th className="py-3 px-4 w-40 border-r border-amber-200/60">Thời gian đặt</th>
+                          <th className="py-3 px-4 w-56 text-center">Thời gian còn lại (Hạn Hold)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-150">
+                        {filteredHoldOrders.map((order, idx) => {
+                          const orderSeats = (order.adult_count !== undefined || order.child_count !== undefined)
+                            ? ((order.adult_count || 0) + (order.child_count || 0))
+                            : (passengers.filter(p => p.order_id === order.id).length || 1);
+
+                          const adults = order.adult_count || 0;
+                          const children = order.child_count || 0;
+                          const infants = order.infant_count || 0;
+
+                          const timeInfo = formatRemainingTime(order.hold_expiry);
+
+                          return (
+                            <tr key={order.id} className="hover:bg-amber-50/30 transition-all">
+                              <td className="py-3 px-3 text-center border-r border-gray-200/50 font-medium text-gray-500">
+                                {idx + 1}
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50 font-mono">
+                                <span className="bg-amber-100/80 text-amber-900 px-2 py-0.5 rounded font-bold border border-amber-200 text-xs">
+                                  {order.id ? order.id.substring(0, 8).toUpperCase() : ''}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50">
+                                <div className="font-bold text-gray-900">
+                                  {order.booker_name || order.created_by || 'Sale'}
+                                </div>
+                                {order.created_by && (
+                                  <div className="text-[10px] text-gray-500">Tạo bởi: {order.created_by}</div>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50">
+                                <div className="font-semibold text-gray-950 uppercase">
+                                  {order.customer_name || order.booker_name || 'Khách đại diện'}
+                                </div>
+                                {(order.customer_phone || order.booker_phone) && (
+                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5">📞 {order.customer_phone || order.booker_phone}</div>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-center border-r border-gray-200/50 font-bold text-amber-800">
+                                <span className="bg-amber-50 text-amber-800 px-2.5 py-1 rounded-full border border-amber-200 text-xs font-black inline-block">
+                                  {orderSeats} chỗ
+                                </span>
+                                {(adults > 0 || children > 0 || infants > 0) && (
+                                  <div className="text-[10px] text-gray-500 font-normal mt-1">
+                                    ({adults} NL{children > 0 ? `, ${children} TE` : ''}{infants > 0 ? `, ${infants} EB` : ''})
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 border-r border-gray-200/50 text-xs text-gray-600 font-mono">
+                                {format(new Date(order.created_at), 'HH:mm dd/MM/yyyy')}
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <div className="inline-flex flex-col items-center gap-1">
+                                  <span className={`px-3 py-1 rounded-full text-xs border ${timeInfo.badgeClass}`}>
+                                    {timeInfo.text}
+                                  </span>
+                                  {order.hold_expiry && (
+                                    <span className="text-[10px] text-gray-400 font-mono">
+                                      Hạn: {format(new Date(order.hold_expiry), 'HH:mm dd/MM/yyyy')}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
               )}
             </div>
-
-            {/* Footer removed per user request */}
           </div>
         </div>
       )}

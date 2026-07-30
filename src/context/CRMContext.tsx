@@ -1087,50 +1087,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             })));
             console.log('Đã nạp thành công Notifications từ Supabase');
           } else {
-            setNotifications([
-              {
-                id: 'N-1',
-                type: 'visa',
-                title: 'Yêu cầu visa mới',
-                message: 'Khách hàng Nguyễn Văn Nam (Booking O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
-                targetId: 'P-101',
-                createdAt: new Date(Date.now() - 3600000).toISOString(),
-                read: false
-              },
-              {
-                id: 'N-2',
-                type: 'accounting',
-                title: 'Yêu cầu xuất hóa đơn',
-                message: 'Booking O-1001 đã sure chỗ. Cần xuất hóa đơn VAT.',
-                targetId: 'O-1001',
-                createdAt: new Date().toISOString(),
-                read: false
-              }
-            ]);
+            setNotifications([]);
           }
         } catch (err) {
           console.warn('Lỗi khi tải Notifications từ Supabase (sử dụng fallback local):', err);
           const savedNotifs = localStorage.getItem('crm_notifications');
-          setNotifications(savedNotifs ? JSON.parse(savedNotifs) : [
-            {
-              id: 'N-1',
-              type: 'visa',
-              title: 'Yêu cầu visa mới',
-              message: 'Khách hàng Nguyễn Văn Nam (Đơn hàng O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
-              targetId: 'P-101',
-              createdAt: new Date(Date.now() - 3600000).toISOString(),
-              read: false
-            },
-            {
-              id: 'N-2',
-              type: 'accounting',
-              title: 'Yêu cầu xuất hóa đơn',
-              message: 'Đơn hàng O-1001 đã sure chỗ. Cần xuất hóa đơn VAT.',
-              targetId: 'O-1001',
-              createdAt: new Date().toISOString(),
-              read: false
-            }
-          ]);
+          setNotifications(savedNotifs ? JSON.parse(savedNotifs) : []);
         }
 
         // 5. Categories
@@ -1418,26 +1380,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       setPassengers(sanitizePassengers(parsedPassengers, parsedOrders));
 
       const savedNotifs = localStorage.getItem('crm_notifications');
-      setNotifications(savedNotifs ? JSON.parse(savedNotifs) : [
-        {
-          id: 'N-1',
-          type: 'visa',
-          title: 'Yêu cầu visa mới',
-          message: 'Khách hàng Nguyễn Văn Nam (Đơn hàng O-1001) đã tải lên đầy đủ giấy tờ cần xét duyệt visa.',
-          targetId: 'P-101',
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-          read: false
-        },
-        {
-          id: 'N-2',
-          type: 'accounting',
-          title: 'Yêu cầu xuất hóa đơn',
-          message: 'Booking chắc chắn O-1001 đã được xác nhận. Vui lòng kiểm tra và xuất hóa đơn.',
-          targetId: 'O-1001',
-          createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
-          read: false
-        }
-      ]);
+      setNotifications(savedNotifs ? JSON.parse(savedNotifs) : []);
 
       const savedCats = localStorage.getItem('crm_categories');
       setCategories(savedCats ? JSON.parse(savedCats) : [
@@ -1559,18 +1502,22 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
-  const releaseExpiredHolds = () => {
+  const releaseExpiredHolds = async () => {
     const now = new Date();
     let updatedTours = [...tours];
     let updatedOrders = [...orders];
     let toursChanged = false;
     let ordersChanged = false;
+    const expiredOrdersToSync: string[] = [];
+    const newNotifsToSync: Notification[] = [];
 
     updatedOrders = updatedOrders.map(order => {
       if (order.status === 'hold' && order.hold_expiry) {
         const expiry = new Date(order.hold_expiry);
         if (now > expiry) {
           ordersChanged = true;
+          expiredOrdersToSync.push(order.id);
+
           // Update associated tour seats
           updatedTours = updatedTours.map(t => {
             if (t.id === order.tour_id) {
@@ -1598,19 +1545,26 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             return t;
           });
 
-          // Add notification
-          setNotifications(prev => [
-            {
-              id: 'N-' + Date.now(),
+          // Short 8-char code for notification
+          const shortCode = order.id.includes('-') ? order.id.split('-')[0] : order.id;
+          const notifId = 'N-cancel-' + order.id;
+
+          setNotifications(prev => {
+            const exists = prev.some(n => n.id === notifId || (n.targetId === order.id && n.title === 'Huỷ giữ chỗ tự động'));
+            if (exists) return prev;
+
+            const notif: Notification = {
+              id: notifId,
               type: 'accounting',
               title: 'Huỷ giữ chỗ tự động',
-              message: `Đơn giữ chỗ ${order.id} đã hết hạn ${order.hold_expiry} và tự động giải phóng chỗ.`,
+              message: `Đơn giữ chỗ #${shortCode} đã hết hạn và tự động giải phóng chỗ.`,
               targetId: order.id,
               createdAt: new Date().toISOString(),
               read: false
-            },
-            ...prev
-          ]);
+            };
+            newNotifsToSync.push(notif);
+            return [notif, ...prev];
+          });
 
           return { ...order, status: 'cancelled' };
         }
@@ -1620,6 +1574,31 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (toursChanged) setTours(updatedTours);
     if (ordersChanged) setOrders(updatedOrders);
+
+    if (isSupabaseConfigured()) {
+      for (const oid of expiredOrdersToSync) {
+        try {
+          await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', toUuid(oid));
+        } catch (err) {
+          console.error('Lỗi khi cập nhật trạng thái huỷ hold lên Supabase:', err);
+        }
+      }
+      for (const notif of newNotifsToSync) {
+        try {
+          await supabase.from('system_notifications').insert({
+            id: notif.id,
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            target_id: notif.targetId,
+            created_at: notif.createdAt,
+            read: false
+          });
+        } catch (err) {
+          console.warn('Lỗi khi lưu thông báo huỷ hold lên Supabase:', err);
+        }
+      }
+    }
   };
 
   const releaseExpiredHoldsRef = useRef(releaseExpiredHolds);
@@ -3651,7 +3630,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             newOrderStatus = 'paid';
           } else if (approvedSum === 0 && order.status === 'paid') {
             newOrderStatus = 'sure';
-          } else if (order.status === 'hold') {
+          } else if (order.status === 'hold' && approvedSum > 0) {
             newOrderStatus = 'sure';
           }
         }
@@ -4509,9 +4488,63 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const syncedTours = React.useMemo(() => {
+    if (!tours || tours.length === 0) return tours;
+    return tours.map(t => {
+      const tourOrders = orders.filter(o => o.tour_id === t.id && o.status !== 'cancelled');
+
+      const sold_seats = tourOrders
+        .filter(o => ['sure', 'paid'].includes(o.status))
+        .reduce((sum, o) => {
+          let count = (o.adult_count !== undefined || o.child_count !== undefined)
+            ? ((o.adult_count || 0) + (o.child_count || 0))
+            : 0;
+          if (count === 0) {
+            const pCount = passengers.filter(p => p.order_id === o.id).length;
+            count = pCount > 0 ? pCount : 1;
+          }
+          return sum + count;
+        }, 0);
+
+      const hold_seats = tourOrders
+        .filter(o => o.status === 'hold')
+        .reduce((sum, o) => {
+          let count = (o.adult_count !== undefined || o.child_count !== undefined)
+            ? ((o.adult_count || 0) + (o.child_count || 0))
+            : 0;
+          if (count === 0) {
+            const pCount = passengers.filter(p => p.order_id === o.id).length;
+            count = pCount > 0 ? pCount : 1;
+          }
+          return sum + count;
+        }, 0);
+
+      const totalSeatsNum = Number(t.total_seats || 0);
+      const overbook = Number(t.overbook_limit || 0);
+      const totalCapacity = totalSeatsNum + overbook;
+      const available_seats = Math.max(0, totalCapacity - sold_seats - hold_seats);
+      const totalUsed = sold_seats + hold_seats;
+
+      let seat_status: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+      if (totalUsed >= totalCapacity) {
+        seat_status = 'Hết chỗ';
+      } else if (totalUsed >= totalSeatsNum) {
+        seat_status = 'Overbooked';
+      }
+
+      return {
+        ...t,
+        sold_seats,
+        hold_seats,
+        available_seats,
+        seat_status
+      };
+    });
+  }, [tours, orders, passengers]);
+
   return (
     <CRMContext.Provider value={{
-      tours,
+      tours: syncedTours,
       orders,
       passengers,
       notifications,

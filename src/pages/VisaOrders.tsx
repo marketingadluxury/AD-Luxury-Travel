@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
+import { isOrderInLeaderTeam } from '@/lib/utils';
 import { Order, Passenger } from '@/types';
 import { ShoppingCart, Users, Plus, ChevronDown, ChevronUp, Trash2, Info, Edit, Search, Phone, Tag, CreditCard, Copy } from 'lucide-react';
 import { format } from 'date-fns';
@@ -12,14 +13,17 @@ import EditOrderModal from '../components/EditOrderModal';
 import PaymentModal from '../components/PaymentModal';
 
 export default function VisaOrders() {
-  const { tours, orders: allOrders, passengers, createOrder, cancelOrder, updatePassenger, updateOrder, currentRole } = useCRM();
+  const { tours, orders: allOrders, passengers, createOrder, cancelOrder, updatePassenger, updateOrder, currentRole, profilesList } = useCRM();
   const { profile, user } = useAuth();
   
   const orders = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let filtered = ['admin', 'operator', 'visa', 'sale_leader'].includes(currentRole)
+    let filtered = ['admin', 'operator', 'visa', 'bod'].includes(currentRole)
       ? allOrders
-      : allOrders.filter(o => o.user_id === profile?.id);
+      : currentRole === 'sale_leader'
+      ? allOrders.filter(o => isOrderInLeaderTeam(o, profile, profilesList))
+      : allOrders.filter(o => o.user_id === profile?.id || (o.created_by && profile?.full_name && o.created_by.toLowerCase().trim().includes(profile.full_name.toLowerCase().trim())));
+
     
     // 2. ONLY Visa orders
     filtered = filtered.filter(o => {

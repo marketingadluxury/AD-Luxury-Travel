@@ -1,11 +1,11 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import Select from 'react-select';
 import { useCRM, canUnlockOrder } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy, Filter, RotateCcw, Layers, List, Calendar, MapPin, Building } from 'lucide-react';
 import { format, differenceInHours } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
@@ -21,9 +21,19 @@ export default function OrdersManagement() {
 
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [orderFilterStatus, setOrderFilterStatus] = useState('hold');
-  const [orderFilterTimeRange, setOrderFilterTimeRange] = useState('all');
+  const [orderFilterTimeRange, setOrderFilterTimeRange] = useState('this_month');
+  const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
   const [orderSortBy, setOrderSortBy] = useState('newest');
+  const [orderFilterTourId, setOrderFilterTourId] = useState('all');
+  const [orderFilterCreator, setOrderFilterCreator] = useState('all');
+  const [orderFilterPaymentStatus, setOrderFilterPaymentStatus] = useState('all');
+  const [orderFilterHoldStatus, setOrderFilterHoldStatus] = useState('all');
   const [contractUploadProgress, setContractUploadProgress] = useState<Record<string, boolean>>({});
+
+  // Overview Stats Detail Modal state
+  const [overviewModalType, setOverviewModalType] = useState<'hold' | 'sure' | 'revenue' | 'paid' | 'remaining' | null>(null);
+  const [overviewModalViewMode, setOverviewModalViewMode] = useState<'tour' | 'order'>('tour');
+  const [overviewModalSearch, setOverviewModalSearch] = useState('');
 
   const handleUploadContract = async (orderId: string, orderCode: string, file: File) => {
     setContractUploadProgress(prev => ({ ...prev, [orderId]: true }));
@@ -98,11 +108,56 @@ export default function OrdersManagement() {
     toast.success(`Đã sao chép mã đơn hàng: ${shortCode}`);
   };
 
+  const isOrderInLeaderTeam = React.useCallback((o: any, leaderProfile: any, profiles: any[]) => {
+    if (!leaderProfile) return false;
+
+    // 1. Created by leader directly
+    const isCreatedByLeader =
+      (o.user_id && o.user_id === leaderProfile.id) ||
+      (o.salesperson_id && o.salesperson_id === leaderProfile.id) ||
+      (o.created_by && leaderProfile.full_name && o.created_by.toLowerCase().trim() === leaderProfile.full_name.toLowerCase().trim()) ||
+      (o.created_by && leaderProfile.email && o.created_by.toLowerCase().trim() === leaderProfile.email.toLowerCase().trim());
+
+    if (isCreatedByLeader) return true;
+
+    // 2. Created by a team member whose leader_id === leaderProfile.id
+    const creatorProfile = profiles.find(p =>
+      (p.id && o.user_id && p.id === o.user_id) ||
+      (p.id && o.salesperson_id && p.id === o.salesperson_id) ||
+      (p.full_name && o.created_by && p.full_name.toLowerCase().trim() === o.created_by.toLowerCase().trim()) ||
+      (p.email && o.created_by && p.email.toLowerCase().trim() === o.created_by.toLowerCase().trim())
+    );
+
+    return Boolean(creatorProfile && creatorProfile.leader_id === leaderProfile.id);
+  }, []);
+
+  const tourFilterOptions = React.useMemo(() => {
+    return tours
+      .filter(t => t.tour_type !== 'visa')
+      .sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  }, [tours]);
+
+  const uniqueCreators = React.useMemo(() => {
+    const creatorsSet = new Set<string>();
+    let baseOrders = ['admin', 'operator', 'bod'].includes(currentRole)
+      ? allOrders
+      : currentRole === 'sale_leader'
+      ? allOrders.filter(o => isOrderInLeaderTeam(o, profile, profilesList))
+      : allOrders.filter(o => o.user_id === profile?.id || (o.created_by && profile?.full_name && o.created_by.toLowerCase().trim() === profile.full_name.toLowerCase().trim()));
+
+    baseOrders.forEach(o => {
+      if (o.created_by) creatorsSet.add(o.created_by);
+    });
+    return Array.from(creatorsSet).sort();
+  }, [allOrders, currentRole, profile, profilesList, isOrderInLeaderTeam]);
+
   const orders = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let filtered = ['admin', 'operator', 'sale_leader'].includes(currentRole)
+    let filtered = ['admin', 'operator', 'bod'].includes(currentRole)
       ? allOrders
-      : allOrders.filter(o => o.user_id === profile?.id);
+      : currentRole === 'sale_leader'
+      ? allOrders.filter(o => isOrderInLeaderTeam(o, profile, profilesList))
+      : allOrders.filter(o => o.user_id === profile?.id || (o.created_by && profile?.full_name && o.created_by.toLowerCase().trim() === profile.full_name.toLowerCase().trim()));
 
     // 2. Filter out Visa-only service orders (separation of concerns)
     filtered = filtered.filter(o => {
@@ -110,7 +165,7 @@ export default function OrdersManagement() {
       return tour?.tour_type !== 'visa';
     });
 
-    // 3. Search term filter (code, booker_name, booker_phone, tour code, tour name)
+    // 3. Search term filter (code, booker_name, booker_phone, tour code, tour name, creator)
     if (orderSearchTerm.trim() !== '') {
       const rawQ = orderSearchTerm.toLowerCase().trim();
       const q = rawQ.replace(/^#/, '').replace(/^bk-/i, '');
@@ -121,11 +176,62 @@ export default function OrdersManagement() {
         const codeMatch = o.id && (o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(rawQ));
         const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(rawQ);
         const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(rawQ);
-        return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch;
+        const creatorMatch = o.created_by && o.created_by.toLowerCase().includes(rawQ);
+        return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch || creatorMatch;
       });
     }
 
-    // 4. Status filter
+    // 4. Tour filter
+    if (orderFilterTourId !== 'all') {
+      filtered = filtered.filter(o => o.tour_id === orderFilterTourId);
+    }
+
+    // 5. Creator / Sale filter
+    if (orderFilterCreator !== 'all') {
+      filtered = filtered.filter(o => (o.created_by || '').toLowerCase() === orderFilterCreator.toLowerCase());
+    }
+
+    // 6. Payment Status filter
+    if (orderFilterPaymentStatus !== 'all') {
+      filtered = filtered.filter(o => {
+        const totalP = o.total_price || 0;
+        const orderInvoices = invoices.filter(inv => inv.order_id === o.id);
+        const paidA = orderInvoices
+          .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+          .reduce((s, inv) => s + inv.amount, 0) || o.paid_amount || 0;
+
+        if (orderFilterPaymentStatus === 'unpaid') {
+          return paidA <= 0;
+        }
+        if (orderFilterPaymentStatus === 'partially_paid') {
+          return paidA > 0 && paidA < totalP;
+        }
+        if (orderFilterPaymentStatus === 'paid_full') {
+          return paidA >= totalP && totalP > 0;
+        }
+        return true;
+      });
+    }
+
+    // 7. Hold Status filter
+    if (orderFilterHoldStatus !== 'all') {
+      const now = new Date().getTime();
+      filtered = filtered.filter(o => {
+        if (o.status !== 'hold' || !o.hold_expiry) return false;
+        const expTime = new Date(o.hold_expiry).getTime();
+        const diffHours = (expTime - now) / (1000 * 3600);
+
+        if (orderFilterHoldStatus === 'expiring_soon') {
+          return diffHours > 0 && diffHours <= 6;
+        }
+        if (orderFilterHoldStatus === 'expired') {
+          return diffHours <= 0;
+        }
+        return true;
+      });
+    }
+
+    // 8. Status filter
     if (orderFilterStatus !== 'all') {
       filtered = filtered.filter(o => {
         if (orderFilterStatus === 'paid') {
@@ -141,7 +247,7 @@ export default function OrdersManagement() {
       });
     }
 
-    // 5. Time range filter
+    // 9. Time range filter
     if (orderFilterTimeRange !== 'all') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -187,7 +293,7 @@ export default function OrdersManagement() {
       }
       return 0;
     });
-  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterStatus, orderFilterTimeRange, orderSortBy, invoices]);
+  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterStatus, orderFilterTimeRange, orderSortBy, invoices, orderFilterTourId, orderFilterCreator, orderFilterPaymentStatus, orderFilterHoldStatus]);
 
   const holdStatistics = React.useMemo(() => {
     const stats: Record<string, { orderCount: number; seatsHold: number; detailTours: Record<string, number> }> = {};
@@ -197,7 +303,13 @@ export default function OrdersManagement() {
         const creator = o.created_by || 'Chưa rõ';
         const tour = tours.find(t => t.id === o.tour_id);
         const tourCode = tour?.code || 'Chưa rõ Tour';
-        const seats = (o.adult_count || 0) + (o.child_count || 0);
+        let seats = (o.adult_count !== undefined || o.child_count !== undefined)
+          ? ((o.adult_count || 0) + (o.child_count || 0))
+          : 0;
+        if (seats === 0) {
+          const pCount = passengers.filter(p => p.order_id === o.id).length;
+          seats = pCount > 0 ? pCount : 1;
+        }
 
         if (!stats[creator]) {
           stats[creator] = {
@@ -217,13 +329,15 @@ export default function OrdersManagement() {
       creator,
       ...data
     })).sort((a, b) => b.seatsHold - a.seatsHold);
-  }, [allOrders, tours]);
+  }, [allOrders, tours, passengers]);
 
   const salesOverviewStats = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let baseOrders = ['admin', 'operator', 'sale_leader'].includes(currentRole)
+    let baseOrders = ['admin', 'operator', 'bod'].includes(currentRole)
       ? allOrders
-      : allOrders.filter(o => o.user_id === profile?.id);
+      : currentRole === 'sale_leader'
+      ? allOrders.filter(o => isOrderInLeaderTeam(o, profile, profilesList))
+      : allOrders.filter(o => o.user_id === profile?.id || (o.created_by && profile?.full_name && o.created_by.toLowerCase().trim() === profile.full_name.toLowerCase().trim()));
 
     // 2. Filter out Visa-only service orders
     baseOrders = baseOrders.filter(o => {
@@ -231,13 +345,83 @@ export default function OrdersManagement() {
       return tour?.tour_type !== 'visa';
     });
 
+    // 3. Search term filter
+    if (orderSearchTerm.trim() !== '') {
+      const rawQ = orderSearchTerm.toLowerCase().trim();
+      const q = rawQ.replace(/^#/, '').replace(/^bk-/i, '');
+      baseOrders = baseOrders.filter(o => {
+        const tour = tours.find(t => t.id === o.tour_id);
+        const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(rawQ);
+        const phoneMatch = o.booker_phone && o.booker_phone.includes(rawQ);
+        const codeMatch = o.id && (o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(rawQ));
+        const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(rawQ);
+        const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(rawQ);
+        const creatorMatch = o.created_by && o.created_by.toLowerCase().includes(rawQ);
+        return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch || creatorMatch;
+      });
+    }
+
+    // 4. Tour filter
+    if (orderFilterTourId !== 'all') {
+      baseOrders = baseOrders.filter(o => o.tour_id === orderFilterTourId);
+    }
+
+    // 5. Creator filter
+    if (orderFilterCreator !== 'all') {
+      baseOrders = baseOrders.filter(o => (o.created_by || '').toLowerCase() === orderFilterCreator.toLowerCase());
+    }
+
+    // 6. Time range filter
+    if (orderFilterTimeRange !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      baseOrders = baseOrders.filter(o => {
+        if (!o.created_at) return false;
+        const cDate = new Date(o.created_at);
+        if (orderFilterTimeRange === 'today') {
+          return cDate >= today;
+        }
+        if (orderFilterTimeRange === 'this_week') {
+          const firstDayOfWeek = new Date(today);
+          const day = today.getDay();
+          const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+          firstDayOfWeek.setDate(diff);
+          return cDate >= firstDayOfWeek;
+        }
+        if (orderFilterTimeRange === 'this_month') {
+          const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+          return cDate >= firstDayOfMonth;
+        }
+        return true;
+      });
+    }
+
     const slotsHold = baseOrders
       .filter(o => o.status === 'hold')
-      .reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+      .reduce((sum, o) => {
+        let count = (o.adult_count !== undefined || o.child_count !== undefined)
+          ? ((o.adult_count || 0) + (o.child_count || 0))
+          : 0;
+        if (count === 0) {
+          const pCount = passengers.filter(p => p.order_id === o.id).length;
+          count = pCount > 0 ? pCount : 1;
+        }
+        return sum + count;
+      }, 0);
 
     const slotsSure = baseOrders
       .filter(o => ['sure', 'paid'].includes(o.status))
-      .reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+      .reduce((sum, o) => {
+        let count = (o.adult_count !== undefined || o.child_count !== undefined)
+          ? ((o.adult_count || 0) + (o.child_count || 0))
+          : 0;
+        if (count === 0) {
+          const pCount = passengers.filter(p => p.order_id === o.id).length;
+          count = pCount > 0 ? pCount : 1;
+        }
+        return sum + count;
+      }, 0);
 
     const totalRev = baseOrders
       .filter(o => ['sure', 'paid'].includes(o.status))
@@ -259,6 +443,7 @@ export default function OrdersManagement() {
     const sureOrdersCount = baseOrders.filter(o => ['sure', 'paid'].includes(o.status)).length;
 
     return {
+      baseOrders,
       slotsHold,
       slotsSure,
       totalRevenue: totalRev,
@@ -267,14 +452,122 @@ export default function OrdersManagement() {
       holdOrdersCount,
       sureOrdersCount
     };
-  }, [allOrders, currentRole, profile, tours, invoices]);
+  }, [allOrders, currentRole, profile, profilesList, tours, invoices, orderSearchTerm, orderFilterTourId, orderFilterCreator, orderFilterTimeRange, passengers]);
+
+  // Compute filtered orders and tour groups for the overview detail modal
+  const overviewModalFilteredOrders = React.useMemo(() => {
+    if (!overviewModalType || !salesOverviewStats.baseOrders) return [];
+    let ordersList = salesOverviewStats.baseOrders;
+
+    if (overviewModalType === 'hold') {
+      ordersList = ordersList.filter(o => o.status === 'hold');
+    } else if (overviewModalType === 'sure') {
+      ordersList = ordersList.filter(o => ['sure', 'paid'].includes(o.status));
+    } else if (overviewModalType === 'revenue') {
+      ordersList = ordersList.filter(o => ['sure', 'paid'].includes(o.status));
+    } else if (overviewModalType === 'paid') {
+      ordersList = ordersList.filter(o => {
+        if (!['sure', 'paid'].includes(o.status)) return false;
+        const orderInvoices = invoices.filter(inv => inv.order_id === o.id);
+        const approvedPaid = orderInvoices
+          .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+          .reduce((s, inv) => s + inv.amount, 0);
+        return (approvedPaid || o.paid_amount || 0) > 0;
+      });
+    } else if (overviewModalType === 'remaining') {
+      ordersList = ordersList.filter(o => {
+        if (!['sure', 'paid'].includes(o.status)) return false;
+        const orderInvoices = invoices.filter(inv => inv.order_id === o.id);
+        const approvedPaid = orderInvoices
+          .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+          .reduce((s, inv) => s + inv.amount, 0);
+        const paid = approvedPaid || o.paid_amount || 0;
+        return ((o.total_price || 0) - paid) > 0;
+      });
+    }
+
+    if (overviewModalSearch.trim() !== '') {
+      const rawQ = overviewModalSearch.toLowerCase().trim();
+      const q = rawQ.replace(/^#/, '').replace(/^bk-/i, '');
+      ordersList = ordersList.filter(o => {
+        const tour = tours.find(t => t.id === o.tour_id);
+        return (
+          (o.id && (o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(rawQ))) ||
+          (o.booker_name && o.booker_name.toLowerCase().includes(rawQ)) ||
+          (o.booker_phone && o.booker_phone.includes(rawQ)) ||
+          (o.created_by && o.created_by.toLowerCase().includes(rawQ)) ||
+          (tour && tour.code && tour.code.toLowerCase().includes(rawQ)) ||
+          (tour && tour.name && tour.name.toLowerCase().includes(rawQ))
+        );
+      });
+    }
+
+    return ordersList;
+  }, [overviewModalType, salesOverviewStats.baseOrders, overviewModalSearch, tours, invoices]);
+
+  const overviewModalTourGroups = React.useMemo(() => {
+    if (!overviewModalType || overviewModalFilteredOrders.length === 0) return [];
+
+    const map = new Map<string, {
+      tour: any;
+      orders: Order[];
+      totalSeats: number;
+      totalPrice: number;
+      totalPaid: number;
+      totalRemaining: number;
+    }>();
+
+    overviewModalFilteredOrders.forEach(o => {
+      const tour = tours.find(t => t.id === o.tour_id) || { id: o.tour_id || 'unassigned', name: 'Tour chưa gán mã / Khác', code: 'N/A' };
+      const tId = tour.id;
+
+      if (!map.has(tId)) {
+        map.set(tId, {
+          tour,
+          orders: [],
+          totalSeats: 0,
+          totalPrice: 0,
+          totalPaid: 0,
+          totalRemaining: 0,
+        });
+      }
+
+      const item = map.get(tId)!;
+      item.orders.push(o);
+
+      let seats = (o.adult_count !== undefined || o.child_count !== undefined)
+        ? ((o.adult_count || 0) + (o.child_count || 0))
+        : 0;
+      if (seats === 0) {
+        const pCount = passengers.filter(p => p.order_id === o.id).length;
+        seats = pCount > 0 ? pCount : 1;
+      }
+
+      const orderInvoices = invoices.filter(inv => inv.order_id === o.id);
+      const approvedPaid = orderInvoices
+        .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+        .reduce((s, inv) => s + inv.amount, 0);
+      const paid = approvedPaid || o.paid_amount || 0;
+      const price = o.total_price || 0;
+      const rem = Math.max(0, price - paid);
+
+      item.totalSeats += seats;
+      item.totalPrice += price;
+      item.totalPaid += paid;
+      item.totalRemaining += rem;
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.orders.length - a.orders.length);
+  }, [overviewModalType, overviewModalFilteredOrders, tours, passengers, invoices]);
 
   // Tính số lượng đơn hàng cho từng tab (sau khi đã áp dụng tìm kiếm, lọc thời gian...)
   const tabCounts = React.useMemo(() => {
     // 1. Filter by role/ownership
-    let base = ['admin', 'operator', 'sale_leader'].includes(currentRole)
+    let base = ['admin', 'operator', 'bod'].includes(currentRole)
       ? allOrders
-      : allOrders.filter(o => o.user_id === profile?.id);
+      : currentRole === 'sale_leader'
+      ? allOrders.filter(o => isOrderInLeaderTeam(o, profile, profilesList))
+      : allOrders.filter(o => o.user_id === profile?.id || (o.created_by && profile?.full_name && o.created_by.toLowerCase().trim() === profile.full_name.toLowerCase().trim()));
 
     // 2. Filter out Visa-only service orders
     base = base.filter(o => {
@@ -293,11 +586,51 @@ export default function OrdersManagement() {
         const codeMatch = o.id && (o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(rawQ));
         const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(rawQ);
         const tourNameMatch = tour && tour.name && tour.name.toLowerCase().includes(rawQ);
-        return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch;
+        const creatorMatch = o.created_by && o.created_by.toLowerCase().includes(rawQ);
+        return nameMatch || phoneMatch || codeMatch || tourCodeMatch || tourNameMatch || creatorMatch;
       });
     }
 
-    // 4. Time range filter
+    // 4. Tour filter
+    if (orderFilterTourId !== 'all') {
+      base = base.filter(o => o.tour_id === orderFilterTourId);
+    }
+
+    // 5. Creator filter
+    if (orderFilterCreator !== 'all') {
+      base = base.filter(o => (o.created_by || '').toLowerCase() === orderFilterCreator.toLowerCase());
+    }
+
+    // 6. Payment Status filter
+    if (orderFilterPaymentStatus !== 'all') {
+      base = base.filter(o => {
+        const totalP = o.total_price || 0;
+        const orderInvoices = invoices.filter(inv => inv.order_id === o.id);
+        const paidA = orderInvoices
+          .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+          .reduce((s, inv) => s + inv.amount, 0) || o.paid_amount || 0;
+
+        if (orderFilterPaymentStatus === 'unpaid') return paidA <= 0;
+        if (orderFilterPaymentStatus === 'partially_paid') return paidA > 0 && paidA < totalP;
+        if (orderFilterPaymentStatus === 'paid_full') return paidA >= totalP && totalP > 0;
+        return true;
+      });
+    }
+
+    // 7. Hold Status filter
+    if (orderFilterHoldStatus !== 'all') {
+      const now = new Date().getTime();
+      base = base.filter(o => {
+        if (o.status !== 'hold' || !o.hold_expiry) return false;
+        const expTime = new Date(o.hold_expiry).getTime();
+        const diffHours = (expTime - now) / (1000 * 3600);
+        if (orderFilterHoldStatus === 'expiring_soon') return diffHours > 0 && diffHours <= 6;
+        if (orderFilterHoldStatus === 'expired') return diffHours <= 0;
+        return true;
+      });
+    }
+
+    // 8. Time range filter
     if (orderFilterTimeRange !== 'all') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -329,7 +662,7 @@ export default function OrdersManagement() {
       refund: base.filter(o => o.status === 'cancelled' && invoices.some(inv => inv.order_id === o.id && inv.type === 'payment')).length,
       total: base.length
     };
-  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange, invoices]);
+  }, [allOrders, currentRole, profile, tours, orderSearchTerm, orderFilterTimeRange, invoices, orderFilterTourId, orderFilterCreator, orderFilterPaymentStatus, orderFilterHoldStatus]);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -691,6 +1024,28 @@ export default function OrdersManagement() {
     return 'normal';
   };
 
+  if (currentRole === 'operator') {
+    return (
+      <div className="max-w-4xl mx-auto my-12 bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm space-y-4">
+        <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto">
+          <ShieldCheck className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-900">Bộ phận Điều hành không có quyền truy cập trang Quản lý Booking</h3>
+        <p className="text-gray-600 text-sm max-w-md mx-auto">
+          Trang Quản lý Booking dành riêng cho Sales, CTV, Sale Leader và Quản trị viên. Điều hành Tour vui lòng truy cập trang Lịch khởi hành hoặc Quản lý Tour để điều phối chỗ và danh sách khách.
+        </p>
+        <div className="flex justify-center gap-3 pt-2">
+          <Link to="/" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-xl transition-all shadow-sm">
+            Về Lịch khởi hành
+          </Link>
+          <Link to="/tours" className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm rounded-xl transition-all">
+            Về Quản lý Tour
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header section */}
@@ -711,31 +1066,230 @@ export default function OrdersManagement() {
       </div>
 
       {/* Overview Statistics Cards Section */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4 font-sans">
-        <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6 space-y-4 font-sans">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
           <div>
-            <h3 className="text-base font-bold text-gray-950 flex items-center gap-2">
+            <h3 className="text-base font-bold text-gray-950 flex items-center gap-2 flex-wrap">
               <TrendingUp className="w-5 h-5 text-blue-600" />
               <span>Bảng Tổng quan Giữ chỗ & Doanh thu</span>
               <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
-                ['admin', 'operator', 'sale_leader', 'bod'].includes(currentRole)
+                ['admin', 'operator', 'bod'].includes(currentRole)
                   ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : currentRole === 'sale_leader'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
                   : 'bg-indigo-50 text-indigo-700 border-indigo-200'
               }`}>
-                {['admin', 'operator', 'sale_leader', 'bod'].includes(currentRole) ? 'Toàn hệ thống (Admin/Leader/Điều hành/BOD)' : 'Cá nhân (Sales/CTV)'}
+                {['admin', 'operator', 'bod'].includes(currentRole)
+                  ? 'Toàn hệ thống (Admin/BOD/Điều hành)'
+                  : currentRole === 'sale_leader'
+                  ? 'Nhóm / Team (Sale Leader)'
+                  : 'Cá nhân (Sales/CTV)'}
               </span>
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">Tổng số chỗ giữ tạm, số chỗ đã xác nhận chắc chắn, doanh số và dư nợ cần nộp.</p>
           </div>
-          <span className="text-xs text-gray-400 font-medium italic hidden sm:inline">Cập nhật theo thời gian thực</span>
+
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            {/* Quick Time Range Selector */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs shadow-2xs">
+              <span className="text-gray-500 font-medium whitespace-nowrap">Thời gian:</span>
+              <select
+                value={orderFilterTimeRange}
+                onChange={e => setOrderFilterTimeRange(e.target.value)}
+                className="bg-transparent font-bold text-blue-700 focus:outline-none cursor-pointer"
+              >
+                <option value="this_month">📅 Tháng này (Mặc định)</option>
+                <option value="today">Hôm nay</option>
+                <option value="this_week">Tuần này</option>
+                <option value="all">Mọi thời gian</option>
+              </select>
+            </div>
+
+            {/* Reset filter button if active */}
+            {(orderSearchTerm || orderFilterTourId !== 'all' || orderFilterCreator !== 'all' || orderFilterPaymentStatus !== 'all' || orderFilterHoldStatus !== 'all' || orderFilterTimeRange !== 'this_month' || orderSortBy !== 'newest') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderSearchTerm('');
+                  setOrderFilterTourId('all');
+                  setOrderFilterCreator('all');
+                  setOrderFilterPaymentStatus('all');
+                  setOrderFilterHoldStatus('all');
+                  setOrderFilterTimeRange('this_month');
+                  setOrderSortBy('newest');
+                }}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer border border-rose-200"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Xóa bộ lọc</span>
+              </button>
+            )}
+
+            {/* Toggle Advanced Filter Button */}
+            <button
+              type="button"
+              onClick={() => setIsAdvancedFilterOpen(!isAdvancedFilterOpen)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border shadow-2xs ${
+                isAdvancedFilterOpen || orderSearchTerm || orderFilterTourId !== 'all' || orderFilterCreator !== 'all' || orderFilterPaymentStatus !== 'all' || orderFilterHoldStatus !== 'all'
+                  ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-sm'
+                  : 'bg-white hover:bg-slate-50 text-gray-700 border-gray-300'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>{isAdvancedFilterOpen ? 'Thu gọn bộ lọc' : 'Bộ lọc nâng cao'}</span>
+              {(orderSearchTerm || orderFilterTourId !== 'all' || orderFilterCreator !== 'all' || orderFilterPaymentStatus !== 'all' || orderFilterHoldStatus !== 'all') && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
+              {isAdvancedFilterOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Expanded Advanced Filter Panel right under the Top Header button */}
+        {isAdvancedFilterOpen && (
+          <div className="pt-3 border-b border-gray-200/80 pb-3.5 animate-fadeIn">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-extrabold text-blue-800 flex items-center gap-1.5">
+                <Filter className="w-4 h-4 text-blue-600" />
+                <span>Bộ lọc tìm kiếm nâng cao</span>
+                {(orderSearchTerm || orderFilterTourId !== 'all' || orderFilterCreator !== 'all' || orderFilterPaymentStatus !== 'all' || orderFilterHoldStatus !== 'all' || orderFilterTimeRange !== 'this_month' || orderSortBy !== 'newest') && (
+                  <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                    Đang lọc
+                  </span>
+                )}
+              </span>
+              <span className="text-[11px] text-gray-500 font-medium italic hidden sm:inline">
+                Tự động đồng bộ với kết quả thống kê & danh sách booking
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-gray-200">
+              {/* 1. Tìm kiếm tổng hợp */}
+              <div className="relative col-span-1 sm:col-span-2 lg:col-span-1">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Mã BK, tên khách, SĐT, Tour..."
+                  value={orderSearchTerm}
+                  onChange={e => setOrderSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+                />
+                {orderSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setOrderSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* 2. Lọc Tour */}
+              <div>
+                <select
+                  value={orderFilterTourId}
+                  onChange={e => setOrderFilterTourId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="all">🗺️ Tất cả các Tour ({tourFilterOptions.length})</option>
+                  {tourFilterOptions.map(t => (
+                    <option key={t.id} value={t.id}>
+                      [{t.code || 'CHƯA_MÃ'}] {t.name} ({t.start_date ? format(new Date(t.start_date), 'dd/MM') : ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 3. Lọc Người tạo / Sale */}
+              <div>
+                <select
+                  value={orderFilterCreator}
+                  onChange={e => setOrderFilterCreator(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="all">👤 Tất cả người tạo / Sale ({uniqueCreators.length})</option>
+                  {uniqueCreators.map(c => (
+                    <option key={c} value={c}>
+                      Sale/CTV: {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 4. Lọc Trạng thái Thanh toán */}
+              <div>
+                <select
+                  value={orderFilterPaymentStatus}
+                  onChange={e => setOrderFilterPaymentStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="all">💳 Tất cả thanh toán</option>
+                  <option value="unpaid">🔴 Chưa thanh toán (Chưa cọc)</option>
+                  <option value="partially_paid">🟡 Đã cọc (Thanh toán 1 phần)</option>
+                  <option value="paid_full">🟢 Đã thanh toán đủ (100%)</option>
+                </select>
+              </div>
+
+              {/* 5. Lọc Hạn Hold */}
+              <div>
+                <select
+                  value={orderFilterHoldStatus}
+                  onChange={e => setOrderFilterHoldStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="all">⏳ Tất cả hạn Hold</option>
+                  <option value="expiring_soon">⚠️ Sắp hết hạn Hold (&lt; 6 giờ)</option>
+                  <option value="expired">🚨 Đã quá hạn Hold</option>
+                </select>
+              </div>
+
+              {/* 6. Lọc Thời gian tạo */}
+              <div>
+                <select
+                  value={orderFilterTimeRange}
+                  onChange={e => setOrderFilterTimeRange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="this_month">📅 Tháng này (Mặc định)</option>
+                  <option value="today">Hôm nay</option>
+                  <option value="this_week">Tuần này</option>
+                  <option value="all">Mọi thời gian tạo</option>
+                </select>
+              </div>
+
+              {/* 7. Sắp xếp */}
+              <div>
+                <select
+                  value={orderSortBy}
+                  onChange={e => setOrderSortBy(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-semibold text-gray-800"
+                >
+                  <option value="newest">↕️ Sắp xếp: Mới nhất</option>
+                  <option value="oldest">↕️ Sắp xếp: Cũ nhất</option>
+                  <option value="highest_price">↕️ Giá trị cao nhất</option>
+                  <option value="lowest_price">↕️ Giá trị thấp nhất</option>
+                  <option value="hold_expiry">↕️ Hạn giữ chỗ gần nhất</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
           {/* Card 1: Slots Hold */}
-          <div className="bg-amber-50/40 rounded-xl p-4 border border-amber-200/60 hover:shadow-sm transition-all">
+          <div
+            onClick={() => {
+              setOverviewModalType('hold');
+              setOverviewModalSearch('');
+            }}
+            className="bg-amber-50/50 hover:bg-amber-100/70 rounded-xl p-4 border-2 border-amber-200/80 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group relative"
+          >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Chỗ giữ tạm (HOLD)</span>
-              <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 border border-amber-200/50">
+              <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 border border-amber-200/80 group-hover:bg-amber-200 transition-colors">
                 <Clock className="w-4 h-4" />
               </div>
             </div>
@@ -743,16 +1297,27 @@ export default function OrdersManagement() {
               <span className="text-2xl font-black text-amber-950">{salesOverviewStats.slotsHold}</span>
               <span className="text-xs font-bold text-amber-700">chỗ</span>
             </div>
-            <p className="text-[11px] text-amber-600/95 mt-1 font-semibold">
-              Từ {salesOverviewStats.holdOrdersCount} đơn đang giữ chỗ tạm
-            </p>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-amber-200/50">
+              <span className="text-[11px] text-amber-700 font-semibold truncate">
+                Từ {salesOverviewStats.holdOrdersCount} đơn tạm tính
+              </span>
+              <span className="text-[10px] font-bold text-amber-800 group-hover:underline flex items-center gap-0.5 shrink-0">
+                Chi tiết →
+              </span>
+            </div>
           </div>
 
           {/* Card 2: Slots Sure */}
-          <div className="bg-green-50/40 rounded-xl p-4 border border-green-200/60 hover:shadow-sm transition-all">
+          <div
+            onClick={() => {
+              setOverviewModalType('sure');
+              setOverviewModalSearch('');
+            }}
+            className="bg-green-50/50 hover:bg-green-100/70 rounded-xl p-4 border-2 border-green-200/80 hover:border-green-400 hover:shadow-md transition-all cursor-pointer group relative"
+          >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Chỗ đã chốt (SURE)</span>
-              <div className="p-1.5 rounded-lg bg-green-100 text-green-700 border border-green-200/50">
+              <div className="p-1.5 rounded-lg bg-green-100 text-green-700 border border-green-200/80 group-hover:bg-green-200 transition-colors">
                 <ShieldCheck className="w-4 h-4" />
               </div>
             </div>
@@ -760,16 +1325,27 @@ export default function OrdersManagement() {
               <span className="text-2xl font-black text-green-950">{salesOverviewStats.slotsSure}</span>
               <span className="text-xs font-bold text-green-700">chỗ</span>
             </div>
-            <p className="text-[11px] text-green-600/95 mt-1 font-semibold">
-              Từ {salesOverviewStats.sureOrdersCount} đơn chốt chắc chắn / đã mua
-            </p>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-green-200/50">
+              <span className="text-[11px] text-green-700 font-semibold truncate">
+                Từ {salesOverviewStats.sureOrdersCount} đơn đã chốt
+              </span>
+              <span className="text-[10px] font-bold text-green-800 group-hover:underline flex items-center gap-0.5 shrink-0">
+                Chi tiết →
+              </span>
+            </div>
           </div>
 
           {/* Card 3: Total Revenue */}
-          <div className="bg-blue-50/40 rounded-xl p-4 border border-blue-200/60 hover:shadow-sm transition-all">
+          <div
+            onClick={() => {
+              setOverviewModalType('revenue');
+              setOverviewModalSearch('');
+            }}
+            className="bg-blue-50/50 hover:bg-blue-100/70 rounded-xl p-4 border-2 border-blue-200/80 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative"
+          >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-blue-800 uppercase tracking-wider">Doanh thu chốt (SURE)</span>
-              <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700 border border-blue-200/50">
+              <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700 border border-blue-200/80 group-hover:bg-blue-200 transition-colors">
                 <DollarSign className="w-4 h-4" />
               </div>
             </div>
@@ -777,17 +1353,28 @@ export default function OrdersManagement() {
               <span className="text-lg font-black text-blue-950 break-all">
                 {new Intl.NumberFormat('vi-VN').format(salesOverviewStats.totalRevenue)}đ
               </span>
-              <span className="text-[10px] text-blue-600/90 mt-1 font-medium">
-                Giá trị từ các đơn SURE & PAID
+            </div>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-blue-200/50">
+              <span className="text-[10px] text-blue-700 font-semibold truncate">
+                Giá trị đơn SURE & PAID
+              </span>
+              <span className="text-[10px] font-bold text-blue-800 group-hover:underline flex items-center gap-0.5 shrink-0">
+                Chi tiết →
               </span>
             </div>
           </div>
 
           {/* Card 4: Total Paid */}
-          <div className="bg-teal-50/40 rounded-xl p-4 border border-teal-200/60 hover:shadow-sm transition-all">
+          <div
+            onClick={() => {
+              setOverviewModalType('paid');
+              setOverviewModalSearch('');
+            }}
+            className="bg-teal-50/50 hover:bg-teal-100/70 rounded-xl p-4 border-2 border-teal-200/80 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer group relative"
+          >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">Đã thanh toán</span>
-              <div className="p-1.5 rounded-lg bg-teal-100 text-teal-700 border border-teal-200/50">
+              <div className="p-1.5 rounded-lg bg-teal-100 text-teal-700 border border-teal-200/80 group-hover:bg-teal-200 transition-colors">
                 <CreditCard className="w-4 h-4" />
               </div>
             </div>
@@ -795,17 +1382,28 @@ export default function OrdersManagement() {
               <span className="text-lg font-black text-teal-950 break-all">
                 {new Intl.NumberFormat('vi-VN').format(salesOverviewStats.totalPaid)}đ
               </span>
-              <span className="text-[10px] text-teal-600/90 mt-1 font-medium">
-                Số tiền kế toán đã duyệt thực thu
+            </div>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-teal-200/50">
+              <span className="text-[10px] text-teal-700 font-semibold truncate">
+                Kế toán đã thực thu
+              </span>
+              <span className="text-[10px] font-bold text-teal-800 group-hover:underline flex items-center gap-0.5 shrink-0">
+                Chi tiết →
               </span>
             </div>
           </div>
 
           {/* Card 5: Remaining Debt */}
-          <div className="bg-rose-50/40 rounded-xl p-4 border border-rose-200/60 hover:shadow-sm transition-all">
+          <div
+            onClick={() => {
+              setOverviewModalType('remaining');
+              setOverviewModalSearch('');
+            }}
+            className="bg-rose-50/50 hover:bg-rose-100/70 rounded-xl p-4 border-2 border-rose-200/80 hover:border-rose-400 hover:shadow-md transition-all cursor-pointer group relative"
+          >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-rose-800 uppercase tracking-wider">Còn lại cần nộp</span>
-              <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 border border-rose-200/50">
+              <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 border border-rose-200/80 group-hover:bg-rose-200 transition-colors">
                 <AlertCircle className="w-4 h-4" />
               </div>
             </div>
@@ -813,8 +1411,13 @@ export default function OrdersManagement() {
               <span className="text-lg font-black text-rose-950 break-all">
                 {new Intl.NumberFormat('vi-VN').format(salesOverviewStats.totalRemaining)}đ
               </span>
-              <span className="text-[10px] text-rose-600/90 mt-1 font-medium">
-                Số dư còn lại khách cần hoàn tất
+            </div>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-rose-200/50">
+              <span className="text-[10px] text-rose-700 font-semibold truncate">
+                Dư nợ cần hoàn tất
+              </span>
+              <span className="text-[10px] font-bold text-rose-800 group-hover:underline flex items-center gap-0.5 shrink-0">
+                Chi tiết →
               </span>
             </div>
           </div>
@@ -822,7 +1425,7 @@ export default function OrdersManagement() {
       </div>
 
       {/* Hold Statistics Dashboard */}
-      {['admin', 'operator', 'sale_leader', 'bod'].includes(currentRole) && holdStatistics.length > 0 && (
+      {['admin', 'operator', 'bod'].includes(currentRole) && holdStatistics.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4 font-sans">
           <div className="flex justify-between items-center border-b border-gray-100 pb-3">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
@@ -1353,7 +1956,7 @@ export default function OrdersManagement() {
       )}
 
       {/* Orders list and monitoring */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div id="booking-list-table" className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden scroll-mt-6">
         <div className="px-6 py-4 border-b border-gray-150 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <span>Danh sách Booking của bạn</span>
@@ -1438,47 +2041,7 @@ export default function OrdersManagement() {
           </button>
         </div>
 
-        {/* Filters and Sorting Controls (Adjusted to grid-cols-3) */}
-        <div className="bg-slate-50 border-b border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Tìm kiếm */}
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
-            </span>
-            <input
-              type="text"
-              placeholder="Tìm mã, khách, tour..."
-              value={orderSearchTerm}
-              onChange={e => setOrderSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
 
-          {/* Lọc thời gian tạo */}
-          <select
-            value={orderFilterTimeRange}
-            onChange={e => setOrderFilterTimeRange(e.target.value)}
-            className="w-full pl-3 pr-10 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">Mọi thời gian</option>
-            <option value="today">Hôm nay</option>
-            <option value="this_week">Tuần này</option>
-            <option value="this_month">Tháng này</option>
-          </select>
-
-          {/* Sắp xếp */}
-          <select
-            value={orderSortBy}
-            onChange={e => setOrderSortBy(e.target.value)}
-            className="w-full pl-3 pr-10 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-          >
-            <option value="newest">Sắp xếp: Mới nhất</option>
-            <option value="oldest">Sắp xếp: Cũ nhất</option>
-            <option value="highest_price">Sắp xếp: Tổng tiền giảm dần</option>
-            <option value="lowest_price">Sắp xếp: Tổng tiền tăng dần</option>
-            <option value="hold_expiry">Sắp xếp: Hạn giữ chỗ gần nhất</option>
-          </select>
-        </div>
 
         {orders.length === 0 ? (
           <div className="text-center py-12">
@@ -2581,20 +3144,8 @@ export default function OrdersManagement() {
                               Thanh toán
                             </button>
                           )}
-                          {order.status === 'hold' && currentRole !== 'sale' && (
+                          {order.status === 'hold' && (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOrderToConfirm(order.id);
-                                  setIsPassengerModalOpen(true);
-                                }}
-                                className="px-3.5 py-2 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 hover:text-emerald-800 transition-colors inline-flex items-center"
-                              >
-                                <Check className="w-3.5 h-3.5 mr-1.5" />
-                                Xác nhận
-                              </button>
-
                               {/* Extensions Request Button */}
                               {order.is_extended ? (
                                 <span className="text-xs text-emerald-600 font-extrabold bg-emerald-50 px-3.5 py-2 rounded-lg border border-emerald-200 inline-flex items-center">
@@ -3231,6 +3782,451 @@ export default function OrdersManagement() {
                   </svg>
                 )}
                 {isCancelUploading ? 'Đang xử lý...' : 'Xác nhận Hủy & Hoàn tiền'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OVERVIEW STATS DETAIL POPUP MODAL */}
+      {overviewModalType && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full border border-gray-100 flex flex-col max-h-[92vh] overflow-hidden my-auto">
+            {/* Banner Header */}
+            <div className={`p-4 sm:p-5 text-white flex flex-col gap-3 relative shrink-0 ${
+              overviewModalType === 'hold' ? 'bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800' :
+              overviewModalType === 'sure' ? 'bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-800' :
+              overviewModalType === 'revenue' ? 'bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800' :
+              overviewModalType === 'paid' ? 'bg-gradient-to-r from-teal-600 via-teal-700 to-teal-800' :
+              'bg-gradient-to-r from-rose-600 via-rose-700 to-rose-800'
+            }`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-xl bg-white/15 backdrop-blur-md border border-white/20">
+                    {overviewModalType === 'hold' && <Clock className="w-6 h-6" />}
+                    {overviewModalType === 'sure' && <ShieldCheck className="w-6 h-6" />}
+                    {overviewModalType === 'revenue' && <DollarSign className="w-6 h-6" />}
+                    {overviewModalType === 'paid' && <CreditCard className="w-6 h-6" />}
+                    {overviewModalType === 'remaining' && <AlertCircle className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg sm:text-xl font-extrabold uppercase tracking-wide">
+                        {overviewModalType === 'hold' && 'Chi tiết Chỗ Giữ Tạm (Hold)'}
+                        {overviewModalType === 'sure' && 'Chi tiết Chỗ Đã Chốt (Sure)'}
+                        {overviewModalType === 'revenue' && 'Chi tiết Doanh Thu Chốt (Sure/Paid)'}
+                        {overviewModalType === 'paid' && 'Chi tiết Tiền Đã Thanh Toán'}
+                        {overviewModalType === 'remaining' && 'Chi tiết Dư Nợ Cần Thu'}
+                      </h3>
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/20 border border-white/30 backdrop-blur-xs">
+                        {orderFilterTimeRange === 'this_month' ? '📅 Tháng này' :
+                         orderFilterTimeRange === 'today' ? '📅 Hôm nay' :
+                         orderFilterTimeRange === 'this_week' ? '📅 Tuần này' : '📅 Mọi thời gian'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/90 mt-0.5 font-medium">
+                      {overviewModalType === 'hold' && 'Danh sách toàn bộ các đơn đang trong thời gian giữ chỗ tạm tính'}
+                      {overviewModalType === 'sure' && 'Danh sách các đơn hàng đã chốt chắc chắn / đã thanh toán'}
+                      {overviewModalType === 'revenue' && 'Tổng hợp doanh số bán hàng từ các đơn SURE & PAID'}
+                      {overviewModalType === 'paid' && 'Số tiền kế toán đã duyệt thực thu từ các hóa đơn thanh toán'}
+                      {overviewModalType === 'remaining' && 'Số dư còn lại khách hàng hoặc đại lý cần thanh toán bổ sung'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setOverviewModalType(null)}
+                  className="p-2 rounded-full bg-black/20 hover:bg-black/30 text-white transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Summary Badges Bar inside Header */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/20 text-xs">
+                <div className="bg-black/15 rounded-lg px-3 py-1.5 flex items-center justify-between">
+                  <span className="text-white/80 font-medium">Số Tour:</span>
+                  <span className="font-extrabold text-white">{overviewModalTourGroups.length} Tour</span>
+                </div>
+                <div className="bg-black/15 rounded-lg px-3 py-1.5 flex items-center justify-between">
+                  <span className="text-white/80 font-medium">Số Đơn Booking:</span>
+                  <span className="font-extrabold text-white">{overviewModalFilteredOrders.length} đơn</span>
+                </div>
+                <div className="bg-black/15 rounded-lg px-3 py-1.5 flex items-center justify-between">
+                  <span className="text-white/80 font-medium">Tổng số chỗ:</span>
+                  <span className="font-extrabold text-white">
+                    {overviewModalFilteredOrders.reduce((sum, o) => {
+                      let c = (o.adult_count || 0) + (o.child_count || 0);
+                      if (c === 0) {
+                        const pc = passengers.filter(p => p.order_id === o.id).length;
+                        c = pc > 0 ? pc : 1;
+                      }
+                      return sum + c;
+                    }, 0)} chỗ
+                  </span>
+                </div>
+                <div className="bg-black/15 rounded-lg px-3 py-1.5 flex items-center justify-between">
+                  <span className="text-white/80 font-medium">Tổng giá trị:</span>
+                  <span className="font-black text-amber-200">
+                    {new Intl.NumberFormat('vi-VN').format(
+                      overviewModalFilteredOrders.reduce((s, o) => s + (o.total_price || 0), 0)
+                    )}đ
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Controls Bar */}
+            <div className="p-3 sm:p-4 bg-slate-100 border-b border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <div className="relative w-full sm:w-80">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Tìm mã Tour, tên khách, SĐT, sale..."
+                  value={overviewModalSearch}
+                  onChange={e => setOverviewModalSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+                {overviewModalSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setOverviewModalSearch('')}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <span className="text-xs text-gray-500 font-medium hidden sm:inline">Kiểu hiển thị:</span>
+                <div className="inline-flex rounded-lg bg-gray-200 p-0.5 border border-gray-300 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setOverviewModalViewMode('tour')}
+                    className={`px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                      overviewModalViewMode === 'tour'
+                        ? 'bg-white text-blue-700 shadow-2xs font-extrabold'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Gom nhóm theo Tour ({overviewModalTourGroups.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOverviewModalViewMode('order')}
+                    className={`px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                      overviewModalViewMode === 'order'
+                        ? 'bg-white text-blue-700 shadow-2xs font-extrabold'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span>Danh sách Booking lẻ ({overviewModalFilteredOrders.length})</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Scrollable Modal Content */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 bg-slate-50/60 grow">
+              {overviewModalFilteredOrders.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300 p-6">
+                  <Info className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-gray-700">Không tìm thấy đơn booking nào phù hợp</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Thử đổi từ khóa tìm kiếm hoặc chọn khung thời gian khác trên thanh công cụ.
+                  </p>
+                </div>
+              ) : overviewModalViewMode === 'tour' ? (
+                /* VIEW MODE: GOM NHÓM THEO TOUR */
+                <div className="space-y-4">
+                  {overviewModalTourGroups.map(({ tour, orders, totalSeats, totalPrice, totalPaid, totalRemaining }) => {
+                    return (
+                      <div
+                        key={tour.id}
+                        className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:border-blue-300 hover:shadow-md transition-all"
+                      >
+                        {/* Tour Header Row */}
+                        <div className="bg-slate-100/90 border-b border-gray-200 p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-black text-xs px-2.5 py-1 bg-blue-700 text-white rounded-md tracking-wider">
+                                {tour.code || 'CHƯA_MÃ'}
+                              </span>
+                              <h4 className="font-extrabold text-sm sm:text-base text-gray-900">
+                                {tour.name || 'Tour chưa gán tên'}
+                              </h4>
+                              {tour.status && (
+                                <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                                  tour.status === 'upcoming' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  tour.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                  'bg-gray-100 text-gray-600 border-gray-200'
+                                }`}>
+                                  {tour.status === 'upcoming' ? 'Lịch sắp tới' : tour.status === 'active' ? 'Đang diễn ra' : 'Hoàn thành/Hủy'}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-4 text-xs text-gray-600 flex-wrap pt-0.5">
+                              {tour.start_date && (
+                                <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Khởi hành: {format(new Date(tour.start_date), 'dd/MM/yyyy')}</span>
+                                </span>
+                              )}
+                              {tour.price_adult > 0 && (
+                                <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Giá vé: {new Intl.NumberFormat('vi-VN').format(tour.price_adult)}đ/khách</span>
+                                </span>
+                              )}
+                              {tour.slots_total !== undefined && (
+                                <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                  <Users className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>Sức chứa Tour: {tour.slots_total} chỗ ({tour.slots_available ?? 0} trống)</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Tour Totals Badge */}
+                          <div className="flex items-center gap-2 flex-wrap shrink-0">
+                            <div className="bg-amber-50 border border-amber-200/80 rounded-lg px-2.5 py-1 text-center">
+                              <span className="text-[10px] uppercase font-bold text-amber-700 block">Số đơn</span>
+                              <span className="text-xs font-black text-amber-900">{orders.length} đơn</span>
+                            </div>
+                            <div className="bg-blue-50 border border-blue-200/80 rounded-lg px-2.5 py-1 text-center">
+                              <span className="text-[10px] uppercase font-bold text-blue-700 block">Số chỗ</span>
+                              <span className="text-xs font-black text-blue-900">{totalSeats} chỗ</span>
+                            </div>
+                            <div className="bg-emerald-50 border border-emerald-200/80 rounded-lg px-2.5 py-1 text-center">
+                              <span className="text-[10px] uppercase font-bold text-emerald-700 block">Tổng giá trị</span>
+                              <span className="text-xs font-black text-emerald-900">
+                                {new Intl.NumberFormat('vi-VN').format(totalPrice)}đ
+                              </span>
+                            </div>
+                            {totalRemaining > 0 && (
+                              <div className="bg-rose-50 border border-rose-200/80 rounded-lg px-2.5 py-1 text-center">
+                                <span className="text-[10px] uppercase font-bold text-rose-700 block">Dư nợ</span>
+                                <span className="text-xs font-black text-rose-900">
+                                  {new Intl.NumberFormat('vi-VN').format(totalRemaining)}đ
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* List of Orders in this Tour */}
+                        <div className="divide-y divide-gray-100">
+                          {orders.map(order => {
+                            let orderSeats = (order.adult_count || 0) + (order.child_count || 0);
+                            if (orderSeats === 0) {
+                              const pc = passengers.filter(p => p.order_id === order.id).length;
+                              orderSeats = pc > 0 ? pc : 1;
+                            }
+
+                            const orderInvoices = invoices.filter(inv => inv.order_id === order.id);
+                            const approvedPaid = orderInvoices
+                              .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+                              .reduce((s, inv) => s + inv.amount, 0);
+                            const paid = approvedPaid || order.paid_amount || 0;
+                            const price = order.total_price || 0;
+                            const remaining = Math.max(0, price - paid);
+
+                            return (
+                              <div
+                                key={order.id}
+                                className="p-3 sm:p-4 hover:bg-slate-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-extrabold text-xs text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                      #{order.id.substring(0, 8).toUpperCase()}
+                                    </span>
+                                    <span className="font-bold text-sm text-gray-900">
+                                      {order.booker_name || 'Khách chưa nhập tên'}
+                                    </span>
+                                    {order.booker_phone && (
+                                      <span className="text-xs text-gray-500 font-medium">
+                                        • 📞 {order.booker_phone}
+                                      </span>
+                                    )}
+                                    {order.created_by && (
+                                      <span className="text-[11px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
+                                        👤 Sale: {order.created_by}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
+                                    <span className="font-medium">
+                                      Số chỗ: <strong className="text-gray-900">{orderSeats} người</strong> ({order.adult_count || 0} lớn, {order.child_count || 0} trẻ)
+                                    </span>
+                                    {order.created_at && (
+                                      <span className="text-gray-400">
+                                        • Ngày tạo: {format(new Date(order.created_at), 'dd/MM/yyyy HH:mm')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 justify-between md:justify-end border-t md:border-t-0 pt-2 md:pt-0 border-gray-100">
+                                  <div className="text-right">
+                                    <div className="text-xs font-black text-gray-900">
+                                      {new Intl.NumberFormat('vi-VN').format(price)}đ
+                                    </div>
+                                    <div className="text-[11px] font-medium text-emerald-700">
+                                      Đã nộp: {new Intl.NumberFormat('vi-VN').format(paid)}đ
+                                    </div>
+                                    {remaining > 0 && (
+                                      <div className="text-[11px] font-bold text-rose-600">
+                                        Còn nộp: {new Intl.NumberFormat('vi-VN').format(remaining)}đ
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOverviewModalType(null);
+                                      setOrderSearchTerm(order.id.substring(0, 8));
+                                      document.getElementById('booking-list-table')?.scrollIntoView({ behavior: 'smooth' });
+                                      toast.success(`Đã chọn đơn #${order.id.substring(0, 8).toUpperCase()}`);
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 hover:border-blue-600 rounded-lg transition-all cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Xem chi tiết</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* VIEW MODE: DANH SÁCH BOOKING LẺ */
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 border-b border-gray-200 text-gray-700 font-extrabold uppercase text-[11px]">
+                          <th className="p-3">Mã Booking</th>
+                          <th className="p-3">Tour Du Lịch</th>
+                          <th className="p-3">Khách Hàng</th>
+                          <th className="p-3 text-center">Số Chỗ</th>
+                          <th className="p-3 text-right">Tổng Tiền</th>
+                          <th className="p-3 text-right">Đã Thu</th>
+                          <th className="p-3 text-right">Dư Nợ</th>
+                          <th className="p-3 text-center">Trạng Thái</th>
+                          <th className="p-3 text-center">Thao Tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
+                        {overviewModalFilteredOrders.map(order => {
+                          const tour = tours.find(t => t.id === order.tour_id);
+                          let orderSeats = (order.adult_count || 0) + (order.child_count || 0);
+                          if (orderSeats === 0) {
+                            const pc = passengers.filter(p => p.order_id === order.id).length;
+                            orderSeats = pc > 0 ? pc : 1;
+                          }
+
+                          const orderInvoices = invoices.filter(inv => inv.order_id === order.id);
+                          const approvedPaid = orderInvoices
+                            .filter(inv => inv.type === 'receipt' && inv.status === 'approved')
+                            .reduce((s, inv) => s + inv.amount, 0);
+                          const paid = approvedPaid || order.paid_amount || 0;
+                          const price = order.total_price || 0;
+                          const remaining = Math.max(0, price - paid);
+
+                          return (
+                            <tr key={order.id} className="hover:bg-blue-50/50 transition-colors">
+                              <td className="p-3 font-extrabold text-blue-700">
+                                #{order.id.substring(0, 8).toUpperCase()}
+                              </td>
+                              <td className="p-3 max-w-[220px]">
+                                <span className="font-bold text-gray-900 block truncate">
+                                  {tour?.name || 'Tour chưa gán'}
+                                </span>
+                                {tour?.code && (
+                                  <span className="text-[10px] font-extrabold text-blue-800 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                                    {tour.code}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3">
+                                <span className="font-bold text-gray-900 block">
+                                  {order.booker_name || 'Khách chưa đặt tên'}
+                                </span>
+                                {order.booker_phone && (
+                                  <span className="text-gray-500 text-[11px]">📞 {order.booker_phone}</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center font-bold">
+                                {orderSeats} chỗ
+                              </td>
+                              <td className="p-3 text-right font-black text-gray-900">
+                                {new Intl.NumberFormat('vi-VN').format(price)}đ
+                              </td>
+                              <td className="p-3 text-right font-bold text-emerald-700">
+                                {new Intl.NumberFormat('vi-VN').format(paid)}đ
+                              </td>
+                              <td className="p-3 text-right font-bold text-rose-600">
+                                {remaining > 0 ? `${new Intl.NumberFormat('vi-VN').format(remaining)}đ` : '0đ'}
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                                  order.status === 'hold' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                  ['sure', 'paid'].includes(order.status) ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                                  'bg-gray-50 text-gray-600 border-gray-200'
+                                }`}>
+                                  {order.status === 'hold' ? 'HOLD' : 'SURE'}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOverviewModalType(null);
+                                    setOrderSearchTerm(order.id.substring(0, 8));
+                                    document.getElementById('booking-list-table')?.scrollIntoView({ behavior: 'smooth' });
+                                    toast.success(`Đã chọn đơn #${order.id.substring(0, 8).toUpperCase()}`);
+                                  }}
+                                  className="px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 rounded-md transition-all cursor-pointer"
+                                >
+                                  Mở đơn
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 bg-gray-100 border-t border-gray-200 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-gray-500 font-medium">
+                Đang hiển thị <strong>{overviewModalFilteredOrders.length}</strong> đơn booking trong danh mục chi tiết này.
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setOverviewModalType(null)}
+                className="px-5 py-2 text-xs font-bold text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-200 border border-gray-300 rounded-xl transition-all cursor-pointer shadow-2xs"
+              >
+                Đóng cửa sổ
               </button>
             </div>
           </div>

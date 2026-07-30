@@ -2037,7 +2037,7 @@ app.post('/api/submit-feedback', express.json(), async (req, res) => {
       sheetUrl,
       sheetError: sheetError || null,
       message: sheetSaved
-        ? 'Gửi đóng góp thành công! Dữ liệu đã được lưu vào Google Drive (folder "AD Luxury Travel > Góp Ý & Báo Lỗi").'
+        ? 'Gửi đóng góp thành công!'
         : `Gửi đóng góp thành công! (Lưu ý: chưa đồng bộ được Google Drive: ${sheetError || 'vui lòng kiểm tra quyền truy cập'})`
     });
   } catch (err: any) {

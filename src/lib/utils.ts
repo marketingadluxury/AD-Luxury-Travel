@@ -133,3 +133,43 @@ export function parseRefundInfo(
     cleanDescription: description,
   };
 }
+
+export function isOrderInLeaderTeam(order: any, leaderProfile: any, profilesList: any[] = []): boolean {
+  if (!order || !leaderProfile) return false;
+
+  const leaderId = leaderProfile.id;
+  const leaderName = (leaderProfile.full_name || '').toLowerCase().trim();
+  const leaderEmail = (leaderProfile.email || '').toLowerCase().trim();
+
+  // 1. Direct ownership by leader
+  const orderUserId = order.user_id || order.salesperson_id;
+  if (orderUserId && orderUserId === leaderId) return true;
+
+  const createdBy = (order.created_by || '').toLowerCase().trim();
+  if (createdBy) {
+    if (leaderName && createdBy.includes(leaderName)) return true;
+    if (leaderEmail && createdBy.includes(leaderEmail)) return true;
+  }
+
+  // 2. Created by a team member under this leader
+  if (Array.isArray(profilesList) && profilesList.length > 0) {
+    const creatorProfile = profilesList.find(p => {
+      if (p.id && orderUserId && p.id === orderUserId) return true;
+      const pName = (p.full_name || '').toLowerCase().trim();
+      const pEmail = (p.email || '').toLowerCase().trim();
+      if (pName && createdBy && createdBy.includes(pName)) return true;
+      if (pEmail && createdBy && createdBy.includes(pEmail)) return true;
+      return false;
+    });
+
+    if (creatorProfile) {
+      if (creatorProfile.leader_id === leaderId) return true;
+      // If creator has no explicit leader_id set, check if creator role is sale or CTV
+      if (!creatorProfile.leader_id && (creatorProfile.role === 'sale' || creatorProfile.role === 'CTV')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}

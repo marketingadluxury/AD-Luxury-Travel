@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { isOrderInLeaderTeam } from '../lib/utils';
 import {
   Users,
   Search,
@@ -61,6 +62,7 @@ export default function PassengersManagement() {
     orders: allOrders, 
     tours, 
     currentRole, 
+    profilesList,
     updatePassenger,
     deletePassenger,
     membershipSettings
@@ -128,11 +130,14 @@ export default function PassengersManagement() {
 
   // 1. Filter orders based on user permissions
   const myOrders = useMemo(() => {
-    if (['admin', 'operator', 'visa', 'sale_leader', 'bod'].includes(currentRole)) {
+    if (['admin', 'operator', 'visa', 'bod'].includes(currentRole)) {
       return allOrders;
     }
-    return allOrders.filter(o => o.user_id === profile?.id);
-  }, [allOrders, currentRole, profile]);
+    if (currentRole === 'sale_leader') {
+      return allOrders.filter(o => isOrderInLeaderTeam(o, profile, profilesList));
+    }
+    return allOrders.filter(o => o.user_id === profile?.id || (o.created_by && profile?.full_name && o.created_by.toLowerCase().trim().includes(profile.full_name.toLowerCase().trim())));
+  }, [allOrders, currentRole, profile, profilesList]);
 
   // 2. Filtered raw passengers belonging to my orders, discarding placeholder drafts
   const validPassengers = useMemo(() => {
