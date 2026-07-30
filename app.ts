@@ -852,6 +852,45 @@ app.post(['/api/create-folder', '/create-folder'], async (req, res) => {
   }
 });
 
+// Helper for 3-tier file upload fallback (Google Drive -> Supabase Storage -> Base64 Data URL)
+async function uploadWith3TierFallback(
+  req: express.Request,
+  file: Express.Multer.File,
+  fileName: string,
+  getDriveFolderId: (token: string) => Promise<string>,
+  supabaseStoragePath: string
+): Promise<{ url: string; fileId?: string; storage: string }> {
+  const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
+  const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+  const driveActive = hasServiceAccount || hasOAuth;
+
+  // Tier 1: Google Drive
+  if (driveActive) {
+    try {
+      const token = await getGoogleDriveAccessToken();
+      const folderId = await getDriveFolderId(token);
+      const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, folderId, token);
+      return { url: result.webViewLink, fileId: result.id, storage: 'drive' };
+    } catch (driveErr: any) {
+      console.warn('[Upload Tier 1 Failure] Google Drive upload failed, falling back to Supabase:', driveErr.message || driveErr);
+    }
+  }
+
+  // Tier 2: Supabase Storage
+  try {
+    const supabase = getSupabaseClient(req);
+    const publicUrl = await uploadFileToSupabase('crm-attachments', supabaseStoragePath, file.buffer, file.mimetype, supabase);
+    return { url: publicUrl, storage: 'supabase' };
+  } catch (sbErr: any) {
+    console.warn('[Upload Tier 2 Failure] Supabase storage upload failed, falling back to Base64 Data URL:', sbErr.message || sbErr);
+  }
+
+  // Tier 3: Base64 Data URL fallback (guarantees upload never fails completely)
+  const base64Data = file.buffer.toString('base64');
+  const dataUrl = `data:${file.mimetype || 'image/jpeg'};base64,${base64Data}`;
+  return { url: dataUrl, storage: 'data_url' };
+}
+
 // Unified File Upload API (Google Drive with Supabase Storage fallback)
 app.post(['/api/upload', '/upload'], (req, res, next) => {
   upload.single('file')(req, res, (err) => {
@@ -884,10 +923,6 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
       if (body[field]) body[field] = decodeUTF8(body[field]);
     });
 
-    const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
-    const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
-    const driveActive = hasServiceAccount || hasOAuth;
-
     const file = req.file;
     const isTourMediaUpload = body.uploadType === 'tour_media' || body.category === 'tour_media' || body.category === 'tour_photos';
     const isFeedbackUpload = body.uploadType === 'feedback' || body.category === 'feedback';
@@ -902,37 +937,21 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
       const timestamp = Date.now();
       const fileName = `${tourCode}_HDV_${timestamp}_${stt}${ext}`;
 
-      if (driveActive) {
-        console.log(`[Drive] Đang tải ảnh đoàn HDV lên Google Drive: AD Luxury Travel > Tour > ${tourCode} > Ảnh đoàn`);
-        const token = await getGoogleDriveAccessToken();
-        const targetFolderId = await getOrCreateTourSubFolderV2(tourCode, 'Ảnh đoàn', token);
-        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, targetFolderId, token);
+      const resData = await uploadWith3TierFallback(
+        req,
+        file,
+        fileName,
+        (token) => getOrCreateTourSubFolderV2(tourCode, 'Ảnh đoàn', token),
+        `Tour/${tourCode}/Anh_Doan/${fileName}`
+      );
 
-        return res.json({
-          success: true,
-          url: result.webViewLink,
-          fileName: fileName,
-          fileId: result.id,
-          storage: 'drive'
-        });
-      } else {
-        const storagePath = `Tour/${tourCode}/Anh_Doan/${fileName}`;
-        console.log(`[Supabase Fallback] Đang tải ảnh đoàn HDV lên Supabase: ${storagePath}`);
-        const supabase = getSupabaseClient(req);
-        const publicUrl = await uploadFileToSupabase(
-          'crm-attachments',
-          storagePath,
-          file.buffer,
-          file.mimetype,
-          supabase
-        );
-        return res.json({
-          success: true,
-          url: publicUrl,
-          fileName: fileName,
-          storage: 'supabase'
-        });
-      }
+      return res.json({
+        success: true,
+        url: resData.url,
+        fileName: fileName,
+        fileId: resData.fileId || '',
+        storage: resData.storage
+      });
     }
 
     if (isPaymentProposal) {
@@ -949,116 +968,66 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
 
       const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
       const fileName = cleanOriginalName.startsWith(proposalCode) ? cleanOriginalName : `${proposalCode}_${cleanOriginalName}`;
-
       const isTourExpense = proposalType === 'tour' && tourCode && tourCode !== 'CHUNG' && tourCode !== 'CHIPHI_TOUR';
 
-      if (driveActive) {
-        const token = await getGoogleDriveAccessToken();
-        let targetFolderId = '';
+      const resData = await uploadWith3TierFallback(
+        req,
+        file,
+        fileName,
+        (token) => isTourExpense 
+          ? getOrCreateTourSubFolderV2(tourCode, 'Chi phí', token) 
+          : getOrCreateAccountingExpenseFolder(mmyyyyStr, token),
+        isTourExpense ? `Tour/${tourCode}/Chi_phi/${fileName}` : `Ke_toan/Thang_${mmyyyyStr}/Chi_phi/${fileName}`
+      );
 
-        if (isTourExpense) {
-          console.log(`[Drive] Đang tải file đề nghị thanh toán tour lên Google Drive: AD Luxury Travel > Tour > ${tourCode} > Chi phí`);
-          targetFolderId = await getOrCreateTourSubFolderV2(tourCode, 'Chi phí', token);
-        } else {
-          console.log(`[Drive] Đang tải file đề nghị thanh toán chung/lẻ lên Google Drive: AD Luxury Travel > Kế toán > Tháng ${mmyyyyStr} > Chi phí`);
-          targetFolderId = await getOrCreateAccountingExpenseFolder(mmyyyyStr, token);
-        }
-
-        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, targetFolderId, token);
-        return res.json({
-          success: true,
-          url: result.webViewLink,
-          fileName: fileName,
-          storage: 'drive'
-        });
-      } else {
-        let storagePath = '';
-        if (isTourExpense) {
-          storagePath = `Tour/${tourCode}/Chi_phi/${fileName}`;
-        } else {
-          storagePath = `Ke_toan/Thang_${mmyyyyStr}/Chi_phi/${fileName}`;
-        }
-
-        console.log(`[Supabase Fallback] Đang tải file đề nghị thanh toán lên Supabase: ${storagePath}`);
-        const supabase = getSupabaseClient(req);
-        const publicUrl = await uploadFileToSupabase(
-          'crm-attachments',
-          storagePath,
-          file.buffer,
-          file.mimetype,
-          supabase
-        );
-        return res.json({
-          success: true,
-          url: publicUrl,
-          fileName: fileName,
-          storage: 'supabase'
-        });
-      }
+      return res.json({
+        success: true,
+        url: resData.url,
+        fileName: fileName,
+        fileId: resData.fileId || '',
+        storage: resData.storage
+      });
     }
 
     if (isFeedbackUpload) {
       const cleanFileName = file.originalname.trim().replace(/\s+/g, '_');
       const fileName = `FB_${Date.now()}_${cleanFileName}`;
 
-      if (!driveActive) {
-        return res.status(400).json({
-          error: 'Chưa cấu hình kết nối Google Drive. Vui lòng kiểm tra biến môi trường Google Drive.'
-        });
-      }
+      const resData = await uploadWith3TierFallback(
+        req,
+        file,
+        fileName,
+        (token) => getOrCreateFeedbackFolder(token),
+        `Feedback/${fileName}`
+      );
 
-      try {
-        console.log(`[Drive] Đang tải ảnh góp ý / báo lỗi lên Google Drive: AD Luxury Travel > Góp Ý & Báo Lỗi`);
-        const token = await getGoogleDriveAccessToken();
-        const feedbackFolderId = await getOrCreateFeedbackFolder(token);
-        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, feedbackFolderId, token);
-
-        return res.json({
-          success: true,
-          url: result.webViewLink,
-          fileName: fileName,
-          storage: 'drive'
-        });
-      } catch (dErr: any) {
-        console.error('[Drive] Tải ảnh góp ý lên Google Drive không thành công:', dErr.message || dErr);
-        return res.status(500).json({
-          error: `Không thể tải ảnh đính kèm lên Google Drive: ${dErr.message || dErr}`
-        });
-      }
+      return res.json({
+        success: true,
+        url: resData.url,
+        fileName: fileName,
+        fileId: resData.fileId || '',
+        storage: resData.storage
+      });
     }
 
     if (isVisaUpload) {
-      const fileName = file.originalname.trim(); // Giữ nguyên tên file gốc theo yêu cầu người dùng
+      const fileName = file.originalname.trim();
 
-      if (driveActive) {
-        console.log(`[Drive] Đang tải file mẫu visa lên Google Drive vào thư mục Visa chung`);
-        const token = await getGoogleDriveAccessToken();
-        const visaFolderId = await getOrCreateVisaFolder(token);
-        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, visaFolderId, token);
-        res.json({
-          success: true,
-          url: result.webViewLink,
-          fileName: fileName,
-          storage: 'drive'
-        });
-      } else {
-        console.log(`[Supabase Fallback] Đang tải file mẫu visa lên Supabase: Visa/${fileName}`);
-        const supabase = getSupabaseClient(req);
-        const publicUrl = await uploadFileToSupabase(
-          'crm-attachments',
-          `Visa/${fileName}`,
-          file.buffer,
-          file.mimetype,
-          supabase
-        );
-        res.json({
-          success: true,
-          url: publicUrl,
-          fileName: fileName,
-          storage: 'supabase'
-        });
-      }
-      return;
+      const resData = await uploadWith3TierFallback(
+        req,
+        file,
+        fileName,
+        (token) => getOrCreateVisaFolder(token),
+        `Visa/${fileName}`
+      );
+
+      return res.json({
+        success: true,
+        url: resData.url,
+        fileName: fileName,
+        fileId: resData.fileId || '',
+        storage: resData.storage
+      });
     }
 
     if (isTourUpload) {
@@ -1066,91 +1035,59 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
       const category = body.category || 'Chung';
 
       if (category === 'Visa') {
-        // File mẫu của từng dịch vụ visa: Lưu trong thư mục của visa đó, với tên thư mục là mã visa (ví dụ: AD Luxury Travel > Visa > VIAU)
         const fileName = file.originalname.trim();
 
-        if (driveActive) {
-          console.log(`[Drive] Đang tải file mẫu visa của từng dịch vụ lên Google Drive: AD Luxury Travel > Visa > ${tourCode}`);
-          const token = await getGoogleDriveAccessToken();
-          const visaFolderId = await getOrCreateVisaFolder(token);
-          const serviceFolderId = await getOrCreateVisaServiceFolder(tourCode, visaFolderId, token);
-          const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, serviceFolderId, token);
-          res.json({
-            success: true,
-            url: result.webViewLink,
-            fileName: fileName,
-            storage: 'drive'
-          });
-        } else {
-          console.log(`[Supabase Fallback] Đang tải file mẫu visa của từng dịch vụ lên Supabase: Visa/${tourCode}/${fileName}`);
-          const supabase = getSupabaseClient(req);
-          const publicUrl = await uploadFileToSupabase(
-            'crm-attachments',
-            `Visa/${tourCode.trim().toUpperCase()}/${fileName}`,
-            file.buffer,
-            file.mimetype,
-            supabase
-          );
-          res.json({
-            success: true,
-            url: publicUrl,
-            fileName: fileName,
-            storage: 'supabase'
-          });
-        }
-        return;
+        const resData = await uploadWith3TierFallback(
+          req,
+          file,
+          fileName,
+          async (token) => {
+            const visaFolderId = await getOrCreateVisaFolder(token);
+            return getOrCreateVisaServiceFolder(tourCode, visaFolderId, token);
+          },
+          `Visa/${tourCode.trim().toUpperCase()}/${fileName}`
+        );
+
+        return res.json({
+          success: true,
+          url: resData.url,
+          fileName: fileName,
+          fileId: resData.fileId || '',
+          storage: resData.storage
+        });
       }
 
       const ext = path.extname(file.originalname) || '.pdf';
       const fileName = `${tourCode.trim().toUpperCase()}${ext}`;
 
-      if (driveActive) {
-        console.log(`[Drive] Đang tải file lịch trình tour lên Google Drive cho Tour: ${tourCode}`);
-        const token = await getGoogleDriveAccessToken();
-        const tourFolderId = await getOrCreateTourFolderV2(tourCode, token);
-        const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, tourFolderId, token);
-        res.json({
-          success: true,
-          url: result.webViewLink,
-          fileName: fileName,
-          storage: 'drive'
-        });
-      } else {
-        console.log(`[Supabase Fallback] Đang tải file lịch trình tour lên Supabase: Tour/${tourCode.trim().toUpperCase()}/${fileName}`);
-        const supabase = getSupabaseClient(req);
-        const publicUrl = await uploadFileToSupabase(
-          'crm-attachments',
-          `Tour/${tourCode.trim().toUpperCase()}/${fileName}`,
-          file.buffer,
-          file.mimetype,
-          supabase
-        );
-        res.json({
-          success: true,
-          url: publicUrl,
-          fileName: fileName,
-          storage: 'supabase'
-        });
-      }
-      return;
+      const resData = await uploadWith3TierFallback(
+        req,
+        file,
+        fileName,
+        (token) => getOrCreateTourFolderV2(tourCode, token),
+        `Tour/${tourCode.trim().toUpperCase()}/${fileName}`
+      );
+
+      return res.json({
+        success: true,
+        url: resData.url,
+        fileName: fileName,
+        fileId: resData.fileId || '',
+        storage: resData.storage
+      });
     }
 
     // Passenger profile upload
     const passportNumber = body.passportNumber || '';
     const fullName = body.fullName || '';
-
     const cleanPassport = (passportNumber || 'CHUA_CO_HC').trim().toUpperCase();
     
-    // Helper to get initials
     const getInitials = (name: string) => {
       if (!name) return 'KH';
       const words = name.trim().split(/\s+/);
       return words.map(w => w.charAt(0).toUpperCase()).join('');
     };
-    
     const initials = getInitials(fullName);
-
-    // Keep raw original file name with full Vietnamese accent support
     const originalName = file.originalname.trim();
     const fileName = originalName;
 
@@ -1160,36 +1097,22 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
       return `${linkUrl}#filename=${encodeURIComponent(name)}`;
     };
 
-    if (driveActive) {
-      console.log(`[Drive] Đang tải file lên Google Drive cho khách hàng: ${fullName} (${cleanPassport}) - File: ${fileName}`);
-      const token = await getGoogleDriveAccessToken();
-      const passengerFolderId = await getOrCreatePassengerFolder(fullName, passportNumber, token);
-      const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, passengerFolderId, token);
-      const finalUrl = appendFilenameFragment(result.webViewLink, originalName);
-      res.json({
-        success: true,
-        url: finalUrl,
-        fileName: originalName,
-        storage: 'drive'
-      });
-    } else {
-      console.log(`[Supabase Fallback] Đang tải file khách hàng lên Supabase: Khách hàng/${cleanPassport}-${initials}/${fileName}`);
-      const supabase = getSupabaseClient(req);
-      const publicUrl = await uploadFileToSupabase(
-        'crm-attachments',
-        `Khách hàng/${cleanPassport}-${initials}/${fileName}`,
-        file.buffer,
-        file.mimetype,
-        supabase
-      );
-      const finalUrl = appendFilenameFragment(publicUrl, originalName);
-      res.json({
-        success: true,
-        url: finalUrl,
-        fileName: originalName,
-        storage: 'supabase'
-      });
-    }
+    const resData = await uploadWith3TierFallback(
+      req,
+      file,
+      fileName,
+      (token) => getOrCreatePassengerFolder(fullName, passportNumber, token),
+      `Khách hàng/${cleanPassport}-${initials}/${fileName}`
+    );
+
+    const finalUrl = appendFilenameFragment(resData.url, originalName);
+    return res.json({
+      success: true,
+      url: finalUrl,
+      fileName: originalName,
+      fileId: resData.fileId || '',
+      storage: resData.storage
+    });
   } catch (error: any) {
     console.error('Lỗi API /api/upload:', error);
     res.status(500).json({ error: error.message || 'Lỗi tải file lên hệ thống' });
@@ -2128,14 +2051,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   console.error('[Global Error Handler]:', err);
   const status = err.status || err.statusCode || 500;
   
-  if (req.path.startsWith('/api/')) {
-    return res.status(status).json({
-      error: err.message || 'Đã xảy ra lỗi hệ thống trên API',
-      status
-    });
-  }
-  
-  next(err);
+  return res.status(status).json({
+    error: err.message || 'Đã xảy ra lỗi hệ thống trên máy chủ',
+    status
+  });
 });
 
 // Serve frontend assets & mount Vite dev server middleware

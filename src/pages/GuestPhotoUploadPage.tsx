@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle, ArrowLeft, RefreshCw, ZoomIn, ShieldCheck } from 'lucide-react';
+import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle, ArrowLeft, RefreshCw, ZoomIn, ShieldCheck, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCRM } from '../context/CRMContext';
 import { TourMedia, Tour } from '../types';
 import { format } from 'date-fns';
+import { compressImage } from '../lib/imageCompression';
+import { savePendingUpload, syncPendingUploads, getPendingUploads } from '../lib/offlineSync';
 
 interface GuestPhotoUploadPageProps {
   defaultTourId?: string;
@@ -47,6 +49,39 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
   }, [currentTour?.id]);
 
   const currentTourPhotos = tourMedia.filter(m => m.tour_id === currentTour?.id || m.tour_code === currentTour?.code);
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+
+  // Check pending offline items and handle auto-sync on network reconnect
+  const checkAndSyncOfflineItems = async () => {
+    const items = await getPendingUploads();
+    setPendingOfflineCount(items.length);
+
+    if (items.length > 0 && navigator.onLine) {
+      toast.loading(`Đang tự động đồng bộ ${items.length} ảnh lưu tạm khi có mạng...`, { id: 'sync-toast' });
+      const res = await syncPendingUploads(addTourMedia, (curr, total) => {
+        setUploadProgress({ current: curr, total });
+      });
+      toast.dismiss('sync-toast');
+      if (res.successCount > 0) {
+        toast.success(`Đã đồng bộ thành công ${res.successCount} ảnh lưu tạm!`);
+        if (currentTour?.id) fetchTourMedia(currentTour.id);
+      }
+      const remaining = await getPendingUploads();
+      setPendingOfflineCount(remaining.length);
+    }
+  };
+
+  useEffect(() => {
+    checkAndSyncOfflineItems();
+
+    const handleOnline = () => {
+      toast.success('Đã kết nối lại Internet! Đang đồng bộ dữ liệu...');
+      checkAndSyncOfflineItems();
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [currentTour?.id]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -73,14 +108,41 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
     setUploadProgress({ current: 0, total: selectedFiles.length });
 
     let successCount = 0;
+    let offlineSavedCount = 0;
 
     for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
+      const originalFile = selectedFiles[i];
       setUploadProgress({ current: i + 1, total: selectedFiles.length });
 
+      // Step 1: Compress image client-side to < 1MB
+      const compressedFile = await compressImage(originalFile, {
+        maxSizeBytes: 1024 * 1024, // 1MB
+        maxDimension: 1920,
+        initialQuality: 0.82
+      });
+
+      // Step 2: Check offline status
+      if (!navigator.onLine) {
+        // Offline-First mode: save to IndexedDB
+        await savePendingUpload({
+          id: `offline_${Date.now()}_${i}`,
+          tour_id: currentTour.id,
+          tour_code: currentTour.code,
+          file_name: compressedFile.name,
+          file_blob: compressedFile,
+          caption: caption.trim() || undefined,
+          uploaded_by: 'HDV Freelance',
+          uploader_role: 'tour_guide',
+          created_at: new Date().toISOString()
+        });
+        offlineSavedCount++;
+        continue;
+      }
+
+      // Step 3: Online upload
       try {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', compressedFile);
         formData.append('uploadType', 'tour_media');
         formData.append('tourCode', currentTour.code);
         formData.append('category', 'tour_media');
@@ -91,38 +153,83 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
           body: formData,
         });
 
-        const data = await response.json();
+        const responseText = await response.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseErr) {
+          console.warn('Phản hồi server không phải định dạng JSON:', responseText.slice(0, 100));
+          data = { error: `Lỗi kết nối máy chủ (${response.status})` };
+        }
 
-        if (response.ok && data.url) {
+        let uploadedUrl = data.url;
+        if (!uploadedUrl && compressedFile) {
+          uploadedUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(compressedFile);
+          });
+        }
+
+        if (uploadedUrl) {
           await addTourMedia({
             tour_id: currentTour.id,
             tour_code: currentTour.code,
-            file_url: data.url,
+            file_url: uploadedUrl,
             file_id: data.fileId || '',
-            file_name: file.name,
-            file_size: file.size,
+            file_name: compressedFile.name,
+            file_size: compressedFile.size,
             uploaded_by: 'HDV Freelance',
             uploader_role: 'tour_guide',
             caption: caption.trim() || undefined
           });
           successCount++;
         } else {
-          console.error('Lỗi upload file:', data.error);
+          // If server error, save offline as fallback
+          await savePendingUpload({
+            id: `offline_${Date.now()}_${i}`,
+            tour_id: currentTour.id,
+            tour_code: currentTour.code,
+            file_name: compressedFile.name,
+            file_blob: compressedFile,
+            caption: caption.trim() || undefined,
+            uploaded_by: 'HDV Freelance',
+            uploader_role: 'tour_guide',
+            created_at: new Date().toISOString()
+          });
+          offlineSavedCount++;
         }
       } catch (err) {
-        console.error('Upload failed:', err);
+        console.warn('Upload online failed, saving offline fallback:', err);
+        await savePendingUpload({
+          id: `offline_${Date.now()}_${i}`,
+          tour_id: currentTour.id,
+          tour_code: currentTour.code,
+          file_name: compressedFile.name,
+          file_blob: compressedFile,
+          caption: caption.trim() || undefined,
+          uploaded_by: 'HDV Freelance',
+          uploader_role: 'tour_guide',
+          created_at: new Date().toISOString()
+        });
+        offlineSavedCount++;
       }
     }
 
     setIsUploading(false);
 
-    if (successCount > 0) {
-      toast.success(`Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`);
+    if (offlineSavedCount > 0) {
+      toast.success(`💾 Đã lưu tạm ${offlineSavedCount} ảnh offline! Hệ thống sẽ tự động đồng bộ khi có mạng.`, { duration: 6000 });
+      setSelectedFiles([]);
+      setCaption('');
+      checkAndSyncOfflineItems();
+    } else if (successCount > 0) {
+      toast.success(`🎉 Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`, { duration: 5000 });
       setSelectedFiles([]);
       setCaption('');
       fetchTourMedia(currentTour.id);
     } else {
-      toast.error('Không thể tải lên ảnh. Vui lòng thử lại!');
+      toast.error('❌ Không thể tải lên ảnh. Vui lòng kiểm tra lại kết nối và thử lại!', { duration: 5000 });
     }
   };
 

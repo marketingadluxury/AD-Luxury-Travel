@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { Tour } from '../types';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
+import { compressImage } from '../lib/imageCompression';
+import { savePendingUpload, syncPendingUploads, getPendingUploads } from '../lib/offlineSync';
 
 interface HDVQuickUploadModalProps {
   isOpen: boolean;
@@ -67,15 +69,40 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
     setUploadProgress({ current: 0, total: selectedFiles.length });
 
     let successCount = 0;
+    let offlineSavedCount = 0;
     const uploaderName = user?.email || (currentRole === 'tour_guide' ? 'Hướng Dẫn Viên' : 'Điều Hành Tour');
 
     for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
+      const originalFile = selectedFiles[i];
       setUploadProgress({ current: i + 1, total: selectedFiles.length });
+
+      // Compress image client-side to < 1MB
+      const compressedFile = await compressImage(originalFile, {
+        maxSizeBytes: 1024 * 1024,
+        maxDimension: 1920,
+        initialQuality: 0.82
+      });
+
+      if (!navigator.onLine) {
+        // Save offline
+        await savePendingUpload({
+          id: `offline_${Date.now()}_${i}`,
+          tour_id: currentTour.id,
+          tour_code: currentTour.code,
+          file_name: compressedFile.name,
+          file_blob: compressedFile,
+          caption: caption.trim() || undefined,
+          uploaded_by: uploaderName,
+          uploader_role: currentRole,
+          created_at: new Date().toISOString()
+        });
+        offlineSavedCount++;
+        continue;
+      }
 
       try {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', compressedFile);
         formData.append('uploadType', 'tour_media');
         formData.append('tourCode', currentTour.code);
         formData.append('category', 'tour_media');
@@ -87,38 +114,82 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
           body: formData,
         });
 
-        const data = await response.json();
+        const responseText = await response.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseErr) {
+          console.warn('Phản hồi server không phải định dạng JSON:', responseText.slice(0, 100));
+          data = { error: `Lỗi kết nối máy chủ (${response.status})` };
+        }
 
-        if (response.ok && data.url) {
+        let uploadedUrl = data.url;
+        if (!uploadedUrl && compressedFile) {
+          uploadedUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(compressedFile);
+          });
+        }
+
+        if (uploadedUrl) {
           await addTourMedia({
             tour_id: currentTour.id,
             tour_code: currentTour.code,
-            file_url: data.url,
+            file_url: uploadedUrl,
             file_id: data.fileId || '',
-            file_name: file.name,
-            file_size: file.size,
+            file_name: compressedFile.name,
+            file_size: compressedFile.size,
             uploaded_by: uploaderName,
             uploader_role: currentRole,
             caption: caption.trim() || undefined
           });
           successCount++;
         } else {
-          console.error('Lỗi upload file:', data.error);
+          await savePendingUpload({
+            id: `offline_${Date.now()}_${i}`,
+            tour_id: currentTour.id,
+            tour_code: currentTour.code,
+            file_name: compressedFile.name,
+            file_blob: compressedFile,
+            caption: caption.trim() || undefined,
+            uploaded_by: uploaderName,
+            uploader_role: currentRole,
+            created_at: new Date().toISOString()
+          });
+          offlineSavedCount++;
         }
       } catch (err) {
-        console.error('Upload failed:', err);
+        console.warn('Upload failed, saving offline fallback:', err);
+        await savePendingUpload({
+          id: `offline_${Date.now()}_${i}`,
+          tour_id: currentTour.id,
+          tour_code: currentTour.code,
+          file_name: compressedFile.name,
+          file_blob: compressedFile,
+          caption: caption.trim() || undefined,
+          uploaded_by: uploaderName,
+          uploader_role: currentRole,
+          created_at: new Date().toISOString()
+        });
+        offlineSavedCount++;
       }
     }
 
     setIsUploading(false);
 
-    if (successCount > 0) {
-      toast.success(`Tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`);
+    if (offlineSavedCount > 0) {
+      toast.success(`💾 Đã lưu tạm ${offlineSavedCount} ảnh offline! Hệ thống sẽ tự động đồng bộ khi có mạng.`, { duration: 6000 });
       setSelectedFiles([]);
       setCaption('');
-      onClose();
+      // Không tự động tắt modal theo yêu cầu
+    } else if (successCount > 0) {
+      toast.success(`🎉 Tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`, { duration: 5000 });
+      setSelectedFiles([]);
+      setCaption('');
+      // Không tự động tắt modal theo yêu cầu
     } else {
-      toast.error('Tải ảnh thất bại. Vui lòng kiểm tra lại kết nối!');
+      toast.error('❌ Tải ảnh thất bại. Vui lòng kiểm tra lại kết nối và thử lại!', { duration: 5000 });
     }
   };
 

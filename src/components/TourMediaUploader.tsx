@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
+import { compressImage as compressImageUtil } from '../lib/imageCompression';
+import { savePendingUpload } from '../lib/offlineSync';
 
 interface TourMediaUploaderProps {
   tourId: string;
@@ -125,6 +127,7 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
 
     const total = selectedFiles.length;
     let successCount = 0;
+    let offlineSavedCount = 0;
     const uploaderName = profile?.full_name || user?.email || 'Hướng Dẫn Viên';
     const uploaderRole = currentRole || 'tour_guide';
 
@@ -133,9 +136,29 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
       const item = selectedFiles[i];
 
       try {
-        // Step 1: Compress image client side
-        const compressed = await compressImage(item.file);
-        const compressedFile = new File([compressed.blob], compressed.fileName, { type: 'image/jpeg' });
+        // Step 1: Compress image client side to < 1MB
+        const compressedFile = await compressImageUtil(item.file, {
+          maxSizeBytes: 1024 * 1024,
+          maxDimension: 1920,
+          initialQuality: 0.82
+        });
+
+        if (!navigator.onLine) {
+          await savePendingUpload({
+            id: `offline_${Date.now()}_${i}`,
+            tour_id: tourId,
+            tour_code: tourCode,
+            file_name: compressedFile.name,
+            file_blob: compressedFile,
+            caption: item.caption || `Ảnh kỷ niệm ${tourCode} (${i + 1})`,
+            uploaded_by: uploaderName,
+            uploader_role: uploaderRole,
+            created_at: new Date().toISOString()
+          });
+          offlineSavedCount++;
+          setUploadProgress(Math.round(((i + 1) / total) * 100));
+          continue;
+        }
 
         // Step 2: Prepare FormData
         const formData = new FormData();
@@ -147,7 +170,7 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
         // Step 3: Call Server API /api/upload
         let fileUrl = '';
         let fileId = '';
-        let fileName = compressed.fileName;
+        let fileName = compressedFile.name;
 
         try {
           const res = await fetch('/api/upload', {
@@ -164,8 +187,21 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
             throw new Error(`Server status ${res.status}`);
           }
         } catch (serverErr) {
-          console.warn('Tải lên server không thành công, dùng data URL fallback offline:', serverErr);
-          fileUrl = item.preview;
+          console.warn('Tải lên server không thành công, lưu tạm offline:', serverErr);
+          await savePendingUpload({
+            id: `offline_${Date.now()}_${i}`,
+            tour_id: tourId,
+            tour_code: tourCode,
+            file_name: compressedFile.name,
+            file_blob: compressedFile,
+            caption: item.caption || `Ảnh kỷ niệm ${tourCode} (${i + 1})`,
+            uploaded_by: uploaderName,
+            uploader_role: uploaderRole,
+            created_at: new Date().toISOString()
+          });
+          offlineSavedCount++;
+          setUploadProgress(Math.round(((i + 1) / total) * 100));
+          continue;
         }
 
         // Step 4: Save record to Database context
@@ -175,7 +211,7 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
           file_url: fileUrl,
           file_id: fileId,
           file_name: fileName,
-          file_size: compressed.blob.size,
+          file_size: compressedFile.size,
           uploaded_by: uploaderName,
           uploader_role: uploaderRole,
           caption: item.caption || `Ảnh kỷ niệm ${tourCode} (${i + 1})`
@@ -192,11 +228,18 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
 
     setIsUploading(false);
 
-    if (successCount > 0) {
-      toast.success(`Đã tải lên thành công ${successCount}/${total} ảnh đoàn!`);
+    if (offlineSavedCount > 0) {
+      toast.success(`💾 Đã lưu tạm ${offlineSavedCount} ảnh offline! Hệ thống sẽ tự động đồng bộ khi có mạng.`, { duration: 6000 });
       setSelectedFiles([]);
       if (onUploadSuccess) onUploadSuccess();
-      if (onClose) onClose();
+      // Không tự động tắt giao diện upload
+    } else if (successCount > 0) {
+      toast.success(`🎉 Đã tải lên thành công ${successCount}/${total} ảnh đoàn!`, { duration: 5000 });
+      setSelectedFiles([]);
+      if (onUploadSuccess) onUploadSuccess();
+      // Không tự động tắt giao diện upload
+    } else {
+      toast.error(`❌ Tải ảnh thất bại (${0}/${total}). Vui lòng kiểm tra lại kết nối!`, { duration: 5000 });
     }
   };
 

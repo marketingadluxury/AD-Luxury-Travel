@@ -23,7 +23,7 @@ async function startServer() {
   if (!process.env.VERCEL) {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`[Server] Khởi động thành công tại http://localhost:${PORT}`);
-      console.log(`[Server] Đang sử dụng Supabase Storage`);
+      console.log(`[Server] Đang sử dụng Google Drive làm kho lưu trữ chính`);
     });
   }
 }
