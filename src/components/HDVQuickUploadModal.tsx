@@ -102,6 +102,8 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
 
     let successCount = 0;
     let offlineSavedCount = 0;
+    let supabaseCount = 0;
+    let lastDriveError = '';
     const uploaderName = user?.email || (currentRole === 'tour_guide' ? 'Hướng Dẫn Viên' : 'Điều Hành Tour');
 
     for (let i = 0; i < selectedFiles.length; i++) {
@@ -169,6 +171,10 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
         }
 
         const uploadedUrl = data.url;
+        if (data.storage === 'supabase') {
+          supabaseCount++;
+          if (data.error) lastDriveError = data.error;
+        }
 
         await addTourMedia({
           id: data.media?.id,
@@ -200,7 +206,15 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
       setSelectedFiles([]);
       setCaption('');
     } else if (successCount > 0) {
-      toast.success(`🎉 Tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`, { duration: 5000 });
+      if (supabaseCount > 0) {
+        toast(
+          `⚠️ Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh, tuy nhiên ${supabaseCount} ảnh phải lưu tạm trên Supabase do kết nối Google Drive của đoàn bị lỗi` +
+          (lastDriveError ? `: ${lastDriveError}` : '.'),
+          { duration: 10000 }
+        );
+      } else {
+        toast.success(`🎉 Tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn lên Google Drive!`, { duration: 5000 });
+      }
       setSelectedFiles([]);
       setCaption('');
     } else {

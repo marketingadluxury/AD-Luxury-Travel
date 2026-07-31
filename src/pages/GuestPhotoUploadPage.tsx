@@ -141,6 +141,8 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
 
     let successCount = 0;
     let offlineSavedCount = 0;
+    let supabaseCount = 0;
+    let lastDriveError = '';
 
     for (let i = 0; i < selectedFiles.length; i++) {
       const originalFile = selectedFiles[i];
@@ -203,6 +205,10 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
         }
 
         const uploadedUrl = data.url;
+        if (data.storage === 'supabase') {
+          supabaseCount++;
+          if (data.error) lastDriveError = data.error;
+        }
 
         // Add to local state (server already saved record to database)
         await addTourMedia({
@@ -237,7 +243,15 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
       setCaption('');
       checkAndSyncOfflineItems();
     } else if (successCount > 0) {
-      toast.success(`🎉 Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn!`, { duration: 5000 });
+      if (supabaseCount > 0) {
+        toast(
+          `⚠️ Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh, tuy nhiên ${supabaseCount} ảnh phải lưu tạm trên Supabase do kết nối Google Drive của đoàn bị lỗi` +
+          (lastDriveError ? `: ${lastDriveError}` : '.'),
+          { duration: 10000 }
+        );
+      } else {
+        toast.success(`🎉 Đã tải lên thành công ${successCount}/${selectedFiles.length} ảnh đoàn lên Google Drive!`, { duration: 5000 });
+      }
       setSelectedFiles([]);
       setCaption('');
     } else {

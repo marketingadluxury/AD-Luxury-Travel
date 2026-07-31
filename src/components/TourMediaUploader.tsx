@@ -163,6 +163,8 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
     const total = selectedFiles.length;
     let successCount = 0;
     let offlineSavedCount = 0;
+    let supabaseCount = 0;
+    let lastDriveError = '';
     const uploaderName = profile?.full_name || user?.email || 'Hướng Dẫn Viên';
     const uploaderRole = currentRole || 'tour_guide';
 
@@ -229,6 +231,11 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
         fileId = data.fileId || '';
         fileName = data.fileName || fileName;
 
+        if (data.storage === 'supabase') {
+          supabaseCount++;
+          if (data.error) lastDriveError = data.error;
+        }
+
         // Step 4: Save record to Database context
         await addTourMedia({
           id: data.media?.id,
@@ -264,7 +271,15 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
       if (onUploadSuccess) onUploadSuccess();
       // Không tự động tắt giao diện upload
     } else if (successCount > 0) {
-      toast.success(`🎉 Đã tải lên thành công ${successCount}/${total} ảnh đoàn!`, { duration: 5000 });
+      if (supabaseCount > 0) {
+        toast(
+          `⚠️ Đã tải lên thành công ${successCount}/${total} ảnh, tuy nhiên ${supabaseCount} ảnh phải lưu tạm trên Supabase do kết nối Google Drive của đoàn bị lỗi` +
+          (lastDriveError ? `: ${lastDriveError}` : '.'),
+          { duration: 10000 }
+        );
+      } else {
+        toast.success(`🎉 Đã tải lên thành công ${successCount}/${total} ảnh đoàn lên Google Drive!`, { duration: 5000 });
+      }
       setSelectedFiles([]);
       if (onUploadSuccess) onUploadSuccess();
       // Không tự động tắt giao diện upload

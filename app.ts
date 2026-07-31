@@ -10,6 +10,40 @@ import cors from 'cors';
 // Load environment variables
 dotenv.config();
 
+// Clean up Google Drive environment variables (remove surrounding quotes if any)
+const googleEnvVars = [
+  'GOOGLE_SERVICE_ACCOUNT_EMAIL',
+  'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY',
+  'GOOGLE_DRIVE_CLIENT_ID',
+  'GOOGLE_DRIVE_CLIENT_SECRET',
+  'GOOGLE_DRIVE_REFRESH_TOKEN',
+  'GOOGLE_DRIVE_PARENT_FOLDER_ID',
+  'GOOGLE_DRIVE_ROOT_FOLDER_ID',
+  'GOOGLE_DRIVE_FOLDER_ID',
+  'DRIVE_PARENT_FOLDER_ID',
+  'DRIVE_ROOT_ID'
+];
+
+googleEnvVars.forEach(name => {
+  const val = process.env[name];
+  if (val) {
+    let cleanVal = val.trim();
+    if (cleanVal.startsWith('"') && cleanVal.endsWith('"')) {
+      cleanVal = cleanVal.slice(1, -1).trim();
+    }
+    if (cleanVal.startsWith("'") && cleanVal.endsWith("'")) {
+      cleanVal = cleanVal.slice(1, -1).trim();
+    }
+    // Specially handle GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY newlines if escaped
+    if (name === 'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY') {
+      if (cleanVal.includes('\\n')) {
+        cleanVal = cleanVal.replace(/\\n/g, '\n');
+      }
+    }
+    process.env[name] = cleanVal;
+  }
+});
+
 const app = express();
 const PORT = 3000;
 
@@ -864,10 +898,12 @@ async function uploadWith3TierFallback(
   getDriveFolderId: (token: string) => Promise<string>,
   supabaseStoragePath: string,
   strictDriveOnly: boolean = false
-): Promise<{ url: string; fileId?: string; storage: string }> {
+): Promise<{ url: string; fileId?: string; storage: string; error?: string }> {
   const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
   const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
   const driveActive = hasServiceAccount || hasOAuth;
+
+  let driveErrorMsg: string | undefined = undefined;
 
   // Tier 1: Google Drive
   if (driveActive) {
@@ -877,9 +913,10 @@ async function uploadWith3TierFallback(
       const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, folderId, token);
       return { url: result.webViewLink, fileId: result.id, storage: 'drive' };
     } catch (driveErr: any) {
-      console.warn('[Upload Tier 1 Failure] Google Drive upload failed:', driveErr.message || driveErr);
+      driveErrorMsg = driveErr.message || String(driveErr);
+      console.warn('[Upload Tier 1 Failure] Google Drive upload failed:', driveErrorMsg);
       if (strictDriveOnly) {
-        throw new Error(`Lỗi lưu file lên Google Drive: ${driveErr.message || driveErr}. Hệ thống chỉ chấp nhận lưu trên Google Drive, không dùng Supabase Storage.`);
+        throw new Error(`Lỗi lưu file lên Google Drive: ${driveErrorMsg}. Hệ thống chỉ chấp nhận lưu trên Google Drive, không dùng Supabase Storage.`);
       }
     }
   } else if (strictDriveOnly) {
@@ -890,7 +927,7 @@ async function uploadWith3TierFallback(
   try {
     const supabase = getSupabaseClient(req);
     const publicUrl = await uploadFileToSupabase('crm-attachments', supabaseStoragePath, file.buffer, file.mimetype, supabase);
-    return { url: publicUrl, storage: 'supabase' };
+    return { url: publicUrl, storage: 'supabase', error: driveErrorMsg };
   } catch (sbErr: any) {
     console.warn('[Upload Tier 2 Failure] Supabase storage upload failed, falling back to Base64 Data URL:', sbErr.message || sbErr);
   }
@@ -898,7 +935,7 @@ async function uploadWith3TierFallback(
   // Tier 3: Base64 Data URL fallback (guarantees upload never fails completely)
   const base64Data = file.buffer.toString('base64');
   const dataUrl = `data:${file.mimetype || 'image/jpeg'};base64,${base64Data}`;
-  return { url: dataUrl, storage: 'data_url' };
+  return { url: dataUrl, storage: 'data_url', error: driveErrorMsg };
 }
 
 // Unified File Upload API (Google Drive with Supabase Storage fallback)
@@ -1033,7 +1070,8 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
         fileId: resData.fileId || '',
         storage: resData.storage,
         media: insertedRecord,
-        tourCode: resolvedTourCode
+        tourCode: resolvedTourCode,
+        error: resData.error || null
       });
     }
 
