@@ -24,7 +24,18 @@ import {
   LogOut,
   Ticket,
   Camera,
-  Share2
+  Share2,
+  Handshake,
+  Building,
+  Sliders,
+  Star,
+  Briefcase,
+  Globe,
+  Calculator,
+  Flag,
+  Key,
+  Megaphone,
+  BarChart3
 } from 'lucide-react';
 import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -35,17 +46,17 @@ import { HDVQuickUploadModal } from './HDVQuickUploadModal';
 import { HDVQuickLinkModal } from './HDVQuickLinkModal';
 
 const roleOptions = [
-  { value: 'CTV', label: '🤝 Cộng tác viên (CTV)' },
-  { value: 'bod', label: '👔 BOD (Ban Giám đốc)' },
-  { value: 'operator', label: '👷 Điều hành Tour' },
-  { value: 'sale_leader', label: '⭐ Sale Leader (Trưởng nhóm)' },
-  { value: 'sale', label: '💼 Sale' },
-  { value: 'visa', label: '🛂 Bộ phận Visa' },
-  { value: 'accounting', label: '💰 Kế toán' },
-  { value: 'tour_guide', label: '🚩 Hướng Dẫn Viên (HDV)' },
-  { value: 'admin', label: '🔑 Quản trị viên (Full)' },
-  { value: 'marketing_leader', label: '📢 Trưởng phòng Marketing' },
-  { value: 'marketing', label: '📈 Nhân viên Marketing' },
+  { value: 'CTV', label: 'Cộng tác viên (CTV)', icon: <Handshake className="w-4 h-4 text-slate-500" /> },
+  { value: 'bod', label: 'BOD (Ban Giám đốc)', icon: <Building className="w-4 h-4 text-violet-600" /> },
+  { value: 'operator', label: 'Điều hành Tour', icon: <Sliders className="w-4 h-4 text-purple-600" /> },
+  { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)', icon: <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> },
+  { value: 'sale', label: 'Sale', icon: <Briefcase className="w-4 h-4 text-blue-600" /> },
+  { value: 'visa', label: 'Bộ phận Visa', icon: <Globe className="w-4 h-4 text-indigo-600" /> },
+  { value: 'accounting', label: 'Kế toán', icon: <Calculator className="w-4 h-4 text-emerald-600" /> },
+  { value: 'tour_guide', label: 'Hướng Dẫn Viên (HDV)', icon: <Flag className="w-4 h-4 text-teal-600" /> },
+  { value: 'admin', label: 'Quản trị viên (Full)', icon: <Key className="w-4 h-4 text-rose-600" /> },
+  { value: 'marketing_leader', label: 'Trưởng phòng Marketing', icon: <Megaphone className="w-4 h-4 text-fuchsia-600" /> },
+  { value: 'marketing', label: 'Nhân viên Marketing', icon: <BarChart3 className="w-4 h-4 text-pink-500" /> },
 ];
 import { FeedbackModal } from './FeedbackModal';
 

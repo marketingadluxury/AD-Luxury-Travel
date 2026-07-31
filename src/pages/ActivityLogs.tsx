@@ -458,15 +458,15 @@ export default function ActivityLogs() {
               }}
               className="w-full px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white font-semibold text-gray-800 cursor-pointer"
             >
-              <option value="all">📁 Tất cả phân loại (Module)</option>
-              <option value="Tour">🗺️ Tour du lịch</option>
-              <option value="Đơn hàng">🛒 Booking</option>
-              <option value="Visa">🛂 Dịch vụ Visa</option>
-              <option value="Kế toán">💰 Kế toán & Hóa đơn</option>
-              <option value="Chi phí">💲 Chi phí Tour</option>
-              <option value="Hành khách">👥 Hành khách</option>
-              <option value="Thành viên">🤝 Đại lý & CTV</option>
-              <option value="Hệ thống">⚙️ Hệ thống</option>
+              <option value="all">Tất cả phân loại (Module)</option>
+              <option value="Tour">Tour du lịch</option>
+              <option value="Đơn hàng">Booking</option>
+              <option value="Visa">Dịch vụ Visa</option>
+              <option value="Kế toán">Kế toán & Hóa đơn</option>
+              <option value="Chi phí">Chi phí Tour</option>
+              <option value="Hành khách">Hành khách</option>
+              <option value="Thành viên">Đại lý & CTV</option>
+              <option value="Hệ thống">Hệ thống</option>
             </select>
           </div>
 
@@ -480,17 +480,17 @@ export default function ActivityLogs() {
               }}
               className="w-full px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white font-semibold text-gray-800 cursor-pointer"
             >
-              <option value="all">👤 Tất cả vai trò người dùng</option>
-              <option value="admin">🔑 Quản trị viên (Admin)</option>
-              <option value="sale_leader">⭐ Sale Leader (Trưởng nhóm)</option>
-              <option value="operator">👷 Điều hành Tour</option>
-              <option value="sale">💼 Sale</option>
-              <option value="accounting">💰 Kế toán</option>
-              <option value="visa">🛂 Bộ phận Visa</option>
-              <option value="CTV">🤝 Cộng tác viên (CTV)</option>
-              <option value="bod">👔 BOD (Ban Giám đốc)</option>
-              <option value="marketing_leader">📢 Trưởng phòng Marketing</option>
-              <option value="marketing">📈 Nhân viên Marketing</option>
+              <option value="all">Tất cả vai trò người dùng</option>
+              <option value="admin">Quản trị viên (Full)</option>
+              <option value="sale_leader">Sale Leader (Trưởng nhóm)</option>
+              <option value="operator">Điều hành Tour</option>
+              <option value="sale">Sale</option>
+              <option value="accounting">Kế toán</option>
+              <option value="visa">Bộ phận Visa</option>
+              <option value="CTV">Cộng tác viên (CTV)</option>
+              <option value="bod">BOD (Ban Giám đốc)</option>
+              <option value="marketing_leader">Trưởng phòng Marketing</option>
+              <option value="marketing">Nhân viên Marketing</option>
             </select>
           </div>
 
@@ -504,10 +504,10 @@ export default function ActivityLogs() {
               }}
               className="w-full px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white font-semibold text-gray-800 cursor-pointer"
             >
-              <option value="all">📅 Tất cả thời gian</option>
-              <option value="today">⚡ Hôm nay</option>
-              <option value="7days">📆 7 ngày gần đây</option>
-              <option value="30days">🗓️ 30 ngày gần đây</option>
+              <option value="all">Tất cả thời gian</option>
+              <option value="today">Hôm nay</option>
+              <option value="7days">7 ngày gần đây</option>
+              <option value="30days">30 ngày gần đây</option>
             </select>
           </div>
         </div>

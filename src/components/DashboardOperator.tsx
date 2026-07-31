@@ -15,9 +15,11 @@ import {
   Clock,
   UserCheck,
   AlertCircle,
-  History
+  History,
+  RotateCcw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { CustomSelect } from './CustomSelect';
 
 const removeDiacritics = (str: string): string => {
   if (!str) return '';
@@ -35,6 +37,8 @@ export default function DashboardOperator() {
 
   const [daysFilter, setDaysFilter] = useState<number>(30);
   const [selectedDestination, setSelectedDestination] = useState<string>('all');
+  const [selectedTourType, setSelectedTourType] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedTour, setSelectedTour] = useState<any | null>(null);
   const [showPassengersModal, setShowPassengersModal] = useState<boolean>(false);
   const [modalSearchTerm, setModalSearchTerm] = useState<string>('');
@@ -47,6 +51,28 @@ export default function DashboardOperator() {
     });
     return Array.from(list);
   }, [tours]);
+
+  const daysFilterOptions = useMemo(() => [
+    { value: '7', label: 'Trong vòng 7 ngày tới' },
+    { value: '15', label: 'Trong vòng 15 ngày tới' },
+    { value: '30', label: 'Trong vòng 30 ngày tới' },
+    { value: '60', label: 'Trong vòng 60 ngày tới' },
+    { value: '90', label: 'Trong vòng 90 ngày tới (3 tháng)' },
+    { value: '180', label: 'Trong vòng 180 ngày tới (6 tháng)' },
+    { value: '99999', label: 'Tất cả thời gian' },
+  ], []);
+
+  const tourTypeOptions = useMemo(() => [
+    { value: 'all', label: 'Tất cả loại hình tour' },
+    { value: 'internal', label: 'Tour tự vận hành (Internal)' },
+    { value: 'partner', label: 'Tour gửi khách đối tác (Partner)' },
+    { value: 'private', label: 'Tour đoàn riêng (Private)' },
+  ], []);
+
+  const destinationOptions = useMemo(() => [
+    { value: 'all', label: 'Tất cả điểm đến' },
+    ...destinationsList.map(dest => ({ value: dest, label: dest })),
+  ], [destinationsList]);
 
   // Logic lấy danh sách hành khách của Tour được chọn
   const tourData = useMemo(() => {
@@ -394,10 +420,23 @@ export default function DashboardOperator() {
     let hold = 0;
     let sure = 0;
 
+    const matchesFilters = (t: any) => {
+      if (t.tour_type === 'visa') return false; // Exclude visa services
+      if (selectedDestination !== 'all' && t.destination !== selectedDestination) return false;
+      if (selectedTourType !== 'all' && t.tour_type !== selectedTourType) return false;
+      if (searchTerm.trim() !== '') {
+        const cleanTerm = removeDiacritics(searchTerm.toLowerCase());
+        const cleanCode = removeDiacritics((t.code || '').toLowerCase());
+        const cleanName = removeDiacritics((t.name || '').toLowerCase());
+        if (!cleanCode.includes(cleanTerm) && !cleanName.includes(cleanTerm)) return false;
+      }
+      return true;
+    };
+
     orders.forEach(o => {
       const tour = tours.find(t => t.id === o.tour_id);
-      if (tour?.tour_type === 'visa') return; // Exclude visa services
-      if (selectedDestination !== 'all' && tour?.destination !== selectedDestination) return;
+      if (!tour) return;
+      if (!matchesFilters(tour)) return;
 
       let seats = (o.adult_count !== undefined || o.child_count !== undefined)
         ? ((o.adult_count || 0) + (o.child_count || 0))
@@ -412,8 +451,7 @@ export default function DashboardOperator() {
     });
 
     const upcoming = tours.filter(t => {
-      if (t.tour_type === 'visa') return false; // Exclude visa services
-      if (selectedDestination !== 'all' && t.destination !== selectedDestination) return false;
+      if (!matchesFilters(t)) return false;
       if (!t.start_date) return false;
       const start = new Date(t.start_date);
       const diff = differenceInDays(start, today);
@@ -421,8 +459,7 @@ export default function DashboardOperator() {
     }).sort((a, b) => new Date(a.start_date!).getTime() - new Date(b.start_date!).getTime());
 
     const upcomingTickets = tours.filter(t => {
-      if (t.tour_type === 'visa') return false; // Exclude visa services
-      if (selectedDestination !== 'all' && t.destination !== selectedDestination) return false;
+      if (!matchesFilters(t)) return false;
       if (!t.start_date) return false;
       const start = new Date(t.start_date);
       const tourStartDiff = differenceInDays(start, today);
@@ -439,8 +476,7 @@ export default function DashboardOperator() {
     });
 
     const upcomingVisas = tours.filter(t => {
-      if (t.tour_type === 'visa') return false; // Exclude visa services
-      if (selectedDestination !== 'all' && t.destination !== selectedDestination) return false;
+      if (!matchesFilters(t)) return false;
       if (!t.visa_deadline) return false;
       const deadline = new Date(t.visa_deadline);
       const diff = differenceInDays(deadline, today);
@@ -451,8 +487,7 @@ export default function DashboardOperator() {
     }).sort((a, b) => new Date(a.visa_deadline!).getTime() - new Date(b.visa_deadline!).getTime());
 
     const departed = tours.filter(t => {
-      if (t.tour_type === 'visa') return false; // Exclude visa services
-      if (selectedDestination !== 'all' && t.destination !== selectedDestination) return false;
+      if (!matchesFilters(t)) return false;
       if (!t.start_date) return false;
       const start = new Date(t.start_date);
       const diff = differenceInDays(start, today);
@@ -467,38 +502,87 @@ export default function DashboardOperator() {
       upcomingVisaTours: upcomingVisas,
       departedTours: departed
     };
-  }, [tours, orders, daysFilter, selectedDestination]);
+  }, [tours, orders, daysFilter, selectedDestination, selectedTourType, searchTerm, passengers]);
 
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Detailed Filters */}
-      <div className="flex flex-wrap items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-700">Bộ lọc chi tiết:</span>
+      <div className="p-4 bg-white rounded-2xl shadow-sm border border-gray-200 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-blue-600" />
+            <h2 className="font-bold text-gray-800 text-base">Bộ lọc chi tiết điều phối</h2>
+          </div>
+          {(searchTerm || daysFilter !== 30 || selectedDestination !== 'all' || selectedTourType !== 'all') && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setDaysFilter(30);
+                setSelectedDestination('all');
+                setSelectedTourType('all');
+              }}
+              className="flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Đặt lại bộ lọc
+            </button>
+          )}
         </div>
-        
-        <select
-          value={daysFilter}
-          onChange={(e) => setDaysFilter(Number(e.target.value))}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value={7}>Trong vòng 7 ngày tới</option>
-          <option value={15}>Trong vòng 15 ngày tới</option>
-          <option value={30}>Trong vòng 30 ngày tới</option>
-          <option value={60}>Trong vòng 60 ngày tới</option>
-        </select>
 
-        <select
-          value={selectedDestination}
-          onChange={(e) => setSelectedDestination(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">Tất cả điểm đến</option>
-          {destinationsList.map(dest => (
-            <option key={dest} value={dest}>{dest}</option>
-          ))}
-        </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Tìm kiếm */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Tìm mã tour, tên tour..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-xl text-sm bg-white text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Thời hạn */}
+          <div>
+            <CustomSelect
+              options={daysFilterOptions}
+              value={String(daysFilter)}
+              onChange={(val) => setDaysFilter(Number(val))}
+              className="w-full"
+              buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-medium bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-gray-400 transition-colors"
+            />
+          </div>
+
+          {/* Loại hình Tour */}
+          <div>
+            <CustomSelect
+              options={tourTypeOptions}
+              value={selectedTourType}
+              onChange={setSelectedTourType}
+              className="w-full"
+              buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-medium bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-gray-400 transition-colors"
+            />
+          </div>
+
+          {/* Điểm đến */}
+          <div>
+            <CustomSelect
+              options={destinationOptions}
+              value={selectedDestination}
+              onChange={setSelectedDestination}
+              className="w-full"
+              buttonClassName="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-medium bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-gray-400 transition-colors"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -511,7 +595,7 @@ export default function DashboardOperator() {
             </h3>
             <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-full">{upcomingTours.length} tour</span>
           </div>
-          <div className="p-4 flex-1 overflow-y-auto max-h-[400px]">
+          <div className="p-4 flex-1 overflow-y-auto max-h-[580px] pr-1.5 scroll-smooth [scrollbar-width:thin] [scrollbar-color:rgba(0,0,0,0.15)_transparent]">
             {upcomingTours.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-4">Không có tour nào sắp khởi hành</p>
             ) : (
@@ -544,7 +628,7 @@ export default function DashboardOperator() {
             </h3>
             <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-full">{upcomingTicketTours.length} tour</span>
           </div>
-          <div className="p-4 flex-1 overflow-y-auto max-h-[400px]">
+          <div className="p-4 flex-1 overflow-y-auto max-h-[580px] pr-1.5 scroll-smooth [scrollbar-width:thin] [scrollbar-color:rgba(0,0,0,0.15)_transparent]">
             {upcomingTicketTours.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-4">Không có tour nào chờ xuất vé</p>
             ) : (
@@ -598,7 +682,7 @@ export default function DashboardOperator() {
             </h3>
             <span className="text-xs font-semibold text-rose-600 bg-rose-100 px-2 py-1 rounded-full">{upcomingVisaTours.length} tour</span>
           </div>
-          <div className="p-4 flex-1 overflow-y-auto max-h-[400px]">
+          <div className="p-4 flex-1 overflow-y-auto max-h-[580px] pr-1.5 scroll-smooth [scrollbar-width:thin] [scrollbar-color:rgba(0,0,0,0.15)_transparent]">
             {upcomingVisaTours.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-4">Không có deadline visa nào sắp tới</p>
             ) : (
@@ -640,7 +724,7 @@ export default function DashboardOperator() {
             </h3>
             <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{departedTours.length} tour</span>
           </div>
-          <div className="p-4 flex-1 overflow-y-auto max-h-[400px]">
+          <div className="p-4 flex-1 overflow-y-auto max-h-[580px] pr-1.5 scroll-smooth [scrollbar-width:thin] [scrollbar-color:rgba(0,0,0,0.15)_transparent]">
             {departedTours.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-4">Không có tour nào đã khởi hành</p>
             ) : (
