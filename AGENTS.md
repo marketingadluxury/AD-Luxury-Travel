@@ -245,6 +245,24 @@ Khi thực hiện nâng cấp hoặc sửa đổi bất kỳ file nào trong h�
   - **Nút Chỉnh Sửa Ngày Tùy Chỉnh:** Khi ở chế độ "Chọn ngày", hiển thị khoảng ngày đã chọn kèm nút icon cây bút ✏️ (`Edit2`) bên cạnh để mở/đóng Popover tùy chỉnh mượt mà mà không đè lên menu dropdown.
   - **Tự động đóng Menu & Popover:** Click ra ngoài vùng chọn (click-outside) sẽ tự động ẩn menu dropdown và popover ngày.
 
+---
+
+## 11. Quy Trình Triển Khai Task Theo 5 Bước (Bắt Buộc Cho AI)
+Để đảm bảo chất lượng code cao nhất và tránh tối đa lỗi phát sinh, AI bắt buộc phải tuân thủ nghiêm ngặt **Quy trình triển khai task 5 bước** sau đây trong mọi tương tác:
+
+- **Bước 1: Check lại trong file AGENTS.md và file BUGS.md về task đó**
+  - Đọc kỹ toàn bộ hướng dẫn, cấu trúc database, phân quyền, cấu trúc thư mục, quy tắc UI trong `AGENTS.md`.
+  - Kiểm tra file `BUGS.md` (nếu có) để xem các lỗi hoặc lưu ý liên quan đến chức năng đang xử lý.
+- **Bước 2: Trao đổi, phản biện lại với người dùng về task đó**
+  - Trước khi bắt tay vào code, giải thích rõ hiểu biết về yêu cầu, đề xuất giải pháp kỹ thuật, phân tích tác động và chờ xác nhận từ người dùng.
+- **Bước 3: Triển khai task**
+  - Tiến hành viết code sạch, chuẩn hóa TypeScript, tối ưu hiệu năng và bám sát các tiêu chuẩn thiết kế tinh tế (Anti-Slop) của dự án.
+- **Bước 4: Double check lại hoạt động của task sau khi code xong**
+  - Chạy linter (`npm run lint`), build thử nghiệm (`npm run build`).
+  - Kiểm tra các lỗi phổ biến như đổi thứ tự React Hook, sai logic phân quyền, lỗi render vô tận, hay rớt dòng UI.
+- **Bước 5: Lưu lại thông tin về task đó**
+  - Cập nhật nhật ký công việc hoặc lưu trữ thông tin cần thiết vào `AGENTS.md` / `BUGS.md` để đảm bảo ngữ cảnh cho các phiên làm việc tiếp theo.
+
 
 
 

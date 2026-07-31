@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Image as ImageIcon, FileImage, Upload, X, CheckCircle2, AlertCircle, Loader2, Sparkles, ExternalLink, FolderCheck, RefreshCw } from 'lucide-react';
+import { Camera, Image as ImageIcon, FileImage, Upload, X, CheckCircle2, AlertCircle, Loader2, Sparkles, ExternalLink, FolderCheck, RefreshCw, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { compressImage as compressImageUtil } from '../lib/imageCompression';
 import { savePendingUpload } from '../lib/offlineSync';
+import { TourMedia } from '../types';
+import ActionModal from './ActionModal';
 
 interface TourMediaUploaderProps {
   tourId: string;
@@ -72,8 +74,30 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
   onUploadSuccess,
   onClose
 }) => {
-  const { tourMedia, fetchTourMedia, addTourMedia, currentRole } = useCRM();
+  const { tourMedia, fetchTourMedia, addTourMedia, deleteTourMedia, currentRole } = useCRM();
   const { profile, user } = useAuth();
+
+  const [photoToDelete, setPhotoToDelete] = useState<TourMedia | null>(null);
+
+  const handleDeleteUploadedPhoto = (item: TourMedia) => {
+    if (!item.id) return;
+    setPhotoToDelete(item);
+  };
+
+  const confirmDeletePhoto = async () => {
+    if (!photoToDelete) return;
+    try {
+      await deleteTourMedia(photoToDelete.id, photoToDelete.file_url);
+      toast.success('Đã xóa ảnh thành công!');
+      if (tourId && fetchTourMedia) {
+        fetchTourMedia(tourId);
+      }
+    } catch (err: any) {
+      toast.error('Có lỗi xảy ra khi xóa ảnh!');
+    } finally {
+      setPhotoToDelete(null);
+    }
+  };
   
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -177,46 +201,37 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
         formData.append('uploadType', 'tour_media');
         formData.append('tourCode', tourCode);
         formData.append('stt', String(i + 1));
+        formData.append('strictDriveOnly', 'true');
 
         // Step 3: Call Server API /api/upload
         let fileUrl = '';
         let fileId = '';
         let fileName = compressedFile.name;
 
-        try {
-          const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-          });
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
 
-          if (res.ok) {
-            const data = await res.json();
-            fileUrl = data.url;
-            fileId = data.fileId || '';
-            fileName = data.fileName || fileName;
-          } else {
-            throw new Error(`Server status ${res.status}`);
-          }
-        } catch (serverErr) {
-          console.warn('Tải lên server không thành công, lưu tạm offline:', serverErr);
-          await savePendingUpload({
-            id: `offline_${Date.now()}_${i}`,
-            tour_id: tourId,
-            tour_code: tourCode,
-            file_name: compressedFile.name,
-            file_blob: compressedFile,
-            caption: item.caption || `Ảnh kỷ niệm ${tourCode} (${i + 1})`,
-            uploaded_by: uploaderName,
-            uploader_role: uploaderRole,
-            created_at: new Date().toISOString()
-          });
-          offlineSavedCount++;
-          setUploadProgress(Math.round(((i + 1) / total) * 100));
-          continue;
+        const resText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(resText);
+        } catch (pErr) {
+          data = { error: `Lỗi kết nối máy chủ (${res.status})` };
         }
+
+        if (!res.ok || data.error || !data.url) {
+          throw new Error(data.error || 'Lỗi không thể lưu file lên Google Drive');
+        }
+
+        fileUrl = data.url;
+        fileId = data.fileId || '';
+        fileName = data.fileName || fileName;
 
         // Step 4: Save record to Database context
         await addTourMedia({
+          id: data.media?.id,
           tour_id: tourId,
           tour_code: tourCode,
           file_url: fileUrl,
@@ -259,7 +274,8 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-w-2xl w-full mx-auto">
+    <>
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-w-2xl w-full mx-auto">
       {/* Header */}
       <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -466,15 +482,26 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
                       </div>
                     </div>
                   </div>
-                  <a
-                    href={item.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2.5 py-1 text-[11px] font-bold text-teal-700 bg-white border border-teal-200 hover:bg-teal-50 rounded-lg transition-colors flex items-center gap-1 shrink-0"
-                  >
-                    <span>Xem</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a
+                      href={item.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 text-[11px] font-bold text-teal-700 bg-white border border-teal-200 hover:bg-teal-50 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      <span>Xem</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUploadedPhoto(item)}
+                      className="px-2 py-1 text-[11px] font-bold text-red-600 bg-white border border-red-200 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                      title="Xóa ảnh này khỏi đoàn tour"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Xóa</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -514,5 +541,13 @@ export const TourMediaUploader: React.FC<TourMediaUploaderProps> = ({
         </div>
       </div>
     </div>
+    <ActionModal
+      isOpen={!!photoToDelete}
+      onClose={() => setPhotoToDelete(null)}
+      title="Xác nhận xóa ảnh"
+      message={`Bạn có chắc chắn muốn xóa ảnh "${photoToDelete?.file_name || 'này'}" khỏi đoàn tour không?`}
+      onConfirm={() => { confirmDeletePhoto(); }}
+    />
+    </>
   );
 };

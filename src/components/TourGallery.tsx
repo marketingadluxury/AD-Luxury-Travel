@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { TourMedia, Tour } from '../types';
 import { useCRM } from '../context/CRMContext';
 import { TourMediaUploader } from './TourMediaUploader';
+import ActionModal from './ActionModal';
 
 interface TourGalleryProps {
   tour: Tour;
@@ -50,22 +51,30 @@ export const TourGallery: React.FC<TourGalleryProps> = ({ tour, canUpload = true
     });
   };
 
-  const handleDeletePhoto = async (photo: TourMedia) => {
-    if (window.confirm(`Bạn có chắc muốn xóa ảnh "${photo.file_name}" không?`)) {
-      try {
-        await deleteTourMedia(photo.id, photo.file_url);
-        toast.success('Đã xóa ảnh đoàn');
-        if (lightboxIndex !== null) setLightboxIndex(null);
-      } catch (err) {
-        toast.error('Không thể xóa ảnh');
-      }
+  const [photoToDelete, setPhotoToDelete] = useState<TourMedia | null>(null);
+
+  const handleDeletePhoto = (photo: TourMedia) => {
+    setPhotoToDelete(photo);
+  };
+
+  const confirmDeletePhoto = async () => {
+    if (!photoToDelete) return;
+    try {
+      await deleteTourMedia(photoToDelete.id, photoToDelete.file_url);
+      toast.success('Đã xóa ảnh đoàn');
+      if (lightboxIndex !== null) setLightboxIndex(null);
+    } catch (err) {
+      toast.error('Không thể xóa ảnh');
+    } finally {
+      setPhotoToDelete(null);
     }
   };
 
   const activePhoto = lightboxIndex !== null ? tourPhotos[lightboxIndex] : null;
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="space-y-6">
       {/* Header Banner & Quick Actions */}
       <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -266,5 +275,13 @@ export const TourGallery: React.FC<TourGalleryProps> = ({ tour, canUpload = true
         )}
       </AnimatePresence>
     </div>
+    <ActionModal
+      isOpen={!!photoToDelete}
+      onClose={() => setPhotoToDelete(null)}
+      title="Xác nhận xóa ảnh"
+      message={`Bạn có chắc chắn muốn xóa ảnh "${photoToDelete?.file_name || 'này'}" khỏi đoàn tour không?`}
+      onConfirm={() => { confirmDeletePhoto(); }}
+    />
+    </>
   );
 };

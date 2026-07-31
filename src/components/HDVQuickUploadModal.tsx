@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, UploadCloud, X, Check, Image as ImageIcon, FileImage, Sparkles, FolderCheck, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { Camera, UploadCloud, X, Check, Image as ImageIcon, FileImage, Sparkles, FolderCheck, AlertCircle, ExternalLink, RefreshCw, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { Tour } from '../types';
+import { Tour, TourMedia } from '../types';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { compressImage } from '../lib/imageCompression';
 import { savePendingUpload, syncPendingUploads, getPendingUploads } from '../lib/offlineSync';
+import ActionModal from './ActionModal';
 
 interface HDVQuickUploadModalProps {
   isOpen: boolean;
@@ -19,7 +20,7 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
   onClose,
   defaultTourId
 }) => {
-  const { tours, tourMedia, fetchTourMedia, addTourMedia, currentRole } = useCRM();
+  const { tours, tourMedia, fetchTourMedia, addTourMedia, deleteTourMedia, currentRole } = useCRM();
   const { user } = useAuth();
 
   // Filter valid tours (exclude visa)
@@ -31,6 +32,7 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+  const [photoToDelete, setPhotoToDelete] = useState<TourMedia | null>(null);
 
   useEffect(() => {
     if (defaultTourId) {
@@ -65,6 +67,26 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleDeleteUploadedPhoto = (item: TourMedia) => {
+    if (!item.id) return;
+    setPhotoToDelete(item);
+  };
+
+  const confirmDeletePhoto = async () => {
+    if (!photoToDelete) return;
+    try {
+      await deleteTourMedia(photoToDelete.id, photoToDelete.file_url);
+      toast.success('Đã xóa ảnh thành công!');
+      if (currentTour?.id && fetchTourMedia) {
+        fetchTourMedia(currentTour.id);
+      }
+    } catch (err: any) {
+      toast.error('Có lỗi xảy ra khi xóa ảnh!');
+    } finally {
+      setPhotoToDelete(null);
+    }
+  };
+
   const handleUpload = async () => {
     if (!currentTour) {
       toast.error('Vui lòng chọn Tour để tải ảnh lên');
@@ -87,11 +109,16 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
       setUploadProgress({ current: i + 1, total: selectedFiles.length });
 
       // Compress image client-side to < 1MB
-      const compressedFile = await compressImage(originalFile, {
-        maxSizeBytes: 1024 * 1024,
-        maxDimension: 1920,
-        initialQuality: 0.82
-      });
+      let compressedFile: File = originalFile;
+      try {
+        compressedFile = await compressImage(originalFile, {
+          maxSizeBytes: 1024 * 1024,
+          maxDimension: 1920,
+          initialQuality: 0.82
+        });
+      } catch (e) {
+        console.warn('Lỗi nén ảnh, sử dụng file gốc:', e);
+      }
 
       if (!navigator.onLine) {
         // Save offline
@@ -121,6 +148,7 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
         formData.append('uploader', uploaderName);
         formData.append('uploaderRole', currentRole);
         formData.append('caption', caption.trim());
+        formData.append('strictDriveOnly', 'true');
 
         // Upload to server endpoint
         const response = await fetch('/api/upload', {
@@ -133,60 +161,31 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
         try {
           data = JSON.parse(responseText);
         } catch (parseErr) {
-          console.warn('Phản hồi server không phải định dạng JSON:', responseText.slice(0, 100));
           data = { error: `Lỗi kết nối máy chủ (${response.status})` };
         }
 
-        let uploadedUrl = data.url;
-        if (!uploadedUrl && compressedFile) {
-          uploadedUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(compressedFile);
-          });
+        if (!response.ok || data.error || !data.url) {
+          throw new Error(data.error || 'Lỗi không thể lưu file lên Google Drive');
         }
 
-        if (uploadedUrl) {
-          await addTourMedia({
-            tour_id: currentTour.id,
-            tour_code: currentTour.code,
-            file_url: uploadedUrl,
-            file_id: data.fileId || '',
-            file_name: compressedFile.name,
-            file_size: compressedFile.size,
-            uploaded_by: uploaderName,
-            uploader_role: currentRole,
-            caption: caption.trim() || undefined
-          });
-          successCount++;
-        } else {
-          await savePendingUpload({
-            id: `offline_${Date.now()}_${i}`,
-            tour_id: currentTour.id,
-            tour_code: currentTour.code,
-            file_name: compressedFile.name,
-            file_blob: compressedFile,
-            caption: caption.trim() || undefined,
-            uploaded_by: uploaderName,
-            uploader_role: currentRole,
-            created_at: new Date().toISOString()
-          });
-          offlineSavedCount++;
-        }
-      } catch (err) {
-        console.warn('Upload failed, saving offline fallback:', err);
-        await savePendingUpload({
-          id: `offline_${Date.now()}_${i}`,
+        const uploadedUrl = data.url;
+
+        await addTourMedia({
+          id: data.media?.id,
           tour_id: currentTour.id,
           tour_code: currentTour.code,
-          file_name: compressedFile.name,
-          file_blob: compressedFile,
-          caption: caption.trim() || undefined,
+          file_url: uploadedUrl,
+          file_id: data.fileId || '',
+          file_name: data.fileName || compressedFile.name,
+          file_size: compressedFile.size,
           uploaded_by: uploaderName,
           uploader_role: currentRole,
-          created_at: new Date().toISOString()
+          caption: caption.trim() || undefined
         });
-        offlineSavedCount++;
+        successCount++;
+      } catch (err: any) {
+        console.error('Upload photo failed:', err);
+        toast.error(`Ảnh #${i + 1} tải lên thất bại: ${err.message || 'Không thể lưu lên Google Drive'}`);
       }
     }
 
@@ -205,12 +204,13 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
       setSelectedFiles([]);
       setCaption('');
     } else {
-      toast.error('❌ Tải ảnh thất bại. Vui lòng kiểm tra lại kết nối và thử lại!', { duration: 5000 });
+      toast.error('❌ Tải ảnh thất bại. Vui lòng kiểm tra lại kết nối Google Drive và thử lại!', { duration: 5000 });
     }
   };
 
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-900/70 backdrop-blur-sm">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -428,15 +428,26 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
                             </div>
                           </div>
                         </div>
-                        <a
-                          href={item.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1 text-[11px] font-bold text-teal-700 bg-white border border-teal-200 hover:bg-teal-50 rounded-lg transition-colors flex items-center gap-1 shrink-0"
-                        >
-                          <span>Xem</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <a
+                            href={item.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 text-[11px] font-bold text-teal-700 bg-white border border-teal-200 hover:bg-teal-50 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                          >
+                            <span>Xem</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUploadedPhoto(item)}
+                            className="px-2 py-1 text-[11px] font-bold text-red-600 bg-white border border-red-200 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                            title="Xóa ảnh này khỏi đoàn tour"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Xóa</span>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -468,5 +479,13 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
         </motion.div>
       </div>
     </AnimatePresence>
+    <ActionModal
+      isOpen={!!photoToDelete}
+      onClose={() => setPhotoToDelete(null)}
+      title="Xác nhận xóa ảnh"
+      message={`Bạn có chắc chắn muốn xóa ảnh "${photoToDelete?.file_name || 'này'}" khỏi đoàn tour không?`}
+      onConfirm={() => { confirmDeletePhoto(); }}
+    />
+    </>
   );
 };

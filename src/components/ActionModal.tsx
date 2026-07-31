@@ -41,7 +41,7 @@ export default function ActionModal({
           <h2 className="text-lg font-bold text-gray-900">{title}</h2>
           <button onClick={onClose}><X className="w-5 h-5" /></button>
         </div>
-        <p className="text-gray-600 mb-4">{message}</p>
+        <p className="text-gray-600 mb-4 break-words">{message}</p>
         {showInput && (
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">{inputLabel}</label>

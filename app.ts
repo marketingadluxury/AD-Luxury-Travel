@@ -858,7 +858,8 @@ async function uploadWith3TierFallback(
   file: Express.Multer.File,
   fileName: string,
   getDriveFolderId: (token: string) => Promise<string>,
-  supabaseStoragePath: string
+  supabaseStoragePath: string,
+  strictDriveOnly: boolean = false
 ): Promise<{ url: string; fileId?: string; storage: string }> {
   const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
   const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
@@ -872,8 +873,13 @@ async function uploadWith3TierFallback(
       const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, folderId, token);
       return { url: result.webViewLink, fileId: result.id, storage: 'drive' };
     } catch (driveErr: any) {
-      console.warn('[Upload Tier 1 Failure] Google Drive upload failed, falling back to Supabase:', driveErr.message || driveErr);
+      console.warn('[Upload Tier 1 Failure] Google Drive upload failed:', driveErr.message || driveErr);
+      if (strictDriveOnly) {
+        throw new Error(`Lỗi lưu file lên Google Drive: ${driveErr.message || driveErr}. Hệ thống chỉ chấp nhận lưu trên Google Drive, không dùng Supabase Storage.`);
+      }
     }
+  } else if (strictDriveOnly) {
+    throw new Error('Chưa kết nối Google Drive. Hệ thống yêu cầu chỉ lưu trữ file trên Google Drive, không sử dụng Supabase Storage.');
   }
 
   // Tier 2: Supabase Storage
@@ -984,7 +990,8 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
         file,
         fileName,
         (token) => getOrCreateTourSubFolderV2(resolvedTourCode, 'Ảnh đoàn', token),
-        `Tour/${resolvedTourCode}/Anh_Doan/${fileName}`
+        `Tour/${resolvedTourCode}/Anh_Doan/${fileName}`,
+        true
       );
 
       // Lưu ngay siêu dữ liệu ảnh kỷ niệm vào bảng tour_media trên Supabase bằng Admin Client

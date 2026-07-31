@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle, ArrowLeft, RefreshCw, ZoomIn, ShieldCheck, WifiOff, ExternalLink, FileImage } from 'lucide-react';
+import { Camera, UploadCloud, X, Check, Image as ImageIcon, Sparkles, FolderCheck, AlertCircle, ArrowLeft, RefreshCw, ZoomIn, ShieldCheck, WifiOff, ExternalLink, FileImage, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCRM } from '../context/CRMContext';
@@ -7,13 +7,14 @@ import { TourMedia, Tour } from '../types';
 import { format } from 'date-fns';
 import { compressImage } from '../lib/imageCompression';
 import { savePendingUpload, syncPendingUploads, getPendingUploads } from '../lib/offlineSync';
+import ActionModal from '../components/ActionModal';
 
 interface GuestPhotoUploadPageProps {
   defaultTourId?: string;
 }
 
 export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defaultTourId }) => {
-  const { tours, addTourMedia, tourMedia, fetchTourMedia } = useCRM();
+  const { tours, addTourMedia, deleteTourMedia, tourMedia, fetchTourMedia } = useCRM();
 
   // Filter valid tours
   const availableTours = tours.filter(t => t.tour_type !== 'visa');
@@ -103,6 +104,28 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const [photoToDelete, setPhotoToDelete] = useState<TourMedia | null>(null);
+
+  const handleDeleteUploadedPhoto = (item: TourMedia) => {
+    if (!item.id) return;
+    setPhotoToDelete(item);
+  };
+
+  const confirmDeletePhoto = async () => {
+    if (!photoToDelete) return;
+    try {
+      await deleteTourMedia(photoToDelete.id, photoToDelete.file_url);
+      toast.success('Đã xóa ảnh thành công!');
+      if (currentTour?.id && fetchTourMedia) {
+        fetchTourMedia(currentTour.id);
+      }
+    } catch (err: any) {
+      toast.error('Có lỗi xảy ra khi xóa ảnh!');
+    } finally {
+      setPhotoToDelete(null);
+    }
+  };
+
   const handleUpload = async () => {
     if (!currentTour) {
       toast.error('Vui lòng chọn Tour để tải ảnh lên');
@@ -160,6 +183,7 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
         formData.append('stt', String(i + 1));
         formData.append('uploader', 'HDV Freelance');
         formData.append('caption', caption.trim());
+        formData.append('strictDriveOnly', 'true');
 
         const response = await fetch('/api/upload', {
           method: 'POST',
@@ -171,63 +195,32 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
         try {
           data = JSON.parse(responseText);
         } catch (parseErr) {
-          console.warn('Phản hồi server không phải định dạng JSON:', responseText.slice(0, 100));
           data = { error: `Lỗi kết nối máy chủ (${response.status})` };
         }
 
-        let uploadedUrl = data.url;
-        if (!uploadedUrl && compressedFile) {
-          uploadedUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(compressedFile);
-          });
+        if (!response.ok || data.error || !data.url) {
+          throw new Error(data.error || 'Lỗi không thể lưu file lên Google Drive');
         }
 
-        if (uploadedUrl) {
-          // Add to local state (server already saved record to database)
-          await addTourMedia({
-            id: data.media?.id,
-            tour_id: currentTour?.id || data.media?.tour_id || defaultTourId || '',
-            tour_code: data.tourCode || currentTour?.code || defaultTourId || '',
-            file_url: uploadedUrl,
-            file_id: data.fileId || data.media?.file_id || '',
-            file_name: data.fileName || compressedFile.name,
-            file_size: compressedFile.size,
-            uploaded_by: 'HDV Freelance',
-            uploader_role: 'tour_guide',
-            caption: caption.trim() || undefined
-          });
-          successCount++;
-        } else {
-          // If server error, save offline as fallback
-          await savePendingUpload({
-            id: `offline_${Date.now()}_${i}`,
-            tour_id: currentTour.id,
-            tour_code: currentTour.code,
-            file_name: compressedFile.name,
-            file_blob: compressedFile,
-            caption: caption.trim() || undefined,
-            uploaded_by: 'HDV Freelance',
-            uploader_role: 'tour_guide',
-            created_at: new Date().toISOString()
-          });
-          offlineSavedCount++;
-        }
-      } catch (err) {
-        console.warn('Upload online failed, saving offline fallback:', err);
-        await savePendingUpload({
-          id: `offline_${Date.now()}_${i}`,
-          tour_id: currentTour.id,
-          tour_code: currentTour.code,
-          file_name: compressedFile.name,
-          file_blob: compressedFile,
-          caption: caption.trim() || undefined,
+        const uploadedUrl = data.url;
+
+        // Add to local state (server already saved record to database)
+        await addTourMedia({
+          id: data.media?.id,
+          tour_id: currentTour?.id || data.media?.tour_id || defaultTourId || '',
+          tour_code: data.tourCode || currentTour?.code || defaultTourId || '',
+          file_url: uploadedUrl,
+          file_id: data.fileId || data.media?.file_id || '',
+          file_name: data.fileName || compressedFile.name,
+          file_size: compressedFile.size,
           uploaded_by: 'HDV Freelance',
           uploader_role: 'tour_guide',
-          created_at: new Date().toISOString()
+          caption: caption.trim() || undefined
         });
-        offlineSavedCount++;
+        successCount++;
+      } catch (err: any) {
+        console.error('Upload photo to Google Drive failed:', err);
+        toast.error(`Ảnh #${i + 1} tải lên thất bại: ${err.message || 'Không thể lưu lên Google Drive'}`);
       }
     }
 
@@ -253,7 +246,8 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-12">
+    <>
+      <div className="min-h-screen bg-slate-50 text-slate-800 pb-12">
       {/* Top Header */}
       <header className="bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 text-white shadow-md sticky top-0 z-30">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -526,7 +520,7 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <a
                         href={item.file_url}
                         target="_blank"
@@ -536,6 +530,15 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
                         <ExternalLink className="w-3.5 h-3.5" />
                         <span>Xem</span>
                       </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUploadedPhoto(item)}
+                        className="px-2.5 py-1.5 bg-white border border-red-200 hover:border-red-400 text-red-600 hover:text-red-700 rounded-xl transition-all shadow-2xs flex items-center gap-1 text-xs font-bold"
+                        title="Xóa ảnh này"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Xóa</span>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -570,5 +573,13 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
         )}
       </AnimatePresence>
     </div>
+    <ActionModal
+      isOpen={!!photoToDelete}
+      onClose={() => setPhotoToDelete(null)}
+      title="Xác nhận xóa ảnh"
+      message={`Bạn có chắc chắn muốn xóa ảnh "${photoToDelete?.file_name || 'này'}" khỏi đoàn tour không?`}
+      onConfirm={() => { confirmDeletePhoto(); }}
+    />
+    </>
   );
 };
