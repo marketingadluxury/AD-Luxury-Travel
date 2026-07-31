@@ -63,13 +63,17 @@ async function getGoogleDriveAccessToken(): Promise<string> {
       const errMsg = err.message || String(err);
       console.error('[Drive] OAuth 2.0 authorization failed:', errMsg);
       
-      // Nếu có cấu hình OAuth nhưng bị lỗi token/credentials, báo lỗi chi tiết hướng dẫn fix trên OAuth Playground
-      throw new Error(
-        `Xác thực OAuth 2.0 thất bại (${errMsg}). ` +
-        `Vui lòng lấy lại Refresh Token tại Google OAuth 2.0 Playground (developers.google.com/oauthplayground). ` +
-        `LƯU Ý QUAN TRỌNG: Mở bánh răng ⚙️ (Settings) góc trên bên phải OAuth Playground, tích chọn "Use your own OAuth credentials", ` +
-        `sau đó nhập đúng Client ID và Client Secret của bạn trước khi bấm Authorize APIs.`
-      );
+      if (hasServiceAccount) {
+        console.log('[Drive] OAuth 2.0 thất bại, tự động chuyển sang sử dụng Service Account làm phương án dự phòng hoạt động...');
+      } else {
+        // Nếu không có cấu hình Service Account dự phòng, báo lỗi chi tiết hướng dẫn fix trên OAuth Playground
+        throw new Error(
+          `Xác thực OAuth 2.0 thất bại (${errMsg}). ` +
+          `Vui lòng lấy lại Refresh Token tại Google OAuth 2.0 Playground (developers.google.com/oauthplayground). ` +
+          `LƯU Ý QUAN TRỌNG: Mở bánh răng ⚙️ (Settings) góc trên bên phải OAuth Playground, tích chọn "Use your own OAuth credentials", ` +
+          `sau đó nhập đúng Client ID và Client Secret của bạn trước khi bấm Authorize APIs.`
+        );
+      }
     }
   }
 

@@ -24,10 +24,14 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 - **Giải pháp:** Cập nhật hàm gọi `addTourMedia` trong `HDVQuickUploadModal.tsx` và `TourMediaUploader.tsx` để truyền trực tiếp `id: data.media?.id` và tên file chuẩn hóa `file_name: data.fileName || ...` từ máy chủ trả về. Nhờ vậy, lệnh `addTourMedia` sẽ ghi đè/upsert khớp hoàn toàn với bản ghi duy nhất trong cơ sở dữ liệu thay vì sinh mới ID ngẫu nhiên.
 - **Trạng thái:** Đã giải quyết triệt để và kiểm tra build thành công.
 
-### 1.4 Lỗi tải ảnh đoàn thất bại khi kết nối Google Drive bị lỗi (OAuth invalid_grant)
-- **Mô tả lỗi:** Hướng dẫn viên freelance hoặc người dùng khi truy cập link upload ảnh đoàn và tải ảnh lên gặp thông báo lỗi màu đỏ chặn đứng quá trình tải file do lỗi xác thực Google Drive (`invalid_grant`).
-- **Nguyên nhân:** Khi gọi hàm `uploadWith3TierFallback` của `/api/upload` dành cho ảnh đoàn (`isTourMediaUpload`), tham số cuối cùng `strictDriveOnly` được truyền cứng là `true`. Điều này làm mất đi khả năng tự động fallback về tầng lưu trữ dự phòng **Supabase Storage** (bucket `crm-attachments`) như quy định khi liên kết Google Drive bị hỏng hoặc chưa sẵn sàng.
-- **Giải pháp:** Chuyển tham số `strictDriveOnly` từ `true` thành `false` trong lệnh gọi `uploadWith3TierFallback` của mục `isTourMediaUpload` tại `app.ts`. Nhờ vậy, nếu Google Drive báo lỗi xác thực hoặc kết nối hỏng, hệ thống sẽ tự động dùng Supabase Storage làm phương án dự phòng mượt mà mà không ném lỗi ra ngoài làm gián đoạn trải nghiệm của người dùng.
+### 1.4 Lỗi tải ảnh đoàn thất bại hoặc bị lưu lên Supabase thay vì Google Drive do lỗi xác thực Google Drive (OAuth invalid_grant)
+- **Mô tả lỗi:** Khi người dùng tải ảnh lên qua link HDV Freelance, file ảnh bị lưu sang Supabase Storage thay vì lưu vào đúng thư mục Google Drive của đoàn như yêu cầu, hoặc bị chặn đứng bởi thông báo lỗi đỏ báo lỗi xác thực Google Drive (`invalid_grant`).
+- **Nguyên nhân:**
+  1. Khi cấu hình Google Drive bằng cả hai phương thức: OAuth 2.0 (Refresh Token) và Service Account, hàm `getGoogleDriveAccessToken` ưu tiên kiểm tra OAuth trước. Nếu OAuth xảy ra lỗi (ví dụ: Refresh Token hết hạn hoặc bị hủy - `invalid_grant`), hàm này lập tức ném lỗi (throw Error) mà không thử chuyển sang kết nối bằng Service Account dù Service Account đã được cấu hình hoàn toàn hợp lệ và hoạt động bình thường.
+  2. Việc tắt `strictDriveOnly` (chuyển sang `false` ở bản vá trước) đã khắc phục việc chặn đứng tải ảnh, nhưng làm hệ thống âm thầm lưu ảnh vào tầng dự phòng **Supabase Storage** thay vì Google Drive khi gặp sự cố xác thực OAuth trên.
+- **Giải pháp:**
+  1. Cập nhật hàm `getGoogleDriveAccessToken` trong `app.ts` để thông minh kiểm tra: Nếu xác thực OAuth 2.0 thất bại nhưng có cấu hình Service Account hợp lệ dự phòng, hệ thống sẽ bỏ qua lỗi OAuth, ghi nhận cảnh báo và tự động chuyển tiếp sang cấu hình kết nối bằng Service Account để duy trì luồng lưu trữ trên Google Drive.
+  2. Bằng cách này, luồng lưu trữ chính Google Drive luôn được bảo toàn và duy trì hoạt động thông qua Service Account, không bị đẩy xuống tầng lưu trữ dự phòng Supabase Storage một cách không cần thiết.
 - **Trạng thái:** Đã khắc phục triệt để và kiểm tra build thành công.
 
 ---
