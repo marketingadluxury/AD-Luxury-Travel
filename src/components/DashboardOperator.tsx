@@ -14,7 +14,8 @@ import {
   Search,
   Clock,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  History
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -386,7 +387,7 @@ export default function DashboardOperator() {
   };
 
   // Metrics
-  const { holdSeats, sureSeats, upcomingTours, upcomingTicketTours, upcomingVisaTours } = useMemo(() => {
+  const { holdSeats, sureSeats, upcomingTours, upcomingTicketTours, upcomingVisaTours, departedTours } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -449,12 +450,22 @@ export default function DashboardOperator() {
       return tourStartDiff >= 0 && diff <= daysFilter; 
     }).sort((a, b) => new Date(a.visa_deadline!).getTime() - new Date(b.visa_deadline!).getTime());
 
+    const departed = tours.filter(t => {
+      if (t.tour_type === 'visa') return false; // Exclude visa services
+      if (selectedDestination !== 'all' && t.destination !== selectedDestination) return false;
+      if (!t.start_date) return false;
+      const start = new Date(t.start_date);
+      const diff = differenceInDays(start, today);
+      return diff < 0 && Math.abs(diff) <= daysFilter;
+    }).sort((a, b) => new Date(b.start_date!).getTime() - new Date(a.start_date!).getTime()); // Sort newest first
+
     return {
       holdSeats: hold,
       sureSeats: sure,
       upcomingTours: upcoming,
       upcomingTicketTours: upcomingTickets,
-      upcomingVisaTours: upcomingVisas
+      upcomingVisaTours: upcomingVisas,
+      departedTours: departed
     };
   }, [tours, orders, daysFilter, selectedDestination]);
 
@@ -490,7 +501,7 @@ export default function DashboardOperator() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {/* Sắp khởi hành */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
           <div className="bg-blue-50 p-4 border-b border-blue-100 flex items-center justify-between">
@@ -615,6 +626,38 @@ export default function DashboardOperator() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Đã khởi hành */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+          <div className="bg-gray-50 p-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="font-bold text-gray-700 flex items-center gap-2">
+              <History className="w-5 h-5 text-gray-500" />
+              Đã khởi hành
+            </h3>
+            <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{departedTours.length} tour</span>
+          </div>
+          <div className="p-4 flex-1 overflow-y-auto max-h-[400px]">
+            {departedTours.length === 0 ? (
+              <p className="text-gray-500 text-sm text-center py-4">Không có tour nào đã khởi hành</p>
+            ) : (
+              <div className="space-y-4">
+                {departedTours.map(t => (
+                  <div key={t.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0 hover:bg-slate-50/50 p-1.5 rounded-lg transition-colors">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="font-bold text-sm text-gray-800 cursor-pointer hover:text-blue-600 font-mono bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.code}</p>
+                      <p className="text-xs font-bold text-gray-500">{format(new Date(t.start_date!), 'dd/MM/yyyy')}</p>
+                    </div>
+                    <p className="text-xs text-gray-600 line-clamp-1 cursor-pointer hover:text-blue-600" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.name}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 cursor-pointer" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>
+                      <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Bán: {t.sold_seats}/{t.total_seats}</span>
+                      <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">Hold: {t.hold_seats}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
