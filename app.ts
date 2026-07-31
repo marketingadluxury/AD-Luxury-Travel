@@ -991,7 +991,7 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
         fileName,
         (token) => getOrCreateTourSubFolderV2(resolvedTourCode, 'Ảnh đoàn', token),
         `Tour/${resolvedTourCode}/Anh_Doan/${fileName}`,
-        true
+        false
       );
 
       // Lưu ngay siêu dữ liệu ảnh kỷ niệm vào bảng tour_media trên Supabase bằng Admin Client

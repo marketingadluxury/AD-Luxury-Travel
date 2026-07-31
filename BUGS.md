@@ -24,6 +24,12 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 - **Giải pháp:** Cập nhật hàm gọi `addTourMedia` trong `HDVQuickUploadModal.tsx` và `TourMediaUploader.tsx` để truyền trực tiếp `id: data.media?.id` và tên file chuẩn hóa `file_name: data.fileName || ...` từ máy chủ trả về. Nhờ vậy, lệnh `addTourMedia` sẽ ghi đè/upsert khớp hoàn toàn với bản ghi duy nhất trong cơ sở dữ liệu thay vì sinh mới ID ngẫu nhiên.
 - **Trạng thái:** Đã giải quyết triệt để và kiểm tra build thành công.
 
+### 1.4 Lỗi tải ảnh đoàn thất bại khi kết nối Google Drive bị lỗi (OAuth invalid_grant)
+- **Mô tả lỗi:** Hướng dẫn viên freelance hoặc người dùng khi truy cập link upload ảnh đoàn và tải ảnh lên gặp thông báo lỗi màu đỏ chặn đứng quá trình tải file do lỗi xác thực Google Drive (`invalid_grant`).
+- **Nguyên nhân:** Khi gọi hàm `uploadWith3TierFallback` của `/api/upload` dành cho ảnh đoàn (`isTourMediaUpload`), tham số cuối cùng `strictDriveOnly` được truyền cứng là `true`. Điều này làm mất đi khả năng tự động fallback về tầng lưu trữ dự phòng **Supabase Storage** (bucket `crm-attachments`) như quy định khi liên kết Google Drive bị hỏng hoặc chưa sẵn sàng.
+- **Giải pháp:** Chuyển tham số `strictDriveOnly` từ `true` thành `false` trong lệnh gọi `uploadWith3TierFallback` của mục `isTourMediaUpload` tại `app.ts`. Nhờ vậy, nếu Google Drive báo lỗi xác thực hoặc kết nối hỏng, hệ thống sẽ tự động dùng Supabase Storage làm phương án dự phòng mượt mà mà không ném lỗi ra ngoài làm gián đoạn trải nghiệm của người dùng.
+- **Trạng thái:** Đã khắc phục triệt để và kiểm tra build thành công.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)
