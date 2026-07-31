@@ -680,7 +680,7 @@ export default function UserManagement() {
                   >
                     <option value="">-- Không thuộc nhóm nào (Tự do / Top Leader) --</option>
                     {users
-                      .filter(u => u.id !== editingUser?.id && (u.role === 'sale_leader' || u.role === 'admin'))
+                      .filter(u => u.id !== editingUser?.id && (u.role === 'sale_leader' || u.role === 'marketing_leader' || u.role === 'admin'))
                       .map(u => (
                         <option key={u.id} value={u.id}>
                           {u.full_name} ({ROLE_LABELS[u.role]?.label || u.role}) - {u.email}

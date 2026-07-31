@@ -1,13 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <!-- Rounded blue background canvas -->
   <rect width="64" height="64" rx="16" fill="#2563EB"/>
-  <!-- Flight Ticket / Boarding Pass Shape -->
-  <path fill-rule="evenodd" clip-rule="evenodd" d="M14 20C14 17.7909 15.7909 16 18 16H46C48.2091 16 50 17.7909 50 20V28C47.7909 28 46 29.7909 46 32C46 34.2091 47.7909 36 50 36V44C50 46.2091 48.2091 48 46 48H18C15.7909 48 14 46.2091 14 44V36C16.2091 36 18 34.2091 18 32C18 29.7909 16.2091 28 14 28V20Z" fill="white" fill-opacity="0.25"/>
-  <path fill-rule="evenodd" clip-rule="evenodd" d="M14 20C14 17.7909 15.7909 16 18 16H46C48.2091 16 50 17.7909 50 20V28C47.7909 28 46 29.7909 46 32C46 34.2091 47.7909 36 50 36V44C50 46.2091 48.2091 48 46 48H18C15.7909 48 14 46.2091 14 44V36C16.2091 36 18 34.2091 18 32C18 29.7909 16.2091 28 14 28V20Z" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Flat Boarding Pass / Ticket Shape -->
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M 12 18 H 21 A 3 3 0 0 1 27 18 H 52 A 4 4 0 0 1 56 22 V 42 A 4 4 0 0 1 52 46 H 27 A 3 3 0 0 1 21 46 H 12 A 4 4 0 0 1 8 42 V 22 A 4 4 0 0 1 12 18 Z" fill="white"/>
+  
   <!-- Perforated separator line -->
-  <line x1="38" y1="18" x2="38" y2="46" stroke="white" stroke-width="2.5" stroke-dasharray="3 3" stroke-linecap="round"/>
-  <!-- Airplane graphic -->
-  <path d="M22 34.5L25.5 31L23 27H24.5L27.5 30.5L30 30.5C30.8284 30.5 31.5 31.1716 31.5 32C31.5 32.8284 30.8284 33.5 30 33.5L27.5 33.5L24.5 37H23L25.5 33" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Barcode stub graphic -->
-  <line x1="42" y1="24" x2="42" y2="40" stroke="white" stroke-width="2" stroke-linecap="round"/>
-  <line x1="45" y1="24" x2="45" y2="40" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="24" y1="21" x2="24" y2="43" stroke="#2563EB" stroke-width="1.5" stroke-dasharray="2 2" stroke-linecap="round"/>
+  
+  <!-- Barcode stub graphics (refined vertical line segments on the left stub like a real barcode) -->
+  <rect x="12" y="22" width="1.5" height="20" rx="0.75" fill="#2563EB"/>
+  <rect x="15" y="22" width="2.5" height="20" rx="1" fill="#2563EB"/>
+  <rect x="19" y="22" width="1" height="20" rx="0.5" fill="#2563EB"/>
+  <rect x="21" y="22" width="1.5" height="20" rx="0.75" fill="#2563EB"/>
+
+  <!-- Minimalist Flat Airplane Shape (aligned and rotated -45 deg around the ticket center) -->
+  <path d="M 11 0 L 4.5 -1.8 L 1 -7.5 C 0.6 -8 0.2 -8 0 -7.5 L 1.2 -1.8 L -4.5 -1.8 L -6.5 -4.5 C -6.8 -4.8 -7.2 -4.8 -7.5 -4.5 L -7 -1.2 L -7 1.2 L -7.5 4.5 C -7.2 4.8 -6.8 4.8 -6.5 4.5 L -4.5 1.8 L 1.2 1.8 L 0 7.5 C 0.2 8 0.6 8 1 7.5 L 4.5 1.8 L 11 0 Z" fill="#2563EB" transform="translate(40, 32) rotate(-45)"/>
 </svg>
