@@ -69,6 +69,7 @@ interface CRMContextType {
   refreshProfiles: () => Promise<void>;
   currentRole: Role;
   setCurrentRole: (role: Role) => void;
+  displayRole: Role;
   categories: string[];
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
@@ -458,7 +459,19 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     goldMin: 50000000,
     platinumMin: 100000000
   });
-  const [currentRole, setCurrentRole] = useState<Role>(initialRole);
+  const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
+
+  const currentRole = React.useMemo(() => {
+    if (selectedRole === 'marketing') return 'sale';
+    if (selectedRole === 'marketing_leader') return 'sale_leader';
+    return selectedRole;
+  }, [selectedRole]);
+
+  const displayRole = selectedRole;
+
+  const setCurrentRole = (role: Role) => {
+    setSelectedRole(role);
+  };
   const [visaCommonFiles, setVisaCommonFiles] = useState<{ name: string; url: string }[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tourCosts, setTourCosts] = useState<TourCost[]>([]);
@@ -532,7 +545,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   };
 
   useEffect(() => {
-    setCurrentRole(initialRole);
+    setSelectedRole(initialRole);
   }, [initialRole]);
 
   // Load Initial Data (either from Supabase or Fallback to LocalStorage)
@@ -4716,6 +4729,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       refreshProfiles,
       currentRole,
       setCurrentRole,
+      displayRole,
       categories,
       addCategory,
       deleteCategory,

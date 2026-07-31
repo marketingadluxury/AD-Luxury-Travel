@@ -44,6 +44,8 @@ const roleOptions = [
   { value: 'accounting', label: '💰 Kế toán' },
   { value: 'tour_guide', label: '🚩 Hướng Dẫn Viên (HDV)' },
   { value: 'admin', label: '🔑 Quản trị viên (Full)' },
+  { value: 'marketing_leader', label: '📢 Trưởng phòng Marketing' },
+  { value: 'marketing', label: '📈 Nhân viên Marketing' },
 ];
 import { FeedbackModal } from './FeedbackModal';
 
@@ -68,7 +70,7 @@ const navigation = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [] } = useCRM();
+  const { currentRole, setCurrentRole, displayRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [] } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -348,6 +350,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       case 'visa': return 'Bộ phận Visa';
       case 'accounting': return 'Kế toán';
       case 'admin': return 'Quản trị viên';
+      case 'marketing_leader': return 'Trưởng phòng Marketing';
+      case 'marketing': return 'Nhân viên Marketing';
       default: return role;
     }
   };
@@ -378,7 +382,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </div>
       <h2 className="text-lg font-black text-gray-900 mb-2">Không có quyền truy cập</h2>
       <p className="text-xs text-gray-500 mb-6 max-w-sm leading-relaxed font-semibold">
-        Vai trò hiện tại của bạn là <strong className="text-blue-600">{getRoleLabel(currentRole)}</strong> không được phân quyền truy cập chức năng này.
+        Vai trò hiện tại của bạn là <strong className="text-blue-600">{getRoleLabel(displayRole)}</strong> không được phân quyền truy cập chức năng này.
       </p>
       <Link
         to="/"
@@ -411,7 +415,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <CustomSelect
             options={roleOptions}
-            value={currentRole}
+            value={displayRole}
             onChange={(val) => setCurrentRole(val as Role)}
             disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}
             className="w-full"
@@ -498,7 +502,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {navigation.find(n => n.href === location.pathname)?.name || 'Tour CRM'}
               </h1>
               <span className="hidden sm:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">
-                {getRoleLabel(currentRole)}
+                {getRoleLabel(displayRole)}
               </span>
             </div>
           </div>
@@ -590,7 +594,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                  <div className="px-4 py-3 border-b border-gray-100 overflow-hidden bg-slate-50">
                     <p className="text-xs font-bold text-gray-900 truncate">{user?.email || 'Tài khoản'}</p>
-                    <p className="text-[10px] text-blue-600 font-semibold">{getRoleLabel(currentRole)}</p>
+                    <p className="text-[10px] text-blue-600 font-semibold">{getRoleLabel(displayRole)}</p>
                  </div>
                  <Link 
                    to="/profile"
@@ -800,7 +804,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-gray-800 truncate">{user?.email || 'Tài khoản'}</p>
-                  <p className="text-[10px] text-gray-500 font-medium">{getRoleLabel(currentRole)}</p>
+                  <p className="text-[10px] text-gray-500 font-medium">{getRoleLabel(displayRole)}</p>
                 </div>
               </div>
 

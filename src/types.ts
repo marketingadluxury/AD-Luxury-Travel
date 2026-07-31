@@ -1,4 +1,4 @@
-export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'bod' | 'tour_guide';
+export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'bod' | 'tour_guide' | 'marketing' | 'marketing_leader';
 
 export interface User {
   id: string;

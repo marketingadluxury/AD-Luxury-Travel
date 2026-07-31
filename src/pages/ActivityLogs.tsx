@@ -142,6 +142,8 @@ export default function ActivityLogs() {
       case 'visa': return 'Visa';
       case 'accounting': return 'Kế toán';
       case 'admin': return 'Admin';
+      case 'marketing_leader': return 'Trưởng phòng Marketing';
+      case 'marketing': return 'Nhân viên Marketing';
       default: return role;
     }
   };
@@ -155,6 +157,8 @@ export default function ActivityLogs() {
       case 'accounting': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       case 'visa': return 'bg-amber-100 text-amber-800 border-amber-200';
       case 'sale': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      case 'marketing_leader': return 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200';
+      case 'marketing': return 'bg-pink-100 text-pink-800 border-pink-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -485,6 +489,8 @@ export default function ActivityLogs() {
               <option value="visa">🛂 Bộ phận Visa</option>
               <option value="CTV">🤝 Cộng tác viên (CTV)</option>
               <option value="bod">👔 BOD (Ban Giám đốc)</option>
+              <option value="marketing_leader">📢 Trưởng phòng Marketing</option>
+              <option value="marketing">📈 Nhân viên Marketing</option>
             </select>
           </div>
 
