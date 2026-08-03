@@ -6,6 +6,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { motion } from 'motion/react';
 import { Order, Invoice } from '@/types';
 import { parseRefundInfo } from '@/lib/utils';
+import { CustomSelect, SelectOption } from '@/components/CustomSelect';
 import {
   Receipt,
   Check,
@@ -33,7 +34,8 @@ import {
   Eye,
   Coins,
   Compass,
-  ChevronRight
+  ChevronRight,
+  Plus
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -150,6 +152,32 @@ export default function AccountingInvoice() {
   // State quản lý các đơn hàng đang được mở rộng chi tiết hóa đơn
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
 
+  // State filter mới giúp Kế toán lọc nâng cao
+  const [filterTourId, setFilterTourId] = useState<string>('all');
+  const [filterCreator, setFilterCreator] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+
+  const toggleCard = (id: string) => {
+    setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const expandAllCards = (ids: string[]) => {
+    setExpandedCards(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { next[id] = true; });
+      return next;
+    });
+  };
+
+  const collapseAllCards = (ids: string[]) => {
+    setExpandedCards(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { next[id] = false; });
+      return next;
+    });
+  };
+
   // State quản lý việc tạo phiếu chi
   const [isCreatePaymentModalOpen, setIsCreatePaymentModalOpen] = useState(false);
   const [newPaymentData, setNewPaymentData] = useState<{
@@ -173,6 +201,71 @@ export default function AccountingInvoice() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Danh sách các Creator và Tháng khả dụng (Đã resolve tên hiển thị chuẩn)
+  const availableCreators = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach(inv => {
+      const resolved = resolveCreatorName(inv.created_by, inv.order_id);
+      if (resolved) set.add(resolved);
+    });
+    orders.forEach(o => {
+      const resolved = resolveCreatorName(o.created_by, o.id);
+      if (resolved) set.add(resolved);
+    });
+    return Array.from(set).sort();
+  }, [invoices, orders, resolveCreatorName]);
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach(inv => {
+      if (inv.created_at) {
+        const d = new Date(inv.created_at);
+        if (!isNaN(d.getTime())) {
+          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          set.add(m);
+        }
+      }
+    });
+    orders.forEach(o => {
+      if (o.created_at) {
+        const d = new Date(o.created_at);
+        if (!isNaN(d.getTime())) {
+          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          set.add(m);
+        }
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [invoices, orders]);
+
+  // Dynamic options for CustomSelect dropdowns
+  const tourOptions: SelectOption[] = useMemo(() => [
+    { value: 'all', label: 'Tất cả Tour' },
+    ...tours.filter(t => t.tour_type !== 'visa').map(t => ({
+      value: t.id,
+      label: t.code ? `[${t.code}] ${t.name || ''}` : (t.name || 'Tour'),
+    }))
+  ], [tours]);
+
+  const creatorOptions: SelectOption[] = useMemo(() => [
+    { value: 'all', label: 'Tất cả Sales / Người tạo' },
+    ...availableCreators.map(c => ({
+      value: c,
+      label: c,
+    }))
+  ], [availableCreators]);
+
+  const monthOptions: SelectOption[] = useMemo(() => [
+    { value: 'all', label: 'Tất cả thời gian' },
+    ...availableMonths.map(m => {
+      const [y, mNum] = m.split('-');
+      return {
+        value: m,
+        label: `Tháng ${mNum}/${y}`,
+      };
+    })
+  ], [availableMonths]);
 
   // Tour-card folder state for Accountant
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
@@ -389,54 +482,117 @@ export default function AccountingInvoice() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Filter receipt invoices (Phiếu thu chuyển khoản)
-  const receiptInvoices = invoices
-    .filter(inv => {
+  // All receipts matching search term & filters
+  const searchFilteredReceipts = useMemo(() => {
+    return invoices.filter(inv => {
       if (inv.type !== 'receipt') return false;
+
+      // Filter by Tour
+      if (filterTourId !== 'all') {
+        const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+        const parsedInfo = parseRefundInfo(inv, orders, tours);
+        const tourId = assocOrder?.tour_id || (parsedInfo.tourCode ? tours.find(t => t.code === parsedInfo.tourCode)?.id : undefined);
+        if (tourId !== filterTourId) return false;
+      }
+
+      // Filter by Creator
+      if (filterCreator !== 'all') {
+        const creatorName = resolveCreatorName(inv.created_by, inv.order_id);
+        if (inv.created_by !== filterCreator && creatorName !== filterCreator) return false;
+      }
+
+      // Filter by Month
+      if (filterMonth !== 'all' && inv.created_at) {
+        const d = new Date(inv.created_at);
+        if (!isNaN(d.getTime())) {
+          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          if (m !== filterMonth) return false;
+        }
+      }
+
       if (searchTerm.trim() !== '') {
         const q = searchTerm.toLowerCase().trim().replace(/^#/, '');
+        const qNoBk = q.replace(/^bk-/, '');
         const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
         const tour = assocOrder ? tours.find(t => t.id === assocOrder.tour_id) : null;
+        const orderCode = assocOrder ? `BK-${assocOrder.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : '');
 
         const invCodeMatch = inv.invoice_code && inv.invoice_code.toLowerCase().includes(q);
-        const orderIdMatch = inv.order_id && inv.order_id.toLowerCase().includes(q);
+        const orderIdMatch = inv.order_id && (inv.order_id.toLowerCase().includes(q) || inv.order_id.toLowerCase().includes(qNoBk));
+        const orderCodeMatch = orderCode && orderCode.toLowerCase().includes(q);
         const descMatch = inv.description && inv.description.toLowerCase().includes(q);
         const creatorMatch = inv.created_by && inv.created_by.toLowerCase().includes(q);
         const bookerMatch = assocOrder && assocOrder.booker_name && assocOrder.booker_name.toLowerCase().includes(q);
         const phoneMatch = assocOrder && assocOrder.booker_phone && assocOrder.booker_phone.includes(q);
         const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
 
-        if (!invCodeMatch && !orderIdMatch && !descMatch && !creatorMatch && !bookerMatch && !phoneMatch && !tourCodeMatch) {
+        if (!invCodeMatch && !orderIdMatch && !orderCodeMatch && !descMatch && !creatorMatch && !bookerMatch && !phoneMatch && !tourCodeMatch) {
           return false;
         }
       }
-      if (filterReceiptStatus === 'all') return true;
-      return inv.status === filterReceiptStatus;
-    })
-    .sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
+      return true;
     });
+  }, [invoices, searchTerm, orders, tours, filterTourId, filterCreator, filterMonth]);
 
-  // Filter payment invoices (Phiếu chi)
-  const paymentInvoices = invoices
-    .filter(inv => {
+  // Filter receipt invoices (Phiếu thu chuyển khoản)
+  const receiptInvoices = useMemo(() => {
+    return searchFilteredReceipts
+      .filter(inv => {
+        if (filterReceiptStatus === 'all') return true;
+        return inv.status === filterReceiptStatus;
+      })
+      .sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+  }, [searchFilteredReceipts, filterReceiptStatus]);
+
+  // All payment invoices matching search term, filters, and role
+  const searchFilteredPayments = useMemo(() => {
+    return invoices.filter(inv => {
       if (inv.type !== 'payment') return false;
+
+      // Filter by Tour
+      if (filterTourId !== 'all') {
+        const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+        const parsedInfo = parseRefundInfo(inv, orders, tours);
+        const tourId = assocOrder?.tour_id || (parsedInfo.tourCode ? tours.find(t => t.code === parsedInfo.tourCode)?.id : undefined);
+        if (tourId !== filterTourId) return false;
+      }
+
+      // Filter by Creator
+      if (filterCreator !== 'all') {
+        const creatorName = resolveCreatorName(inv.created_by, inv.order_id);
+        if (inv.created_by !== filterCreator && creatorName !== filterCreator) return false;
+      }
+
+      // Filter by Month
+      if (filterMonth !== 'all' && inv.created_at) {
+        const d = new Date(inv.created_at);
+        if (!isNaN(d.getTime())) {
+          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          if (m !== filterMonth) return false;
+        }
+      }
+
       if (searchTerm.trim() !== '') {
         const q = searchTerm.toLowerCase().trim().replace(/^#/, '');
+        const qNoBk = q.replace(/^bk-/, '');
         const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
         const tour = assocOrder ? tours.find(t => t.id === assocOrder.tour_id) : null;
+        const orderCode = assocOrder ? `BK-${assocOrder.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : '');
 
         const invCodeMatch = inv.invoice_code && inv.invoice_code.toLowerCase().includes(q);
-        const orderIdMatch = inv.order_id && inv.order_id.toLowerCase().includes(q);
+        const orderIdMatch = inv.order_id && (inv.order_id.toLowerCase().includes(q) || inv.order_id.toLowerCase().includes(qNoBk));
+        const orderCodeMatch = orderCode && orderCode.toLowerCase().includes(q);
         const descMatch = inv.description && inv.description.toLowerCase().includes(q);
         const creatorMatch = inv.created_by && inv.created_by.toLowerCase().includes(q);
         const bookerMatch = assocOrder && assocOrder.booker_name && assocOrder.booker_name.toLowerCase().includes(q);
         const phoneMatch = assocOrder && assocOrder.booker_phone && assocOrder.booker_phone.includes(q);
         const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
 
-        if (!invCodeMatch && !orderIdMatch && !descMatch && !creatorMatch && !bookerMatch && !phoneMatch && !tourCodeMatch) {
+        if (!invCodeMatch && !orderIdMatch && !orderCodeMatch && !descMatch && !creatorMatch && !bookerMatch && !phoneMatch && !tourCodeMatch) {
           return false;
         }
       }
@@ -454,14 +610,23 @@ export default function AccountingInvoice() {
         if (!isCreator && !isMyOrder) return false;
       }
 
-      if (filterPaymentStatus === 'all') return true;
-      return inv.status === filterPaymentStatus;
-    })
-    .sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
+      return true;
     });
+  }, [invoices, searchTerm, orders, tours, isAccountantOrAdmin, profile, user, filterTourId, filterCreator, filterMonth]);
+
+  // Filter payment invoices (Phiếu chi)
+  const paymentInvoices = useMemo(() => {
+    return searchFilteredPayments
+      .filter(inv => {
+        if (filterPaymentStatus === 'all') return true;
+        return inv.status === filterPaymentStatus;
+      })
+      .sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+  }, [searchFilteredPayments, filterPaymentStatus]);
 
   // Gom nhóm hóa đơn chuyển khoản theo mã đơn hàng
   const groupedReceipts = useMemo(() => {
@@ -476,11 +641,12 @@ export default function AccountingInvoice() {
     }[] = [];
 
     receiptInvoices.forEach(inv => {
-      let group = groups.find(g => g.orderId === inv.order_id);
+      const orderId = inv.order_id || 'unassigned';
+      let group = groups.find(g => g.orderId === orderId);
       if (!group) {
-        const order = orders.find(o => o.id === inv.order_id);
+        const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
         const tour = order ? tours.find(t => t.id === order.tour_id) : null;
-        const orderCode = order ? `BK-${order.id.substring(0, 8).toUpperCase()}` : 'Chưa rõ';
+        const orderCode = order ? `BK-${order.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : 'Chưa rõ');
         const orderPassengers = order ? passengers.filter(p => p.order_id === order.id) : [];
         const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
         const leadName = (order?.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
@@ -488,9 +654,9 @@ export default function AccountingInvoice() {
           : (leadPassenger?.full_name || 'Khách trưởng đoàn');
 
         group = {
-          orderId: inv.order_id,
+          orderId,
           orderCode,
-          order,
+          order: order || undefined,
           tourName: tour?.name || '',
           leadName,
           invoices: [],
@@ -505,38 +671,66 @@ export default function AccountingInvoice() {
     return groups;
   }, [receiptInvoices, orders, tours, passengers]);
 
-  // Filter VAT orders (Only orders that requested VAT)
-  const invoiceOrders = orders
-    .filter(o => {
+  // All VAT orders matching search term & filters
+  const searchFilteredVatOrders = useMemo(() => {
+    return orders.filter(o => {
       if (o.status !== 'sure' && o.status !== 'paid') return false;
       if (o.vat_option !== 'Xuất VAT') return false;
 
+      // Filter by Tour
+      if (filterTourId !== 'all' && o.tour_id !== filterTourId) return false;
+
+      // Filter by Creator
+      if (filterCreator !== 'all') {
+        const creatorName = resolveCreatorName(o.created_by, o.id);
+        if (o.created_by !== filterCreator && creatorName !== filterCreator && o.user_id !== filterCreator) return false;
+      }
+
+      // Filter by Month
+      if (filterMonth !== 'all' && o.created_at) {
+        const d = new Date(o.created_at);
+        if (!isNaN(d.getTime())) {
+          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          if (m !== filterMonth) return false;
+        }
+      }
+
       if (searchTerm.trim() !== '') {
         const q = searchTerm.toLowerCase().trim().replace(/^#/, '');
+        const qNoBk = q.replace(/^bk-/, '');
         const tour = tours.find(t => t.id === o.tour_id);
-        const codeMatch = o.id.toLowerCase().includes(q);
+        const orderCode = `BK-${o.id.substring(0, 8).toUpperCase()}`;
+        const codeMatch = o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(qNoBk) || orderCode.toLowerCase().includes(q);
         const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(q);
         const companyMatch = o.vat_company_name && o.vat_company_name.toLowerCase().includes(q);
         const taxMatch = o.vat_tax_code && o.vat_tax_code.toLowerCase().includes(q);
         const tourCodeMatch = tour && tour.code && tour.code.toLowerCase().includes(q);
         if (!codeMatch && !nameMatch && !companyMatch && !taxMatch && !tourCodeMatch) return false;
       }
-
-      if (filterInvoice === 'all') return true;
-      return o.invoice_status === filterInvoice;
-    })
-    .sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
+      return true;
     });
+  }, [orders, searchTerm, tours, filterTourId, filterCreator, filterMonth]);
+
+  // Filter VAT orders (Only orders that requested VAT)
+  const invoiceOrders = useMemo(() => {
+    return searchFilteredVatOrders
+      .filter(o => {
+        if (filterInvoice === 'all') return true;
+        return o.invoice_status === filterInvoice;
+      })
+      .sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+  }, [searchFilteredVatOrders, filterInvoice]);
 
   const getInvoiceBadge = (status: Order['invoice_status']) => {
     switch (status) {
       case 'pending':
-        return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Chưa xuất hóa đơn</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">Chờ xuất VAT</span>;
       case 'issued':
-        return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Đã xuất hóa đơn</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs"><Check className="w-3 h-3 mr-1 text-emerald-600" /> Đã xuất VAT</span>;
       default:
         return null;
     }
@@ -546,19 +740,19 @@ export default function AccountingInvoice() {
     switch (status) {
       case 'pending':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+          <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
             <Clock className="w-3 h-3 mr-1 text-amber-600 animate-spin" /> Chờ kế toán duyệt
           </span>
         );
       case 'approved':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full bg-green-50 text-green-800 border border-green-200">
-            <Check className="w-3 h-3 mr-1 text-green-600" /> Công ty đã nhận
+          <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
+            <Check className="w-3 h-3 mr-1 text-emerald-600" /> Công ty đã nhận
           </span>
         );
       case 'rejected':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-50 text-rose-800 border border-rose-200">
+          <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
             <X className="w-3 h-3 mr-1 text-rose-600" /> Bị từ chối
           </span>
         );
@@ -568,16 +762,21 @@ export default function AccountingInvoice() {
   };
 
   // Stats
-  const pendingReceiptsCount = invoices.filter(inv => inv.type === 'receipt' && inv.status === 'pending').length;
-  const approvedReceiptsCount = invoices.filter(inv => inv.type === 'receipt' && inv.status === 'approved').length;
-  const rejectedReceiptsCount = invoices.filter(inv => inv.type === 'receipt' && inv.status === 'rejected').length;
-  const totalReceiptsCount = invoices.filter(inv => inv.type === 'receipt').length;
+  const pendingReceiptsCount = useMemo(() => searchFilteredReceipts.filter(inv => inv.status === 'pending').length, [searchFilteredReceipts]);
+  const approvedReceiptsCount = useMemo(() => searchFilteredReceipts.filter(inv => inv.status === 'approved').length, [searchFilteredReceipts]);
+  const rejectedReceiptsCount = useMemo(() => searchFilteredReceipts.filter(inv => inv.status === 'rejected').length, [searchFilteredReceipts]);
+  const totalReceiptsCount = searchFilteredReceipts.length;
 
-  const pendingVatCount = orders.filter(o => (o.status === 'sure' || o.status === 'paid') && o.vat_option === 'Xuất VAT' && o.invoice_status === 'pending').length;
-  const issuedVatCount = orders.filter(o => (o.status === 'sure' || o.status === 'paid') && o.vat_option === 'Xuất VAT' && o.invoice_status === 'issued').length;
-  const totalVatCount = orders.filter(o => (o.status === 'sure' || o.status === 'paid') && o.vat_option === 'Xuất VAT').length;
+  const pendingVatCount = useMemo(() => searchFilteredVatOrders.filter(o => o.invoice_status === 'pending').length, [searchFilteredVatOrders]);
+  const issuedVatCount = useMemo(() => searchFilteredVatOrders.filter(o => o.invoice_status === 'issued').length, [searchFilteredVatOrders]);
+  const totalVatCount = searchFilteredVatOrders.length;
 
-  const approvedReceiptsSum = invoices.filter(inv => inv.type === 'receipt' && inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0);
+  const pendingPaymentsCount = useMemo(() => searchFilteredPayments.filter(inv => inv.status === 'pending').length, [searchFilteredPayments]);
+  const approvedPaymentsCount = useMemo(() => searchFilteredPayments.filter(inv => inv.status === 'approved').length, [searchFilteredPayments]);
+  const rejectedPaymentsCount = useMemo(() => searchFilteredPayments.filter(inv => inv.status === 'rejected').length, [searchFilteredPayments]);
+  const totalPaymentsCount = searchFilteredPayments.length;
+
+  const approvedReceiptsSum = useMemo(() => searchFilteredReceipts.filter(inv => inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0), [searchFilteredReceipts]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -641,29 +840,75 @@ export default function AccountingInvoice() {
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Tìm kiếm theo mã booking hoặc mã phiếu..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-          <TrendingUp className="w-4 h-4" />
-          <span>Theo dõi các luồng dòng tiền</span>
+      {/* Advanced Filter Toolbar for Accountant */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          {/* Search box */}
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm mã phiếu, mã booking, tên khách, SĐT, MST, ghi chú..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-500 transition-all outline-none"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-200 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Custom UI Dropdown Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Filter Tour */}
+            <CustomSelect
+              options={tourOptions}
+              value={filterTourId}
+              onChange={(val) => setFilterTourId(val)}
+              icon={<Compass className="w-3.5 h-3.5 text-blue-600" />}
+              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
+            />
+
+            {/* Filter Creator */}
+            <CustomSelect
+              options={creatorOptions}
+              value={filterCreator}
+              onChange={(val) => setFilterCreator(val)}
+              icon={<User className="w-3.5 h-3.5 text-blue-600" />}
+              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
+            />
+
+            {/* Filter Month */}
+            <CustomSelect
+              options={monthOptions}
+              value={filterMonth}
+              onChange={(val) => setFilterMonth(val)}
+              icon={<Calendar className="w-3.5 h-3.5 text-blue-600" />}
+              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
+            />
+
+            {/* Reset Filters button */}
+            {(filterTourId !== 'all' || filterCreator !== 'all' || filterMonth !== 'all' || searchTerm.trim() !== '') && (
+              <button
+                onClick={() => {
+                  setFilterTourId('all');
+                  setFilterCreator('all');
+                  setFilterMonth('all');
+                  setSearchTerm('');
+                }}
+                className="px-2.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                title="Xóa tất cả bộ lọc"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Xóa lọc</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -761,253 +1006,364 @@ export default function AccountingInvoice() {
               <p className="text-xs text-gray-500 mt-0.5">Đối chiếu tài khoản công ty và bấm phê duyệt tương ứng</p>
             </div>
             
-            {/* Thanh chuyển đổi trạng thái (Sub-tabs) hiện đại và trực quan */}
-            <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 rounded-lg border border-gray-200">
-              <button
-                type="button"
-                onClick={() => setFilterReceiptStatus('pending')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterReceiptStatus === 'pending'
-                    ? 'bg-amber-500 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <span>Chờ phê duyệt</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filterReceiptStatus === 'pending' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'
-                }`}>
-                  {pendingReceiptsCount}
-                </span>
-              </button>
+            {/* Thanh chuyển đổi trạng thái (Sub-tabs) hiện đại & Nút mở rộng/thu gọn */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setFilterReceiptStatus('pending')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterReceiptStatus === 'pending'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
+                >
+                  <span>Chờ phê duyệt</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterReceiptStatus === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {pendingReceiptsCount}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setFilterReceiptStatus('approved')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterReceiptStatus === 'approved'
-                    ? 'bg-green-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <span>Công ty đã nhận</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filterReceiptStatus === 'approved' ? 'bg-green-700 text-white' : 'bg-green-100 text-green-800'
-                }`}>
-                  {approvedReceiptsCount}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterReceiptStatus('approved')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterReceiptStatus === 'approved'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
+                >
+                  <span>Công ty đã nhận</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterReceiptStatus === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {approvedReceiptsCount}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setFilterReceiptStatus('rejected')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterReceiptStatus === 'rejected'
-                    ? 'bg-rose-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <span>Bị từ chối</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filterReceiptStatus === 'rejected' ? 'bg-rose-700 text-white' : 'bg-rose-100 text-rose-800'
-                }`}>
-                  {rejectedReceiptsCount}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterReceiptStatus('rejected')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterReceiptStatus === 'rejected'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
+                >
+                  <span>Bị từ chối</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterReceiptStatus === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {rejectedReceiptsCount}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setFilterReceiptStatus('all')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterReceiptStatus === 'all'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <span>Tất cả</span>
-                <span className={filterReceiptStatus === 'all' 
-                  ? 'px-1.5 py-0.5 rounded-full text-[10px] bg-blue-700 text-white' 
-                  : 'px-1.5 py-0.5 rounded-full text-[10px] bg-gray-200 text-gray-800'
-                }>
-                  {totalReceiptsCount}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterReceiptStatus('all')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterReceiptStatus === 'all'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
+                >
+                  <span>Tất cả</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterReceiptStatus === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {totalReceiptsCount}
+                  </span>
+                </button>
+              </div>
+
+              {/* Nút Mở rộng / Thu gọn tất cả thẻ */}
+              {receiptInvoices.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allIds = receiptInvoices.map(i => i.id);
+                    const isAnyExpanded = allIds.some(id => expandedCards[id]);
+                    if (isAnyExpanded) {
+                      collapseAllCards(allIds);
+                    } else {
+                      expandAllCards(allIds);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <Eye className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{receiptInvoices.some(i => expandedCards[i.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {groupedReceipts.length === 0 ? (
-            <div className="text-center py-20 bg-gray-50/50">
-              <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm font-semibold">Không tìm thấy phiếu thu nào.</p>
-              <p className="text-xs text-gray-400 mt-1">Các phiếu thu do Sales tải lên sẽ hiển thị tại đây.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100 bg-white">
-              {groupedReceipts.map(group => {
-                const isExpanded = !!expandedOrders[group.orderId];
-                const pendingInGroup = group.invoices.filter(i => i.status === 'pending');
-                const hasPending = pendingInGroup.length > 0;
-
-                return (
-                  <div key={group.orderId} className="transition-all duration-150 hover:bg-slate-50/30">
-                    {/* Header dòng gộp */}
-                    <div 
-                      onClick={() => setExpandedOrders(prev => ({ ...prev, [group.orderId]: !isExpanded }))}
-                      className="px-6 py-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none"
-                    >
-                      <div className="flex items-start gap-3 md:w-1/3">
-                        <div className={`p-2.5 rounded-lg shrink-0 ${hasPending ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
-                          <Hash className="w-5 h-5" />
-                        </div>
-                        <div className="space-y-0.5">
-                          <div className="font-black text-gray-900 text-base flex items-center gap-2 flex-wrap">
-                            {group.orderCode}
-                            {hasPending && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse" />
-                                {pendingInGroup.length} phiếu mới
-                              </span>
-                            )}
-                          </div>
-                          {group.tourName && (
-                            <div className="text-xs text-gray-500 font-semibold max-w-[280px] truncate" title={group.tourName}>
-                              Tour: {group.tourName}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 md:w-1/4">
-                        <User className="w-4.5 h-4.5 text-gray-400 shrink-0" />
-                        <div>
-                          <div className="text-sm font-extrabold text-gray-800">{group.leadName}</div>
-                          <div className="text-[11px] text-gray-400 font-medium">Khách trưởng đoàn / Người nộp</div>
-                        </div>
-                      </div>
-
-                      <div className="text-left md:text-right md:w-1/4">
-                        <div className="text-lg font-black text-blue-700">
-                          {new Intl.NumberFormat('vi-VN').format(group.totalAmount)} đ
-                        </div>
-                        <div className="text-xs text-gray-500 font-bold">
-                          Tổng thu ({group.invoices.length} lần thanh toán)
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2 shrink-0">
-                        {isExpanded ? (
-                          <span className="text-xs text-blue-600 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                            Thu gọn <ChevronUp className="w-4 h-4" />
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-600 font-bold bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-gray-100">
-                            Mở rộng <ChevronDown className="w-4 h-4" />
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Danh sách các lần thanh toán (mở rộng) */}
-                    {isExpanded && (
-                      <div className="bg-gray-50/50 border-t border-gray-100 px-6 py-4 animate-fadeIn">
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-100 text-xs">
-                              <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                <tr>
-                                  <th className="px-4 py-3 text-left">Mã giao dịch (Hóa đơn)</th>
-                                  <th className="px-4 py-3 text-left">Ngày nộp</th>
-                                  <th className="px-4 py-3 text-left">Ghi chú & Đợt nộp</th>
-                                  <th className="px-4 py-3 text-right">Số tiền nộp</th>
-                                  <th className="px-4 py-3 text-center">Chứng từ đính kèm</th>
-                                  <th className="px-4 py-3 text-center">Trạng thái duyệt</th>
-                                  <th className="px-4 py-3 text-center">Thao tác</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100 text-gray-700 bg-white">
-                                {group.invoices.map(inv => {
-                                  return (
-                                    <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
-                                      <td className="px-4 py-3.5 font-mono font-bold text-blue-700">
-                                        {inv.invoice_code || 'N/A'}
-                                      </td>
-                                      <td className="px-4 py-3.5 text-gray-500 whitespace-nowrap">
-                                        {inv.created_at ? format(new Date(inv.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
-                                      </td>
-                                      <td className="px-4 py-3.5">
-                                        <div className="font-semibold text-gray-800">{inv.description || 'Chuyển khoản thanh toán'}</div>
-                                      </td>
-                                      <td className="px-4 py-3.5 text-right font-black text-blue-600 text-sm whitespace-nowrap">
-                                        {new Intl.NumberFormat('vi-VN').format(inv.amount)} đ
-                                      </td>
-                                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                        {inv.file_url ? (
-                                          <a
-                                            href={inv.file_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors border border-blue-200"
-                                          >
-                                            <FileText className="w-3.5 h-3.5 mr-1" /> Minh chứng <ExternalLink className="w-3 h-3 ml-1" />
-                                          </a>
-                                        ) : (
-                                          <span className="text-xs text-gray-400 italic">Không có file</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                        {getReceiptStatusBadge(inv.status)}
-                                        {inv.verified_by && (
-                                          <div className="text-[9px] text-gray-400 mt-0.5">
-                                            Bởi {inv.verified_by}
-                                          </div>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                        {inv.status === 'pending' ? (
-                                          <div className="flex items-center justify-center space-x-1.5">
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setApproveTarget({
-                                                  id: inv.id,
-                                                  amount: inv.amount,
-                                                  orderCode: group.orderCode
-                                                });
-                                              }}
-                                              className="inline-flex items-center px-2.5 py-1 text-xs font-bold rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm cursor-pointer"
-                                            >
-                                              <Check className="w-3 h-3 mr-0.5" /> Duyệt nhận
-                                            </button>
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setRejectTarget({
-                                                  id: inv.id,
-                                                  orderCode: group.orderCode
-                                                });
-                                              }}
-                                              className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-md text-slate-700 bg-white border border-gray-300 hover:bg-slate-100 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
-                                            >
-                                              <X className="w-3 h-3 mr-0.5" /> Từ chối
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <span className="text-gray-400 italic font-medium">Đã xử lý</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
+          {/* Tab 1: Vertical cards grid for Phiếu thu */}
+          <div className="p-4 md:p-6 space-y-4">
+            {receiptInvoices.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <h4 className="text-gray-900 font-bold text-sm">Không tìm thấy phiếu thu nào</h4>
+                <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+                  {searchTerm.trim() 
+                    ? `Không tìm thấy phiếu thu nào phù hợp với từ khóa "${searchTerm}".` 
+                    : filterReceiptStatus !== 'all' 
+                      ? `Không tìm thấy phiếu thu nào ở trạng thái này.` 
+                      : 'Các phiếu thu do Sales tải lên sẽ hiển thị tại đây.'}
+                </p>
+                {(searchTerm.trim() || filterReceiptStatus !== 'all') && (
+                  <div className="mt-4 flex justify-center gap-2">
+                    {searchTerm.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTerm('')}
+                        className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                      >
+                        Xóa từ khóa
+                      </button>
+                    )}
+                    {filterReceiptStatus !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => setFilterReceiptStatus('all')}
+                        className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                      >
+                        Xem tất cả ({totalReceiptsCount})
+                      </button>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {receiptInvoices.map((inv) => {
+                  const isExpanded = !!expandedCards[inv.id];
+                  const parsedInfo = parseRefundInfo(inv, orders, tours);
+                  const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+                  const tour = order ? tours.find(t => t.id === order.tour_id) : null;
+                  const tourCode = tour?.code || parsedInfo.tourCode;
+                  const tourName = tour?.name || parsedInfo.tourName;
+                  const orderPassengers = order ? passengers.filter(p => p.order_id === order.id) : [];
+                  const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
+                  const leadName = (order?.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
+                    ? order.booker_name
+                    : (leadPassenger?.full_name || 'Khách trưởng đoàn');
+                  const phone = order?.booker_phone || leadPassenger?.phone || '';
+                  const orderCode = order ? `BK-${order.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : '');
+
+                  return (
+                    <div 
+                      key={inv.id} 
+                      className={`border-x border-b rounded-xl p-4 shadow-2xs relative overflow-hidden bg-white transition-all flex flex-col justify-between border-t-4 border-t-emerald-500 ${
+                        isExpanded ? 'border-blue-400 ring-2 ring-blue-100 shadow-md' : 'border-gray-200 hover:border-gray-300 hover:shadow-xs'
+                      }`}
+                    >
+                      <div>
+                        {/* Compact Header: Code, Amount, Status & Expand Arrow */}
+                        <div className="flex justify-between items-start mb-3 pb-2.5 border-b border-gray-100">
+                          <div>
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mã Phiếu Thu</div>
+                            <div className="font-mono font-bold text-slate-800 text-xs flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded border border-slate-200 shadow-2xs">
+                              {inv.invoice_code || 'Chưa cấp'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-right">
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Số Tiền Thu</div>
+                              <div className="font-black text-emerald-700 text-base select-all bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/80 shadow-2xs inline-block">
+                                +{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleCard(inv.id)}
+                              className="p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer ml-1"
+                              title={isExpanded ? "Thu gọn chi tiết" : "Mở rộng chi tiết"}
+                            >
+                              {isExpanded ? <ChevronUp className="w-5 h-5 text-blue-600" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Status & Short Info ALWAYS visible */}
+                        <div className="flex items-center justify-between mb-2 text-xs">
+                          <div className="flex items-center gap-1.5 text-gray-700 font-bold truncate max-w-[180px]">
+                            <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="truncate">{leadName}</span>
+                          </div>
+                          {getReceiptStatusBadge(inv.status)}
+                        </div>
+
+                        {/* Summary preview line when collapsed */}
+                        {!isExpanded && (
+                          <div className="text-[11px] text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 mb-2">
+                            <span className="truncate font-medium block">{inv.description || (tourCode ? `Tour: ${tourCode}` : 'Thanh toán tiền tour')}</span>
+                          </div>
+                        )}
+
+                        {/* EXPANDABLE FULL DETAILS */}
+                        {isExpanded && (
+                          <div className="mt-3 space-y-3 pt-2 border-t border-gray-100 animate-fadeIn">
+                            {/* Thông tin Tour du lịch */}
+                            {(tourCode || tourName) && (
+                              <div className="bg-blue-50/70 border border-blue-100/90 rounded-lg p-2.5 shadow-2xs">
+                                <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                  <Compass className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  <span>Thông tin Tour</span>
+                                </div>
+                                <div className="text-xs space-y-1">
+                                  {tourCode && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-bold text-gray-500">Mã Tour:</span>
+                                      <span className="font-mono font-black text-blue-900 bg-white px-1.5 py-0.5 rounded border border-blue-200 text-xs">
+                                        {tourCode}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {tourName && (
+                                    <div className="flex items-start gap-1.5 text-gray-800 font-semibold leading-snug">
+                                      <span className="text-[10px] font-bold text-gray-500 shrink-0 mt-0.5">Tên Tour:</span>
+                                      <span>{tourName}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Verification Detail */}
+                            {inv.verified_by && (
+                              <div className="text-[10px] text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100 flex items-center justify-between font-semibold">
+                                <span>Duyệt bởi: <strong>{inv.verified_by}</strong></span>
+                                {inv.verified_at && <span>{format(new Date(inv.verified_at), 'dd/MM/yyyy')}</span>}
+                              </div>
+                            )}
+
+                            {/* Order Association & Booker */}
+                            {orderCode && (
+                              <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 font-semibold flex items-center justify-between flex-wrap gap-1.5">
+                                <div className="min-w-0 flex-1 leading-snug">
+                                  <span className="text-gray-500">Khách / Người nộp:</span> <strong className="text-gray-900 font-bold">{leadName}</strong> {phone ? <span className="text-blue-950 font-semibold font-mono">({phone})</span> : ''}
+                                </div>
+                                <span 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(orderCode);
+                                    toast.success(`Đã sao chép mã booking: ${orderCode}`);
+                                  }}
+                                  className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold hover:bg-blue-50 hover:text-blue-900 cursor-pointer inline-flex items-center gap-1 group/copy transition-colors shrink-0 shadow-2xs"
+                                  title="Bấm để sao chép mã booking"
+                                >
+                                  #{orderCode}
+                                  <Copy className="w-3 h-3 text-blue-400 group-hover/copy:text-blue-700 transition-colors" />
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Description */}
+                            <div className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-600 border border-gray-100">
+                              <span className="font-bold text-gray-700 block mb-1">Ghi chú & Đợt nộp:</span>
+                              <p className="leading-relaxed break-words">
+                                {inv.description || 'Chuyển khoản thanh toán tiền tour'}
+                              </p>
+                            </div>
+
+                            {/* Bank Transfer Info */}
+                            {parsedInfo.method === 'transfer' && (
+                              <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
+                                <span className="text-blue-800 font-black uppercase text-[10px] tracking-wider block mb-2 border-b border-blue-200/50 pb-1">
+                                  Thông tin nộp tiền Ngân hàng
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                  <div>
+                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Ngân hàng</span>
+                                    <span className="font-semibold text-blue-950 text-xs">{parsedInfo.bankName || '---'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Số tài khoản</span>
+                                    <span className="font-semibold text-blue-950 text-xs">{parsedInfo.accountNumber || '---'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Chủ tài khoản</span>
+                                    <span className="font-bold text-blue-950 text-xs uppercase">{parsedInfo.accountName ? parsedInfo.accountName.toUpperCase() : '---'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Minh chứng & Thao tác */}
+                            <div className="p-2.5 bg-slate-50/80 rounded-lg border border-gray-150 text-xs flex flex-col gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-gray-500 uppercase text-[10px]">Xác nhận</span>
+                                {inv.file_url ? (
+                                  <a
+                                    href={inv.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2.5 py-1 rounded border border-blue-200 shadow-2xs hover:bg-blue-50 transition-colors"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Xem ảnh xác nhận</span>
+                                    <ExternalLink className="w-3 h-3 text-blue-400" />
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 text-[10px] italic">Chưa có ảnh minh chứng</span>
+                                )}
+                              </div>
+
+                              {inv.status === 'pending' && (
+                                <div className="flex items-center gap-2 pt-2 border-t border-gray-200/80">
+                                  <button
+                                    onClick={() => {
+                                      setApproveTarget({
+                                        id: inv.id,
+                                        amount: inv.amount,
+                                        orderCode: orderCode || 'N/A'
+                                      });
+                                    }}
+                                    className="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 transition-colors shadow-xs cursor-pointer"
+                                  >
+                                    <Check className="w-3.5 h-3.5 mr-1" /> Duyệt nhận
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setRejectTarget({
+                                        id: inv.id,
+                                        orderCode: orderCode || 'N/A'
+                                      });
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                                  >
+                                    <X className="w-3.5 h-3.5 mr-0.5 inline" /> Từ chối
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer Actions & Info */}
+                      <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400 font-medium">
+                        <span className="flex items-center gap-1 text-gray-600 font-semibold truncate max-w-[150px]">
+                          <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="truncate">{resolveCreatorName(inv.created_by, inv.order_id)}</span>
+                        </span>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                            {inv.created_at ? format(new Date(inv.created_at), 'dd/MM/yyyy') : '---'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
       
@@ -1021,264 +1377,417 @@ export default function AccountingInvoice() {
             </div>
             
             {/* Thanh chuyển đổi trạng thái (Sub-tabs) hiện đại và trực quan cho VAT */}
-            <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 rounded-lg border border-gray-200">
-              <button
-                type="button"
-                onClick={() => setFilterInvoice('pending')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterInvoice === 'pending'
-                    ? 'bg-red-500 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <span>Chờ xuất VAT</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filterInvoice === 'pending' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-800'
-                }`}>
-                  {pendingVatCount}
-                </span>
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setFilterInvoice('pending')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterInvoice === 'pending'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
+                >
+                  <span>Chờ xuất VAT</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterInvoice === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {pendingVatCount}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setFilterInvoice('issued')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterInvoice === 'issued'
-                    ? 'bg-green-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <span>Đã xuất VAT</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filterInvoice === 'issued' ? 'bg-green-700 text-white' : 'bg-green-100 text-green-800'
-                }`}>
-                  {issuedVatCount}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterInvoice('issued')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterInvoice === 'issued'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
+                >
+                  <span>Đã xuất VAT</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterInvoice === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {issuedVatCount}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setFilterInvoice('all')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  filterInvoice === 'all'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <span>Tất cả</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filterInvoice === 'all' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {totalVatCount}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterInvoice('all')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterInvoice === 'all'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
+                >
+                  <span>Tất cả</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterInvoice === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {totalVatCount}
+                  </span>
+                </button>
+              </div>
+
+              {/* Nút Mở rộng / Thu gọn tất cả thẻ VAT */}
+              {invoiceOrders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allIds = invoiceOrders.map(o => o.id);
+                    const isAnyExpanded = allIds.some(id => expandedCards[id]);
+                    if (isAnyExpanded) {
+                      collapseAllCards(allIds);
+                    } else {
+                      expandAllCards(allIds);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <Eye className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{invoiceOrders.some(o => expandedCards[o.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {invoiceOrders.length === 0 ? (
-            <div className="text-center py-20 bg-gray-50/50">
-              <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm font-semibold">Không tìm thấy yêu cầu xuất hóa đơn nào.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-150 bg-white">
-              {invoiceOrders.map(order => {
-                const tour = tours.find(t => t.id === order.tour_id);
-                const orderPassengers = passengers.filter(p => p.order_id === order.id);
-                const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
-                const orderCode = `BK-${order.id.substring(0, 8).toUpperCase()}`;
-                const isExpanded = !!expandedOrders[order.id];
+          {/* Tab 2: Vertical cards grid for Xuất VAT */}
+          <div className="p-4 md:p-6 space-y-4">
+            {invoiceOrders.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <h4 className="text-gray-900 font-bold text-sm">Không tìm thấy yêu cầu xuất hóa đơn nào</h4>
+                <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+                  {searchTerm.trim() 
+                    ? `Không tìm thấy booking nào phù hợp với từ khóa "${searchTerm}".` 
+                    : filterInvoice !== 'all' 
+                      ? `Không tìm thấy booking nào ở trạng thái xuất VAT này.` 
+                      : 'Các yêu cầu xuất VAT từ booking sẽ hiển thị tại đây.'}
+                </p>
+                {(searchTerm.trim() || filterInvoice !== 'all') && (
+                  <div className="mt-4 flex justify-center gap-2">
+                    {searchTerm.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTerm('')}
+                        className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                      >
+                        Xóa từ khóa
+                      </button>
+                    )}
+                    {filterInvoice !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => setFilterInvoice('all')}
+                        className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                      >
+                        Xem tất cả ({totalVatCount})
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {invoiceOrders.map(order => {
+                  const isExpanded = !!expandedCards[order.id];
+                  const tour = tours.find(t => t.id === order.tour_id);
+                  const orderPassengers = passengers.filter(p => p.order_id === order.id);
+                  const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
+                  const orderCode = `BK-${order.id.substring(0, 8).toUpperCase()}`;
 
-                return (
-                  <div key={order.id} className="p-5 hover:bg-slate-50/40 transition-colors">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      {/* Left: Booking & Tour */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="font-mono font-black text-blue-950 text-xs bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                            {orderCode}
-                          </span>
-                          <span className="text-[11px] text-gray-400 font-medium">
-                            {order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
-                          </span>
+                  return (
+                    <div 
+                      key={order.id} 
+                      className={`border-x border-b rounded-xl p-4 shadow-2xs relative overflow-hidden bg-white transition-all flex flex-col justify-between border-t-4 border-t-blue-500 ${
+                        isExpanded ? 'border-blue-400 ring-2 ring-blue-100 shadow-md' : 'border-gray-200 hover:border-gray-300 hover:shadow-xs'
+                      }`}
+                    >
+                      <div>
+                        {/* Compact Header: Booking Code, Amount & Expand Arrow */}
+                        <div className="flex justify-between items-start mb-3 pb-2.5 border-b border-gray-100">
+                          <div>
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mã Booking</div>
+                            <div className="font-mono font-bold text-blue-900 text-xs flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded border border-blue-200 shadow-2xs">
+                              {orderCode}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-right">
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tổng Tiền Booking</div>
+                              <div className="font-black text-slate-900 text-base select-all bg-slate-50 px-2 py-0.5 rounded border border-slate-200 shadow-2xs inline-block">
+                                {new Intl.NumberFormat('vi-VN').format(order.total_price)}đ
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleCard(order.id)}
+                              className="p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer ml-1"
+                              title={isExpanded ? "Thu gọn chi tiết" : "Mở rộng chi tiết"}
+                            >
+                              {isExpanded ? <ChevronUp className="w-5 h-5 text-blue-600" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Status & Short Buyer Info ALWAYS visible */}
+                        <div className="flex items-center justify-between mb-2 text-xs">
+                          <div className="flex items-center gap-1.5 text-gray-800 font-bold truncate max-w-[180px]">
+                            <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="truncate">{leadPassenger?.full_name || order.booker_name || 'Khách lẻ'}</span>
+                          </div>
                           {getInvoiceBadge(order.invoice_status)}
                         </div>
-                        {tour && (
-                          <div className="text-xs space-y-0.5 mt-1">
-                            <span className="font-bold text-blue-600 mr-2">{tour.code}</span>
-                            <span className="text-gray-700 font-semibold">{tour.name}</span>
+
+                        {/* Summary preview line when collapsed */}
+                        {!isExpanded && (
+                          <div className="text-[11px] text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 mb-2">
+                            <span className="truncate font-semibold text-gray-800 block">
+                              {order.vat_company_name ? `Cty: ${order.vat_company_name}` : (tour?.code ? `Tour: ${tour.code}` : 'Chưa có thông tin Cty')}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* EXPANDABLE FULL VAT DETAILS */}
+                        {isExpanded && (
+                          <div className="mt-3 space-y-3 pt-2 border-t border-gray-100 animate-fadeIn">
+                            {/* Thông tin Tour du lịch */}
+                            {tour && (
+                              <div className="bg-blue-50/70 border border-blue-100/90 rounded-lg p-2.5 shadow-2xs">
+                                <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                  <Compass className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  <span>Thông tin Tour</span>
+                                </div>
+                                <div className="text-xs space-y-1">
+                                  {tour.code && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-bold text-gray-500">Mã Tour:</span>
+                                      <span className="font-mono font-black text-blue-900 bg-white px-1.5 py-0.5 rounded border border-blue-200 text-xs">
+                                        {tour.code}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {tour.name && (
+                                    <div className="flex items-start gap-1.5 text-gray-800 font-semibold leading-snug">
+                                      <span className="text-[10px] font-bold text-gray-500 shrink-0 mt-0.5">Tên Tour:</span>
+                                      <span>{tour.name}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Người mua & Số khách */}
+                            <div className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-700 border border-gray-100 space-y-1">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">Người mua:</span>
+                                <span className="font-bold text-gray-900">{leadPassenger?.full_name || order.booker_name || 'Khách lẻ'}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">SĐT:</span>
+                                <span className="font-semibold text-gray-800">{leadPassenger?.phone || order.booker_phone || 'Chưa cung cấp'}</span>
+                              </div>
+                              <div className="flex justify-between items-center pt-1 border-t border-gray-200/60">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">Số khách:</span>
+                                <span className="bg-gray-200/80 text-gray-800 px-1.5 py-0.5 rounded text-[10px] font-bold">{orderPassengers.length} người</span>
+                              </div>
+                            </div>
+
+                            {/* Thông tin Chi tiết Xuất Hóa Đơn (VAT) */}
+                            <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
+                              <div className="text-[10px] font-bold text-blue-900 mb-2 uppercase tracking-wider border-b border-blue-200/50 pb-1 flex items-center gap-1">
+                                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Chi tiết Hóa đơn VAT</span>
+                              </div>
+                              <div className="space-y-2 text-xs">
+                                <div>
+                                  <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Tên công ty</span>
+                                  <span className="font-bold text-gray-900 select-all leading-snug block">{order.vat_company_name || 'Chưa cung cấp'}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Mã số thuế (MST)</span>
+                                  <span className="font-black text-blue-800 font-mono select-all bg-white px-2 py-0.5 rounded border border-blue-150 inline-block">{order.vat_tax_code || 'Chưa cung cấp'}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Địa chỉ công ty</span>
+                                  <span className="font-medium text-gray-700 select-all leading-snug block">{order.vat_address || 'Chưa cung cấp'}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Email nhận hóa đơn</span>
+                                  <span className="font-bold text-gray-800 select-all font-mono break-all bg-white px-2 py-0.5 rounded border border-blue-150 inline-block">{order.vat_email || 'Chưa cung cấp'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Thao tác */}
+                            <div className="p-2.5 bg-slate-50/80 rounded-lg border border-gray-150 text-xs flex items-center justify-between">
+                              <span className="font-bold text-gray-500 uppercase text-[10px]">Thao tác</span>
+                              {order.invoice_status === 'pending' ? (
+                                <button
+                                  onClick={() => {
+                                    setVatTarget({
+                                      orderId: order.id,
+                                      orderCode,
+                                      targetStatus: 'issued'
+                                    });
+                                  }}
+                                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 shadow-xs transition-colors cursor-pointer"
+                                >
+                                  <Check className="w-3.5 h-3.5 mr-1" /> Đã xuất VAT
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setVatTarget({
+                                      orderId: order.id,
+                                      orderCode,
+                                      targetStatus: 'pending'
+                                    });
+                                  }}
+                                  className="text-xs text-gray-500 hover:text-red-600 underline font-bold transition-colors cursor-pointer px-2"
+                                >
+                                  Đánh dấu chưa xuất VAT
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
 
-                      {/* Middle: Người mua & Tổng tiền */}
-                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-6 lg:gap-10">
-                        <div>
-                          <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Người mua & Số khách</div>
-                          <div className="font-bold text-gray-950 text-xs">{leadPassenger?.full_name || 'Khách lẻ'}</div>
-                          <div className="text-[11px] text-gray-500">{leadPassenger?.phone || 'Chưa cung cấp'}</div>
-                          <span className="inline-block mt-1 bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                            {orderPassengers.length} người
+                      {/* Footer Actions & Info */}
+                      <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400 font-medium">
+                        <span className="flex items-center gap-1 text-gray-600 font-semibold truncate max-w-[150px]">
+                          <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="truncate">{resolveCreatorName(order.created_by, order.id)}</span>
+                        </span>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                            {order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy') : '---'}
                           </span>
-                        </div>
-
-                        <div className="lg:text-right lg:min-w-[120px]">
-                          <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5 lg:text-right">Tổng tiền</div>
-                          <div className="font-black text-gray-900 text-sm lg:text-right">
-                            {new Intl.NumberFormat('vi-VN').format(order.total_price)} đ
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Thao tác & Nút mở rộng */}
-                      <div className="flex flex-wrap items-center gap-2 lg:gap-3 shrink-0 self-start lg:self-center">
-                        {order.vat_option === 'Xuất VAT' ? (
-                          <button
-                            onClick={() => setExpandedOrders(prev => ({ ...prev, [order.id]: !isExpanded }))}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                              isExpanded 
-                                ? 'bg-blue-50 text-blue-700 border-blue-200' 
-                                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <span>{isExpanded ? 'Ẩn thông tin VAT' : 'Xem thông tin VAT'}</span>
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">Không có yêu cầu viết VAT đỏ</span>
-                        )}
-
-                        <div>
-                          {order.invoice_status === 'pending' ? (
-                            <button
-                              onClick={() => {
-                                setVatTarget({
-                                  orderId: order.id,
-                                  orderCode,
-                                  targetStatus: 'issued'
-                                });
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 shadow-sm transition-colors cursor-pointer"
-                            >
-                              <Check className="w-3.5 h-3.5 mr-1" /> Đã xuất VAT
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setVatTarget({
-                                  orderId: order.id,
-                                  orderCode,
-                                  targetStatus: 'pending'
-                                });
-                              }}
-                              className="text-xs text-gray-400 hover:text-red-500 underline font-bold transition-colors cursor-pointer px-2"
-                            >
-                              Đánh dấu chưa xuất VAT
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
-
-                    {/* Expandable Details Card */}
-                    {isExpanded && order.vat_option === 'Xuất VAT' && (
-                      <div className="mt-4 bg-blue-50/50 rounded-xl border border-blue-100 p-4 animate-in fade-in slide-in-from-top-2 duration-150">
-                        <div className="text-[10px] font-bold text-blue-900 mb-3 uppercase tracking-wider border-b border-blue-100 pb-1.5 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-blue-600" />
-                          Thông tin chi tiết xuất hóa đơn (VAT)
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <div>
-                            <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Tên công ty</span>
-                            <span className="text-xs font-black text-gray-900 select-all break-words">{order.vat_company_name || 'Chưa cung cấp'}</span>
-                          </div>
-                          <div>
-                            <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Mã số thuế (MST)</span>
-                            <span className="text-xs font-black text-blue-800 font-mono select-all bg-white px-2 py-0.5 rounded border border-blue-150 inline-block">{order.vat_tax_code || 'Chưa cung cấp'}</span>
-                          </div>
-                          <div className="md:col-span-2">
-                            <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Địa chỉ công ty</span>
-                            <span className="text-xs font-medium text-gray-800 select-all break-words">{order.vat_address || 'Chưa cung cấp'}</span>
-                          </div>
-                          <div className="md:col-span-2">
-                            <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Email nhận hóa đơn</span>
-                            <span className="text-xs font-black text-gray-800 select-all font-mono break-all bg-white px-2 py-0.5 rounded border border-blue-150 inline-block">{order.vat_email || 'Chưa cung cấp'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {activeTab === 'payments' && (
         /* TAB 3: PHIẾU CHI */
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-gray-50/50">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Danh sách phiếu chi & Hoàn tiền</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Quản lý, phê duyệt các khoản chi tiền, hoàn tiền cho khách hàng hoặc đại lý</p>
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/50 space-y-3">
+            {/* Row 1: Title & Main Action Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Danh sách phiếu chi & Hoàn tiền</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Quản lý, phê duyệt các khoản chi tiền, hoàn tiền cho khách hàng hoặc đại lý</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCreatePaymentModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-sm transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 self-start sm:self-auto"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tạo phiếu chi mới</span>
+              </button>
             </div>
-            
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Thanh chuyển đổi trạng thái phiếu chi (Sub-tabs) */}
+
+            {/* Row 2: Sub-tabs & Expand/Collapse button */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200/60">
               <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button
                   type="button"
                   onClick={() => setFilterPaymentStatus('pending')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterPaymentStatus === 'pending'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
                   }`}
                 >
-                  Chờ duyệt
+                  <span>Chờ duyệt</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterPaymentStatus === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {pendingPaymentsCount}
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterPaymentStatus('approved')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterPaymentStatus === 'approved'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
                   }`}
                 >
-                  Đã duyệt chi
+                  <span>Đã duyệt chi</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterPaymentStatus === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {approvedPaymentsCount}
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterPaymentStatus('rejected')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterPaymentStatus === 'rejected'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
                   }`}
                 >
-                  Bị từ chối
+                  <span>Bị từ chối</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterPaymentStatus === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {rejectedPaymentsCount}
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterPaymentStatus('all')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterPaymentStatus === 'all'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
                   }`}
                 >
-                  Tất cả
+                  <span>Tất cả</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    filterPaymentStatus === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {totalPaymentsCount}
+                  </span>
                 </button>
               </div>
 
-              <button
-                onClick={() => setIsCreatePaymentModalOpen(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-sm transition-colors cursor-pointer"
-              >
-                + Tạo phiếu chi mới
-              </button>
+              {/* Nút Mở rộng / Thu gọn tất cả thẻ Phiếu Chi */}
+              {paymentInvoices.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allIds = paymentInvoices.map(p => p.id);
+                    const isAnyExpanded = allIds.some(id => expandedCards[id]);
+                    if (isAnyExpanded) {
+                      collapseAllCards(allIds);
+                    } else {
+                      expandAllCards(allIds);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  <Eye className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{paymentInvoices.some(p => expandedCards[p.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1292,232 +1801,264 @@ export default function AccountingInvoice() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {paymentInvoices.map((inv) => {
+                  const isExpanded = !!expandedCards[inv.id];
                   const parsedInfo = parseRefundInfo(inv, orders, tours);
+
                   return (
-                    <div key={inv.id} className="border border-gray-200 rounded-xl p-4 shadow-sm relative overflow-hidden bg-white hover:border-blue-200 transition-all flex flex-col justify-between">
+                    <div 
+                      key={inv.id} 
+                      className={`border-x border-b rounded-xl p-4 shadow-2xs relative overflow-hidden bg-white transition-all flex flex-col justify-between border-t-4 border-t-rose-500 ${
+                        isExpanded ? 'border-blue-400 ring-2 ring-blue-100 shadow-md' : 'border-gray-200 hover:border-gray-300 hover:shadow-xs'
+                      }`}
+                    >
                       <div>
-                        {/* Top Code and Amount */}
-                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-150">
+                        {/* Compact Header: Invoice Code, Amount & Expand Arrow */}
+                        <div className="flex justify-between items-start mb-3 pb-2.5 border-b border-gray-100">
                           <div>
-                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Mã Phiếu Chi</div>
-                            <div className="font-mono font-black text-gray-800 text-xs flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mã Phiếu Chi</div>
+                            <div className="font-mono font-bold text-rose-950 text-xs flex items-center gap-1.5 bg-rose-50 px-2 py-1 rounded border border-rose-200 shadow-2xs">
                               {inv.invoice_code || 'Chưa cấp'}
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Số Tiền Chi</div>
-                            <div className="font-black text-rose-600 text-sm select-all">{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ</div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-right">
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Số Tiền Chi</div>
+                              <div className="font-black text-rose-600 text-base select-all bg-rose-50 px-2 py-0.5 rounded border border-rose-200/80 shadow-2xs inline-block">
+                                -{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleCard(inv.id)}
+                              className="p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer ml-1"
+                              title={isExpanded ? "Thu gọn chi tiết" : "Mở rộng chi tiết"}
+                            >
+                              {isExpanded ? <ChevronUp className="w-5 h-5 text-blue-600" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
                           </div>
                         </div>
 
-                        {/* Thông tin Tour du lịch - Hiển thị ngay phía dưới Mã Phiếu Chi */}
-                        {(parsedInfo.tourCode || parsedInfo.tourName) && (
-                          <div className="bg-blue-50/70 border border-blue-100/90 rounded-lg p-2.5 mb-3 shadow-2xs">
-                            <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                              <Compass className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span>Thông tin Tour</span>
-                            </div>
-                            <div className="text-xs space-y-1">
-                              {parsedInfo.tourCode && (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] font-bold text-gray-500">Mã Tour:</span>
-                                  <span className="font-mono font-black text-blue-900 bg-white px-1.5 py-0.5 rounded border border-blue-200 text-xs">
-                                    {parsedInfo.tourCode}
-                                  </span>
-                                </div>
-                              )}
-                              {parsedInfo.tourName && (
-                                <div className="flex items-start gap-1.5 text-gray-800 font-semibold leading-snug">
-                                  <span className="text-[10px] font-bold text-gray-500 shrink-0 mt-0.5">Tên Tour:</span>
-                                  <span>{parsedInfo.tourName}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Status Badge */}
-                        <div className="flex items-center justify-between mb-3 text-xs">
+                        {/* Status Badge ALWAYS visible */}
+                        <div className="flex items-center justify-between mb-2 text-xs">
                           <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Trạng thái</span>
                           {inv.status === 'pending' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                              <Clock className="w-3 h-3 mr-1 animate-spin" /> Chờ duyệt chi
+                            <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                              <Clock className="w-3 h-3 mr-1 text-amber-600 animate-spin" /> Chờ duyệt chi
                             </span>
                           ) : inv.status === 'approved' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-50 text-green-700 border border-green-200">
-                              <Check className="w-3.5 h-3.5 mr-1" /> Đã duyệt chi
+                            <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
+                              <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Đã duyệt chi
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                              <X className="w-3.5 h-3.5 mr-1" /> Bị từ chối
+                            <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
+                              <X className="w-3.5 h-3.5 mr-1 text-rose-600" /> Bị từ chối
                             </span>
                           )}
                         </div>
 
-                        {/* Verification Detail */}
-                        {inv.status === 'approved' && inv.verified_by && (
-                          <div className="text-[10px] text-green-700 bg-green-50/50 p-2 rounded-lg border border-green-100 mb-3 flex items-center justify-between font-semibold">
-                            <span>Duyệt bởi: <strong>{inv.verified_by}</strong></span>
-                            {inv.verified_at && <span>{format(new Date(inv.verified_at), 'dd/MM/yyyy')}</span>}
-                          </div>
-                        )}
-
-                        {/* Order Association if available */}
-                        {inv.order_id && (
-                          <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 mb-3 font-semibold flex items-center justify-between">
-                            <span>Booking liên kết:</span>
-                            <span 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const code = `#${inv.order_id.substring(0, 8).toUpperCase()}`;
-                                navigator.clipboard.writeText(code);
-                                toast.success(`Đã sao chép mã booking: ${code}`);
-                              }}
-                              className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold hover:bg-blue-50 hover:text-blue-900 cursor-pointer inline-flex items-center gap-1 group/copy transition-colors"
-                              title="Bấm để sao chép mã booking"
-                            >
-                              #{inv.order_id.substring(0, 8).toUpperCase()}
-                              <Copy className="w-3 h-3 text-blue-400 group-hover/copy:text-blue-700 transition-colors" />
+                        {/* Collapsed summary line */}
+                        {!isExpanded && (
+                          <div className="text-[11px] text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100 mb-2">
+                            <span className="truncate font-semibold block">
+                              {parsedInfo.tourCode ? `Tour: ${parsedInfo.tourCode}` : (parsedInfo.cleanDescription ? parsedInfo.cleanDescription : 'Phiếu chi tiền')}
                             </span>
                           </div>
                         )}
 
-                        {/* Description */}
-                        <div className="bg-gray-50 rounded-lg p-2.5 mb-3 text-xs text-gray-600 border border-gray-100">
-                          <span className="font-bold text-gray-700 block mb-1">{inv.type === 'receipt' ? 'Lý do thu:' : 'Lý do chi:'}</span>
-                          <p className="leading-relaxed break-words">
-                            {parsedInfo.cleanDescription || 'Không có mô tả chi tiết'}
-                          </p>
-                        </div>
-
-                        {/* Refund Method Info */}
-                        {parsedInfo.method === 'transfer' && (
-                          <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 mb-3">
-                            <span className="text-blue-800 font-black uppercase text-[10px] tracking-wider block mb-2 border-b border-blue-200/50 pb-1">
-                              {inv.type === 'receipt' ? 'Thông tin nộp tiền qua Ngân hàng' : 'Thông tin chuyển khoản Ngân hàng'}
-                            </span>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div>
-                                <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Ngân hàng</span>
-                                <span className="font-semibold text-blue-950 text-xs">{parsedInfo.bankName || '---'}</span>
+                        {/* EXPANDABLE FULL PAYMENT DETAILS */}
+                        {isExpanded && (
+                          <div className="mt-3 space-y-3 pt-2 border-t border-gray-100 animate-fadeIn">
+                            {/* Thông tin Tour du lịch */}
+                            {(parsedInfo.tourCode || parsedInfo.tourName) && (
+                              <div className="bg-blue-50/70 border border-blue-100/90 rounded-lg p-2.5 shadow-2xs">
+                                <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                  <Compass className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  <span>Thông tin Tour</span>
+                                </div>
+                                <div className="text-xs space-y-1">
+                                  {parsedInfo.tourCode && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-bold text-gray-500">Mã Tour:</span>
+                                      <span className="font-mono font-black text-blue-900 bg-white px-1.5 py-0.5 rounded border border-blue-200 text-xs">
+                                        {parsedInfo.tourCode}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {parsedInfo.tourName && (
+                                    <div className="flex items-start gap-1.5 text-gray-800 font-semibold leading-snug">
+                                      <span className="text-[10px] font-bold text-gray-500 shrink-0 mt-0.5">Tên Tour:</span>
+                                      <span>{parsedInfo.tourName}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Số tài khoản</span>
-                                <span className="font-semibold text-blue-950 text-xs">{parsedInfo.accountNumber || '---'}</span>
-                              </div>
-                              <div>
-                                <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Chủ tài khoản</span>
-                                <span className="font-bold text-blue-950 text-xs uppercase">{parsedInfo.accountName ? parsedInfo.accountName.toUpperCase() : '---'}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {parsedInfo.method === 'cash' && (
-                          <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 mb-3">
-                            <span className="text-amber-800 font-black uppercase text-[10px] tracking-wider block mb-1">
-                              Hoàn trả: Nhận tiền mặt
-                            </span>
-                            <p className="text-amber-700 text-xs font-semibold">Khách hàng nhận tiền mặt trực tiếp tại văn phòng.</p>
-                          </div>
-                        )}
-
-                      {/* Minh chứng chuyển khoản cho phiếu chi */}
-                      <div className="mt-3 p-2.5 bg-slate-50/80 rounded-lg border border-gray-150 text-xs flex flex-col gap-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-gray-500 uppercase text-[10px]">Xác nhận</span>
-                          {inv.file_url ? (
-                            <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 font-bold px-1.5 py-0.5 rounded">
-                              Đã có minh chứng
-                            </span>
-                          ) : (
-                            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-bold px-1.5 py-0.5 rounded">
-                              Chưa có minh chứng
-                            </span>
-                          )}
-                        </div>
-
-                        {inv.file_url ? (
-                          <div className="flex items-center gap-2">
-                            <a
-                              href={inv.file_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 transition-colors"
-                            >
-                              <FileText className="w-3.5 h-3.5" /> Xem ảnh chuyển tiền
-                            </a>
-                            {isAccountantOrAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setUploadProofTarget(inv);
-                                }}
-                                className="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-white hover:bg-gray-100 rounded-md border border-gray-200 transition-colors cursor-pointer"
-                                title="Cập nhật ảnh khác"
-                              >
-                                <Upload className="w-3.5 h-3.5" />
-                              </button>
                             )}
-                          </div>
-                        ) : (
-                          <div>
-                            {isAccountantOrAdmin ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setUploadProofTarget(inv);
-                                }}
-                                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 rounded-md border border-gray-200 transition-colors cursor-pointer"
-                              >
-                                <Upload className="w-3.5 h-3.5 text-gray-500" /> Tải lên biên lai chuyển khoản
-                              </button>
-                            ) : (
-                              <span className="text-gray-400 italic block text-center py-1">Chưa cập nhật ảnh chuyển khoản</span>
+
+                            {/* Verification Detail */}
+                            {inv.status === 'approved' && inv.verified_by && (
+                              <div className="text-[10px] text-green-700 bg-green-50/50 p-2 rounded-lg border border-green-100 flex items-center justify-between font-semibold">
+                                <span>Duyệt bởi: <strong>{inv.verified_by}</strong></span>
+                                {inv.verified_at && <span>{format(new Date(inv.verified_at), 'dd/MM/yyyy')}</span>}
+                              </div>
+                            )}
+
+                            {/* Order Association if available */}
+                            {inv.order_id && (
+                              <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 font-semibold flex items-center justify-between">
+                                <span>Booking liên kết:</span>
+                                <span 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const code = `#${inv.order_id.substring(0, 8).toUpperCase()}`;
+                                    navigator.clipboard.writeText(code);
+                                    toast.success(`Đã sao chép mã booking: ${code}`);
+                                  }}
+                                  className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold hover:bg-blue-50 hover:text-blue-900 cursor-pointer inline-flex items-center gap-1 group/copy transition-colors"
+                                  title="Bấm để sao chép mã booking"
+                                >
+                                  #{inv.order_id.substring(0, 8).toUpperCase()}
+                                  <Copy className="w-3 h-3 text-blue-400 group-hover/copy:text-blue-700 transition-colors" />
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Description */}
+                            <div className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-600 border border-gray-100">
+                              <span className="font-bold text-gray-700 block mb-1">{inv.type === 'receipt' ? 'Lý do thu:' : 'Lý do chi:'}</span>
+                              <p className="leading-relaxed break-words">
+                                {parsedInfo.cleanDescription || 'Không có mô tả chi tiết'}
+                              </p>
+                            </div>
+
+                            {/* Refund Method Info */}
+                            {parsedInfo.method === 'transfer' && (
+                              <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
+                                <span className="text-blue-800 font-black uppercase text-[10px] tracking-wider block mb-2 border-b border-blue-200/50 pb-1">
+                                  {inv.type === 'receipt' ? 'Thông tin nộp tiền qua Ngân hàng' : 'Thông tin chuyển khoản Ngân hàng'}
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                  <div>
+                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Ngân hàng</span>
+                                    <span className="font-semibold text-blue-950 text-xs">{parsedInfo.bankName || '---'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Số tài khoản</span>
+                                    <span className="font-semibold text-blue-950 text-xs">{parsedInfo.accountNumber || '---'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Chủ tài khoản</span>
+                                    <span className="font-bold text-blue-950 text-xs uppercase">{parsedInfo.accountName ? parsedInfo.accountName.toUpperCase() : '---'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {parsedInfo.method === 'cash' && (
+                              <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3">
+                                <span className="text-amber-800 font-black uppercase text-[10px] tracking-wider block mb-1">
+                                  Hoàn trả: Nhận tiền mặt
+                                </span>
+                                <p className="text-amber-700 text-xs font-semibold">Khách hàng nhận tiền mặt trực tiếp tại văn phòng.</p>
+                              </div>
+                            )}
+
+                            {/* Minh chứng chuyển khoản cho phiếu chi */}
+                            <div className="p-2.5 bg-slate-50/80 rounded-lg border border-gray-150 text-xs flex flex-col gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-gray-500 uppercase text-[10px]">Xác nhận</span>
+                                {inv.file_url ? (
+                                  <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 font-bold px-1.5 py-0.5 rounded">
+                                    Đã có minh chứng
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-bold px-1.5 py-0.5 rounded">
+                                    Chưa có minh chứng
+                                  </span>
+                                )}
+                              </div>
+
+                              {inv.file_url ? (
+                                <div className="flex items-center gap-2">
+                                  <a
+                                    href={inv.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 transition-colors"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" /> Xem ảnh xác nhận
+                                  </a>
+                                  {isAccountantOrAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setUploadProofTarget(inv);
+                                      }}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-white hover:bg-gray-100 rounded-md border border-gray-200 transition-colors cursor-pointer"
+                                      title="Cập nhật ảnh khác"
+                                    >
+                                      <Upload className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div>
+                                  {isAccountantOrAdmin ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setUploadProofTarget(inv);
+                                      }}
+                                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 rounded-md border border-gray-200 transition-colors cursor-pointer"
+                                    >
+                                      <Upload className="w-3.5 h-3.5 text-gray-500" /> Tải lên biên lai chuyển khoản
+                                    </button>
+                                  ) : (
+                                    <span className="text-gray-400 italic block text-center py-1">Chưa cập nhật ảnh chuyển khoản</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Accountant Actions */}
+                            {isAccountantOrAdmin && inv.status === 'pending' && (
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                                <button
+                                  type="button"
+                                  onClick={() => setRejectPaymentTarget(inv)}
+                                  className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Từ chối chi
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setApprovePaymentTarget(inv)}
+                                  className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Phê duyệt chi
+                                </button>
+                              </div>
                             )}
                           </div>
                         )}
                       </div>
-                    </div>
 
-                    <div>
-                      {/* Footer Info */}
-                      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-3 border-t border-gray-100">
-                        <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                          <User className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                          <span className="truncate max-w-[160px] font-bold text-gray-800" title={resolveCreatorName(inv.created_by, inv.order_id)}>
-                            {resolveCreatorName(inv.created_by, inv.order_id)}
+                      {/* Footer Actions & Info */}
+                      <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400 font-medium">
+                        <span className="flex items-center gap-1 text-gray-600 font-semibold truncate max-w-[150px]">
+                          <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="truncate">{resolveCreatorName(inv.created_by, inv.order_id)}</span>
+                        </span>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                            {inv.created_at ? format(new Date(inv.created_at), 'dd/MM/yyyy') : '---'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{inv.created_at ? format(new Date(inv.created_at), 'dd/MM/yyyy') : 'N/A'}</span>
-                        </div>
                       </div>
-
-                      {/* Accountant Actions */}
-                      {isAccountantOrAdmin && inv.status === 'pending' && (
-                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100">
-                          <button
-                            type="button"
-                            onClick={() => setRejectPaymentTarget(inv)}
-                            className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" /> Từ chối chi
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setApprovePaymentTarget(inv)}
-                            className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors cursor-pointer"
-                          >
-                            <Check className="w-3.5 h-3.5" /> Phê duyệt chi
-                          </button>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
             )}
           </div>
