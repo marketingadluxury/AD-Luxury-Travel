@@ -146,7 +146,7 @@ export function isOrderInLeaderTeam(order: any, leaderProfile: any, profilesList
   if (orderUserId && orderUserId === leaderId) return true;
 
   const rawCreatedBy = (order.created_by || '').toLowerCase().trim();
-  const cleanCreatedBy = rawCreatedBy.replace(/^(sale leader|sale|ctv|cộng tác viên|điều hành|quản trị viên|admin|bod)\s*-\s*/i, '').trim();
+  const cleanCreatedBy = rawCreatedBy.replace(/^(sale leader|sale|đại lý|agent|điều hành|quản trị viên|admin|bod)\s*-\s*/i, '').trim();
 
   if (rawCreatedBy) {
     if (leaderName && (rawCreatedBy.includes(leaderName) || leaderName.includes(cleanCreatedBy))) return true;
@@ -170,8 +170,8 @@ export function isOrderInLeaderTeam(order: any, leaderProfile: any, profilesList
 
     if (creatorProfile) {
       if (creatorProfile.leader_id === leaderId) return true;
-      // If creator has no explicit leader_id set, check if creator role is sale or CTV
-      if (!creatorProfile.leader_id && (creatorProfile.role === 'sale' || creatorProfile.role === 'CTV')) {
+      // If creator has no explicit leader_id set, check if creator role is sale or agent
+      if (!creatorProfile.leader_id && (creatorProfile.role === 'sale' || creatorProfile.role === 'agent')) {
         return true;
       }
     }
@@ -179,3 +179,67 @@ export function isOrderInLeaderTeam(order: any, leaderProfile: any, profilesList
 
   return false;
 }
+
+export interface CalculateFinancialsInput {
+  sellerType?: 'agent' | 'direct';
+  originalPrice: number;
+  sellingPrice?: number;
+  baseCommission?: number;
+  agentCommission?: number;
+  citTaxPercent?: number;
+  vatTaxPercent?: number;
+}
+
+export interface CalculateFinancialsOutput {
+  sellerType: 'agent' | 'direct';
+  originalPrice: number;
+  sellingPrice: number;
+  priceMarkup: number;
+  citTaxPercent: number;
+  vatTaxPercent: number;
+  markupFeeAmount: number;
+  netCommissionAmount: number;
+  agentCommissionAmount: number;
+  netPayableAmount: number;
+}
+
+export function calculateOrderFinancials(input: CalculateFinancialsInput): CalculateFinancialsOutput {
+  const sellerType = input.sellerType || 'direct';
+  const originalPrice = Math.max(0, input.originalPrice || 0);
+  const baseCommission = Math.max(0, input.baseCommission || 0);
+  const agentCommissionAmount = input.agentCommission !== undefined ? Math.max(0, input.agentCommission) : baseCommission;
+  
+  const vatTaxPercent = input.vatTaxPercent !== undefined ? input.vatTaxPercent : 8;
+  const citTaxPercent = input.citTaxPercent === 20 ? 20 : 17;
+
+  if (sellerType === 'agent') {
+    const netPayableAmount = Math.max(0, originalPrice - agentCommissionAmount);
+    return {
+      sellerType: 'agent',
+      originalPrice,
+      sellingPrice: originalPrice,
+      priceMarkup: 0,
+      citTaxPercent: 0,
+      vatTaxPercent: 0,
+      markupFeeAmount: 0,
+      netCommissionAmount: agentCommissionAmount,
+      agentCommissionAmount,
+      netPayableAmount,
+    };
+  }
+
+  const sellingPrice = input.sellingPrice && input.sellingPrice > 0 ? input.sellingPrice : originalPrice;
+  return {
+    sellerType: 'direct',
+    originalPrice,
+    sellingPrice,
+    priceMarkup: 0,
+    citTaxPercent: 0,
+    vatTaxPercent: 0,
+    markupFeeAmount: 0,
+    netCommissionAmount: baseCommission,
+    agentCommissionAmount: 0,
+    netPayableAmount: sellingPrice,
+  };
+}
+

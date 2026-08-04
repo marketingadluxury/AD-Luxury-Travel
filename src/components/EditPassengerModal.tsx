@@ -35,9 +35,11 @@ export default function EditPassengerModal({
 }: EditPassengerModalProps) {
   const { orders, currentRole } = useCRM();
   const order = passenger ? orders.find(o => o.id === passenger.order_id) : null;
-  const isOrderConfirmed = order ? (order.status === 'sure' || order.status === 'paid' || Boolean(order.is_locked)) : false;
+  const isOrderExplicitlyLocked = Boolean(order?.is_locked);
   const isPrivilegedRole = ['admin', 'sale_leader'].includes(currentRole);
-  const canEditFinancials = isPrivilegedRole || !isOrderConfirmed;
+  const hasConfirmedVisaChoice = Boolean(passenger && (passenger.needs_visa_service !== undefined && passenger.needs_visa_service !== null));
+  const isVisaOptionLocked = isOrderExplicitlyLocked || hasConfirmedVisaChoice;
+  const canEditVisaOption = isPrivilegedRole || !isVisaOptionLocked;
 
   const [fullName, setFullName] = useState('');
   const [passportNumber, setPassportNumber] = useState('');
@@ -370,27 +372,27 @@ export default function EditPassengerModal({
 
           {/* Visa Service Option */}
           <div className={`border rounded-xl p-4 space-y-3 ${
-            !canEditFinancials ? 'bg-slate-50 border-slate-200' : 'bg-blue-50/50 border-blue-100'
+            !canEditVisaOption ? 'bg-slate-50 border-slate-200' : 'bg-blue-50/50 border-blue-100'
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-wrap">
                 <CheckCircle2 className={`w-4 h-4 ${needsVisaService ? 'text-blue-600' : 'text-slate-400'}`} />
                 <span className="text-xs font-bold text-slate-700">Đăng ký dịch vụ làm Visa qua Tour</span>
-                {!canEditFinancials && (
+                {!canEditVisaOption && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                     <Lock className="w-3 h-3 text-amber-600" />
-                    Đã khóa (Ảnh hưởng giá tour)
+                    Đã khóa (Xác nhận làm Visa)
                   </span>
                 )}
               </div>
-              <label className={`relative inline-flex items-center ${!canEditFinancials ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+              <label className={`relative inline-flex items-center ${!canEditVisaOption ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                 <input 
                   type="checkbox" 
                   className="sr-only peer"
-                  disabled={!canEditFinancials}
+                  disabled={!canEditVisaOption}
                   checked={needsVisaService}
                   onChange={e => {
-                    if (!canEditFinancials) return;
+                    if (!canEditVisaOption) return;
                     setNeedsVisaService(e.target.checked);
                   }}
                 />
@@ -398,14 +400,17 @@ export default function EditPassengerModal({
               </label>
             </div>
             
-            {!canEditFinancials && (
+            {!canEditVisaOption && (
               <div className="text-[11px] text-amber-900 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200/60 leading-relaxed">
-                🔒 Booking đã được xác nhận hoặc bị khóa. Tùy chọn làm Visa qua Tour trực tiếp tác động tới tổng giá trị booking, do đó bị khóa đối với tài khoản Sale/CTV.
-                Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần mở khóa hoặc thay đổi.
+                {isOrderExplicitlyLocked ? (
+                  <>🔒 Booking đã bị khóa bởi Quản trị viên. Tùy chọn làm Visa qua Tour bị khóa đối với tài khoản Sale/Đại lý. Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần mở khóa hoặc thay đổi.</>
+                ) : (
+                  <>🔒 Lựa chọn làm Visa qua Tour đã được xác nhận cho hành khách này. Do thay đổi dịch vụ Visa sẽ trực tiếp ảnh hưởng đến tổng giá trị booking, tùy chọn này đã bị khóa đối với tài khoản Sale/Đại lý. Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần điều chỉnh.</>
+                )}
               </div>
             )}
 
-            {canEditFinancials && (needsVisaService ? (
+            {needsVisaService ? (
               <div className="text-[11px] text-blue-700 font-medium bg-white/60 p-2.5 rounded-lg border border-blue-50 animate-fade-in">
                 Hành khách <strong>CHƯA CÓ VISA</strong>. Hệ thống sẽ tự động cộng thêm phí làm visa đi tour (<strong>{tourPriceVisa?.toLocaleString('vi-VN')}đ</strong>) vào tổng giá trị booking.
               </div>
@@ -413,7 +418,7 @@ export default function EditPassengerModal({
               <div className="text-[11px] text-slate-500 font-medium p-1">
                 Hành khách <strong>ĐÃ CÓ VISA</strong> hoặc không cần làm visa qua tour. Không phát sinh thêm phí.
               </div>
-            ))}
+            )}
           </div>
 
           {/* Document Section */}

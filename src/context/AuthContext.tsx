@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           full_name: email || 'Người dùng',
           phone: '',
           company_name: '',
-          role: (isDefaultAdmin ? 'admin' : 'CTV') as Role
+          role: (isDefaultAdmin ? 'admin' : 'agent') as Role
         };
         await supabase.from('profiles').insert([newProfile]);
         profileData = newProfile as UserProfile;

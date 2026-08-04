@@ -26,10 +26,11 @@ const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; bord
   visa: { label: 'Bộ phận Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
   accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
   tour_guide: { label: 'Hướng Dẫn Viên (HDV)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
-  CTV: { label: 'Cộng tác viên (CTV)', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
+  agent: { label: 'Đại lý (Agent)', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' },
   bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
   marketing_leader: { label: 'Trưởng phòng Marketing', color: 'text-fuchsia-800', bg: 'bg-fuchsia-100', border: 'border-fuchsia-300' },
-  marketing: { label: 'Nhân viên Marketing', color: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200' }
+  marketing: { label: 'Nhân viên Marketing', color: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200' },
+  CTV: { label: 'Cộng Tác Viên (CTV)', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' }
 };
 
 export default function UserManagement() {
@@ -57,7 +58,7 @@ export default function UserManagement() {
     full_name: '',
     phone: '',
     company_name: '',
-    role: 'CTV' as Role,
+    role: 'agent' as Role,
     leader_id: ''
   });
 
@@ -138,7 +139,7 @@ export default function UserManagement() {
       full_name: '',
       phone: '',
       company_name: 'AD Luxury Travel',
-      role: 'CTV',
+      role: 'agent',
       leader_id: ''
     });
     setShowPassword(false);

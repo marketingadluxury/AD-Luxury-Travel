@@ -5,7 +5,7 @@ import Select from 'react-select';
 import { useCRM, canUnlockOrder } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy, Filter, RotateCcw, Layers, List, Calendar, MapPin, Building } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy, Filter, RotateCcw, Layers, List, Calendar, MapPin, Building, Coins, Phone } from 'lucide-react';
 import { format, differenceInHours } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
@@ -67,11 +67,15 @@ export default function OrdersManagement() {
       }
 
       const resText = await response.text();
-      let resData;
+      let resData: any = {};
       try {
         resData = JSON.parse(resText);
       } catch {
-        throw new Error('Định dạng phản hồi từ máy chủ không đúng.');
+        if (resText && resText.trim().startsWith('http')) {
+          resData = { url: resText.trim() };
+        } else {
+          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
+        }
       }
       await updateOrder(orderId, { contract_url: resData.url });
       toast.success('Tải lên hợp đồng thành công!', { id: toastId });
@@ -616,7 +620,7 @@ export default function OrdersManagement() {
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [activeTabs, setActiveTabs] = useState<Record<string, 'details' | 'payment_history'>>({});
+  const [activeTabs, setActiveTabs] = useState<Record<string, 'details' | 'contact_info' | 'payment_history'>>({});
   const [isPassengerModalOpen, setIsPassengerModalOpen] = useState(false);
   const [orderToConfirm, setOrderToConfirm] = useState<string | null>(null);
   const [orderToAddPassengers, setOrderToAddPassengers] = useState<string | null>(null);
@@ -752,6 +756,11 @@ export default function OrdersManagement() {
   const [vatTaxCode, setVatTaxCode] = useState<string>('');
   const [vatAddress, setVatAddress] = useState<string>('');
   const [vatEmail, setVatEmail] = useState<string>('');
+  const [ctvInfo, setCtvInfo] = useState<string>('');
+  const [isCreatingForCTV, setIsCreatingForCTV] = useState<boolean>(false);
+
+  const isAgentRole = (currentRole as string) === 'agent' || (profile?.role as string) === 'agent';
+  const isSaleRole = !isAgentRole && (['sale', 'sale_leader', 'admin', 'bod'].includes(currentRole as string) || ['sale', 'sale_leader', 'admin', 'bod'].includes(profile?.role || ''));
 
   // Countdown timer for form completion
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
@@ -827,9 +836,11 @@ export default function OrdersManagement() {
     }
   };
 
-  const priceAdult = selectedTour ? (selectedTour.price_adult ?? (selectedTour.price - (selectedTour.discount || 0))) : 0;
-  const priceChild = selectedTour ? (selectedTour.price_child ?? Math.round((selectedTour.price - (selectedTour.discount || 0)) * 0.8)) : 0;
-  const priceInfant = selectedTour ? (selectedTour.price_infant ?? Math.round((selectedTour.price - (selectedTour.discount || 0)) * 0.3)) : 0;
+  const tourDiscount = selectedTour?.discount || 0;
+  const rawPriceAdult = selectedTour ? (selectedTour.price_adult ?? selectedTour.price) : 0;
+  const priceAdult = selectedTour ? Math.max(0, rawPriceAdult - tourDiscount) : 0;
+  const priceChild = selectedTour ? Math.max(0, (selectedTour.price_child ?? Math.round(rawPriceAdult * 0.8)) - (selectedTour.price_child ? tourDiscount : Math.round(tourDiscount * 0.8))) : 0;
+  const priceInfant = selectedTour ? Math.max(0, (selectedTour.price_infant ?? Math.round(rawPriceAdult * 0.3)) - (selectedTour.price_infant ? tourDiscount : Math.round(tourDiscount * 0.3))) : 0;
   const singleRoomSurcharge = selectedTour ? (selectedTour.single_room_surcharge ?? 7500000) : 0;
 
   const subtotalPrice = selectedTour
@@ -891,7 +902,7 @@ export default function OrdersManagement() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'agent' ? 'Đại lý' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
     const executeCreateOrder = () => {
@@ -916,7 +927,9 @@ export default function OrdersManagement() {
         vat_address: vatAddress,
         vat_email: vatEmail,
         special_requests: specialRequests,
-        is_locked: true,
+        ctv_info: ctvInfo.trim(),
+        is_locked: false,
+        seller_type: currentRole === 'agent' ? 'agent' : 'direct',
       });
 
       // Reset Form
@@ -930,6 +943,7 @@ export default function OrdersManagement() {
       setSingleRoomCount(0);
       setRoomShareInfo('Không ghép');
       setSpecialRequests('');
+      setCtvInfo('');
       setVatOption('Không xuất VAT');
       setVatCompanyName('');
       setVatTaxCode('');
@@ -1823,6 +1837,42 @@ export default function OrdersManagement() {
                     onChange={e => setSpecialRequests(e.target.value)}
                   />
                 </div>
+                {isSaleRole && (
+                  <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3 space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isCreatingForCTV}
+                        onChange={e => {
+                          setIsCreatingForCTV(e.target.checked);
+                          if (!e.target.checked) setCtvInfo('');
+                        }}
+                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <span>🤝 Tạo đơn thay cho CTV (Cộng Tác Viên)</span>
+                      </span>
+                    </label>
+
+                    {(isCreatingForCTV || ctvInfo.trim().length > 0) && (
+                      <div className="space-y-1 pt-1">
+                        <span className="text-[10px] text-amber-700 block">Dành riêng cho Sale ghi nhận tên, SĐT, số tiền hoa hồng CTV</span>
+                        <input
+                          type="text"
+                          placeholder="Nhập Tên CTV, SĐT, số tiền hoa hồng..."
+                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white focus:ring-1 focus:ring-amber-500 outline-none font-medium"
+                          value={ctvInfo}
+                          onChange={e => {
+                            setCtvInfo(e.target.value);
+                            if (e.target.value.trim().length > 0 && !isCreatingForCTV) {
+                              setIsCreatingForCTV(true);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1833,23 +1883,23 @@ export default function OrdersManagement() {
               <div className="text-xs space-y-1 text-gray-700">
                 <div className="font-semibold text-blue-800 text-sm">Tổng hợp chi tiết tạm tính:</div>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
-                  <div>• Người lớn ({adultCount}):</div>
+                  <div>• Người lớn ({adultCount} x {new Intl.NumberFormat('vi-VN').format(priceAdult)} đ):</div>
                   <div className="font-semibold">{new Intl.NumberFormat('vi-VN').format(priceAdult * adultCount)} VND</div>
                   {childCount > 0 && (
                     <>
-                      <div>• Trẻ em ({childCount}):</div>
+                      <div>• Trẻ em ({childCount} x {new Intl.NumberFormat('vi-VN').format(priceChild)} đ):</div>
                       <div className="font-semibold">{new Intl.NumberFormat('vi-VN').format(priceChild * childCount)} VND</div>
                     </>
                   )}
                   {infantCount > 0 && (
                     <>
-                      <div>• Trẻ nhỏ ({infantCount}):</div>
+                      <div>• Trẻ nhỏ ({infantCount} x {new Intl.NumberFormat('vi-VN').format(priceInfant)} đ):</div>
                       <div className="font-semibold">{new Intl.NumberFormat('vi-VN').format(priceInfant * infantCount)} VND</div>
                     </>
                   )}
                   {singleRoomCount > 0 && (
                     <>
-                      <div>• Phụ thu phòng đơn ({singleRoomCount}):</div>
+                      <div>• Phụ thu phòng đơn ({singleRoomCount} x {new Intl.NumberFormat('vi-VN').format(singleRoomSurcharge)} đ):</div>
                       <div className="font-semibold text-red-600">{new Intl.NumberFormat('vi-VN').format(singleRoomSurcharge * singleRoomCount)} VND</div>
                     </>
                   )}
@@ -1868,6 +1918,58 @@ export default function OrdersManagement() {
                 </div>
                 <span className="text-[10px] text-gray-400 font-medium">Đã bao gồm thuế phí áp dụng</span>
               </div>
+            </div>
+          )}
+
+          {/* Thống kê Phí Visa cho Phiếu thông tin giữ chỗ */}
+          {selectedTour && selectedTour.price_visa_tour && selectedTour.price_visa_tour > 0 ? (
+            <div className="bg-blue-50/90 p-3.5 rounded-xl border border-blue-200/80 shadow-xs space-y-2 text-xs">
+              <div className="flex justify-between items-center text-blue-950 font-bold border-b border-blue-200/80 pb-1.5">
+                <span className="flex items-center gap-1.5 text-blue-800">
+                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                  Phí dịch vụ Visa / khách (nếu chọn làm qua Tour):
+                </span>
+                <span className="font-extrabold text-sm text-blue-900">+{new Intl.NumberFormat('vi-VN').format(selectedTour.price_visa_tour)} đ/khách</span>
+              </div>
+              <div className="flex justify-between items-center text-blue-950 font-black pt-0.5">
+                <span>Ưóc tính phí Visa tối đa cho đoàn ({adultCount + childCount} khách):</span>
+                <span className="text-base font-black text-blue-700">+{new Intl.NumberFormat('vi-VN').format(selectedTour.price_visa_tour * (adultCount + childCount))} đ</span>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Thống kê Hoa hồng & Giá Net cho Phiếu thông tin giữ chỗ */}
+          {selectedTour && (
+            <div className="space-y-2">
+              {/* Thống kê Hoa hồng: Hiển thị nếu là Đại lý, CTV, hoặc Sale chọn tạo đơn cho CTV */}
+              {(isAgentRole || currentRole === 'CTV' || profile?.role === 'CTV' || (isSaleRole && (isCreatingForCTV || ctvInfo.trim().length > 0))) && (
+                <div className="bg-amber-50/90 p-3.5 rounded-xl border border-amber-200/80 shadow-sm space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-amber-950 font-bold border-b border-amber-200/80 pb-1.5">
+                    <span className="flex items-center gap-1.5 text-amber-800">
+                      <Coins className="w-4 h-4 text-amber-600" />
+                      Hoa hồng nhận được / khách:
+                    </span>
+                    <span className="font-extrabold text-sm text-amber-900">{new Intl.NumberFormat('vi-VN').format(selectedTour.commission || 0)} đ/khách</span>
+                  </div>
+                  <div className="flex justify-between items-center text-emerald-950 font-black pt-0.5">
+                    <span>Tổng hoa hồng nhận được đơn hàng ({adultCount + childCount} khách):</span>
+                    <span className="text-base font-black text-emerald-700">{new Intl.NumberFormat('vi-VN').format((selectedTour.commission || 0) * (adultCount + childCount))} đ</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Thống kê Giá Net: CHỈ hiển thị khi user là Đại lý thao tác */}
+              {isAgentRole && (
+                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-3.5 rounded-xl border border-indigo-200 shadow-xs flex justify-between items-center text-xs">
+                  <div className="flex flex-col">
+                    <span className="font-black text-indigo-950 uppercase tracking-tight">Số tiền phải chuyển cho AD (Giá Net):</span>
+                    <span className="text-[10px] text-indigo-600 font-medium">(Tổng tạm tính trừ tổng hoa hồng nhận được)</span>
+                  </div>
+                  <span className="text-base font-black text-indigo-700">
+                    {new Intl.NumberFormat('vi-VN').format(Math.max(0, calculatedTotalPrice - ((selectedTour.commission || 0) * (adultCount + childCount))))} đ
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -2020,9 +2122,11 @@ export default function OrdersManagement() {
               const isFullyPaid = hasApprovedReceipt && approvedPaidAmount >= order.total_price;
 
               const visaPassengersCount = orderPassengers.filter(p => p.needs_visa_service).length;
-              const priceAdult = tour?.price_adult || (tour?.price - (tour?.discount || 0)) || 0;
-              const priceChild = tour?.price_child || Math.round(priceAdult * 0.9);
-              const priceInfant = tour?.price_infant || Math.round(priceAdult * 0.3);
+              const tourDiscount = tour?.discount || 0;
+              const rawPriceAdult = tour ? (tour.price_adult ?? tour.price) : 0;
+              const priceAdult = tour ? Math.max(0, rawPriceAdult - tourDiscount) : 0;
+              const priceChild = tour ? Math.max(0, (tour.price_child ?? Math.round(rawPriceAdult * 0.9)) - (tour.price_child ? tourDiscount : Math.round(tourDiscount * 0.9))) : 0;
+              const priceInfant = tour ? Math.max(0, (tour.price_infant ?? Math.round(rawPriceAdult * 0.3)) - (tour.price_infant ? tourDiscount : Math.round(tourDiscount * 0.3))) : 0;
               const singleRoomSurcharge = tour?.single_room_surcharge || 0;
               const priceVisaTour = tour?.price_visa_tour || 0;
 
@@ -2039,6 +2143,26 @@ export default function OrdersManagement() {
               const customSurchargeAmount = order.surcharge_amount || 0;
               const totalBeforeVat = totalSubtotal - discountAmount + customSurchargeAmount;
               const computedVat = order.vat_option === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
+
+              // Commission breakdown calculations
+              const baseCommissionPerSeat = tour?.commission || 0;
+              const commissionPassengerCount = (order.adult_count !== undefined && order.adult_count !== null) || (order.child_count !== undefined && order.child_count !== null)
+                ? ((order.adult_count || 0) + (order.child_count || 0))
+                : (orderPassengers.length > 0 ? orderPassengers.length : 1);
+              const baseTotalCommission = baseCommissionPerSeat * commissionPassengerCount;
+
+              const markupTaxPercent = order.markup_tax_percent ?? 25;
+              const priceMarkupNet = Math.max(0, (order.price_markup || 0) - (order.markup_fee_amount || Math.round(((order.price_markup || 0) * markupTaxPercent) / 100)));
+              const commissionAdded = priceMarkupNet;
+
+              let netCommissionReceived = Math.max(0, baseTotalCommission + commissionAdded - discountAmount);
+              if (order.seller_type === 'agent' && order.agent_commission_amount !== undefined && order.agent_commission_amount !== null && order.agent_commission_amount > 0) {
+                netCommissionReceived = order.agent_commission_amount;
+              } else if (order.net_commission_amount !== undefined && order.net_commission_amount !== null && order.net_commission_amount > 0) {
+                netCommissionReceived = Math.max(order.net_commission_amount, netCommissionReceived);
+              }
+
+              const commissionDeducted = discountAmount > 0 ? Math.min(baseTotalCommission + commissionAdded, discountAmount) : 0;
 
               return (
                 <div
@@ -2249,6 +2373,18 @@ export default function OrdersManagement() {
                           </button>
                           <button
                             type="button"
+                            onClick={() => setActiveTabs(prev => ({ ...prev, [order.id]: 'contact_info' }))}
+                            className={`py-2 px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                              currentTab === 'contact_info'
+                                ? 'border-blue-600 text-blue-600 bg-white shadow-sm font-extrabold'
+                                : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100/50'
+                            }`}
+                          >
+                            <Phone className="w-4 h-4 text-blue-600" />
+                            Thông tin liên hệ
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setActiveTabs(prev => ({ ...prev, [order.id]: 'payment_history' }))}
                             className={`py-2 px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
                               currentTab === 'payment_history'
@@ -2266,141 +2402,348 @@ export default function OrdersManagement() {
                           </button>
                         </div>
 
-                        {currentTab === 'details' ? (
-                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-                        {/* Box 1: Surcharges & Room config */}
-                        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center justify-between">
+                        {currentTab === 'contact_info' ? (
+                          <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-4 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-blue-600" />
+                                Thông tin liên hệ đặt chỗ
+                              </h4>
+                              {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingOrder(order);
+                                    setIsEditOrderOpen(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 text-xs font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                  Chỉnh sửa
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                              <div className="space-y-3 bg-slate-50/60 p-4 rounded-xl border border-slate-100">
+                                <div className="flex justify-between items-center py-1.5 border-b border-dashed border-gray-200">
+                                  <span className="text-gray-600 font-medium">Người đặt chỗ:</span>
+                                  <span className="font-bold text-gray-900 text-sm">
+                                    {(order.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
+                                      ? order.booker_name
+                                      : (leadPassenger?.full_name || 'Chưa cung cấp')}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center py-1.5 border-b border-dashed border-gray-200">
+                                  <span className="text-gray-600 font-medium">Số điện thoại:</span>
+                                  <span className="font-mono font-bold text-gray-900 text-sm">
+                                    {order.booker_phone || leadPassenger?.phone || 'Chưa cung cấp'}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center py-1.5">
+                                  <span className="text-gray-600 font-medium">Sales / CTV phụ trách:</span>
+                                  <span className="font-bold text-blue-700 text-sm">
+                                    {order.created_by || 'Chưa rõ'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3 bg-slate-50/60 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+                                {order.ctv_info && (
+                                  <div className="bg-amber-50/80 p-3 rounded-lg border border-amber-200 space-y-1 mb-2">
+                                    <span className="text-amber-900 font-bold text-xs block">Ghi chú / Thông tin CTV:</span>
+                                    <p className="font-medium text-amber-950 text-xs whitespace-pre-wrap leading-relaxed">
+                                      {order.ctv_info}
+                                    </p>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap items-center justify-between py-1 gap-2">
+                                  <span className="text-gray-700 font-bold flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-blue-600 shrink-0" /> Hợp đồng dịch vụ:
+                                  </span>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {order.contract_url ? (
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="px-2.5 py-1 rounded font-bold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          Đã tải hợp đồng
+                                        </span>
+                                        <a
+                                          href={order.contract_url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                                        >
+                                          <Eye className="w-3.5 h-3.5 shrink-0" /> Xem
+                                        </a>
+                                        {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
+                                          <button
+                                            onClick={() => handleDeleteContract(order.id)}
+                                            className="p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded-lg transition-colors cursor-pointer shrink-0 border border-transparent hover:border-rose-200"
+                                            title="Gỡ hợp đồng"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <label className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                                          <Upload className="w-3.5 h-3.5 shrink-0" />
+                                          Tải hợp đồng lên
+                                          <input
+                                            type="file"
+                                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) handleUploadContract(order.id, order.id.substring(0,8), file);
+                                            }}
+                                            disabled={contractUploadProgress[order.id]}
+                                          />
+                                        </label>
+                                        {contractUploadProgress[order.id] && <Clock className="w-4 h-4 animate-spin text-blue-600 shrink-0" />}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : currentTab === 'details' ? (
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        {/* Box 1: Combined Pricing Breakdown & Service Config */}
+                        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center justify-between flex-wrap gap-2">
                             <span className="flex items-center gap-1.5">
-                              <FileText className="w-4 h-4 text-blue-600" />
-                              Phụ thu & Dịch vụ
+                              <CreditCard className="w-4 h-4 text-rose-500" />
+                              Chi tiết bảng tính giá & Dịch vụ
                             </span>
-                            {/* Nút sửa booking */}
-                            {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingOrder(order);
-                                  setIsEditOrderOpen(true);
-                                }}
-                                className="text-blue-600 hover:text-blue-800 text-[10px] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
-                              >
-                                <Edit className="w-3 h-3" />
-                                Chỉnh sửa
-                              </button>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {order.seller_type === 'agent' && (
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-2 py-0.5 rounded-full">
+                                  Đại lý (Giá Net)
+                                </span>
+                              )}
+                              {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingOrder(order);
+                                    setIsEditOrderOpen(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 text-[10px] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                  Chỉnh sửa
+                                </button>
+                              )}
+                            </div>
                           </h4>
-                          <div className="space-y-2 text-xs">
-                            <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                              <span className="text-gray-500">Phòng đơn:</span>
-                              <span className="font-bold text-gray-900">
-                                {order.single_room_count ? `${order.single_room_count} phòng` : 'Không'}
-                              </span>
+
+                          <div className="space-y-3 text-xs">
+                            {/* Phần 1: Bảng tính giá chi tiết */}
+                            <div className="space-y-1.5">
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Bảng tính giá chi tiết</div>
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-600 font-medium">
+                                  NL ({(order.adult_count || 1)} x {new Intl.NumberFormat('vi-VN').format(priceAdult)} đ):
+                                </span>
+                                <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalAdult)} đ</span>
+                              </div>
+                              {(order.child_count || 0) > 0 && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-gray-600 font-medium">
+                                    TE ({order.child_count} x {new Intl.NumberFormat('vi-VN').format(priceChild)} đ):
+                                  </span>
+                                  <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalChild)} đ</span>
+                                </div>
+                              )}
+                              {(order.infant_count || 0) > 0 && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-gray-600 font-medium">
+                                    TN ({order.infant_count} x {new Intl.NumberFormat('vi-VN').format(priceInfant)} đ):
+                                  </span>
+                                  <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalInfant)} đ</span>
+                                </div>
+                              )}
+                              {totalSingleRoom > 0 && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-gray-600 font-medium">
+                                    Phòng đơn ({(order.single_room_count || 1)} x {new Intl.NumberFormat('vi-VN').format(singleRoomSurcharge)} đ):
+                                  </span>
+                                  <span className="font-bold text-red-600">{new Intl.NumberFormat('vi-VN').format(totalSingleRoom)} đ</span>
+                                </div>
+                              )}
+                              {totalVisa > 0 && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100 text-blue-800">
+                                  <span className="font-medium flex items-center gap-1">
+                                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                    Phí Visa ({visaPassengersCount} x {new Intl.NumberFormat('vi-VN').format(priceVisaTour)} đ):
+                                  </span>
+                                  <span className="font-bold text-blue-700">+{new Intl.NumberFormat('vi-VN').format(totalVisa)} đ</span>
+                                </div>
+                              )}
+                              {(order.discount_value || 0) > 0 && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-rose-500 font-medium">Giảm giá {order.discount_type === 'percent' ? `(${order.discount_value}%)` : ''} : </span>
+                                  <span className="font-bold text-rose-600">-{new Intl.NumberFormat('vi-VN').format(
+                                    order.discount_type === 'percent'
+                                      ? ((totalAdult + totalChild + totalInfant + totalSingleRoom) * (order.discount_value || 0)) / 100
+                                      : (order.discount_value || 0)
+                                  )} đ</span>
+                                </div>
+                              )}
+                              {order.surcharges && order.surcharges.length > 0 ? (
+                                order.surcharges.filter(s => s.amount > 0).map((s, idx) => (
+                                  <div key={s.id || idx} className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                    <span className="text-blue-500 font-medium">{s.name || `Phụ thu ${idx + 1}`}:</span>
+                                    <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(s.amount)} đ</span>
+                                  </div>
+                                ))
+                              ) : (order.surcharge_amount || 0) > 0 && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-blue-500 font-medium">{order.surcharge_name || 'Phụ thu khác'}:</span>
+                                  <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(order.surcharge_amount || 0)} đ</span>
+                                </div>
+                              )}
+                              {(order.price_markup || 0) > 0 && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100 text-xs">
+                                  <span className="text-emerald-700 font-medium">Tiền tour chênh lệch (CTV):</span>
+                                  <span className="font-bold text-emerald-600">+{new Intl.NumberFormat('vi-VN').format(order.price_markup || 0)} đ</span>
+                                </div>
+                              )}
+                              {order.vat_option === 'Xuất VAT' && (
+                                <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-emerald-700 font-medium">Thuế VAT (10%):</span>
+                                  <span className="font-bold text-emerald-600">+{new Intl.NumberFormat('vi-VN').format(computedVat)} đ</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between py-2 mt-1 bg-slate-50 px-2.5 rounded-lg border border-slate-200 items-center">
+                                <span className="font-black text-gray-900 uppercase text-[11px]">TỔNG CỘNG (GIÁ NIÊM YẾT):</span>
+                                <span className="font-black text-rose-600 text-sm">{new Intl.NumberFormat('vi-VN').format(order.total_price)} đ</span>
+                              </div>
                             </div>
-                            <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                              <span className="text-gray-500">Ghép giường:</span>
-                              <span className="font-semibold text-gray-800">{order.room_share_info || 'Không'}</span>
-                            </div>
-                            <div className="flex flex-col py-2 border-b border-dashed border-gray-100">
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">VAT:</span>
-                                <span className={`font-bold ${order.vat_option === 'Xuất VAT' ? 'text-blue-600' : 'text-gray-500'}`}>
-                                  {order.vat_option || 'Không'}
+
+                            {/* Phần 2: Cấu hình Phụ thu & Dịch vụ */}
+                            <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Cấu hình dịch vụ & Phụ thu</div>
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-500">Phòng đơn:</span>
+                                <span className="font-bold text-gray-900">
+                                  {order.single_room_count ? `${order.single_room_count} phòng` : 'Không'}
                                 </span>
                               </div>
-                              {order.vat_option === 'Xuất VAT' && (
-                                <div className="mt-2 p-2 bg-blue-50/50 rounded-md border border-blue-100 space-y-1">
-                                  <div className="flex justify-between text-[11px]">
-                                    <span className="text-slate-500">Công ty:</span>
-                                    <span className="font-semibold text-slate-700 text-right">{order.vat_company_name || '---'}</span>
+                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
+                                <span className="text-gray-500">Ghép giường:</span>
+                                <span className="font-semibold text-gray-800">{order.room_share_info || 'Không'}</span>
+                              </div>
+                              <div className="flex flex-col py-1 border-b border-dashed border-gray-100">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">VAT:</span>
+                                  <span className={`font-bold ${order.vat_option === 'Xuất VAT' ? 'text-blue-600' : 'text-gray-500'}`}>
+                                    {order.vat_option || 'Không'}
+                                  </span>
+                                </div>
+                                {order.vat_option === 'Xuất VAT' && (
+                                  <div className="mt-2 p-2 bg-blue-50/50 rounded-md border border-blue-100 space-y-1">
+                                    <div className="flex justify-between text-[11px]">
+                                      <span className="text-slate-500">Công ty:</span>
+                                      <span className="font-semibold text-slate-700 text-right">{order.vat_company_name || '---'}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[11px]">
+                                      <span className="text-slate-500">MST:</span>
+                                      <span className="font-semibold text-slate-700 text-right">{order.vat_tax_code || '---'}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[11px]">
+                                      <span className="text-slate-500">Địa chỉ:</span>
+                                      <span className="font-semibold text-slate-700 text-right line-clamp-2" title={order.vat_address || ''}>{order.vat_address || '---'}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[11px]">
+                                      <span className="text-slate-500">Email:</span>
+                                      <span className="font-semibold text-slate-700 text-right">{order.vat_email || '---'}</span>
+                                    </div>
                                   </div>
-                                  <div className="flex justify-between text-[11px]">
-                                    <span className="text-slate-500">MST:</span>
-                                    <span className="font-semibold text-slate-700 text-right">{order.vat_tax_code || '---'}</span>
+                                )}
+                              </div>
+                              {order.special_requests && (
+                                <div className="pt-1">
+                                  <span className="text-gray-500 block mb-1">Ghi chú đặc biệt:</span>
+                                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 text-amber-900 italic leading-relaxed text-[11px]">
+                                    "{order.special_requests}"
                                   </div>
-                                  <div className="flex justify-between text-[11px]">
-                                    <span className="text-slate-500">Địa chỉ:</span>
-                                    <span className="font-semibold text-slate-700 text-right line-clamp-2" title={order.vat_address || ''}>{order.vat_address || '---'}</span>
-                                  </div>
-                                  <div className="flex justify-between text-[11px]">
-                                    <span className="text-slate-500">Email:</span>
-                                    <span className="font-semibold text-slate-700 text-right">{order.vat_email || '---'}</span>
+                                </div>
+                              )}
+                              {order.ctv_info && isSaleRole && (
+                                <div className="pt-1">
+                                  <span className="text-amber-900 font-bold block mb-1">🤝 Ghi chú CTV:</span>
+                                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-amber-950 font-medium leading-relaxed text-[11px]">
+                                    {order.ctv_info}
                                   </div>
                                 </div>
                               )}
                             </div>
-                            {order.special_requests && (
-                              <div className="pt-2">
-                                <span className="text-gray-500 block mb-1">Ghi chú đặc biệt:</span>
-                                <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 text-amber-900 italic leading-relaxed text-[11px]">
-                                  "{order.special_requests}"
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
 
-                        {/* Box 1.5: Detailed Pricing Breakdown */}
-                        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2 flex items-center gap-1.5">
-                            <CreditCard className="w-4 h-4 text-rose-500" />
-                            Chi tiết bảng tính giá
-                          </h4>
-                          <div className="space-y-2 text-xs">
-                            <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                              <span className="text-gray-500">NL ({order.adult_count}):</span>
-                              <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalAdult)} đ</span>
-                            </div>
-                            {order.child_count > 0 && (
-                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-gray-500">TE ({order.child_count}):</span>
-                                <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalChild)} đ</span>
+                            {/* Phần 3: Thống kê Hoa hồng & Giá Net */}
+                            {(isAgentRole || order.seller_type === 'agent' || currentRole === 'CTV' || profile?.role === 'CTV' || (isSaleRole && order.ctv_info && order.ctv_info.trim().length > 0)) && (baseTotalCommission > 0 || netCommissionReceived > 0 || (order.price_markup || 0) > 0) && (
+                              <div className="pt-2 border-t border-dashed border-gray-200 space-y-2">
+                                <div className="bg-amber-50/90 p-3 rounded-xl border border-amber-200/80 space-y-2 text-xs">
+                                  <div className="flex justify-between items-center text-amber-900 font-bold border-b border-amber-200/60 pb-1.5">
+                                    <span className="flex items-center gap-1.5 text-amber-800">
+                                      <Coins className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <span>Hoa hồng / khách:</span>
+                                    </span>
+                                    <span className="font-extrabold text-amber-950">{new Intl.NumberFormat('vi-VN').format(baseCommissionPerSeat)} đ/khách</span>
+                                  </div>
+
+                                  <div className="flex justify-between items-center text-amber-900 font-medium">
+                                    <span>Hoa hồng định mức ({commissionPassengerCount} chỗ):</span>
+                                    <span className="font-semibold">{new Intl.NumberFormat('vi-VN').format(baseTotalCommission)} đ</span>
+                                  </div>
+
+                                  {(order.price_markup || 0) > 0 && (
+                                    <div className="bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200 space-y-1.5 my-1 text-emerald-950">
+                                      <div className="flex justify-between items-center font-medium">
+                                        <span>Tổng giá chênh lệch:</span>
+                                        <span className="font-bold text-emerald-700">+{new Intl.NumberFormat('vi-VN').format(order.price_markup || 0)} đ</span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-rose-700 font-medium">
+                                        <span>Phí công ty thu ({markupTaxPercent}%):</span>
+                                        <span className="font-bold">-{new Intl.NumberFormat('vi-VN').format(order.markup_fee_amount || Math.round(((order.price_markup || 0) * markupTaxPercent) / 100))} đ</span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-emerald-900 font-bold border-t border-emerald-200/60 pt-1 mt-0.5">
+                                        <span>Số tiền chênh lệch còn lại:</span>
+                                        <span className="text-emerald-600 font-black">+{new Intl.NumberFormat('vi-VN').format(priceMarkupNet)} đ</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {commissionDeducted > 0 && (
+                                    <div className="flex justify-between items-center text-rose-700 font-medium">
+                                      <span>Bị trừ (Do giảm giá cho khách):</span>
+                                      <span className="font-bold text-rose-600">-{new Intl.NumberFormat('vi-VN').format(commissionDeducted)} đ</span>
+                                    </div>
+                                  )}
+
+                                  <div className="flex justify-between items-center bg-emerald-100/90 text-emerald-950 p-2.5 rounded-lg border border-emerald-300 font-extrabold text-xs mt-1">
+                                    <span>Tổng hoa hồng thực nhận:</span>
+                                    <span className="text-base font-black text-emerald-700">{new Intl.NumberFormat('vi-VN').format(netCommissionReceived)} đ</span>
+                                  </div>
+                                </div>
+
+                                {/* Giá Net Prominent Highlight Box - CHỈ hiển thị khi user là Đại lý */}
+                                {isAgentRole && (
+                                  <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-3 rounded-xl border border-indigo-200/90 shadow-xs flex justify-between items-center">
+                                    <div className="flex flex-col">
+                                      <span className="font-black text-indigo-950 text-xs uppercase tracking-tight">GIÁ NET:</span>
+                                      <span className="text-[10px] text-indigo-600 font-medium">(Đã trừ tổng hoa hồng thực nhận)</span>
+                                    </div>
+                                    <span className="text-base font-black text-indigo-700">
+                                      {new Intl.NumberFormat('vi-VN').format(Math.max(0, order.total_price - netCommissionReceived))} đ
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             )}
-                            {order.infant_count > 0 && (
-                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-gray-500">TN ({order.infant_count}):</span>
-                                <span className="font-bold text-gray-900">{new Intl.NumberFormat('vi-VN').format(totalInfant)} đ</span>
-                              </div>
-                            )}
-                            {totalSingleRoom > 0 && (
-                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-gray-500">Phòng đơn:</span>
-                                <span className="font-bold text-red-600">{new Intl.NumberFormat('vi-VN').format(totalSingleRoom)} đ</span>
-                              </div>
-                            )}
-                            {totalVisa > 0 && (
-                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-gray-500">Visa ({visaPassengersCount}):</span>
-                                <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(totalVisa)} đ</span>
-                              </div>
-                            )}
-                            {(order.discount_value || 0) > 0 && (
-                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-rose-500">Giảm giá {order.discount_type === 'percent' ? `(${order.discount_value}%)` : ''} : </span>
-                                <span className="font-bold text-rose-600">-{new Intl.NumberFormat('vi-VN').format(
-                                  order.discount_type === 'percent'
-                                    ? ((totalAdult + totalChild + totalInfant + totalSingleRoom) * (order.discount_value || 0)) / 100
-                                    : (order.discount_value || 0)
-                                )} đ</span>
-                              </div>
-                            )}
-                            {(order.surcharge_amount || 0) > 0 && (
-                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-blue-500">{order.surcharge_name || 'Phụ thu khác'}:</span>
-                                <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(order.surcharge_amount || 0)} đ</span>
-                              </div>
-                            )}
-                            {order.vat_option === 'Xuất VAT' && (
-                              <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                <span className="text-gray-500">Thuế VAT (10%):</span>
-                                <span className="font-bold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(computedVat)} đ</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between py-2 mt-1 bg-slate-50 px-2 rounded border border-slate-100">
-                              <span className="font-black text-gray-900 uppercase text-[10px]">Tổng cộng:</span>
-                              <span className="font-black text-rose-600">{new Intl.NumberFormat('vi-VN').format(order.total_price)} đ</span>
-                            </div>
                           </div>
                         </div>
 
@@ -2417,103 +2760,26 @@ export default function OrdersManagement() {
                               </span>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Cơ cấu hành khách</span>
-                                <div className="space-y-2 text-xs">
-                                  <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-600 font-medium">Người lớn (Adult):</span>
-                                    <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-150">
-                                      {order.adult_count !== undefined ? (order.adult_count || 0) : orderPassengers.filter(p => !p.full_name.includes('Trẻ em') && !p.full_name.includes('Trẻ nhỏ')).length || 1} khách
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-600 font-medium">Trẻ em (Child, 2-11 tuổi):</span>
-                                    <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-150">
-                                      {order.child_count !== undefined ? (order.child_count || 0) : orderPassengers.filter(p => p.full_name.includes('Trẻ em')).length} khách
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center py-1">
-                                    <span className="text-gray-600 font-medium">Trẻ nhỏ (Infant, &lt;2 tuổi):</span>
-                                    <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-150">
-                                      {order.infant_count !== undefined ? (order.infant_count || 0) : orderPassengers.filter(p => p.full_name.includes('Trẻ nhỏ')).length} khách
-                                    </span>
-                                  </div>
+                            <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Cơ cấu hành khách</span>
+                              <div className="space-y-2 text-xs">
+                                <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-gray-600 font-medium">Người lớn (Adult):</span>
+                                  <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-150">
+                                    {order.adult_count !== undefined ? (order.adult_count || 0) : orderPassengers.filter(p => !p.full_name.includes('Trẻ em') && !p.full_name.includes('Trẻ nhỏ')).length || 1} khách
+                                  </span>
                                 </div>
-                              </div>
-
-                              <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Thông tin liên hệ đặt chỗ</span>
-                                <div className="space-y-2 text-xs">
-                                  <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-600 font-medium">Người đặt chỗ:</span>
-                                    <span className="font-bold text-gray-900">
-                                      {(order.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
-                                        ? order.booker_name
-                                        : (leadPassenger?.full_name || 'Chưa cung cấp')}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-600 font-medium">Số điện thoại:</span>
-                                    <span className="font-mono font-bold text-gray-900">
-                                      {order.booker_phone || leadPassenger?.phone || 'Chưa cung cấp'}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-600 font-medium">Sales / CTV phụ trách:</span>
-                                    <span className="font-bold text-blue-700">
-                                      {order.created_by || 'Chưa rõ'}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-wrap items-center justify-between py-1.5 border-t border-dashed border-gray-100 mt-1 pt-1 gap-2">
-                                    <span className="text-gray-600 font-medium flex items-center gap-1.5 whitespace-nowrap">
-                                      <FileText className="w-4 h-4 text-blue-600 shrink-0" /> Hợp đồng dịch vụ:
-                                    </span>
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      {order.contract_url ? (
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-                                            Đã tải hợp đồng
-                                          </span>
-                                          <a
-                                            href={order.contract_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-bold text-[10px] flex items-center gap-1 transition-all whitespace-nowrap"
-                                          >
-                                            <Eye className="w-3 h-3 shrink-0" /> Xem
-                                          </a>
-                                          {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
-                                            <button
-                                              onClick={() => handleDeleteContract(order.id)}
-                                              className="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer shrink-0"
-                                              title="Gỡ hợp đồng"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <label className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm whitespace-nowrap">
-                                            <Upload className="w-3 h-3 shrink-0" />
-                                            Tải hợp đồng lên
-                                            <input
-                                              type="file"
-                                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                              className="hidden"
-                                              onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) handleUploadContract(order.id, order.id.substring(0,8), file);
-                                              }}
-                                              disabled={contractUploadProgress[order.id]}
-                                            />
-                                          </label>
-                                          {contractUploadProgress[order.id] && <Clock className="w-3 h-3 animate-spin text-blue-600 shrink-0" />}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
+                                <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
+                                  <span className="text-gray-600 font-medium">Trẻ em (Child, 2-11 tuổi):</span>
+                                  <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-150">
+                                    {order.child_count !== undefined ? (order.child_count || 0) : orderPassengers.filter(p => p.full_name.includes('Trẻ em')).length} khách
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center py-1">
+                                  <span className="text-gray-600 font-medium">Trẻ nhỏ (Infant, &lt;2 tuổi):</span>
+                                  <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-150">
+                                    {order.infant_count !== undefined ? (order.infant_count || 0) : orderPassengers.filter(p => p.full_name.includes('Trẻ nhỏ')).length} khách
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -2647,87 +2913,10 @@ export default function OrdersManagement() {
                               </div>
                             )}
                           </div>
-                          <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-3.5 lg:col-span-2 flex flex-col">
-                                <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-2.5">
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Thông tin liên hệ đặt chỗ</span>
-                                  <div className="space-y-2 text-xs">
-                                    <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                      <span className="text-gray-600 font-medium">Người đặt chỗ:</span>
-                                      <span className="font-bold text-gray-900">
-                                        {(order.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
-                                          ? order.booker_name
-                                          : (leadPassenger?.full_name || 'Chưa cung cấp')}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                      <span className="text-gray-600 font-medium">Số điện thoại:</span>
-                                      <span className="font-mono font-bold text-gray-900">
-                                        {order.booker_phone || leadPassenger?.phone || 'Chưa cung cấp'}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-1 border-b border-dashed border-gray-100">
-                                      <span className="text-gray-600 font-medium">Sales / CTV phụ trách:</span>
-                                      <span className="font-bold text-blue-700">
-                                        {order.created_by || 'Chưa rõ'}
-                                      </span>
-                                    </div>
-                                    <div className="flex flex-wrap items-center justify-between py-1.5 border-t border-dashed border-gray-100 mt-1 pt-1 gap-2">
-                                      <span className="text-gray-600 font-medium flex items-center gap-1.5 whitespace-nowrap">
-                                        <FileText className="w-4 h-4 text-blue-600 shrink-0" /> Hợp đồng dịch vụ:
-                                      </span>
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        {order.contract_url ? (
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-                                              Đã tải hợp đồng
-                                            </span>
-                                            <a
-                                              href={order.contract_url}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-bold text-[10px] flex items-center gap-1 transition-all whitespace-nowrap"
-                                            >
-                                              <Eye className="w-3 h-3 shrink-0" /> Xem
-                                            </a>
-                                            {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
-                                              <button
-                                                onClick={() => handleDeleteContract(order.id)}
-                                                className="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer shrink-0"
-                                                title="Gỡ hợp đồng"
-                                              >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                              </button>
-                                            )}
-                                          </div>
-                                        ) : (
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <label className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm whitespace-nowrap">
-                                              <Upload className="w-3 h-3 shrink-0" />
-                                              Tải hợp đồng lên
-                                              <input
-                                                type="file"
-                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                                className="hidden"
-                                                onChange={(e) => {
-                                                  const file = e.target.files?.[0];
-                                                  if (file) handleUploadContract(order.id, order.id.substring(0,8), file);
-                                                }}
-                                                disabled={contractUploadProgress[order.id]}
-                                              />
-                                            </label>
-                                            {contractUploadProgress[order.id] && <Clock className="w-3 h-3 animate-spin text-blue-600 shrink-0" />}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                          </div>
-                          </>
-                        )}
-                      </div>
-                    ) : (
+                        </>
+                      )}
+                    </div>
+                  ) : (
                       /* Tab Lịch sử thanh toán */
                           <div className="space-y-5 animate-in fade-in duration-150">
                             {/* Khối thống kê số tiền */}
@@ -3673,11 +3862,15 @@ export default function OrdersManagement() {
                     }
 
                     const resText = await uploadRes.text();
-                    let resData;
+                    let resData: any = {};
                     try {
                       resData = JSON.parse(resText);
                     } catch {
-                      throw new Error('Định dạng phản hồi từ máy chủ không đúng.');
+                      if (resText && resText.trim().startsWith('http')) {
+                        resData = { url: resText.trim() };
+                      } else {
+                        throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
+                      }
                     }
 
                     // 2. Hủy đơn hàng nếu chưa hủy

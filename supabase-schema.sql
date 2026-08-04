@@ -106,6 +106,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_address TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_email TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS contract_url TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS ctv_info TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE CASCADE;
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -147,6 +148,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   room_share_info text NULL,
   vat_option text NULL DEFAULT 'no_vat'::text,
   special_requests text NULL,
+  ctv_info text NULL,
   discount_type text NULL,
   discount_value numeric DEFAULT 0,
   surcharge_name text NULL,
@@ -157,6 +159,17 @@ CREATE TABLE IF NOT EXISTS bookings (
   seats integer NULL DEFAULT 1,
   contract_url text NULL,
   is_locked boolean NULL DEFAULT false,
+  seller_type text NULL DEFAULT 'direct'::text,
+  partner_id uuid NULL,
+  original_price numeric NULL DEFAULT 0,
+  selling_price numeric NULL DEFAULT 0,
+  price_markup numeric NULL DEFAULT 0,
+  cit_tax_percent numeric NULL DEFAULT 17,
+  vat_tax_percent numeric NULL DEFAULT 8,
+  markup_fee_amount numeric NULL DEFAULT 0,
+  net_commission_amount numeric NULL DEFAULT 0,
+  net_payable_amount numeric NULL DEFAULT 0,
+  agent_commission_amount numeric NULL DEFAULT 0,
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
   CONSTRAINT bookings_code_key UNIQUE (code),
   CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id),
@@ -603,18 +616,33 @@ CREATE POLICY "Allow public read access to tours" ON tours FOR SELECT TO anon, a
 DROP POLICY IF EXISTS "Allow public access to tour_media" ON tour_media;
 CREATE POLICY "Allow public access to tour_media" ON tour_media FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- ==============================================================================
--- BẢNG THÔNG BÁO HỆ THỐNG (SYSTEM NOTIFICATIONS)
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS system_notifications (
-  id TEXT PRIMARY KEY,
-  type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  target_id TEXT,
-  read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Nâng cấp schema cho Đơn hàng: Phân loại cơ chế tài chính giữa Đại lý (Agent) và CTV
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS seller_type TEXT DEFAULT 'direct';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS partner_id UUID;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS original_price NUMERIC DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS selling_price NUMERIC DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_markup NUMERIC DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS markup_tax_percent NUMERIC DEFAULT 25;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS markup_fee_amount NUMERIC DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS surcharges JSONB;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cit_tax_percent NUMERIC DEFAULT 17;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS vat_tax_percent NUMERIC DEFAULT 8;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS net_commission_amount NUMERIC DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS net_payable_amount NUMERIC DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS agent_commission_amount NUMERIC DEFAULT 0;
+
+-- Cập nhật dữ liệu mặc định cho các đơn hàng cũ (Sử dụng đúng cột total_amount)
+UPDATE bookings 
+SET 
+  selling_price = COALESCE(NULLIF(selling_price, 0), total_amount, 0),
+  net_payable_amount = COALESCE(NULLIF(net_payable_amount, 0), total_amount, 0)
+WHERE selling_price = 0 OR net_payable_amount = 0;
+
+-- Chuyển đổi toàn bộ người dùng có vai trò 'CTV' hiện tại sang 'agent' (Đại lý)
+UPDATE profiles SET role = 'agent' WHERE role = 'CTV';
+UPDATE bookings SET seller_type = 'agent' WHERE seller_type = 'CTV' OR seller_type = 'ctv';
+
+
 
 
 

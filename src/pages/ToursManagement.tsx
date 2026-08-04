@@ -742,18 +742,23 @@ export default function ToursManagement() {
         throw new Error(errorMsg);
       }
 
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.success && data.url) {
-          setItineraryPdfUrl(data.url);
-        } else {
-          throw new Error(data.error || 'Lỗi từ máy chủ khi lưu file');
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        if (text && text.trim().startsWith('http')) {
+          data = { success: true, url: text.trim() };
         }
+      }
+
+      if (data && data.url) {
+        setItineraryPdfUrl(data.url);
+      } else if (data && data.error) {
+        throw new Error(data.error);
       } else {
-        const text = await res.text();
-        console.error('Phản hồi không phải JSON từ máy chủ:', text.substring(0, 200));
-        throw new Error('Định dạng phản hồi không hợp lệ từ máy chủ (có thể là trang HTML lỗi)');
+        console.error('Phản hồi không hợp lệ từ máy chủ:', text.substring(0, 200));
+        throw new Error(`Phản hồi từ máy chủ không hợp lệ: ${text.substring(0, 100)}`);
       }
     } catch (err: any) {
       console.error(err);

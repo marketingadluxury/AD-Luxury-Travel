@@ -1,4 +1,4 @@
-export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'CTV' | 'bod' | 'tour_guide' | 'marketing' | 'marketing_leader';
+export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'bod' | 'tour_guide' | 'marketing' | 'marketing_leader' | 'agent' | 'CTV';
 
 export interface User {
   id: string;
@@ -76,6 +76,12 @@ export interface Tour {
   created_at?: string;
 }
 
+export interface SurchargeItem {
+  id: string;
+  name: string;
+  amount: number;
+}
+
 export interface Order {
   id: string;
   tour_id: string;
@@ -83,6 +89,17 @@ export interface Order {
   salesperson_id?: string;
   created_by: string; // Tên người tạo
   user_id?: string;
+  seller_type?: 'agent' | 'direct';
+  partner_id?: string;
+  original_price?: number;
+  selling_price?: number;
+  price_markup?: number;
+  cit_tax_percent?: number;
+  vat_tax_percent?: number;
+  markup_fee_amount?: number;
+  net_commission_amount?: number;
+  net_payable_amount?: number;
+  agent_commission_amount?: number;
   status: 'hold' | 'sure' | 'paid' | 'cancelled';
   hold_expiry?: string; // Thời gian hết hạn hold
   invoice_status: 'pending' | 'issued';
@@ -109,10 +126,13 @@ export interface Order {
   vat_address?: string;
   vat_email?: string;
   special_requests?: string;
+  ctv_info?: string;
   discount_type?: 'percent' | 'amount';
   discount_value?: number;
   surcharge_name?: string;
   surcharge_amount?: number;
+  surcharges?: SurchargeItem[];
+  markup_tax_percent?: number;
   contract_url?: string;
   is_locked?: boolean;
 }

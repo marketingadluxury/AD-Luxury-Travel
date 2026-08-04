@@ -206,7 +206,7 @@ export default function OccupancyWarningWidget({ tours }: OccupancyWarningWidget
                       <strong className="text-slate-800 font-extrabold">{tour.start_date}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block font-semibold text-[10px] uppercase">Hoa hồng CTV hiện tại</span>
+                      <span className="text-slate-400 block font-semibold text-[10px] uppercase">Hoa hồng Đại lý hiện tại</span>
                       <strong className="text-emerald-700 font-extrabold">{(tour.commission || 0).toLocaleString('vi-VN')} đ</strong>
                     </div>
                   </div>
@@ -219,7 +219,7 @@ export default function OccupancyWarningWidget({ tours }: OccupancyWarningWidget
                       className="flex-1 py-2 px-3 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-2xs hover:shadow-xs"
                     >
                       <TrendingUp className="w-3.5 h-3.5" />
-                      Tăng hoa hồng CTV
+                      Tăng hoa hồng Đại lý
                     </button>
 
                     <button
@@ -247,14 +247,14 @@ export default function OccupancyWarningWidget({ tours }: OccupancyWarningWidget
                 <TrendingUp className="w-6 h-6" />
               </span>
               <div>
-                <h3 className="text-base font-black text-slate-900 uppercase">Tăng Hoa Hồng CTV</h3>
+                <h3 className="text-base font-black text-slate-900 uppercase">Tăng Hoa Hồng Đại Lý</h3>
                 <p className="text-xs text-slate-500 font-medium">Mã tour: {selectedTour.code}</p>
               </div>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Mức hoa hồng mới cho CTV/Sales (VNĐ):</label>
+                <label className="block font-bold text-slate-700 mb-1">Mức hoa hồng mới cho Đại lý/Sales (VNĐ):</label>
                 <input 
                   type="number"
                   step="50000"
@@ -266,7 +266,7 @@ export default function OccupancyWarningWidget({ tours }: OccupancyWarningWidget
 
               <div className="p-3 bg-slate-50 rounded-xl text-[11px] text-slate-600 space-y-1">
                 <p>• Hoa hồng hiện tại: <strong>{(selectedTour.commission || 0).toLocaleString('vi-VN')} đ</strong></p>
-                <p>• Sau khi lưu, hoa hồng sẽ tự động hiển thị hấp dẫn trên bảng Lịch khởi hành dành cho Đại lý & CTV để kích cầu bán vé.</p>
+                <p>• Sau khi lưu, hoa hồng sẽ tự động hiển thị hấp dẫn trên bảng Lịch khởi hành dành cho Đại lý để kích cầu bán vé.</p>
               </div>
             </div>
 

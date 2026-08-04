@@ -539,7 +539,7 @@ export default function TourCostsManagement() {
     syncCategory('Công ty Bảo hiểm du lịch', costs.insuranceAmount);
     syncCategory('Hướng dẫn viên (Tạm ứng chi phí điều hành Tour)', costs.tourGuideAmount);
     syncCategory('Đối tác cung ứng quà tặng du lịch', costs.giftAmount);
-    syncCategory('Đại lý & CTV (Hoa hồng bán tour)', costs.commissionAmount);
+    syncCategory('Đại lý (Hoa hồng bán tour)', costs.commissionAmount);
     syncCategory('Đối tác Quảng cáo / Marketing', costs.advertisingAmount);
     syncCategory('Nhà cung cấp dịch vụ Visa', costs.visaAmount);
     syncCategory('Chi phí vận hành khác', costs.otherAmount);
@@ -963,6 +963,7 @@ export default function TourCostsManagement() {
           'công ty bảo hiểm du lịch',
           'hướng dẫn viên (tạm ứng chi phí điều hành tour)',
           'đối tác cung ứng quà tặng du lịch',
+          'đại lý (hoa hồng bán tour)',
           'đại lý & ctv (hoa hồng bán tour)',
           'đối tác quảng cáo / marketing',
           'nhà cung cấp dịch vụ visa',
@@ -1097,6 +1098,7 @@ export default function TourCostsManagement() {
             'công ty bảo hiểm du lịch',
             'hướng dẫn viên (tạm ứng chi phí điều hành tour)',
             'đối tác cung ứng quà tặng du lịch',
+            'đại lý (hoa hồng bán tour)',
             'đại lý & ctv (hoa hồng bán tour)',
             'đối tác quảng cáo / marketing',
             'nhà cung cấp dịch vụ visa',

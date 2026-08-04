@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia } from '../types';
+import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 
@@ -98,11 +98,13 @@ interface CRMContextType {
     vat_address?: string;
     vat_email?: string;
     special_requests?: string;
+    ctv_info?: string;
     discount_type?: 'percent' | 'amount';
     discount_value?: number;
     surcharge_name?: string;
     surcharge_amount?: number;
     is_locked?: boolean;
+    seller_type?: 'direct' | 'agent';
   }) => void;
   confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
   cancelOrder: (orderId: string, reason?: string) => void;
@@ -721,12 +723,40 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               vat_address: b.vat_address,
               vat_email: b.vat_email,
               special_requests: b.special_requests,
+              ctv_info: b.ctv_info || '',
               discount_type: b.discount_type,
               discount_value: Number(b.discount_value || 0),
               surcharge_name: b.surcharge_name,
               surcharge_amount: Number(b.surcharge_amount || 0),
+              surcharges: Array.isArray(b.surcharges)
+                ? b.surcharges
+                : (b.surcharges
+                    ? (typeof b.surcharges === 'string' ? JSON.parse(b.surcharges) : b.surcharges)
+                    : (b.surcharge_amount && Number(b.surcharge_amount) > 0
+                        ? (b.surcharge_name && b.surcharge_name.includes(',')
+                            ? b.surcharge_name.split(',').map((nameItem: string, idx: number) => ({
+                                id: String(idx + 1),
+                                name: nameItem.trim(),
+                                amount: Math.round(Number(b.surcharge_amount) / b.surcharge_name.split(',').length)
+                              }))
+                            : [{ id: '1', name: b.surcharge_name || 'Phụ thu khác', amount: Number(b.surcharge_amount) }])
+                        : undefined
+                      )
+                  ),
               contract_url: b.contract_url,
-              is_locked: b.is_locked || false
+              is_locked: b.is_locked || false,
+              seller_type: b.seller_type || 'direct',
+              partner_id: b.partner_id || undefined,
+              original_price: b.original_price !== undefined && b.original_price !== null ? Number(b.original_price) : undefined,
+              selling_price: b.selling_price !== undefined && b.selling_price !== null ? Number(b.selling_price) : undefined,
+              price_markup: b.price_markup !== undefined && b.price_markup !== null ? Number(b.price_markup) : undefined,
+              markup_tax_percent: b.markup_tax_percent !== undefined && b.markup_tax_percent !== null ? Number(b.markup_tax_percent) : 25,
+              cit_tax_percent: b.cit_tax_percent !== undefined && b.cit_tax_percent !== null ? Number(b.cit_tax_percent) : undefined,
+              vat_tax_percent: b.vat_tax_percent !== undefined && b.vat_tax_percent !== null ? Number(b.vat_tax_percent) : undefined,
+              markup_fee_amount: b.markup_fee_amount !== undefined && b.markup_fee_amount !== null ? Number(b.markup_fee_amount) : undefined,
+              net_commission_amount: b.net_commission_amount !== undefined && b.net_commission_amount !== null ? Number(b.net_commission_amount) : undefined,
+              net_payable_amount: b.net_payable_amount !== undefined && b.net_payable_amount !== null ? Number(b.net_payable_amount) : undefined,
+              agent_commission_amount: b.agent_commission_amount !== undefined && b.agent_commission_amount !== null ? Number(b.agent_commission_amount) : undefined
             }));
             setOrders(fetchedOrders);
             console.log('Đã nạp thành công Bookings từ Supabase');
@@ -1328,7 +1358,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
                 user_id: l.user_id,
                 user_name: l.user_name || 'Người dùng',
                 user_email: l.user_email || '',
-                user_role: (l.user_role as Role) || 'CTV',
+                user_role: (l.user_role as Role) || 'agent',
                 action: l.action,
                 module: l.module as ActivityLog['module'],
                 details: l.details || '',
@@ -2324,11 +2354,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     vat_address?: string;
     vat_email?: string;
     special_requests?: string;
+    ctv_info?: string;
     discount_type?: 'percent' | 'amount';
     discount_value?: number;
     surcharge_name?: string;
     surcharge_amount?: number;
+    surcharges?: SurchargeItem[];
+    price_markup?: number;
+    markup_tax_percent?: number;
+    markup_fee_amount?: number;
     is_locked?: boolean;
+    seller_type?: 'direct' | 'agent';
+    partner_id?: string;
+    original_price?: number;
+    selling_price?: number;
   }) => {
     const tour = tours.find(t => t.id === orderData.tour_id);
     if (!tour) return;
@@ -2361,7 +2400,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       : undefined;
 
     const creatorName = orderData.created_by || (
-      currentRole === 'CTV' ? 'CTV' :
+      currentRole === 'agent' ? 'Đại lý' :
       currentRole === 'bod' ? 'BOD' :
       currentRole === 'sale' ? 'Sale' :
       currentRole === 'sale_leader' ? 'Sale Leader' :
@@ -2438,11 +2477,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       vat_address: orderData.vat_address,
       vat_email: orderData.vat_email,
       special_requests: orderData.special_requests,
+      ctv_info: orderData.ctv_info || '',
       discount_type: orderData.discount_type || 'amount',
       discount_value: orderData.discount_value || 0,
       surcharge_name: orderData.surcharge_name || '',
       surcharge_amount: orderData.surcharge_amount || 0,
-      is_locked: orderData.is_locked !== undefined ? orderData.is_locked : true,
+      surcharges: orderData.surcharges,
+      price_markup: (orderData as any).price_markup !== undefined ? Number((orderData as any).price_markup) : undefined,
+      markup_tax_percent: (orderData as any).markup_tax_percent !== undefined ? Number((orderData as any).markup_tax_percent) : 25,
+      markup_fee_amount: (orderData as any).markup_fee_amount !== undefined ? Number((orderData as any).markup_fee_amount) : undefined,
+      is_locked: orderData.is_locked !== undefined ? orderData.is_locked : false,
+      seller_type: (orderData as any).seller_type || ((currentRole === 'agent' || profile?.role === 'agent') ? 'agent' : 'direct'),
+      partner_id: (orderData as any).partner_id,
+      original_price: (orderData as any).original_price,
+      selling_price: (orderData as any).selling_price,
     } as any;
 
     const newPassengers: Passenger[] = (orderData.passengers || []).map((p, index) => ({
@@ -2523,7 +2571,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        const { error: bookingError } = await supabase.from('bookings').insert({
+        const fullBookingPayload = {
           id: orderId,
           customer_id: finalCustomerId,
           tour_id: orderData.tour_id,
@@ -2555,12 +2603,40 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           vat_address: orderData.vat_address,
           vat_email: orderData.vat_email,
           special_requests: orderData.special_requests,
+          ctv_info: orderData.ctv_info || null,
           discount_type: orderData.discount_type || 'amount',
           discount_value: Number(orderData.discount_value || 0),
           surcharge_name: orderData.surcharge_name || '',
-          surcharge_amount: Number(orderData.surcharge_amount || 0)
-        });
-        if (bookingError) throw bookingError;
+          surcharge_amount: Number(orderData.surcharge_amount || 0),
+          surcharges: orderData.surcharges || null,
+          is_locked: orderData.is_locked !== undefined ? orderData.is_locked : false,
+          seller_type: (orderData as any).seller_type || ((currentRole === 'agent' || profile?.role === 'agent') ? 'agent' : 'direct'),
+          partner_id: (orderData as any).partner_id 
+            ? toUuid((orderData as any).partner_id) 
+            : ((currentRole === 'agent' || profile?.role === 'agent') && profile?.id ? toUuid(profile.id) : null),
+          original_price: (orderData as any).original_price !== undefined && (orderData as any).original_price !== null ? Number((orderData as any).original_price) : null,
+          selling_price: (orderData as any).selling_price !== undefined && (orderData as any).selling_price !== null ? Number((orderData as any).selling_price) : null,
+          price_markup: (orderData as any).price_markup !== undefined && (orderData as any).price_markup !== null ? Number((orderData as any).price_markup) : null,
+          markup_tax_percent: (orderData as any).markup_tax_percent !== undefined && (orderData as any).markup_tax_percent !== null ? Number((orderData as any).markup_tax_percent) : 25,
+          markup_fee_amount: (orderData as any).markup_fee_amount !== undefined && (orderData as any).markup_fee_amount !== null ? Number((orderData as any).markup_fee_amount) : null,
+          net_commission_amount: (orderData as any).net_commission_amount !== undefined && (orderData as any).net_commission_amount !== null ? Number((orderData as any).net_commission_amount) : null,
+          net_payable_amount: (orderData as any).net_payable_amount !== undefined && (orderData as any).net_payable_amount !== null ? Number((orderData as any).net_payable_amount) : null,
+          agent_commission_amount: (orderData as any).agent_commission_amount !== undefined && (orderData as any).agent_commission_amount !== null ? Number((orderData as any).agent_commission_amount) : null
+        };
+
+        let { error: bookingError } = await supabase.from('bookings').insert(fullBookingPayload);
+        if (bookingError) {
+          console.warn('Lỗi chèn đầy đủ cột booking, thử chèn fallback cơ bản:', bookingError);
+          const {
+            seller_type, partner_id, original_price, selling_price, price_markup,
+            markup_tax_percent, markup_fee_amount, surcharges,
+            net_commission_amount, net_payable_amount, agent_commission_amount, ...fallbackPayload
+          } = fullBookingPayload;
+          const { error: fallbackError } = await supabase.from('bookings').insert(fallbackPayload);
+          if (fallbackError) {
+            console.warn('Lỗi chèn booking fallback:', fallbackError);
+          }
+        }
 
         for (const p of newPassengers) {
           try {
@@ -2904,7 +2980,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     setOrders(prev => prev.map(o => {
       if (o.id === orderId) {
-        return { ...o, status: 'sure', is_locked: true, hold_expiry: undefined, total_price: newTotal };
+        return { ...o, status: 'sure', hold_expiry: undefined, total_price: newTotal };
       }
       return o;
     }));
@@ -2912,7 +2988,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ status: 'sure', is_locked: true, hold_expiry: null, total_amount: newTotal }).eq('id', toUuid(orderId));
+        await supabase.from('bookings').update({ status: 'sure', hold_expiry: null, total_amount: newTotal }).eq('id', toUuid(orderId));
         await supabase.from('passengers').delete().eq('order_id', toUuid(orderId));
 
         for (const p of newPassengers) {
@@ -3359,6 +3435,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           new: updatedData.booker_phone || 'Chưa cung cấp'
         });
       }
+      if (updatedData.ctv_info !== undefined && updatedData.ctv_info !== existingOrder.ctv_info) {
+        orderChanges.push({
+          field: 'Thông tin CTV',
+          old: existingOrder.ctv_info || 'Chưa có',
+          new: updatedData.ctv_info || 'Chưa có'
+        });
+      }
       if (updatedData.special_requests !== undefined && updatedData.special_requests !== existingOrder.special_requests) {
         orderChanges.push({
           field: 'Yêu cầu đặc biệt',
@@ -3434,6 +3517,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         if (updatedData.vat_address !== undefined) updatePayload.vat_address = updatedData.vat_address;
         if (updatedData.vat_email !== undefined) updatePayload.vat_email = updatedData.vat_email;
         if (updatedData.special_requests !== undefined) updatePayload.special_requests = updatedData.special_requests;
+        if (updatedData.ctv_info !== undefined) updatePayload.ctv_info = updatedData.ctv_info;
         if (updatedData.discount_type !== undefined) updatePayload.discount_type = updatedData.discount_type;
         if (updatedData.discount_value !== undefined) updatePayload.discount_value = Number(updatedData.discount_value);
         if (updatedData.surcharge_name !== undefined) updatePayload.surcharge_name = updatedData.surcharge_name;
@@ -3442,10 +3526,46 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         if (updatedData.contract_url !== undefined) updatePayload.contract_url = updatedData.contract_url;
         if (updatedData.is_locked !== undefined) updatePayload.is_locked = updatedData.is_locked;
         if (updatedData.status !== undefined) updatePayload.status = updatedData.status;
+        if (updatedData.seller_type !== undefined) updatePayload.seller_type = updatedData.seller_type;
+        if (updatedData.partner_id !== undefined) updatePayload.partner_id = updatedData.partner_id ? toUuid(updatedData.partner_id) : null;
+        if (updatedData.original_price !== undefined) updatePayload.original_price = Number(updatedData.original_price);
+        if (updatedData.selling_price !== undefined) updatePayload.selling_price = Number(updatedData.selling_price);
+        if (updatedData.price_markup !== undefined) updatePayload.price_markup = Number(updatedData.price_markup);
+        if (updatedData.markup_tax_percent !== undefined) updatePayload.markup_tax_percent = Number(updatedData.markup_tax_percent);
+        if (updatedData.markup_fee_amount !== undefined) updatePayload.markup_fee_amount = Number(updatedData.markup_fee_amount);
+        if (updatedData.surcharges !== undefined) updatePayload.surcharges = updatedData.surcharges;
+        if (updatedData.cit_tax_percent !== undefined) updatePayload.cit_tax_percent = Number(updatedData.cit_tax_percent);
+        if (updatedData.vat_tax_percent !== undefined) updatePayload.vat_tax_percent = Number(updatedData.vat_tax_percent);
+        if (updatedData.net_commission_amount !== undefined) updatePayload.net_commission_amount = Number(updatedData.net_commission_amount);
+        if (updatedData.net_payable_amount !== undefined) updatePayload.net_payable_amount = Number(updatedData.net_payable_amount);
+        if (updatedData.agent_commission_amount !== undefined) updatePayload.agent_commission_amount = Number(updatedData.agent_commission_amount);
         console.log('CRMContext: Updating booking with payload:', updatePayload);
-        const { error } = await supabase.from('bookings').update(updatePayload).eq('id', toUuid(orderId));
-        if (error) throw error;
-        console.log('CRMContext: Successfully updated booking');
+        let { error } = await supabase.from('bookings').update(updatePayload).eq('id', toUuid(orderId));
+        if (error) {
+          console.warn('Lỗi khi cập nhật booking với đầy đủ cột, thử cập nhật fallback cơ bản:', error);
+          // Save core financials separately first so price_markup and surcharge_amount are preserved
+          const coreFinancialsPayload: Record<string, any> = {};
+          if (updatePayload.price_markup !== undefined) coreFinancialsPayload.price_markup = updatePayload.price_markup;
+          if (updatePayload.markup_fee_amount !== undefined) coreFinancialsPayload.markup_fee_amount = updatePayload.markup_fee_amount;
+          if (updatePayload.surcharge_name !== undefined) coreFinancialsPayload.surcharge_name = updatePayload.surcharge_name;
+          if (updatePayload.surcharge_amount !== undefined) coreFinancialsPayload.surcharge_amount = updatePayload.surcharge_amount;
+          if (Object.keys(coreFinancialsPayload).length > 0) {
+            await supabase.from('bookings').update(coreFinancialsPayload).eq('id', toUuid(orderId));
+          }
+
+          const {
+            seller_type, partner_id, original_price, selling_price, price_markup,
+            markup_tax_percent, markup_fee_amount, surcharges,
+            cit_tax_percent, vat_tax_percent, net_commission_amount,
+            net_payable_amount, agent_commission_amount, ...fallbackUpdatePayload
+          } = updatePayload;
+          if (Object.keys(fallbackUpdatePayload).length > 0) {
+            const { error: fallbackError } = await supabase.from('bookings').update(fallbackUpdatePayload).eq('id', toUuid(orderId));
+            if (fallbackError) console.error('Lỗi khi cập nhật booking fallback:', fallbackError);
+          }
+        } else {
+          console.log('CRMContext: Successfully updated booking');
+        }
       } catch (err) {
         console.error('Lỗi khi cập nhật đơn hàng trên Supabase:', err);
       }

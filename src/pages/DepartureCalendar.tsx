@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour } from '@/types';
-import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle } from 'lucide-react';
+import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle, Coins } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '../components/DatePicker';
 import { TimeRangeFilter } from '../components/TimeRangeFilter';
@@ -185,15 +185,21 @@ const TourCard: React.FC<{
             ) : (
               <div className="text-xl font-black text-red-600 tracking-tight">{formatCurrency(tour.price)} đ</div>
             )}
-            {tour.price_visa_tour && tour.price_visa_tour > 0 && (
-              <div className="mt-1">
-                <span className="text-[10px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 shadow-sm inline-flex items-center uppercase">
-                  🛂 Phí Visa: +{formatCurrency(tour.price_visa_tour)} đ
+            {tour.price_visa_tour && tour.price_visa_tour > 0 ? (
+              <div className="mt-1.5 flex justify-end">
+                <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-900 border border-blue-300/80 px-2.5 py-1 rounded-lg shadow-xs">
+                  <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="text-[11px] font-bold text-blue-800">Phí Visa:</span>
+                  <span className="text-sm font-black text-blue-700">+{formatCurrency(tour.price_visa_tour)} đ</span>
                 </span>
               </div>
-            )}
-            <div className="text-xs text-gray-500 font-bold mt-1 tracking-wide">
-              HH: <span className="text-gray-900">{formatCurrency(tour.commission)} đ</span>
+            ) : null}
+            <div className="mt-1.5 flex justify-end">
+              <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 border border-amber-300/80 px-2.5 py-1 rounded-lg shadow-xs">
+                <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span className="text-[11px] font-bold text-amber-800">Hoa hồng:</span>
+                <span className="text-sm font-black text-emerald-700">{formatCurrency(tour.commission)} đ</span>
+              </span>
             </div>
           </div>
 
@@ -214,7 +220,14 @@ const TourCard: React.FC<{
                 <span className="w-1.5 h-3 bg-blue-600 rounded mr-2 inline-block"></span>
                 Biểu giá tour chi tiết theo độ tuổi & dịch vụ
               </h4>
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-center">
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 text-center">
+                <div className="bg-amber-50/90 p-3 rounded-lg border border-amber-200 shadow-2xs flex flex-col justify-center">
+                  <div className="text-xs text-amber-900 mb-1 font-bold flex items-center justify-center gap-1">
+                    <Coins className="w-3.5 h-3.5 text-amber-600" />
+                    Hoa hồng / Khách
+                  </div>
+                  <div className="text-base font-black text-amber-700">{formatCurrency(tour.commission)} VND</div>
+                </div>
                 <div className="bg-blue-50/30 p-3 rounded-lg border border-blue-100/50">
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Người lớn (≥ 10 tuổi)</div>
                   <div className="text-base font-bold text-gray-900">{formatCurrency(tour.price_adult ?? tour.price)} VND</div>
@@ -227,9 +240,12 @@ const TourCard: React.FC<{
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Trẻ nhỏ (&lt; 2 tuổi)</div>
                   <div className="text-base font-bold text-gray-900">{formatCurrency(tour.price_infant ?? Math.round(tour.price * 0.3))} VND</div>
                 </div>
-                <div className="bg-orange-50/30 p-3 rounded-lg border border-orange-100/50">
-                  <div className="text-xs text-orange-600 mb-1 font-bold">Dịch vụ Visa (Nếu cần)</div>
-                  <div className="text-base font-black text-orange-700">{tour.price_visa_tour ? formatCurrency(tour.price_visa_tour) : 'Miễn phí'} VND</div>
+                <div className="bg-sky-50/70 p-3 rounded-lg border border-sky-200/80 shadow-2xs flex flex-col justify-center">
+                  <div className="text-xs text-blue-900 mb-1 font-bold flex items-center justify-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                    Dịch vụ Visa (Nếu cần)
+                  </div>
+                  <div className="text-base font-black text-blue-700">{tour.price_visa_tour ? `${formatCurrency(tour.price_visa_tour)} VND` : 'Miễn phí'}</div>
                 </div>
                 <div className="bg-red-50/30 p-3 rounded-lg border border-red-100/50">
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Phụ thu phòng đơn</div>
@@ -422,7 +438,12 @@ export default function DepartureCalendar() {
   const [vatAddress, setVatAddress] = useState('');
   const [vatEmail, setVatEmail] = useState('');
   const [specialRequests, setSpecialRequests] = useState('');
+  const [ctvInfo, setCtvInfo] = useState('');
+  const [isCreatingForCTV, setIsCreatingForCTV] = useState(false);
   const [countdown, setCountdown] = useState(300);
+
+  const isAgentRole = currentRole === 'agent' || profile?.role === 'agent';
+  const isSaleRole = !isAgentRole && ['sale', 'sale_leader', 'admin', 'bod'].includes(currentRole || profile?.role || '');
 
   // Auto-complete Customer suggestions logic
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -547,9 +568,11 @@ export default function DepartureCalendar() {
   };
 
   // Pricing helper variables based on selectedTourForBooking
-  const priceAdult = selectedTourForBooking ? (selectedTourForBooking.price_adult ?? selectedTourForBooking.price) : 0;
-  const priceChild = selectedTourForBooking ? (selectedTourForBooking.price_child ?? Math.round(selectedTourForBooking.price * 0.8)) : 0;
-  const priceInfant = selectedTourForBooking ? (selectedTourForBooking.price_infant ?? Math.round(selectedTourForBooking.price * 0.3)) : 0;
+  const tourDiscount = selectedTourForBooking?.discount || 0;
+  const rawPriceAdult = selectedTourForBooking ? (selectedTourForBooking.price_adult ?? selectedTourForBooking.price) : 0;
+  const priceAdult = selectedTourForBooking ? Math.max(0, rawPriceAdult - tourDiscount) : 0;
+  const priceChild = selectedTourForBooking ? Math.max(0, (selectedTourForBooking.price_child ?? Math.round(rawPriceAdult * 0.8)) - (selectedTourForBooking.price_child ? tourDiscount : Math.round(tourDiscount * 0.8))) : 0;
+  const priceInfant = selectedTourForBooking ? Math.max(0, (selectedTourForBooking.price_infant ?? Math.round(rawPriceAdult * 0.3)) - (selectedTourForBooking.price_infant ? tourDiscount : Math.round(tourDiscount * 0.3))) : 0;
   const singleRoomSurcharge = selectedTourForBooking ? (selectedTourForBooking.single_room_surcharge ?? 7500000) : 0;
 
   const subtotalPrice = selectedTourForBooking 
@@ -609,7 +632,7 @@ export default function DepartureCalendar() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'agent' ? 'Đại lý' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
     createOrder({
@@ -633,6 +656,7 @@ export default function DepartureCalendar() {
         vat_address: vatAddress,
         vat_email: vatEmail,
       special_requests: specialRequests,
+      ctv_info: ctvInfo.trim(),
     });
 
     // Reset fields
@@ -644,6 +668,8 @@ export default function DepartureCalendar() {
     setSingleRoomCount(0);
     setRoomShareInfo('Không ghép');
     setSpecialRequests('');
+    setCtvInfo('');
+    setIsCreatingForCTV(false);
     setVatOption('Không xuất VAT');
     setVatCompanyName('');
     setVatTaxCode('');
@@ -1218,6 +1244,42 @@ export default function DepartureCalendar() {
                       onChange={e => setSpecialRequests(e.target.value)}
                     />
                   </div>
+                  {isSaleRole && (
+                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3 space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isCreatingForCTV}
+                          onChange={e => {
+                            setIsCreatingForCTV(e.target.checked);
+                            if (!e.target.checked) setCtvInfo('');
+                          }}
+                          className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                          <span>🤝 Tạo đơn thay cho CTV (Cộng Tác Viên)</span>
+                        </span>
+                      </label>
+
+                      {(isCreatingForCTV || ctvInfo.trim().length > 0) && (
+                        <div className="space-y-1 pt-1">
+                          <span className="text-[10px] text-amber-700 block">Dành riêng cho Sale ghi nhận tên, SĐT, số tiền hoa hồng CTV</span>
+                          <input
+                            type="text"
+                            placeholder="Nhập Tên CTV, SĐT, số tiền hoa hồng..."
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white focus:ring-1 focus:ring-amber-500 outline-none font-medium"
+                            value={ctvInfo}
+                            onChange={e => {
+                              setCtvInfo(e.target.value);
+                              if (e.target.value.trim().length > 0 && !isCreatingForCTV) {
+                                setIsCreatingForCTV(true);
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1264,6 +1326,58 @@ export default function DepartureCalendar() {
                   <span className="text-[10px] text-gray-400 font-medium">Đã bao gồm thuế phí áp dụng</span>
                 </div>
               </div>
+
+              {/* Thống kê Phí Visa cho Phiếu Giữ chỗ */}
+              {selectedTourForBooking && selectedTourForBooking.price_visa_tour && selectedTourForBooking.price_visa_tour > 0 ? (
+                <div className="bg-blue-50/90 p-3.5 rounded-xl border border-blue-200/80 shadow-xs space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-blue-950 font-bold border-b border-blue-200/80 pb-1.5">
+                    <span className="flex items-center gap-1.5 text-blue-800">
+                      <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                      Phí dịch vụ Visa / khách (nếu chọn làm qua Tour):
+                    </span>
+                    <span className="font-extrabold text-sm text-blue-900">+{formatCurrency(selectedTourForBooking.price_visa_tour)} đ/khách</span>
+                  </div>
+                  <div className="flex justify-between items-center text-blue-950 font-black pt-0.5">
+                    <span>Ước tính phí Visa tối đa cho đoàn ({adultCount + childCount} khách):</span>
+                    <span className="text-base font-black text-blue-700">+{formatCurrency(selectedTourForBooking.price_visa_tour * (adultCount + childCount))} đ</span>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Thống kê Hoa hồng & Giá Net cho Phiếu Giữ chỗ */}
+              {selectedTourForBooking && (
+                <div className="space-y-2">
+                  {/* Thống kê Hoa hồng: Hiển thị nếu là Đại lý, CTV, hoặc Sale chọn tạo đơn cho CTV */}
+                  {(isAgentRole || currentRole === 'CTV' || profile?.role === 'CTV' || (isSaleRole && (isCreatingForCTV || ctvInfo.trim().length > 0))) && (
+                    <div className="bg-amber-50/90 p-3.5 rounded-xl border border-amber-200/80 shadow-sm space-y-2 text-xs">
+                      <div className="flex justify-between items-center text-amber-950 font-bold border-b border-amber-200/80 pb-1.5">
+                        <span className="flex items-center gap-1.5 text-amber-800">
+                          <Coins className="w-4 h-4 text-amber-600" />
+                          Hoa hồng nhận được / khách:
+                        </span>
+                        <span className="font-extrabold text-sm text-amber-900">{formatCurrency(selectedTourForBooking.commission || 0)} đ/khách</span>
+                      </div>
+                      <div className="flex justify-between items-center text-emerald-950 font-black pt-0.5">
+                        <span>Tổng hoa hồng nhận được đơn hàng ({adultCount + childCount} khách):</span>
+                        <span className="text-base font-black text-emerald-700">{formatCurrency((selectedTourForBooking.commission || 0) * (adultCount + childCount))} đ</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Thống kê Giá Net: CHỈ hiển thị khi user là Đại lý thao tác */}
+                  {isAgentRole && (
+                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-3.5 rounded-xl border border-indigo-200 shadow-xs flex justify-between items-center text-xs">
+                      <div className="flex flex-col">
+                        <span className="font-black text-indigo-950 uppercase tracking-tight">Số tiền phải chuyển cho AD (Giá Net):</span>
+                        <span className="text-[10px] text-indigo-600 font-medium">(Tổng tạm tính trừ tổng hoa hồng nhận được)</span>
+                      </div>
+                      <span className="text-base font-black text-indigo-700">
+                        {formatCurrency(Math.max(0, calculatedTotalPrice - ((selectedTourForBooking.commission || 0) * (adultCount + childCount))))} đ
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

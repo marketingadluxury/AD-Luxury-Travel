@@ -52,7 +52,7 @@ function AppContent() {
   }
 
   return (
-    <CRMProvider initialRole={profile?.role || 'CTV'}>
+    <CRMProvider initialRole={profile?.role || 'agent'}>
       <Router>
         <Layout>
           <Routes>

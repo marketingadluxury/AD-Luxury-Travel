@@ -367,7 +367,15 @@ export default function AccountingInvoice() {
 
       const resText = await uploadRes.text();
       let resData = { url: '' };
-      try { resData = JSON.parse(resText); } catch { throw new Error('Định dạng phản hồi từ máy chủ không đúng.'); }
+      try {
+        resData = JSON.parse(resText);
+      } catch {
+        if (resText && resText.trim().startsWith('http')) {
+          resData = { url: resText.trim() };
+        } else {
+          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
+        }
+      }
       const contractUrl = resData.url;
 
       // Update in order
@@ -420,7 +428,15 @@ export default function AccountingInvoice() {
 
       const resText = await uploadRes.text();
       let resData = { url: '' };
-      try { resData = JSON.parse(resText); } catch { throw new Error('Định dạng phản hồi từ máy chủ không đúng.'); }
+      try {
+        resData = JSON.parse(resText);
+      } catch {
+        if (resText && resText.trim().startsWith('http')) {
+          resData = { url: resText.trim() };
+        } else {
+          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
+        }
+      }
       const fileUrl = resData.url;
 
       await approveInvoiceReceipt(invoiceId, verifierName, fileUrl);
@@ -1188,12 +1204,19 @@ export default function AccountingInvoice() {
                         </div>
 
                         {/* Status & Short Info ALWAYS visible */}
-                        <div className="flex items-center justify-between mb-2 text-xs">
-                          <div className="flex items-center gap-1.5 text-gray-700 font-bold truncate max-w-[180px]">
-                            <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2.5 text-xs bg-slate-50/80 p-2.5 rounded-lg border border-slate-150">
+                          <div className="flex items-center gap-1.5 text-slate-900 font-extrabold min-w-0">
+                            <User className="w-4 h-4 text-emerald-600 shrink-0" />
                             <span className="truncate">{leadName}</span>
+                            {phone && (
+                              <span className="text-emerald-800 font-bold font-mono text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                                📞 {phone}
+                              </span>
+                            )}
                           </div>
-                          {getReceiptStatusBadge(inv.status)}
+                          <div className="shrink-0 self-start sm:self-auto">
+                            {getReceiptStatusBadge(inv.status)}
+                          </div>
                         </div>
 
                         {/* Summary preview line when collapsed */}
@@ -1533,12 +1556,19 @@ export default function AccountingInvoice() {
                         </div>
 
                         {/* Status & Short Buyer Info ALWAYS visible */}
-                        <div className="flex items-center justify-between mb-2 text-xs">
-                          <div className="flex items-center gap-1.5 text-gray-800 font-bold truncate max-w-[180px]">
-                            <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2.5 text-xs bg-blue-50/60 p-2.5 rounded-lg border border-blue-150">
+                          <div className="flex items-center gap-1.5 text-slate-900 font-extrabold min-w-0">
+                            <User className="w-4 h-4 text-blue-600 shrink-0" />
                             <span className="truncate">{leadPassenger?.full_name || order.booker_name || 'Khách lẻ'}</span>
+                            {(leadPassenger?.phone || order.booker_phone) && (
+                              <span className="text-blue-900 font-bold font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                                📞 {leadPassenger?.phone || order.booker_phone}
+                              </span>
+                            )}
                           </div>
-                          {getInvoiceBadge(order.invoice_status)}
+                          <div className="shrink-0 self-start sm:self-auto">
+                            {getInvoiceBadge(order.invoice_status)}
+                          </div>
                         </div>
 
                         {/* Summary preview line when collapsed */}
@@ -1838,22 +1868,34 @@ export default function AccountingInvoice() {
                           </div>
                         </div>
 
-                        {/* Status Badge ALWAYS visible */}
-                        <div className="flex items-center justify-between mb-2 text-xs">
-                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Trạng thái</span>
-                          {inv.status === 'pending' ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
-                              <Clock className="w-3 h-3 mr-1 text-amber-600 animate-spin" /> Chờ duyệt chi
+                        {/* Status Badge & Contact Info ALWAYS visible */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2.5 text-xs bg-rose-50/50 p-2.5 rounded-lg border border-rose-150">
+                          <div className="flex items-center gap-1.5 text-slate-900 font-extrabold min-w-0">
+                            <User className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span className="truncate">
+                              {parsedInfo.accountName || (inv.order_id ? (orders.find(o => o.id === inv.order_id)?.booker_name || passengers.find(p => p.order_id === inv.order_id)?.full_name) : null) || 'Khách / Đối tác nhận chi'}
                             </span>
-                          ) : inv.status === 'approved' ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
-                              <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Đã duyệt chi
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
-                              <X className="w-3.5 h-3.5 mr-1 text-rose-600" /> Bị từ chối
-                            </span>
-                          )}
+                            {(inv.order_id ? (orders.find(o => o.id === inv.order_id)?.booker_phone || passengers.find(p => p.order_id === inv.order_id)?.phone) : null) && (
+                              <span className="text-rose-900 font-bold font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-rose-200 shrink-0">
+                                📞 {orders.find(o => o.id === inv.order_id)?.booker_phone || passengers.find(p => p.order_id === inv.order_id)?.phone}
+                              </span>
+                            )}
+                          </div>
+                          <div className="shrink-0 self-start sm:self-auto">
+                            {inv.status === 'pending' ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                                <Clock className="w-3 h-3 mr-1 text-amber-600 animate-spin" /> Chờ duyệt
+                              </span>
+                            ) : inv.status === 'approved' ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
+                                <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Đã chi
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
+                                <X className="w-3.5 h-3.5 mr-1 text-rose-600" /> Từ chối
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Collapsed summary line */}
@@ -2848,7 +2890,16 @@ export default function AccountingInvoice() {
                       }
 
                       const resText = await uploadRes.text();
-                      let resData = JSON.parse(resText);
+                      let resData: any = {};
+                      try {
+                        resData = JSON.parse(resText);
+                      } catch {
+                        if (resText && resText.trim().startsWith('http')) {
+                          resData = { url: resText.trim() };
+                        } else {
+                          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
+                        }
+                      }
                       fileUrl = resData.url;
                     }
 
@@ -3027,7 +3078,16 @@ export default function AccountingInvoice() {
                     }
 
                     const resText = await uploadRes.text();
-                    let resData = JSON.parse(resText);
+                    let resData: any = {};
+                    try {
+                      resData = JSON.parse(resText);
+                    } catch {
+                      if (resText && resText.trim().startsWith('http')) {
+                        resData = { url: resText.trim() };
+                      } else {
+                        throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
+                      }
+                    }
                     
                     await uploadInvoiceProof(uploadProofTarget.id, resData.url);
                     

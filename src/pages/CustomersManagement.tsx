@@ -38,9 +38,9 @@ export default function CustomersManagement() {
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header section */}
       <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <h2 className="text-xl font-bold text-gray-900">Quản lý Đại lý & CTV</h2>
+        <h2 className="text-xl font-bold text-gray-900">Quản lý Đại lý (Agent)</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Theo dõi danh sách các đại lý phân phối Tour, cộng tác viên (CTV), hoa hồng đại lý và doanh số tích lũy.
+          Theo dõi danh sách các đại lý phân phối Tour, hoa hồng đại lý và doanh số tích lũy.
         </p>
       </div>
 

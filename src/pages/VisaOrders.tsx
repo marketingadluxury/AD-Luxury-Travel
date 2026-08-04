@@ -183,7 +183,7 @@ export default function VisaOrders() {
     }
 
     const partnerDisplayName = profile?.full_name || user?.email || 'Ẩn danh';
-    const roleLabel = currentRole === 'CTV' ? 'CTV' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
+    const roleLabel = currentRole === 'agent' ? 'Đại lý' : currentRole === 'bod' ? 'BOD' : currentRole === 'sale' ? 'Sale' : currentRole === 'sale_leader' ? 'Sale Leader' : currentRole === 'operator' ? 'Điều hành' : 'Quản trị viên';
     const creatorFullName = `${roleLabel} - ${partnerDisplayName}`;
 
     createOrder({

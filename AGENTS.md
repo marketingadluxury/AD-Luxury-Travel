@@ -59,7 +59,7 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - `status` (text: 'upcoming', 'active', 'completed', 'cancelled')
 - `created_at` (timestamp)
 
-### 4.3 Bảng `orders` (Quản lý Booking / Đơn hàng Tour)
+### 4.3 Bảng `bookings` / `orders` (Quản lý Booking / Đơn hàng Tour)
 - `id` (uuid, primary key)
 - `tour_id` (uuid, tham chiếu `tours.id`)
 - `created_by` (uuid, tham chiếu `profiles.id`)
@@ -68,7 +68,13 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - `customer_email` (text)
 - `adult_count` (integer)
 - `child_count` (integer)
-- `total_price` (numeric)
+- `total_price` / `total_amount` (numeric)
+- `surcharges` (jsonb - danh sách mảng các khoản phụ thu chi tiết `{id, name, amount}`)
+- `surcharge_name` (text)
+- `surcharge_amount` (numeric)
+- `price_markup` (numeric - tiền tour chênh lệch khi bán qua CTV)
+- `markup_tax_percent` (numeric - % phí công ty thu trên chênh lệch, mặc định 25%)
+- `markup_fee_amount` (numeric - số tiền phí công ty thu)
 - `payment_status` (text: 'unpaid', 'partially_paid', 'paid')
 - `booking_status` (text: 'pending', 'confirmed', 'cancelled')
 - `created_at` (timestamp)
@@ -146,6 +152,10 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - **Giao Diện & Tính Năng Dành Cho Hướng Dẫn Viên (HDV / `tour_guide`) & Ảnh Khách Đoàn:**
   - **Trang & Tab Riêng "Ảnh khách đoàn" (`/tour-media`):** Được hiển thị trên thanh Sidebar cho người dùng công ty (Admin, Operator, Sale, Visa, Kế toán, BOD, HDV) và **ẩn đối với Cộng Tác Viên (`CTV`)**. Trang này chứa danh sách đoàn tour kèm nút duy nhất **"📂 Mở Thư Mục Google Drive"** để truy cập thẳng thư mục `AD Luxury Travel > Tour > {MÃ_TOUR} > Ảnh đoàn`.
   - **Phân Quyền Thao Tác Upload & Link HDV:** Chỉ có vai trò **Điều hành (`operator`)**, **HDV (`tour_guide`)** và **Quản trị viên (`admin`)** mới có quyền thao tác các nút **"📸 Upload Ảnh Đoàn"** và **"🔗 Link HDV Freelance"**. Các vai trò khác (Sale, Kế toán, Visa, BOD) chỉ xem và mở thư mục Drive.
+- **Nhiều Khoản Phụ Thu & Tiền Tour Chênh Lệch CTV:**
+  - **Quản lý Nhiều Phụ Thu:** Hỗ trợ tạo, chỉnh sửa và xóa danh sách nhiều khoản phụ thu linh hoạt (`surcharges`) cho từng đơn hàng (thay vì chỉ 1 khoản đơn lẻ). Tự động cộng tổng các khoản phụ thu vào tổng giá trị đơn hàng. **Lưu ý quan trọng:** Các khoản phụ thu (nâng hạng ghế, vé tham quan, phụ thu phòng đơn, v.v.) chỉ tính vào tổng tiền đơn hàng, **hoàn toàn không được cộng vào hoa hồng thực nhận** của CTV/Đại lý.
+  - **Tiền Tour Chênh Lệch CTV & Phí Công Ty:** Khi tạo đơn cho CTV, cho phép nhập cố định khoản Tiền tour chênh lệch (`price_markup`) khi CTV bán giá cao hơn cho khách. Hệ thống tự động tính phí công ty thu trên chênh lệch (mặc định 25%, có thể tự điều chỉnh 0-100%) và tính toán chính xác hoa hồng thực nhận còn lại cho CTV.
+  - **Trình Bày Chi Tiết Bảng Tính Hoa Hồng:** Bảng thống kê hoa hồng được trình bày trực quan thành từng mục riêng biệt: (1) **Hoa hồng**: Hoa hồng/khách & Hoa hồng định mức tổng khách; (2) **Giá chênh lệch**: Tổng giá chênh lệch, Phí công ty thu (% trừ) và Số tiền chênh lệch còn lại; (3) **Bị trừ**: Do giảm giá cho khách (nếu có); (4) **Tổng hoa hồng thực nhận**: Khối tổng kết xanh nổi bật dễ nhìn.
 
 ---
 

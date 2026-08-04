@@ -264,12 +264,12 @@ export default function NetMarginCard({ orders, tours, tourCosts }: NetMarginCar
                   </p>
                 </div>
 
-                {/* Item 3: Hoa hồng Đại lý / CTV */}
+                {/* Item 3: Hoa hồng Đại lý (Agent) */}
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-500">
                     <span className="flex items-center gap-1">
                       <Users className="w-3.5 h-3.5 text-emerald-600" />
-                      Hoa hồng Đại lý / CTV
+                      Hoa hồng Đại lý (Agent)
                     </span>
                     <span>{financialSummary.grossRevenue > 0 ? ((financialSummary.totalCommissionCost / financialSummary.grossRevenue) * 100).toFixed(1) : 0}%</span>
                   </div>
@@ -297,7 +297,7 @@ export default function NetMarginCard({ orders, tours, tourCosts }: NetMarginCar
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-center gap-2 text-xs text-blue-900 font-medium">
                 <Info className="w-4 h-4 text-blue-600 shrink-0" />
                 <span>
-                  Công thức tính: <strong>Lợi Nhuận Thuần = Doanh Thu Gộp - (Chi Phí Vé + Landtour + Hoa Hồng CTV + Vận Hành Khác)</strong>. Số liệu được cập nhật tự động khi Kế toán duyệt chứng từ phiếu thu/chi.
+                  Công thức tính: <strong>Lợi Nhuận Thuần = Doanh Thu Gộp - (Chi Phí Vé + Landtour + Hoa Hồng Đại Lý + Vận Hành Khác)</strong>. Số liệu được cập nhật tự động khi Kế toán duyệt chứng từ phiếu thu/chi.
                 </span>
               </div>
             </div>

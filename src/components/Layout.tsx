@@ -46,7 +46,7 @@ import { HDVQuickUploadModal } from './HDVQuickUploadModal';
 import { HDVQuickLinkModal } from './HDVQuickLinkModal';
 
 const roleOptions = [
-  { value: 'CTV', label: 'Cộng tác viên (CTV)', icon: <Handshake className="w-4 h-4 text-slate-500" /> },
+  { value: 'agent', label: 'Đại lý (Agent)', icon: <Handshake className="w-4 h-4 text-amber-600" /> },
   { value: 'bod', label: 'BOD (Ban Giám đốc)', icon: <Building className="w-4 h-4 text-violet-600" /> },
   { value: 'operator', label: 'Điều hành Tour', icon: <Sliders className="w-4 h-4 text-purple-600" /> },
   { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)', icon: <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> },
@@ -64,16 +64,16 @@ import { FeedbackModal } from './FeedbackModal';
 const navigation = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
   { name: 'Điều hành chiến lược', href: '/dashboard/executive', icon: TrendingUp, roleAccess: ['admin', 'bod'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['CTV', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide'] },
   { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
   { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
-  { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
-  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['CTV', 'bod', 'sale', 'sale_leader', 'admin'] },
+  { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
+  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin'] },
   { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin', 'bod'] },
   { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod'] },
-  { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin', 'bod'] },
+  { name: 'Đại lý (Agent)', href: '/customers', icon: Users, roleAccess: ['admin', 'bod'] },
   { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
@@ -242,7 +242,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             const isMyProposal = p.created_by_id === currentUserId || (userFullName && (p.created_by_name || '').toLowerCase().includes(userFullName));
             if (isMyProposal) return true;
             const creator = profilesList.find(prof => prof.id === p.created_by_id || (prof.full_name && (p.created_by_name || '').toLowerCase().includes(prof.full_name.toLowerCase())));
-            if (creator && (creator.leader_id === currentUserId || (!creator.leader_id && (creator.role === 'sale' || creator.role === 'CTV')))) {
+            if (creator && (creator.leader_id === currentUserId || (!creator.leader_id && (creator.role === 'sale' || creator.role === 'agent')))) {
               return true;
             }
             return false;
@@ -301,8 +301,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         return isDirectlyRelevant;
       }
 
-      // 3. Regular Sale & CTV: Notifications strictly for their own orders, passengers, proposals
-      if (['sale', 'CTV'].includes(currentRole)) {
+      // 3. Regular Sale & Agent: Notifications strictly for their own orders, passengers, proposals
+      if (['sale', 'agent'].includes(currentRole)) {
         if (n.type === 'system' && !n.targetId) return true;
         return isDirectlyRelevant;
       }
@@ -353,7 +353,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const getRoleLabel = (role: Role) => {
     switch (role) {
-      case 'CTV': return 'Cộng tác viên (CTV)';
+      case 'agent': return 'Đại lý (Agent)';
       case 'bod': return 'BOD (Ban Giám đốc)';
       case 'operator': return 'Điều hành Tour';
       case 'sale_leader': return 'Sale Leader';

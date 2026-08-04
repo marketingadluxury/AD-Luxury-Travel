@@ -134,7 +134,7 @@ export default function ActivityLogs() {
 
   const getRoleLabel = (role: Role) => {
     switch (role) {
-      case 'CTV': return 'CTV';
+      case 'agent': return 'Đại lý';
       case 'bod': return 'BOD';
       case 'operator': return 'Điều hành';
       case 'sale_leader': return 'Sale Leader';

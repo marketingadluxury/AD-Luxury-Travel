@@ -1,10 +1,10 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { X, Bed, Percent, Info, RefreshCw, Lock, Copy } from 'lucide-react';
-import { Order } from '../types';
+import { X, Bed, Percent, Info, RefreshCw, Lock, Copy, Coins, Plus, Trash2, Tag } from 'lucide-react';
+import { Order, SurchargeItem } from '../types';
 import { useCRM, canUnlockOrder } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
-import { formatNumber, parseNumber } from '@/lib/utils';
+import { formatNumber, parseNumber, calculateOrderFinancials } from '@/lib/utils';
 
 interface EditOrderModalProps {
   isOpen: boolean;
@@ -30,11 +30,21 @@ export default function EditOrderModal({
   const [vatAddress, setVatAddress] = useState(order?.vat_address || '');
   const [vatEmail, setVatEmail] = useState(order?.vat_email || '');
   const [specialRequests, setSpecialRequests] = useState('');
+  const [ctvInfo, setCtvInfo] = useState('');
   const [discountType, setDiscountType] = useState<'percent' | 'amount'>(order?.discount_type || 'amount');
   const [discountValueDisplay, setDiscountValueDisplay] = useState(formatNumber(order?.discount_value || 0));
-  const [surchargeName, setSurchargeName] = useState(order?.surcharge_name || '');
-  const [surchargeAmountDisplay, setSurchargeAmountDisplay] = useState(formatNumber(order?.surcharge_amount || 0));
+  const [surcharges, setSurcharges] = useState<SurchargeItem[]>([]);
+  const [priceMarkupDisplay, setPriceMarkupDisplay] = useState<string>('');
+  const [markupTaxPercent, setMarkupTaxPercent] = useState<number>(25);
   const [totalPrice, setTotalPrice] = useState(0);
+
+  // Financial mechanics: Direct vs Agent
+  const [sellerType, setSellerType] = useState<'direct' | 'agent'>(order?.seller_type || 'direct');
+  const [partnerId, setPartnerId] = useState<string>(order?.partner_id || '');
+  const [sellingPriceDisplay, setSellingPriceDisplay] = useState<string>('');
+  const [citTaxPercent, setCitTaxPercent] = useState<number>(order?.cit_tax_percent || 17);
+  const [agentCommissionDisplay, setAgentCommissionDisplay] = useState<string>('');
+
   const [isSaving, setIsSaving] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showLockConfirmModal, setShowLockConfirmModal] = useState(false);
@@ -43,9 +53,11 @@ export default function EditOrderModal({
   const tour = order ? tours.find((t) => t.id === order.tour_id) || null : null;
 
   // Pricing formula definitions
-  const priceAdult = tour ? (tour.price_adult ?? tour.price) : 0;
-  const priceChild = tour ? (tour.price_child ?? Math.round(tour.price * 0.8)) : 0;
-  const priceInfant = tour ? (tour.price_infant ?? Math.round(tour.price * 0.3)) : 0;
+  const tourDiscount = tour?.discount || 0;
+  const rawPriceAdult = tour ? (tour.price_adult ?? tour.price) : 0;
+  const priceAdult = tour ? Math.max(0, rawPriceAdult - tourDiscount) : 0;
+  const priceChild = tour ? Math.max(0, (tour.price_child ?? Math.round(rawPriceAdult * 0.8)) - (tour.price_child ? tourDiscount : Math.round(tourDiscount * 0.8))) : 0;
+  const priceInfant = tour ? Math.max(0, (tour.price_infant ?? Math.round(rawPriceAdult * 0.3)) - (tour.price_infant ? tourDiscount : Math.round(tourDiscount * 0.3))) : 0;
   const singleRoomSurcharge = tour ? (tour.single_room_surcharge ?? 7500000) : 7500000;
 
   const adultCount = order?.adult_count ?? 1;
@@ -64,15 +76,32 @@ export default function EditOrderModal({
     : parseNumber(discountValueDisplay);
     
   const subtotalAfterDiscount = subtotalWithSurcharge - discountAmount;
-  const customSurchargeAmount = parseNumber(surchargeAmountDisplay);
-  const totalBeforeVat = subtotalAfterDiscount + customSurchargeAmount;
+  
+  // Custom surcharges total
+  const customSurchargeAmount = surcharges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  
+  // CTV Price markup & fee tax
+  const priceMarkup = parseNumber(priceMarkupDisplay);
+  const markupFeeAmount = Math.round((priceMarkup * markupTaxPercent) / 100);
+  const netMarkupReceived = Math.max(0, priceMarkup - markupFeeAmount);
+
+  const totalBeforeVat = subtotalAfterDiscount + customSurchargeAmount + priceMarkup;
   const vatAmount = vatOption === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
   const computedTotalPrice = totalBeforeVat + vatAmount;
+
+  // Commission calculations
+  const baseCommissionPerSeat = tour?.commission || 0;
+  const baseTotalCommission = baseCommissionPerSeat * (adultCount + childCount);
+  const totalCommissionBenefit = baseTotalCommission + netMarkupReceived;
+  const netCommissionReceived = Math.max(0, totalCommissionBenefit - discountAmount);
+  const commissionDeducted = discountAmount > 0 ? Math.min(totalCommissionBenefit, discountAmount) : 0;
 
   // Format money function
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN').format(amount);
   };
+
+  const isCurrentAgent = currentRole === 'agent' || profile?.role === 'agent';
 
   useEffect(() => {
     if (isOpen && order) {
@@ -84,14 +113,73 @@ export default function EditOrderModal({
       setVatAddress(order.vat_address || '');
       setVatEmail(order.vat_email || '');
       setSpecialRequests(order.special_requests || '');
+      setCtvInfo(order.ctv_info || '');
       setDiscountType(order.discount_type || 'amount');
       setDiscountValueDisplay(formatNumber(order.discount_value || 0));
-      setSurchargeName(order.surcharge_name || '');
-      setSurchargeAmountDisplay(formatNumber(order.surcharge_amount || 0));
+
+      // Surcharges list initialization
+      if (order.surcharges && Array.isArray(order.surcharges) && order.surcharges.length > 0) {
+        setSurcharges(order.surcharges);
+      } else if (order.surcharge_amount && order.surcharge_amount > 0) {
+        setSurcharges([{ id: '1', name: order.surcharge_name || 'Phụ thu khác', amount: order.surcharge_amount }]);
+      } else {
+        setSurcharges([]);
+      }
+
+      setPriceMarkupDisplay(formatNumber(order.price_markup || 0));
+      setMarkupTaxPercent(order.markup_tax_percent ?? 25);
       setTotalPrice(order.total_price || 0);
+
+      const creatorProfile = profilesList.find(p => p.id === order.user_id || p.id === order.created_by);
+      const isCreatorAgent = creatorProfile?.role === 'agent';
+      const defaultSeller = order.seller_type || (isCurrentAgent || isCreatorAgent ? 'agent' : 'direct');
+      setSellerType(defaultSeller);
+      
+      let initialPartnerId = order.partner_id || '';
+      if (!initialPartnerId) {
+        if (isCurrentAgent && profile?.id) {
+          initialPartnerId = profile.id;
+        } else if (isCreatorAgent && creatorProfile?.id) {
+          initialPartnerId = creatorProfile.id;
+        } else if (order.created_by) {
+          const matchProfile = profilesList.find(p => (p.role === 'agent' || p.company_name) && (
+            (p.full_name && order.created_by.includes(p.full_name)) ||
+            (p.company_name && order.created_by.includes(p.company_name))
+          ));
+          if (matchProfile) initialPartnerId = matchProfile.id;
+        }
+      }
+      setPartnerId(initialPartnerId);
+      setSellingPriceDisplay(formatNumber(order.selling_price || order.total_price || 0));
+      setCitTaxPercent(order.cit_tax_percent || 17);
+      
+      const defaultAgentComm = order.agent_commission_amount !== undefined 
+        ? order.agent_commission_amount 
+        : ((tour?.commission || 0) * ((order.adult_count || 1) + (order.child_count || 0)));
+      setAgentCommissionDisplay(formatNumber(defaultAgentComm));
+
       setIsInitialLoad(true);
     }
   }, [isOpen, order]);
+
+  // Helper functions for surcharges
+  const handleAddSurcharge = () => {
+    setSurcharges(prev => [...prev, { id: Date.now().toString(), name: '', amount: 0 }]);
+  };
+
+  const handleRemoveSurcharge = (id: string) => {
+    setSurcharges(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleUpdateSurchargeName = (id: string, name: string) => {
+    setSurcharges(prev => prev.map(s => s.id === id ? { ...s, name } : s));
+  };
+
+  const handleUpdateSurchargeAmount = (id: string, rawValStr: string) => {
+    const rawVal = rawValStr.replace(/[^0-9]/g, '');
+    const num = rawVal ? parseInt(rawVal, 10) : 0;
+    setSurcharges(prev => prev.map(s => s.id === id ? { ...s, amount: num } : s));
+  };
 
   // Synchronize computed price when inputs change
   useEffect(() => {
@@ -103,11 +191,29 @@ export default function EditOrderModal({
     }
 
     const isAdmin = ['admin', 'sale_leader'].includes(currentRole);
-    // If not admin/leader, total price is strictly automatic. If admin/leader, we still auto-calculate but they can override.
     if (!isAdmin || !isInitialLoad) {
       setTotalPrice(computedTotalPrice);
     }
-  }, [singleRoomCount, vatOption, discountType, parseNumber(discountValueDisplay), parseNumber(surchargeAmountDisplay), currentRole]);
+  }, [singleRoomCount, vatOption, discountType, parseNumber(discountValueDisplay), surcharges, priceMarkupDisplay, markupTaxPercent, currentRole]);
+
+  // Compute live financial breakdown based on seller mechanism
+  const financials = calculateOrderFinancials({
+    sellerType,
+    originalPrice: computedTotalPrice,
+    sellingPrice: parseNumber(sellingPriceDisplay) || computedTotalPrice,
+    baseCommission: (tour?.commission || 0) * (adultCount + childCount),
+    agentCommission: parseNumber(agentCommissionDisplay),
+    citTaxPercent,
+    vatTaxPercent: 8,
+  });
+
+  const isAgent = (currentRole as string) === 'agent' || (profile?.role as string) === 'agent';
+  const isSaleRole = !isAgent && (['sale', 'sale_leader', 'admin', 'bod'].includes(currentRole as string) || ['sale', 'sale_leader', 'admin', 'bod'].includes(profile?.role || ''));
+  const isCTVOrAgent = (currentRole as string) === 'CTV' || (currentRole as string) === 'agent' || (profile?.role as string) === 'CTV' || (profile?.role as string) === 'agent';
+  const maxCommission = sellerType === 'agent' 
+    ? (parseNumber(agentCommissionDisplay) || ((tour?.commission || 0) * (adultCount + childCount)))
+    : ((tour?.commission || 0) * (adultCount + childCount));
+  const isDiscountExceedingCommission = isCTVOrAgent && (discountAmount > maxCommission);
 
   if (!isOpen || !order) return null;
 
@@ -117,6 +223,11 @@ export default function EditOrderModal({
   const canEditFinancials = isPrivilegedRole || !isOrderConfirmed;
 
   const handleSave = async (forceConfirm = false) => {
+    if (isCTVOrAgent && discountAmount > maxCommission) {
+      toast.error(`Vai trò ${currentRole === 'agent' || profile?.role === 'agent' ? 'Đại lý' : 'CTV'} không thể giảm số tiền (${formatCurrency(discountAmount)} đ) lớn hơn tiền hoa hồng (${formatCurrency(maxCommission)} đ)!`);
+      return;
+    }
+
     if (!isPrivilegedRole && !forceConfirm) {
       setShowLockConfirmModal(true);
       return;
@@ -124,6 +235,12 @@ export default function EditOrderModal({
 
     setIsSaving(true);
     try {
+      const finalTotalPrice = sellerType === 'agent' 
+        ? financials.netPayableAmount 
+        : Number(totalPrice);
+
+      const surchargeNameCombined = surcharges.map(s => s.name.trim()).filter(Boolean).join(', ') || (customSurchargeAmount > 0 ? 'Phụ thu khác' : '');
+
       onSave(order.id, {
         single_room_count: Number(singleRoomCount),
         room_share_info: roomShareInfo.trim(),
@@ -133,12 +250,27 @@ export default function EditOrderModal({
         vat_address: vatAddress.trim(),
         vat_email: vatEmail.trim(),
         special_requests: specialRequests.trim(),
+        ctv_info: ctvInfo.trim(),
         discount_type: discountType,
         discount_value: parseNumber(discountValueDisplay),
-        surcharge_name: surchargeName.trim(),
-        surcharge_amount: parseNumber(surchargeAmountDisplay),
-        total_price: Number(totalPrice),
+        surcharges,
+        surcharge_name: surchargeNameCombined,
+        surcharge_amount: customSurchargeAmount,
+        price_markup: priceMarkup,
+        markup_fee_amount: markupFeeAmount,
+        markup_tax_percent: markupTaxPercent,
+        total_price: finalTotalPrice,
         is_locked: true,
+
+        seller_type: sellerType,
+        partner_id: partnerId || (isCurrentAgent ? profile?.id : undefined),
+        original_price: computedTotalPrice,
+        selling_price: financials.sellingPrice,
+        cit_tax_percent: financials.citTaxPercent,
+        vat_tax_percent: 8,
+        net_commission_amount: netCommissionReceived,
+        net_payable_amount: financials.netPayableAmount,
+        agent_commission_amount: financials.agentCommissionAmount,
       });
       toast.success('Cập nhật thông tin booking thành công! Booking đã tự động khóa.');
       setShowLockConfirmModal(false);
@@ -201,6 +333,81 @@ export default function EditOrderModal({
               </div>
             </div>
           )}
+
+          {/* Agent Form Options (Shown automatically when booking is for Agent) */}
+          {sellerType === 'agent' && (
+            <div className="bg-indigo-50/70 border border-indigo-150 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between pb-2 border-b border-indigo-200/60">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                  <span className="text-xs font-extrabold text-indigo-950 uppercase tracking-wider">Thông tin Đại lý đối tác (Agent - Giá Net)</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-indigo-900 mb-1">
+                      Đại lý đối tác (Agent)
+                    </label>
+                    {isCurrentAgent ? (
+                      <div className="w-full bg-indigo-100/90 border border-indigo-200/90 rounded-lg px-2.5 py-1.5 text-xs font-bold text-indigo-950 flex items-center justify-between shadow-xs">
+                        <span className="truncate">
+                          {profile?.company_name ? `${profile.company_name} (${profile.full_name})` : (profile?.full_name || 'Tài khoản Đại lý của bạn')}
+                        </span>
+                        <span className="text-[10px] bg-indigo-600 text-white font-extrabold px-1.5 py-0.5 rounded shrink-0 ml-1">
+                          Tài khoản của bạn
+                        </span>
+                      </div>
+                    ) : (
+                      <select
+                        disabled={!canEditFinancials}
+                        value={partnerId}
+                        onChange={(e) => setPartnerId(e.target.value)}
+                        className="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      >
+                        <option value="">-- Chọn Đại lý đối tác --</option>
+                        {profilesList.filter(p => p.role === 'agent' || p.company_name).map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.company_name ? `${p.company_name} (${p.full_name})` : p.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-indigo-900 mb-1">
+                      Hoa hồng Đại lý (VND)
+                    </label>
+                    <input
+                      type="text"
+                      disabled={!canEditFinancials}
+                      value={agentCommissionDisplay}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        setAgentCommissionDisplay(raw ? formatNumber(raw) : '');
+                      }}
+                      placeholder="Nhập tiền hoa hồng..."
+                      className="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-indigo-200 rounded-lg p-2.5 text-xs space-y-1">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Tổng giá niêm yết:</span>
+                    <span className="font-semibold">{formatCurrency(computedTotalPrice)} đ</span>
+                  </div>
+                  <div className="flex justify-between text-indigo-700">
+                    <span>Hoa hồng Đại lý khấu trừ:</span>
+                    <span className="font-bold">-{formatCurrency(financials.agentCommissionAmount)} đ</span>
+                  </div>
+                  <div className="flex justify-between text-indigo-950 font-extrabold border-t border-indigo-100 pt-1 text-sm">
+                    <span>Số tiền Đại lý phải chuyển cho AD (Giá Net):</span>
+                    <span className="text-indigo-700 font-black">{formatCurrency(financials.netPayableAmount)} đ</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
           {/* Surcharge & VAT Block */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -310,96 +517,216 @@ export default function EditOrderModal({
             />
           </div>
 
-          {/* Discount Block */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Loại giảm giá
-              </label>
-              <select
-                disabled={!canEditFinancials}
-                value={discountType}
-                onChange={(e) => setDiscountType(e.target.value as 'percent' | 'amount')}
-                className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
-                  !canEditFinancials
-                    ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
-                    : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
-                }`}
-              >
-                <option value="amount">Số tiền (đ)</option>
-                <option value="percent">Phần trăm (%)</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Giá trị giảm
-              </label>
-            <input
-                type="text"
-                disabled={!canEditFinancials}
-                value={discountValueDisplay}
-                onChange={(e) => {
-                    const rawValue = e.target.value.replace(/[^0-9]/g, '');
-                    if (!rawValue) {
-                      setDiscountValueDisplay('');
-                    } else {
-                      const numericValue = parseInt(rawValue, 10);
-                      setDiscountValueDisplay(formatNumber(numericValue.toString()));
-                    }
-                }}
-                className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
-                  !canEditFinancials
-                    ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
-                    : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
-                }`}
-            />
-            </div>
-          </div>
-
-          {/* Surcharge Block */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Tên phụ thu (nếu có)
+          {/* CTV Information Note Section for Sale */}
+          {(isSaleRole || Boolean(ctvInfo)) && (
+            <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-1.5">
+              <label className="block text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🤝 Ghi chú / Thông tin CTV (Dành riêng cho Sale quản lý CTV)</span>
               </label>
               <input
-                  type="text"
+                type="text"
+                value={ctvInfo}
+                onChange={(e) => setCtvInfo(e.target.value)}
+                placeholder="Nhập Tên CTV, SĐT, tỷ lệ/số tiền hoa hồng hứa trả cho CTV..."
+                className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+          )}
+
+          {/* Discount Block */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Loại giảm giá
+                </label>
+                <select
                   disabled={!canEditFinancials}
-                  placeholder="VD: Nâng cấp hạng phòng..."
-                  value={surchargeName}
-                  onChange={(e) => setSurchargeName(e.target.value)}
+                  value={discountType}
+                  onChange={(e) => setDiscountType(e.target.value as 'percent' | 'amount')}
                   className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
                     !canEditFinancials
                       ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
-                      : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+                      : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
                   }`}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Số tiền phụ thu (đ)
-              </label>
-              <input
+                >
+                  <option value="amount">Số tiền (đ)</option>
+                  <option value="percent">Phần trăm (%)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Giá trị giảm
+                </label>
+                <input
                   type="text"
                   disabled={!canEditFinancials}
-                  value={surchargeAmountDisplay}
+                  value={discountValueDisplay}
                   onChange={(e) => {
                       const rawValue = e.target.value.replace(/[^0-9]/g, '');
                       if (!rawValue) {
-                        setSurchargeAmountDisplay('');
+                        setDiscountValueDisplay('');
                       } else {
                         const numericValue = parseInt(rawValue, 10);
-                        setSurchargeAmountDisplay(formatNumber(numericValue.toString()));
+                        setDiscountValueDisplay(formatNumber(numericValue.toString()));
                       }
                   }}
                   className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
-                    !canEditFinancials
+                    isDiscountExceedingCommission
+                      ? 'border-rose-400 bg-rose-50 text-rose-700 focus:ring-rose-500'
+                      : !canEditFinancials
                       ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
                       : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
                   }`}
-              />
+                />
+              </div>
             </div>
+
+            {isCTVOrAgent && isDiscountExceedingCommission && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-start gap-2">
+                <span className="text-sm shrink-0">⚠️</span>
+                <div>
+                  <span className="font-bold">Vượt quá giới hạn giảm giá! </span>
+                  Tài khoản vai trò <strong className="font-bold">{currentRole === 'agent' || profile?.role === 'agent' ? 'Đại lý' : 'CTV'}</strong> chỉ được giảm tối đa bằng số tiền hoa hồng được hưởng là <strong className="font-extrabold underline">{formatCurrency(maxCommission)} đ</strong>. Số tiền giảm hiện tại là <strong>{formatCurrency(discountAmount)} đ</strong>.
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Multiple Surcharges Block */}
+          <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-blue-600" />
+                <span>Các khoản phụ thu ({surcharges.length})</span>
+              </label>
+              {canEditFinancials && (
+                <button
+                  type="button"
+                  onClick={handleAddSurcharge}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-white border border-blue-200 px-2.5 py-1 rounded-lg shadow-sm hover:bg-blue-50 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Thêm phụ thu
+                </button>
+              )}
+            </div>
+
+            {surcharges.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-1">Chưa có khoản phụ thu nào. Bấm "+ Thêm phụ thu" nếu cần.</p>
+            ) : (
+              <div className="space-y-2 pt-1">
+                {surcharges.map((item, idx) => (
+                  <div key={item.id || idx} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border border-slate-200">
+                    <div className="col-span-6">
+                      <input
+                        type="text"
+                        disabled={!canEditFinancials}
+                        placeholder="Tên phụ thu (VD: Phụ thu phòng đơn, Vé máy bay...)"
+                        value={item.name}
+                        onChange={(e) => handleUpdateSurchargeName(item.id, e.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="col-span-5">
+                      <input
+                        type="text"
+                        disabled={!canEditFinancials}
+                        placeholder="Số tiền (đ)"
+                        value={item.amount ? formatNumber(item.amount.toString()) : ''}
+                        onChange={(e) => handleUpdateSurchargeAmount(item.id, e.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="col-span-1 text-right">
+                      {canEditFinancials && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSurcharge(item.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors"
+                          title="Xóa phụ thu"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {customSurchargeAmount > 0 && (
+                  <div className="flex justify-between items-center text-xs font-bold text-blue-700 pt-1 px-1">
+                    <span>Tổng phụ thu:</span>
+                    <span>+{formatCurrency(customSurchargeAmount)} đ</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* CTV Markup & Fee Tax Block */}
+          {(Boolean(ctvInfo) || currentRole === 'CTV' || profile?.role === 'CTV' || isSaleRole) && (
+            <div className="space-y-2 bg-emerald-50/70 border border-emerald-200 p-3 rounded-xl">
+              <div className="flex items-center justify-between border-b border-emerald-200/80 pb-1.5">
+                <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Tiền tour chênh lệch CTV & Phí tính thuế</span>
+                </span>
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">Dành cho CTV</span>
+              </div>
+
+              <div className="grid grid-cols-12 gap-3 pt-1">
+                <div className="col-span-7 space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase">
+                    Tiền tour chênh lệch (đ)
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!canEditFinancials}
+                    placeholder="VD: 5.000.000"
+                    value={priceMarkupDisplay}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      setPriceMarkupDisplay(raw ? formatNumber(raw) : '');
+                    }}
+                    className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-900 focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div className="col-span-5 space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase">
+                    Phí tính trên chênh lệch (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      disabled={!canEditFinancials}
+                      value={markupTaxPercent}
+                      onChange={(e) => setMarkupTaxPercent(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                      className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 pr-7 focus:border-emerald-500 focus:outline-none"
+                    />
+                    <span className="absolute right-2.5 top-1.5 text-xs font-bold text-slate-400">%</span>
+                  </div>
+                </div>
+              </div>
+
+              {priceMarkup > 0 && (
+                <div className="bg-white/80 p-2 rounded-lg border border-emerald-200 space-y-1 text-xs text-emerald-950 font-medium">
+                  <div className="flex justify-between">
+                    <span>Tiền chênh lệch bán cao hơn:</span>
+                    <span className="font-bold">+{formatCurrency(priceMarkup)} đ</span>
+                  </div>
+                  <div className="flex justify-between text-rose-700">
+                    <span>Phí công ty thu ({markupTaxPercent}%):</span>
+                    <span className="font-bold">-{formatCurrency(markupFeeAmount)} đ</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-800 font-bold border-t border-emerald-200/60 pt-1 mt-1">
+                    <span>CTV thực nhận thêm:</span>
+                    <span className="text-emerald-600">+{formatCurrency(netMarkupReceived)} đ</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Automatic Calculator Breakdown Box */}
           <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2.5">
@@ -442,12 +769,23 @@ export default function EditOrderModal({
                 </div>
               )}
 
-              {parseNumber(surchargeAmountDisplay) > 0 && (
-                <div className="flex justify-between text-blue-700 font-medium border-t border-slate-200/60 pt-1.5 mt-1.5">
+              {surcharges.length > 0 && customSurchargeAmount > 0 && (
+                <div className="space-y-1 border-t border-slate-200/60 pt-1.5 mt-1.5">
+                  {surcharges.filter(s => s.amount > 0).map((item, i) => (
+                    <div key={item.id || i} className="flex justify-between text-blue-700 font-medium">
+                      <span>{item.name || `Phụ thu ${i + 1}`}:</span>
+                      <span className="font-bold">+{formatCurrency(item.amount)} đ</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {priceMarkup > 0 && (
+                <div className="flex justify-between text-emerald-700 font-medium border-t border-slate-200/60 pt-1.5">
                   <span className="flex items-center gap-1">
-                    {surchargeName || 'Phụ thu khác'}:
+                    Tiền tour chênh lệch (CTV):
                   </span>
-                  <span className="font-bold">+{formatCurrency(parseNumber(surchargeAmountDisplay))} đ</span>
+                  <span className="font-bold">+{formatCurrency(priceMarkup)} đ</span>
                 </div>
               )}
 
@@ -465,6 +803,53 @@ export default function EditOrderModal({
                 <span className="text-blue-800">Tổng cộng (Giá tính toán):</span>
                 <span className="text-base text-rose-600">{formatCurrency(computedTotalPrice)} đ</span>
               </div>
+
+              {/* Commission breakdown box */}
+              {(baseTotalCommission > 0 || netCommissionReceived > 0 || priceMarkup > 0) && (
+                <div className="bg-amber-50/90 p-3 rounded-xl border border-amber-200/80 space-y-2 text-xs mt-2.5">
+                  <div className="flex justify-between items-center text-amber-900 font-bold border-b border-amber-200/60 pb-1.5">
+                    <span className="flex items-center gap-1.5 text-amber-800">
+                      <Coins className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Hoa hồng / khách:</span>
+                    </span>
+                    <span className="font-extrabold text-amber-950">{formatCurrency(baseCommissionPerSeat)} đ/khách</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-amber-900 font-medium">
+                    <span>Hoa hồng định mức ({adultCount + childCount} chỗ):</span>
+                    <span className="font-semibold">{formatCurrency(baseTotalCommission)} đ</span>
+                  </div>
+
+                  {priceMarkup > 0 && (
+                    <div className="bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200 space-y-1.5 my-1 text-emerald-950">
+                      <div className="flex justify-between items-center font-medium">
+                        <span>Tổng giá chênh lệch:</span>
+                        <span className="font-bold text-emerald-700">+{formatCurrency(priceMarkup)} đ</span>
+                      </div>
+                      <div className="flex justify-between items-center text-rose-700 font-medium">
+                        <span>Phí công ty thu ({markupTaxPercent}%):</span>
+                        <span className="font-bold">-{formatCurrency(markupFeeAmount)} đ</span>
+                      </div>
+                      <div className="flex justify-between items-center text-emerald-900 font-bold border-t border-emerald-200/60 pt-1 mt-0.5">
+                        <span>Số tiền chênh lệch còn lại:</span>
+                        <span className="text-emerald-600 font-black">+{formatCurrency(netMarkupReceived)} đ</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {commissionDeducted > 0 && (
+                    <div className="flex justify-between items-center text-rose-700 font-medium">
+                      <span>Bị trừ (Do giảm giá cho khách):</span>
+                      <span className="font-bold text-rose-600">-{formatCurrency(commissionDeducted)} đ</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center bg-emerald-100/90 text-emerald-950 p-2.5 rounded-lg border border-emerald-300 font-extrabold text-xs mt-1">
+                    <span>Tổng hoa hồng thực nhận:</span>
+                    <span className="text-base font-black text-emerald-700">{formatCurrency(netCommissionReceived)} đ</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

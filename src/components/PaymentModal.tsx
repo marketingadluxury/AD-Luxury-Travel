@@ -91,11 +91,15 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
       }
 
       const resText = await uploadRes.text();
-      let resData;
+      let resData: any = {};
       try {
         resData = JSON.parse(resText);
       } catch (err) {
-        throw new Error('Lỗi phản hồi từ máy chủ (không phải JSON).');
+        if (resText && resText.trim().startsWith('http')) {
+          resData = { url: resText.trim(), success: true };
+        } else {
+          throw new Error(`Phản hồi từ máy chủ không hợp lệ: ${resText.substring(0, 100)}`);
+        }
       }
       
       // 3. Create invoice receipt in state & DB

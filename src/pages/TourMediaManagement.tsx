@@ -72,13 +72,13 @@ export default function TourMediaManagement() {
     }
   }, [tours]);
 
-  // Hide from CTV
-  if (currentRole === 'CTV') {
+  // Hide from agent
+  if (currentRole === 'agent') {
     return (
       <div className="bg-white p-12 text-center rounded-2xl border border-gray-200 space-y-3">
         <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto" />
         <h2 className="text-lg font-bold text-gray-900">Không có quyền truy cập</h2>
-        <p className="text-xs text-gray-500">Tài khoản Cộng Tác Viên (CTV) không có quyền truy cập mục Kho Ảnh Khách Đoàn.</p>
+        <p className="text-xs text-gray-500">Tài khoản Đại lý (Agent) không có quyền truy cập mục Kho Ảnh Khách Đoàn.</p>
       </div>
     );
   }

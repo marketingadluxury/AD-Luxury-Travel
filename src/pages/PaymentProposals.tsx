@@ -73,7 +73,7 @@ export default function PaymentProposals() {
   const { user, profile } = useAuth();
 
   // Role checks
-  const isCTV = currentRole === 'CTV';
+  const isAgent = currentRole === 'agent';
   const isLeader = ['sale_leader', 'admin', 'bod'].includes(currentRole);
   const isAccountingOrAdmin = ['accounting', 'admin', 'bod'].includes(currentRole);
 
@@ -390,8 +390,8 @@ export default function PaymentProposals() {
     };
   }, [paymentProposals]);
 
-  // If CTV attempts access
-  if (isCTV) {
+  // If Agent attempts access
+  if (isAgent) {
     return (
       <div className="max-w-4xl mx-auto py-12 px-4 text-center font-sans">
         <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-xs max-w-lg mx-auto">
@@ -401,10 +401,10 @@ export default function PaymentProposals() {
           <h2 className="text-xl font-bold text-gray-900 mb-2">Quyền truy cập hạn chế</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-6">
             Tính năng <strong>Đề nghị thanh toán</strong> dành cho cán bộ công nhân viên chính thức thuộc công ty.
-            Cộng tác viên (CTV) không có quyền gửi đề nghị thanh toán nội bộ.
+            Đại lý (Agent) không có quyền gửi đề nghị thanh toán nội bộ.
           </p>
           <div className="text-xs text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200">
-            Mọi thắc mắc về hoa hồng hoặc thanh toán CTV, vui lòng liên hệ trực tiếp Quản lý Sale hoặc Bộ phận Kế toán.
+            Mọi thắc mắc về hoa hồng hoặc thanh toán Đại lý, vui lòng liên hệ trực tiếp Quản lý Sale hoặc Bộ phận Kế toán.
           </div>
         </div>
       </div>
