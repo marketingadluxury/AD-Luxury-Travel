@@ -944,6 +944,7 @@ export default function OrdersManagement() {
       setRoomShareInfo('Không ghép');
       setSpecialRequests('');
       setCtvInfo('');
+      setIsCreatingForCTV(false);
       setVatOption('Không xuất VAT');
       setVatCompanyName('');
       setVatTaxCode('');

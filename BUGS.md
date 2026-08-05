@@ -103,6 +103,19 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   2. Bổ sung các khối kiểm tra thông minh ở Client để kiểm tra tiền tố nội dung trả về. Nếu phản hồi bắt đầu bằng `<!doctype html` hoặc `<html`, client sẽ chủ động chặn lại và dịch thành thông báo Tiếng Việt thân thiện, mô tả đúng trạng thái cấu hình lưu trữ Google Drive / Supabase thay vì cố gắng parse JSON lỗi.
 - **Trạng thái:** Đã giải quyết triệt để, kiểm tra biên dịch thành công 100%.
 
+### 1.16 Lỗi mặc định hiển thị / gán trạng thái "Tạo hộ CTV" khi vào Quản lý Booking hoặc Chỉnh sửa Đơn hàng
+- **Mô tả lỗi:** Khi người dùng Sale tạo đơn hàng lẻ cho khách trực tiếp và không tích chọn checkbox "Tạo đơn thay cho CTV (Cộng Tác Viên)", khi vào Quản lý Booking hoặc khi bấm "Chỉnh sửa thông tin booking", hệ thống vẫn tự động hiển thị khối nhập liệu "Tiền tour chênh lệch CTV & Phí tính thuế" dành riêng cho CTV và tính toán hoa hồng CTV, gây bối rối cho người dùng và tạo cảm giác hệ thống bị lỗi mặc định tạo hộ CTV.
+- **Nguyên nhân:**
+  1. Trong form tạo mới ở `OrdersManagement.tsx`, sau khi tạo đơn thành công, logic reset form bị thiếu hàm `setIsCreatingForCTV(false)`, dẫn đến việc state này có thể bị lưu giữ ở trạng thái cũ (`true`) trong các lượt thao tác kế tiếp.
+  2. Trong modal chỉnh sửa `EditOrderModal.tsx`, ban đầu hoàn toàn không có state `isCreatingForCTV` và checkbox tương ứng để người dùng chủ động lựa chọn. Hệ thống mặc định sử dụng quyền `isSaleRole` của người đăng nhập để luôn hiển thị khối nhập liệu và tính toán hoa hồng CTV cho mọi đơn hàng (dù đó là đơn khách lẻ trực tiếp và không có thông tin CTV).
+- **Giải pháp:**
+  1. Thêm state `isCreatingForCTV` vào `EditOrderModal.tsx` và khởi tạo động dựa trên sự hiện diện của `order.ctv_info` hoặc `order.price_markup > 0`.
+  2. Bổ sung checkbox `🤝 Tạo đơn thay cho CTV (Cộng Tác Viên)` đồng bộ hoàn hảo trong `EditOrderModal.tsx` giống y hệt như form tạo mới. Chỉ hiển thị ô nhập Ghi chú CTV, khối tiền chênh lệch và cấu hình thuế khi checkbox này được tick chọn.
+  3. Cấu hình bảng thống kê tạm tính hoa hồng tự động (Commission breakdown box) trong `EditOrderModal.tsx` chỉ hiển thị khi đơn hàng thực sự thuộc về Đại lý (`sellerType === 'agent'`), hoặc vai trò hiện tại là CTV, hoặc khi có tick chọn tạo thay CTV (`isCreatingForCTV` là `true`). Với các đơn hàng trực tiếp của khách lẻ do Sale bán trực tiếp, khối này sẽ được ẩn đi hoàn toàn.
+  4. Cập nhật hàm `handleSave` trong `EditOrderModal.tsx` để tự động dọn sạch và reset các trường liên quan đến CTV (`ctv_info` về rỗng, `price_markup` về `0`, phí thu về `0`) nếu người dùng không chọn hoặc bỏ chọn checkbox tạo hộ CTV trên form, đảm bảo tính nhất quán của dữ liệu.
+  5. Bổ sung lệnh reset `setIsCreatingForCTV(false)` trong khối reset của form tạo mới tại `OrdersManagement.tsx`.
+- **Trạng thái:** Đã khắc phục triệt để, đồng bộ giao diện nhất quán 100%, biên dịch thành công hoàn hảo.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

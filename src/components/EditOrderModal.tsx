@@ -31,6 +31,7 @@ export default function EditOrderModal({
   const [vatEmail, setVatEmail] = useState(order?.vat_email || '');
   const [specialRequests, setSpecialRequests] = useState('');
   const [ctvInfo, setCtvInfo] = useState('');
+  const [isCreatingForCTV, setIsCreatingForCTV] = useState(false);
   const [discountType, setDiscountType] = useState<'percent' | 'amount'>(order?.discount_type || 'amount');
   const [discountValueDisplay, setDiscountValueDisplay] = useState(formatNumber(order?.discount_value || 0));
   const [surcharges, setSurcharges] = useState<SurchargeItem[]>([]);
@@ -114,6 +115,10 @@ export default function EditOrderModal({
       setVatEmail(order.vat_email || '');
       setSpecialRequests(order.special_requests || '');
       setCtvInfo(order.ctv_info || '');
+      
+      const hasCTV = Boolean(order.ctv_info && order.ctv_info.trim().length > 0) || (order.price_markup !== undefined && order.price_markup > 0);
+      setIsCreatingForCTV(hasCTV);
+
       setDiscountType(order.discount_type || 'amount');
       setDiscountValueDisplay(formatNumber(order.discount_value || 0));
 
@@ -241,6 +246,8 @@ export default function EditOrderModal({
 
       const surchargeNameCombined = surcharges.map(s => s.name.trim()).filter(Boolean).join(', ') || (customSurchargeAmount > 0 ? 'Phụ thu khác' : '');
 
+      const isActuallyCTV = isCreatingForCTV || (currentRole === 'CTV' || profile?.role === 'CTV');
+
       onSave(order.id, {
         single_room_count: Number(singleRoomCount),
         room_share_info: roomShareInfo.trim(),
@@ -250,15 +257,15 @@ export default function EditOrderModal({
         vat_address: vatAddress.trim(),
         vat_email: vatEmail.trim(),
         special_requests: specialRequests.trim(),
-        ctv_info: ctvInfo.trim(),
+        ctv_info: isActuallyCTV ? ctvInfo.trim() : '',
         discount_type: discountType,
         discount_value: parseNumber(discountValueDisplay),
         surcharges,
         surcharge_name: surchargeNameCombined,
         surcharge_amount: customSurchargeAmount,
-        price_markup: priceMarkup,
-        markup_fee_amount: markupFeeAmount,
-        markup_tax_percent: markupTaxPercent,
+        price_markup: isActuallyCTV ? priceMarkup : 0,
+        markup_fee_amount: isActuallyCTV ? markupFeeAmount : 0,
+        markup_tax_percent: isActuallyCTV ? markupTaxPercent : 25,
         total_price: finalTotalPrice,
         is_locked: true,
 
@@ -517,19 +524,52 @@ export default function EditOrderModal({
             />
           </div>
 
-          {/* CTV Information Note Section for Sale */}
-          {(isSaleRole || Boolean(ctvInfo)) && (
+          {/* CTV Toggle and Information Section */}
+          {isSaleRole && (
+            <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isCreatingForCTV}
+                  disabled={!canEditFinancials}
+                  onChange={e => {
+                    setIsCreatingForCTV(e.target.checked);
+                    if (!e.target.checked) {
+                      setCtvInfo('');
+                      setPriceMarkupDisplay('');
+                    }
+                  }}
+                  className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                  <span>🤝 Tạo đơn thay cho CTV (Cộng Tác Viên)</span>
+                </span>
+              </label>
+
+              {isCreatingForCTV && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] text-amber-700 block">Dành riêng cho Sale ghi nhận tên, SĐT, số tiền hoa hồng CTV</span>
+                  <input
+                    type="text"
+                    disabled={!canEditFinancials}
+                    value={ctvInfo}
+                    onChange={(e) => setCtvInfo(e.target.value)}
+                    placeholder="Nhập Tên CTV, SĐT, tỷ lệ/số tiền hoa hồng hứa trả cho CTV..."
+                    className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isSaleRole && Boolean(ctvInfo) && (
             <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-1.5">
               <label className="block text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                <span>🤝 Ghi chú / Thông tin CTV (Dành riêng cho Sale quản lý CTV)</span>
+                <span>🤝 Ghi chú / Thông tin CTV</span>
               </label>
-              <input
-                type="text"
-                value={ctvInfo}
-                onChange={(e) => setCtvInfo(e.target.value)}
-                placeholder="Nhập Tên CTV, SĐT, tỷ lệ/số tiền hoa hồng hứa trả cho CTV..."
-                className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
+              <div className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-700">
+                {ctvInfo}
+              </div>
             </div>
           )}
 
@@ -663,7 +703,7 @@ export default function EditOrderModal({
           </div>
 
           {/* CTV Markup & Fee Tax Block */}
-          {(Boolean(ctvInfo) || currentRole === 'CTV' || profile?.role === 'CTV' || isSaleRole) && (
+          {(isCreatingForCTV || currentRole === 'CTV' || profile?.role === 'CTV') && (
             <div className="space-y-2 bg-emerald-50/70 border border-emerald-200 p-3 rounded-xl">
               <div className="flex items-center justify-between border-b border-emerald-200/80 pb-1.5">
                 <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -805,7 +845,7 @@ export default function EditOrderModal({
               </div>
 
               {/* Commission breakdown box */}
-              {(baseTotalCommission > 0 || netCommissionReceived > 0 || priceMarkup > 0) && (
+              {((sellerType === 'agent') || currentRole === 'CTV' || profile?.role === 'CTV' || isCreatingForCTV) && (baseTotalCommission > 0 || netCommissionReceived > 0 || priceMarkup > 0) && (
                 <div className="bg-amber-50/90 p-3 rounded-xl border border-amber-200/80 space-y-2 text-xs mt-2.5">
                   <div className="flex justify-between items-center text-amber-900 font-bold border-b border-amber-200/60 pb-1.5">
                     <span className="flex items-center gap-1.5 text-amber-800">
