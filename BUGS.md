@@ -34,6 +34,75 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   2. Bằng cách này, luồng lưu trữ chính Google Drive luôn được bảo toàn và duy trì hoạt động thông qua Service Account, không bị đẩy xuống tầng lưu trữ dự phòng Supabase Storage một cách không cần thiết.
 - **Trạng thái:** Đã khắc phục triệt để và kiểm tra build thành công.
 
+### 1.5 Lỗi Đề nghị thanh toán (Payment Proposals) không hiển thị cho Leader / Admin
+- **Mô tả lỗi:** Khi nhân viên tạo đề nghị thanh toán mới, người dùng cấp quản lý (Leader/Admin) ở các trình duyệt/thiết bị khác không nhìn thấy đề xuất này trên hệ thống.
+- **Nguyên nhân:** Bảng `payment_proposals` trong cơ sở dữ liệu Supabase được kích hoạt tính năng RLS (Row Level Security) hoặc kế thừa RLS từ các thiết lập mặc định, nhưng ban đầu chưa được định nghĩa chính sách (Policy) truy cập cụ thể nào. Điều này khiến cho các truy vấn của những người dùng đăng nhập khác bị chặn và hệ thống buộc phải tự động sử dụng kho dữ liệu dự phòng `localStorage` vốn bị cô lập riêng cho từng thiết bị của mỗi nhân viên.
+- **Giải pháp:** 
+  1. Kích hoạt rõ ràng Row Level Security (RLS) cho bảng `payment_proposals` trong file `supabase-schema.sql`.
+  2. Tạo chính sách bảo mật cho phép tất cả tài khoản đã đăng nhập (authenticated) được quyền xem, sửa, xóa các bản ghi trên bảng này:
+     `CREATE POLICY "Allow authenticated access to payment_proposals" ON payment_proposals FOR ALL TO authenticated USING (true) WITH CHECK (true);`
+- **Trạng thái:** Đã khắc phục triệt để, đồng bộ dữ liệu hoàn hảo giữa các tài khoản và kiểm tra thành công.
+
+### 1.6 Yêu cầu giới hạn quyền truy cập tài liệu Google Drive (Phương án B)
+- **Mô tả yêu cầu:** Giới hạn quyền truy cập các thư mục và file được tải lên Google Drive của công ty, chỉ cho phép những email nội bộ công ty được quyền xem tài liệu, tránh rò rỉ thông tin ra ngoài.
+- **Giải pháp:** Thực hiện nâng cấp cơ chế phân quyền Google Drive theo **Phương án B**:
+  1. Thay vì chia sẻ công khai cho bất kỳ ai có link (`type: 'anyone', role: 'reader'`), hệ thống đã được viết lại hàm `makeFolderPublic` trong `app.ts`.
+  2. Cấu hình phân quyền Google Drive cho từng file/thư mục khi tạo mới hoặc upload bằng cách lặp và thiết lập quyền truy cập cho:
+     - Tên miền email nội bộ của công ty: `adluxury.net` (`type: 'domain', domain: 'adluxury.net', role: 'reader'`).
+     - Các email quản trị viên tối cao: `marketing@adluxury.net`, `marketing.adluxury@gmail.com` (`type: 'user', emailAddress: '...', role: 'reader'`).
+     - Tự động trích xuất email của người dùng đang thực hiện tải lên từ token JWT Supabase (`getAuthenticatedUserEmail`) để cấp quyền truy cập trực tiếp cho chính nhân viên đó.
+- **Trạng thái:** Đã triển khai thành công, vượt qua kiểm tra build và linter với kết quả hoàn hảo.
+
+### 1.7 Lỗi Popover bộ chọn ngày (TimeRangeFilter) bị tràn và cắt khuất góc phải màn hình
+- **Mô tả lỗi:** Nút chọn khoảng ngày tùy chỉnh của Bộ lọc Đề nghị thanh toán nằm ở góc ngoài cùng bên phải. Khi mở rộng, popover bị tràn sang phải ra khỏi màn hình trình duyệt, che mất nút "Xác nhận".
+- **Giải pháp:** Cập nhật `alignPopover="right"` cho bộ chọn trong `PaymentProposals.tsx`. Giúp popover tự động căn mép phải với nút kích hoạt và mở rộng vào phía trong màn hình một cách an toàn.
+- **Trạng thái:** Đã xử lý triệt để, hiển thị chuẩn chỉnh.
+
+### 1.8 Lỗi lệch vai trò của nhân viên Marketing khi gửi đóng góp ý kiến
+- **Mô tả lỗi:** Nhân viên Marketing khi gửi góp ý hệ thống hiển thị vai trò là "Sale", không đúng với chức vụ thực tế "NHÂN VIÊN MARKETING" trong Quản lý thành viên.
+- **Nguyên nhân:** Biến `currentRole` được sử dụng trong `FeedbackModal.tsx` đã bị gộp từ `marketing` về `sale` phục vụ phân quyền dữ liệu. Bộ biên dịch chuyển đổi vai trò `getRoleBadge` cũng thiếu định nghĩa cho các vai trò mới như `marketing`, `marketing_leader`, `tour_guide`, `CTV`.
+- **Giải pháp:** 
+  1. Thay đổi việc truy xuất vai trò từ `currentRole` thành `displayRole` (giữ nguyên vai trò gốc đang hiển thị).
+  2. Bổ sung đầy đủ 4 vai trò mới vào hàm `getRoleBadge` in `FeedbackModal.tsx` để dịch hiển thị chính xác hoàn toàn.
+- **Trạng thái:** Đã đồng bộ hoàn chỉnh trên toàn hệ thống.
+
+### 1.9 Di chuyển 2 nút "Lịch trình tour" và "Thông tin lưu ý" xuống hàng dưới so với tên Tour (Ảnh 1)
+- **Mô tả yêu cầu:** Khi hiển thị card tour, 2 nút này chiếm nhiều diện tích trên cùng 1 hàng ngang với tên tour làm giao diện bị rối mắt.
+- **Giải pháp:** Cập nhật file `DepartureCalendar.tsx`, di chuyển cụm container chứa 2 nút này xuống dưới dòng tên tour (phía trên các dòng thông tin chi tiết và tag).
+- **Trạng thái:** Hoàn thành, hiển thị thoáng và cân đối đúng mockup.
+
+### 1.11 Di chuyển các nhãn trạng thái (Còn chỗ, Giờ chót, Mở bán, v.v.) lên phía trên ô số chỗ ngồi (Ảnh bôi đỏ)
+- **Mô tả yêu cầu:** Nhãn trạng thái lúc trước nằm cạnh tên tour. Người dùng mong muốn chuyển chúng lên phía trên ô bôi đỏ (khu vực nằm ngay phía trên khối hiển thị Đã bán / Giữ chỗ / Còn lại).
+- **Giải pháp:** Cập nhật file `DepartureCalendar.tsx`, bóc tách `SeatStatusBadge` và `tour_status` ra khỏi dòng tên tour, đặt chúng vào một hàng ngang ngay phía trên khối số lượng ghế "Seats Info". Với sản phẩm visa lẻ, cụm badge này vẫn được căn chỉnh chính xác trên layout mà không cần hiển thị khối ghế trống.
+- **Trạng thái:** Hoàn thành, cực kỳ thoáng mắt và đúng chuẩn phân vùng thông tin.
+
+### 1.12 Thay đổi viền ngoài của thẻ tour tùy biến theo trạng thái giữ chỗ (Còn chỗ, Hết chỗ, Overbooked)
+- **Mô tả yêu cầu:** Giữ màu sắc nền của thẻ tour như cũ (trắng tiêu chuẩn `bg-white`), chỉ thay đổi viền để màu sắc nổi bật, rõ ràng hơn. Cả trạng thái "Giờ chót" (`last_minute`) và "Hết chỗ" (`Hết chỗ`) đều áp dụng viền đỏ.
+- **Giải pháp:** Định nghĩa biến `borderClasses` động trong `DepartureCalendar.tsx` với màu nền trắng đồng bộ và viền dày 2px rõ nét:
+  - **Giờ chót hoặc Hết chỗ:** Viền đỏ thắm dày 2px nổi bật (`border-rose-400 border-[2px] bg-white`).
+  - **Còn chỗ:** Viền xanh lá cây tươi dày 2px rõ ràng (`border-emerald-400 border-[2px] bg-white`).
+  - **Overbooked:** Viền tím đậm dày 2px sang trọng (`border-purple-400 border-[2px] bg-white`).
+- **Trạng thái:** Hoàn thành, thẻ tour vừa giữ được độ thanh lịch của nền trắng, vừa tăng tối đa khả năng phân loại trực quan của viền màu sắc rõ rệt.
+
+### 1.13 Tự động thiết lập trạng thái "Giờ chót" cho các tour khởi hành trong vòng 20 ngày
+- **Mô tả yêu cầu:** Hệ thống cần tự động tính toán và gắn nhãn "Giờ chót" cho các tour có thời gian khởi hành trong vòng 20 ngày kể từ ngày hiện tại để tự động tối ưu hóa hiển thị và phân quyền màu sắc viền thẻ tour.
+- **Giải pháp:** Cập nhật file `DepartureCalendar.tsx`, bổ sung hàm helper `getEffectiveTourStatus` so sánh thời gian khởi hành (`departure_time` hoặc `start_date`) với ngày hiện tại (`today`). Nếu khoảng cách thời gian từ 0 đến 20 ngày, tour sẽ tự động chuyển sang nhãn trạng thái `last_minute`. Hàm helper này được đồng bộ để áp dụng cho cả việc hiển thị nhãn, hiển thị viền đỏ và tính năng lọc trạng thái tour trên lịch khởi hành.
+- **Trạng thái:** Hoàn thành, hoạt động tự động thông minh, nhất quán và tin cậy.
+
+### 1.14 Tự động đồng bộ khoản thanh toán Net nộp cho Đối tác nhận khách trong bảng chi phí Tour
+- **Mô tả yêu cầu:** Trong bảng hạch toán chi phí tour đối tác, hệ thống cần tự động hiển thị mục để AD thanh toán/chuyển khoản cho bên công ty đối tác nhận khách dựa trên giá Net nhân với số lượng hành khách tham gia tour.
+- **Giải pháp:** Cập nhật hàm `getAutoGeneratedPaymentsList` trong component `TourCostsManagement.tsx`. Khi hệ thống thực hiện đồng bộ chi phí (từ nút "Đồng bộ từ chi phí" hoặc khi Lưu bảng chi phí) đối với Tour gửi khách đối tác (`partner` hoặc `outsourced`) có khai báo chi phí Net (`partner_net_cost` > 0), hệ thống sẽ tự động khởi tạo/cập nhật một thẻ thanh toán đối tác riêng biệt: `Thanh toán đối tác: [Tên đối tác nhận khách]` với tổng số tiền bằng `partner_net_cost * totalConfirmedPassengers` (Số tiền Net mỗi khách x Tổng số khách đã xác nhận).
+- **Trạng thái:** Hoàn thành, giúp điều hành và kế toán dễ dàng tạo đề xuất chi nhiều đợt, đính kèm ảnh chuyển khoản và phê duyệt UNC trực tiếp và minh bạch.
+
+### 1.15 Khắc phục lỗi "Phản hồi từ máy chủ không hợp lệ: <!doctype html>" khi upload tài liệu
+- **Mô tả lỗi:** Khi người dùng thực hiện tải file lên (lịch trình Tour hoặc hóa đơn chuyển khoản), hệ thống đôi khi trả về thông báo lỗi HTML `<!doctype html>` thay vì xử lý dữ liệu JSON đúng định dạng.
+- **Nguyên nhân:**
+  1. Ở chế độ phát triển (hoặc khi deploy production qua Vercel), nếu một request API có tải lượng lớn hoặc gặp sự cố nhỏ lọt qua Express router, nó sẽ trôi xuống SPA Fallback middleware của Vite (`vite.middlewares`) hoặc catch-all của static server (`dist/index.html`). Do đó, client nhận về tệp `index.html` (với nội dung bắt đầu bằng `<!doctype html>`) cùng mã HTTP `200 OK`. Khi client cố gắng parse JSON của chuỗi HTML này, phương thức `JSON.parse` thất bại và ném ra biệt lệ.
+- **Giải pháp:**
+  1. Thêm header cấu hình `'Accept': 'application/json'` rõ ràng trong tất cả các request `fetch` tải file từ Client (`PaymentModal.tsx` và `ToursManagement.tsx`). Điều này báo hiệu cho SPA Fallback middleware của Vite và các server trung gian biết rằng client KHÔNG chấp nhận định dạng HTML, tránh hoàn toàn việc tự động trả về tệp `index.html` khi có lỗi.
+  2. Bổ sung các khối kiểm tra thông minh ở Client để kiểm tra tiền tố nội dung trả về. Nếu phản hồi bắt đầu bằng `<!doctype html` hoặc `<html`, client sẽ chủ động chặn lại và dịch thành thông báo Tiếng Việt thân thiện, mô tả đúng trạng thái cấu hình lưu trữ Google Drive / Supabase thay vì cố gắng parse JSON lỗi.
+- **Trạng thái:** Đã giải quyết triệt để, kiểm tra biên dịch thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

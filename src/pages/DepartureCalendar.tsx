@@ -24,6 +24,28 @@ const formatDate = (dateString: string | undefined | null) => {
   }
 };
 
+const getEffectiveTourStatus = (tour: Tour): string | undefined => {
+  const departureDateStr = tour.departure_time || tour.start_date;
+  if (departureDateStr) {
+    try {
+      const departureDate = new Date(departureDateStr);
+      const today = new Date();
+      const departureMidnight = new Date(departureDate.getFullYear(), departureDate.getMonth(), departureDate.getDate());
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      const diffTime = departureMidnight.getTime() - todayMidnight.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays >= 0 && diffDays <= 20) {
+        return 'last_minute';
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return tour.tour_status;
+};
+
 const SeatStatusBadge = ({ status }: { status: Tour['seat_status'] }) => {
   if (status === 'Còn chỗ') return <span className="inline-flex items-center px-3 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-sm">{status}</span>;
   if (status === 'Hết chỗ') return <span className="inline-flex items-center px-3 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-rose-50 text-rose-700 border border-rose-200/60 shadow-sm">{status}</span>;
@@ -38,8 +60,24 @@ const TourCard: React.FC<{
 }> = ({ tour, onBookClick, onShowNotice }) => {
   const [expanded, setExpanded] = useState(false);
 
+  const effectiveTourStatus = getEffectiveTourStatus(tour);
+
+  const borderClasses = (() => {
+    // Cả "Giờ chót" (tour_status === 'last_minute') và "Hết chỗ" (seat_status === 'Hết chỗ') đều viền đỏ nổi bật
+    if (tour.seat_status === 'Hết chỗ' || effectiveTourStatus === 'last_minute') {
+      return 'border-rose-400 border-[2px] bg-white';
+    }
+    if (tour.seat_status === 'Còn chỗ') {
+      return 'border-emerald-400 border-[2px] bg-white';
+    }
+    if (tour.seat_status === 'Overbooked') {
+      return 'border-purple-400 border-[2px] bg-white';
+    }
+    return 'border-gray-200 border bg-white';
+  })();
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow font-sans">
+    <div className={`rounded-2xl transition-all hover:shadow-md font-sans overflow-hidden ${borderClasses}`}>
 
       <div 
         className="p-5 cursor-pointer flex flex-col xl:flex-row gap-6 items-start xl:items-center justify-between"
@@ -51,55 +89,37 @@ const TourCard: React.FC<{
             <h3 className="text-lg font-bold text-gray-900 leading-tight uppercase">
               {tour.name}
             </h3>
-            
-            {/* Action buttons horizontal next to tour name */}
-            <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-              {tour.itinerary_pdf_url ? (
-                <a
-                  href={tour.itinerary_pdf_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-all shadow-sm"
-                >
-                  <FileText className="w-3.5 h-3.5 mr-1 shrink-0 text-blue-600" />
-                  Lịch trình tour
-                </a>
-              ) : (
-                <button
-                  onClick={() => toast.error("File PDF lịch trình chi tiết đang được cập nhật bởi Điều hành. Vui lòng kiểm tra lại sau!")}
-                  className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-gray-400 bg-gray-50 border border-gray-200 rounded-md cursor-not-allowed"
-                >
-                  <FileText className="w-3.5 h-3.5 mr-1 shrink-0" />
-                  Lịch trình tour
-                </button>
-              )}
-
-              <button
-                onClick={() => onShowNotice(tour)}
-                className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-md transition-all shadow-sm"
+          </div>
+          
+          {/* Action buttons on their own row below tour name */}
+          <div className="flex flex-wrap items-center gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
+            {tour.itinerary_pdf_url ? (
+              <a
+                href={tour.itinerary_pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-all shadow-sm"
               >
-                <HelpCircle className="w-3.5 h-3.5 mr-1 shrink-0 text-orange-600" />
-                Thông tin lưu ý
+                <FileText className="w-3.5 h-3.5 mr-1 shrink-0 text-blue-600" />
+                Lịch trình tour
+              </a>
+            ) : (
+              <button
+                onClick={() => toast.error("File PDF lịch trình chi tiết đang được cập nhật bởi Điều hành. Vui lòng kiểm tra lại sau!")}
+                className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-gray-400 bg-gray-50 border border-gray-200 rounded-md cursor-not-allowed"
+              >
+                <FileText className="w-3.5 h-3.5 mr-1 shrink-0" />
+                Lịch trình tour
               </button>
-            </div>
+            )}
 
-            <div className="flex items-center gap-2 shrink-0">
-              <SeatStatusBadge status={tour.seat_status} />
-              {tour.tour_status && (
-                <span className={`inline-flex items-center px-3 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full shadow-sm ${
-                  tour.tour_status === 'on_sale' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' :
-                  tour.tour_status === 'last_minute' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
-                  tour.tour_status === 'holiday' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/60' :
-                  tour.tour_status === 'noshop' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
-                  'bg-blue-50 text-blue-700 border border-blue-200/60'
-                }`}>
-                  {tour.tour_status === 'on_sale' ? 'Giảm giá' :
-                   tour.tour_status === 'last_minute' ? 'Giờ chót' :
-                   tour.tour_status === 'holiday' ? 'Lễ Tết' :
-                   tour.tour_status === 'noshop' ? 'No-shop' : 'Mở bán'}
-                </span>
-              )}
-            </div>
+            <button
+              onClick={() => onShowNotice(tour)}
+              className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-md transition-all shadow-sm"
+            >
+              <HelpCircle className="w-3.5 h-3.5 mr-1 shrink-0 text-orange-600" />
+              Thông tin lưu ý
+            </button>
           </div>
 
           {/* Product type badge and summary details */}
@@ -155,24 +175,67 @@ const TourCard: React.FC<{
 
         {/* Right side: Key Numbers */}
         <div className="flex flex-wrap sm:flex-nowrap gap-6 items-center w-full xl:w-auto">
-          {/* Seats Info */}
-          {tour.tour_type !== 'visa' && (
-            <div className="flex gap-4 text-sm bg-gray-50 px-4 py-2.5 rounded-lg border border-gray-100 flex-1 sm:flex-none justify-center">
-              <div className="flex flex-col items-center">
-                <span className="text-gray-500 text-xs mb-1">Đã bán</span>
-                <span className="font-semibold text-blue-700 text-base">{tour.sold_seats}</span>
+          {/* Seats Info with Status Badges above */}
+          {tour.tour_type !== 'visa' ? (
+            <div className="flex flex-col gap-2 flex-1 sm:flex-none">
+              {/* Badges container */}
+              <div className="flex items-center gap-2 justify-center sm:justify-start">
+                <SeatStatusBadge status={tour.seat_status} />
+                {effectiveTourStatus && (
+                  <span className={`inline-flex items-center px-3 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full shadow-sm ${
+                    effectiveTourStatus === 'on_sale' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' :
+                    effectiveTourStatus === 'last_minute' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
+                    effectiveTourStatus === 'holiday' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/60' :
+                    effectiveTourStatus === 'noshop' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
+                    'bg-blue-50 text-blue-700 border border-blue-200/60'
+                  }`}>
+                    {effectiveTourStatus === 'on_sale' ? 'Giảm giá' :
+                     effectiveTourStatus === 'last_minute' ? 'Giờ chót' :
+                     effectiveTourStatus === 'holiday' ? 'Lễ Tết' :
+                     effectiveTourStatus === 'noshop' ? 'No-shop' : 'Mở bán'}
+                  </span>
+                )}
               </div>
-              <div className="w-px h-8 bg-gray-200"></div>
-              <div className="flex flex-col items-center">
-                <span className="text-gray-500 text-xs mb-1">Giữ chỗ</span>
-                <span className="font-semibold text-orange-500 text-base">{tour.hold_seats}</span>
-              </div>
-              <div className="w-px h-8 bg-gray-200"></div>
-              <div className="flex flex-col items-center">
-                <span className="text-gray-500 text-xs mb-1">Còn lại</span>
-                <span className="font-bold text-green-600 text-base">{tour.available_seats}</span>
+
+              {/* Seats Info box */}
+              <div className="flex gap-4 text-sm bg-gray-50 px-4 py-2.5 rounded-lg border border-gray-100 justify-center">
+                <div className="flex flex-col items-center">
+                  <span className="text-gray-500 text-xs mb-1">Đã bán</span>
+                  <span className="font-semibold text-blue-700 text-base">{tour.sold_seats}</span>
+                </div>
+                <div className="w-px h-8 bg-gray-200"></div>
+                <div className="flex flex-col items-center">
+                  <span className="text-gray-500 text-xs mb-1">Giữ chỗ</span>
+                  <span className="font-semibold text-orange-500 text-base">{tour.hold_seats}</span>
+                </div>
+                <div className="w-px h-8 bg-gray-200"></div>
+                <div className="flex flex-col items-center">
+                  <span className="text-gray-500 text-xs mb-1">Còn lại</span>
+                  <span className="font-bold text-green-600 text-base">{tour.available_seats}</span>
+                </div>
               </div>
             </div>
+          ) : (
+            /* For Visa, show badges if they exist without the seats count */
+            (tour.seat_status || effectiveTourStatus) && (
+              <div className="flex items-center gap-2 justify-center sm:justify-start flex-1 sm:flex-none">
+                <SeatStatusBadge status={tour.seat_status} />
+                {effectiveTourStatus && (
+                  <span className={`inline-flex items-center px-3 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full shadow-sm ${
+                    effectiveTourStatus === 'on_sale' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' :
+                    effectiveTourStatus === 'last_minute' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
+                    effectiveTourStatus === 'holiday' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/60' :
+                    effectiveTourStatus === 'noshop' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
+                    'bg-blue-50 text-blue-700 border border-blue-200/60'
+                  }`}>
+                    {effectiveTourStatus === 'on_sale' ? 'Giảm giá' :
+                     effectiveTourStatus === 'last_minute' ? 'Giờ chót' :
+                     effectiveTourStatus === 'holiday' ? 'Lễ Tết' :
+                     effectiveTourStatus === 'noshop' ? 'No-shop' : 'Mở bán'}
+                  </span>
+                )}
+              </div>
+            )
           )}
 
           {/* Pricing */}
@@ -703,7 +766,8 @@ export default function DepartureCalendar() {
     if (selectedCategory !== 'all' && tour.category !== selectedCategory) return false;
 
     // 3. Tour Status match
-    if (selectedTourStatus !== 'all' && tour.tour_status !== selectedTourStatus) return false;
+    const effectiveTourStatus = getEffectiveTourStatus(tour);
+    if (selectedTourStatus !== 'all' && effectiveTourStatus !== selectedTourStatus) return false;
 
     // 4. Time Range match
     if (selectedTimeRange !== 'all') {

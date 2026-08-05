@@ -10,7 +10,7 @@ interface FeedbackModalProps {
 
 export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
   const { user, profile } = useAuth();
-  const { currentRole } = useCRM();
+  const { displayRole } = useCRM();
 
   const [type] = useState<string>('Góp ý & Báo lỗi');
   const [content, setContent] = useState('');
@@ -34,6 +34,10 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
       case 'visa': return 'Bộ phận Visa';
       case 'accounting': return 'Kế toán';
       case 'admin': return 'Quản trị viên';
+      case 'tour_guide': return 'Hướng Dẫn Viên (HDV)';
+      case 'marketing_leader': return 'Trưởng phòng Marketing';
+      case 'marketing': return 'Nhân viên Marketing';
+      case 'CTV': return 'Cộng Tác Viên (CTV)';
       default: return role;
     }
   };
@@ -136,7 +140,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
           senderName: profile?.full_name || user?.email?.split('@')[0] || 'Thành viên',
           senderEmail: user?.email || '',
           senderPhone: profile?.phone || '',
-          senderRole: getRoleBadge(currentRole),
+          senderRole: getRoleBadge(displayRole),
         }),
       });
 
@@ -286,7 +290,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
               Người gửi: <strong className="text-gray-900 font-bold">{profile?.full_name || user?.email?.split('@')[0] || 'Thành viên'}</strong>
             </span>
             <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px]">
-              {getRoleBadge(currentRole)}
+              {getRoleBadge(displayRole)}
             </span>
           </div>
 

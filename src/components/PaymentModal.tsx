@@ -76,6 +76,9 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
       // 2. Call upload API
       const uploadRes = await fetch('/api/upload-invoice-receipt', {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json'
+        },
         body: formData,
       });
 
@@ -83,7 +86,11 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
         let errData: any = {};
         try {
           const text = await uploadRes.text();
-          errData = JSON.parse(text);
+          if (text.trim().startsWith('<!doctype html') || text.trim().startsWith('<html')) {
+            errData = { error: 'Máy chủ phản hồi không đúng định dạng (HTML). Vui lòng kiểm tra lại cấu hình lưu trữ Google Drive/Supabase hoặc liên hệ quản trị viên.' };
+          } else {
+            errData = JSON.parse(text);
+          }
         } catch {
           errData = { error: `Lỗi máy chủ: ${uploadRes.status}` };
         }
@@ -93,12 +100,15 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
       const resText = await uploadRes.text();
       let resData: any = {};
       try {
+        if (resText.trim().startsWith('<!doctype html') || resText.trim().startsWith('<html')) {
+          throw new Error('Máy chủ phản hồi không đúng định dạng HTML thay vì JSON.');
+        }
         resData = JSON.parse(resText);
-      } catch (err) {
+      } catch (err: any) {
         if (resText && resText.trim().startsWith('http')) {
           resData = { url: resText.trim(), success: true };
         } else {
-          throw new Error(`Phản hồi từ máy chủ không hợp lệ: ${resText.substring(0, 100)}`);
+          throw new Error(err.message || `Phản hồi từ máy chủ không hợp lệ: ${resText.substring(0, 100)}`);
         }
       }
       

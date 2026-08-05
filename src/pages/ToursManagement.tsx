@@ -757,6 +757,9 @@ export default function ToursManagement() {
 
       const res = await fetch('/api/upload', {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json'
+        },
         body: formData,
       });
 
@@ -766,6 +769,17 @@ export default function ToursManagement() {
         if (contentType && contentType.includes('application/json')) {
           const errJson = await res.json();
           errorMsg = errJson.error || errorMsg;
+        } else {
+          try {
+            const errText = await res.text();
+            if (errText.trim().startsWith('<!doctype html') || errText.trim().startsWith('<html')) {
+              errorMsg = 'Máy chủ phản hồi không đúng định dạng (HTML). Vui lòng cấu hình Google Drive hoặc kiểm tra lại file upload.';
+            } else {
+              errorMsg = errText || errorMsg;
+            }
+          } catch {
+            errorMsg = `Lỗi máy chủ: ${res.status}`;
+          }
         }
         throw new Error(errorMsg);
       }
@@ -773,10 +787,15 @@ export default function ToursManagement() {
       const text = await res.text();
       let data: any = null;
       try {
+        if (text.trim().startsWith('<!doctype html') || text.trim().startsWith('<html')) {
+          throw new Error('Máy chủ phản hồi không đúng định dạng HTML thay vì JSON.');
+        }
         data = JSON.parse(text);
-      } catch {
+      } catch (err: any) {
         if (text && text.trim().startsWith('http')) {
           data = { success: true, url: text.trim() };
+        } else {
+          throw new Error(err.message || `Phản hồi từ máy chủ không hợp lệ: ${text.substring(0, 100)}`);
         }
       }
 
@@ -848,16 +867,6 @@ export default function ToursManagement() {
       setCategory(categories[0]);
     }
   }, [categories, category]);
-
-  // Auto-format tour code based on selected departure time when creating a new tour or adding departure quick
-  useEffect(() => {
-    if (!editingTour && departureTime && code) {
-      const formatted = getFormattedCode(code, departureTime);
-      if (formatted !== code) {
-        setCode(formatted);
-      }
-    }
-  }, [departureTime, code, editingTour]);
 
   // Handle Extension requests list
   const extensionRequests = orders.filter(o => o.extension_status === 'requested');

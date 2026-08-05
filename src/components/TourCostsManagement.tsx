@@ -600,6 +600,13 @@ export default function TourCostsManagement() {
       }
     });
 
+    // Tự động đồng bộ khoản thanh toán Net nộp cho Đối tác nhận khách (đối với Tour đối tác / gửi khách)
+    if (selectedTour && (selectedTour.tour_type === 'partner' || selectedTour.tour_type === 'outsourced') && (selectedTour.partner_net_cost || 0) > 0) {
+      const partnerLabel = `Thanh toán đối tác: ${selectedTour.partner_company_name || selectedTour.partner_name || 'Đối tác nhận khách'}`;
+      const partnerNetTotal = (selectedTour.partner_net_cost || 0) * totalConfirmedPassengers;
+      syncCategory(partnerLabel, partnerNetTotal);
+    }
+
     // Lọc bỏ các thẻ Landtour chưa thanh toán nếu NCC Landtour tương ứng đã bị xóa
     const currentLandtourNames = new Set(
       costs.landtours.map(lt => `landtour: ${lt.supplierName.trim().toLowerCase()}`)

@@ -193,23 +193,67 @@ async function createFolder(folderName: string, parentId?: string, token?: strin
   return data.id;
 }
 
-async function makeFolderPublic(fileId: string, token?: string): Promise<void> {
+async function getAuthenticatedUserEmail(req?: express.Request): Promise<string | undefined> {
+  if (!req) return undefined;
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+      if (supabaseUrl && anonKey) {
+        const client = createClient(supabaseUrl, anonKey);
+        const { data: { user } } = await client.auth.getUser(token);
+        return user?.email;
+      }
+    }
+  } catch (err) {
+    console.warn('[Auth] Failed to get user email from token:', err);
+  }
+  return undefined;
+}
+
+async function makeFolderPublic(fileId: string, token?: string, userEmail?: string | string[]): Promise<void> {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      role: 'reader',
-      type: 'anyone'
-    })
-  });
   
-  if (!res.ok) {
-    const errText = await res.text();
-    console.warn('[Drive] Failed to make folder public:', errText);
+  // Option B: Restrict permissions to company domain and specific company/admin emails
+  const targets: Array<{ type: string; role: string; domain?: string; emailAddress?: string }> = [
+    { type: 'domain', domain: 'adluxury.net', role: 'reader' },
+    { type: 'user', emailAddress: 'marketing@adluxury.net', role: 'reader' },
+    { type: 'user', emailAddress: 'marketing.adluxury@gmail.com', role: 'reader' }
+  ];
+
+  if (userEmail) {
+    const emails = Array.isArray(userEmail) ? userEmail : [userEmail];
+    emails.forEach(email => {
+      if (email && email.trim() && email.includes('@')) {
+        const cleanEmail = email.trim().toLowerCase();
+        if (!targets.some(t => t.emailAddress === cleanEmail)) {
+          targets.push({ type: 'user', emailAddress: cleanEmail, role: 'reader' });
+        }
+      }
+    });
+  }
+
+  for (const target of targets) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(target)
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[Drive] Failed to share with ${target.type === 'domain' ? target.domain : target.emailAddress}:`, errText);
+      } else {
+        console.log(`[Drive] Successfully shared with ${target.type === 'domain' ? target.domain : target.emailAddress}`);
+      }
+    } catch (err) {
+      console.error(`[Drive] Error sharing with ${target.type === 'domain' ? target.domain : target.emailAddress}:`, err);
+    }
   }
 }
 
@@ -639,7 +683,8 @@ async function uploadFileToGoogleDrive(
   mimeType: string, 
   buffer: Buffer, 
   parentId: string, 
-  token: string
+  token: string,
+  userEmail?: string
 ): Promise<{ id: string; webViewLink: string }> {
   const boundary = '-------314159265358979323846';
   const delimiter = `\r\n--${boundary}\r\n`;
@@ -673,8 +718,8 @@ async function uploadFileToGoogleDrive(
 
   const data: any = await res.json();
   
-  // Make the file public so people with link can view it
-  await makeFolderPublic(data.id, token);
+  // Make the file public so people with link can view it (using Option B restrictions inside makeFolderPublic)
+  await makeFolderPublic(data.id, token, userEmail);
   
   return {
     id: data.id,
@@ -910,7 +955,8 @@ async function uploadWith3TierFallback(
     try {
       const token = await getGoogleDriveAccessToken();
       const folderId = await getDriveFolderId(token);
-      const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, folderId, token);
+      const userEmail = await getAuthenticatedUserEmail(req);
+      const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, folderId, token, userEmail);
       return { url: result.webViewLink, fileId: result.id, storage: 'drive' };
     } catch (driveErr: any) {
       driveErrorMsg = driveErr.message || String(driveErr);

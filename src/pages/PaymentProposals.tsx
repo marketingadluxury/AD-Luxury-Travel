@@ -562,6 +562,7 @@ export default function PaymentProposals() {
               endDate={endDate}
               onChangeEndDate={setEndDate}
               prefixText="Tạo"
+              alignPopover="right"
               selectClassName="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 cursor-pointer"
             />
           </div>

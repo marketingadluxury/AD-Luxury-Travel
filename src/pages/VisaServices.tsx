@@ -910,16 +910,6 @@ export default function VisaServices() {
     setShowNoticeModal(true);
   };
 
-  // Auto-format tour code based on selected departure time when creating a new tour or adding departure quick
-  useEffect(() => {
-    if (!editingTour && departureTime && code) {
-      const formatted = getFormattedCode(code, departureTime);
-      if (formatted !== code) {
-        setCode(formatted);
-      }
-    }
-  }, [departureTime, code, editingTour]);
-
   // Handle Extension requests list
   const extensionRequests = orders.filter(o => o.extension_status === 'requested');
 
