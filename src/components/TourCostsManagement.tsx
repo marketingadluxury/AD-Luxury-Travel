@@ -213,6 +213,51 @@ export default function TourCostsManagement() {
     return selectedTourOrders.reduce((sum, order) => sum + (order.total_price || 0), 0);
   }, [selectedTourOrders]);
 
+  // Auto-calculated total commission from active bookings for the selected tour
+  const totalBookingCommissions = useMemo(() => {
+    if (!selectedTourOrders || selectedTourOrders.length === 0) return 0;
+    return selectedTourOrders.reduce((sum, order) => {
+      const seats = Math.max(1, (order.adult_count || 0) + (order.child_count || 0));
+      const tourCommPerSeat = selectedTour?.commission || 0;
+      const baseTotalComm = seats * tourCommPerSeat;
+
+      // Price markup net calculation
+      const markup = order.price_markup || 0;
+      const markupTax = order.markup_tax_percent !== undefined ? order.markup_tax_percent : 25;
+      const markupFee = order.markup_fee_amount !== undefined ? order.markup_fee_amount : Math.round((markup * markupTax) / 100);
+      const markupNet = Math.max(0, markup - markupFee);
+
+      // Discount amount calculation
+      let discountAmount = 0;
+      if (order.discount_type === 'percent') {
+        discountAmount = Math.round(((order.adult_count * (selectedTour?.price_adult || 0) + order.child_count * (selectedTour?.price_child || 0)) * (order.discount_value || 0)) / 100);
+      } else if (order.discount_type === 'amount') {
+        discountAmount = order.discount_value || 0;
+      }
+
+      let netComm = Math.max(0, baseTotalComm + markupNet - discountAmount);
+      if (order.agent_commission_amount !== undefined && order.agent_commission_amount > 0) {
+        netComm = order.agent_commission_amount;
+      } else if (order.net_commission_amount !== undefined && order.net_commission_amount > 0) {
+        netComm = Math.max(order.net_commission_amount, netComm);
+      }
+
+      return sum + netComm;
+    }, 0);
+  }, [selectedTourOrders, selectedTour]);
+
+  // Keep commissionAmount always synchronized with totalBookingCommissions automatically
+  React.useEffect(() => {
+    if (selectedTourId) {
+      if (selectedTourOrders.length > 0) {
+        setCommissionAmount(totalBookingCommissions);
+      } else {
+        const fallback = Math.max(0, (selectedTour?.commission || 0) * (selectedTour?.sold_seats || 0));
+        setCommissionAmount(fallback);
+      }
+    }
+  }, [selectedTourId, selectedTourOrders, totalBookingCommissions, selectedTour]);
+
   // Keep track of the last loaded tourId and serialized costs to prevent overwriting user edits and avoid infinite render loops
   const lastLoadedRef = React.useRef<{ tourId: string | null; serializedCosts: string | null }>({
     tourId: null,
@@ -277,7 +322,10 @@ export default function TourCostsManagement() {
         setInsuranceAmount(Math.max(0, existingCosts.insuranceAmount || 0));
         setTourGuideAmount(Math.max(0, existingCosts.tourGuideAmount || 0));
         setGiftAmount(Math.max(0, existingCosts.giftAmount || 0));
-        setCommissionAmount(Math.max(0, existingCosts.commissionAmount || 0));
+        const commToSet = selectedTourOrders.length > 0 
+          ? totalBookingCommissions 
+          : Math.max(0, existingCosts.commissionAmount || 0);
+        setCommissionAmount(commToSet);
         setAdvertisingAmount(Math.max(0, existingCosts.advertisingAmount || 0));
         setOtherAmount(Math.max(0, existingCosts.otherAmount || 0));
         setVisaAmount(Math.max(0, existingCosts.visaAmount || 0));
@@ -290,8 +338,10 @@ export default function TourCostsManagement() {
         setInsuranceAmount(0);
         setTourGuideAmount(0);
         setGiftAmount(0);
-        // Pre-populate commission based on tour's configured commission * sold passengers if available
-        const computedComm = Math.max(0, tour?.commission || 0) * Math.max(0, tour?.sold_seats || 0);
+        // Pre-populate commission based on total commission calculated from bookings, or tour's configured commission * sold passengers
+        const computedComm = totalBookingCommissions > 0 
+          ? totalBookingCommissions 
+          : Math.max(0, tour?.commission || 0) * Math.max(0, tour?.sold_seats || 0);
         setCommissionAmount(computedComm);
         setAdvertisingAmount(0);
         setOtherAmount(0);
@@ -952,8 +1002,22 @@ export default function TourCostsManagement() {
     }
   };
 
+  const isOutsourcedTour = selectedTour?.tour_type === 'outsourced' || selectedTour?.tour_type === 'partner';
+
+  const totalConfirmedPassengers = useMemo(() => {
+    return selectedTourOrders.reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+  }, [selectedTourOrders]);
+
+  const outsourcedPartnerNetTotal = useMemo(() => {
+    if (!isOutsourcedTour || !selectedTour) return 0;
+    return (selectedTour.partner_net_cost || 0) * totalConfirmedPassengers;
+  }, [isOutsourcedTour, selectedTour, totalConfirmedPassengers]);
+
   // Total direct costs calculated
   const totalCosts = useMemo(() => {
+    if (isOutsourcedTour) {
+      return outsourcedPartnerNetTotal + commissionAmount;
+    }
     const sumLandtours = landtours.reduce((sum, item) => sum + item.amount, 0);
     const sumExtraPartners = partnerPayments
       .filter(p => {
@@ -986,6 +1050,8 @@ export default function TourCostsManagement() {
       sumExtraPartners
     );
   }, [
+    isOutsourcedTour,
+    outsourcedPartnerNetTotal,
     flightAmount,
     insuranceAmount,
     tourGuideAmount,
@@ -1086,9 +1152,14 @@ export default function TourCostsManagement() {
       .filter(inv => inv.type === 'receipt' && inv.status === 'approved' && inv.order_id && orderIds.includes(inv.order_id))
       .reduce((sum, inv) => sum + (inv.amount || 0), 0);
 
+    const isOutsourced = tour.tour_type === 'outsourced' || tour.tour_type === 'partner';
     const costRecord = tourCosts.find(c => c.tourId === tour.id);
     let totalCosts = 0;
-    if (costRecord) {
+
+    if (isOutsourced) {
+      const totalPassengers = tourOrders.reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+      totalCosts = (tour.partner_net_cost || 0) * totalPassengers;
+    } else if (costRecord) {
       const sumLandtours = (costRecord.landtours || []).reduce((sum, item) => sum + (item.amount || 0), 0);
       const sumExtraPartners = (costRecord.partnerPayments || [])
         .filter(p => {
@@ -1435,11 +1506,65 @@ export default function TourCostsManagement() {
                   <DollarSign className="w-4 h-4 text-blue-600" /> 1. Chi phí vận hành, Hành chính & Landtour
                 </h4>
                 <span className="text-xs font-bold text-slate-500">
-                  Tổng Mục 1: <strong className="text-blue-600 font-extrabold text-sm">{formatVND(flightAmount + insuranceAmount + tourGuideAmount + giftAmount + commissionAmount + advertisingAmount + visaAmount + otherAmount + landtours.reduce((sum, item) => sum + item.amount, 0))}</strong>
+                  Tổng Mục 1: <strong className="text-blue-600 font-extrabold text-sm">{formatVND(isOutsourcedTour ? outsourcedPartnerNetTotal + commissionAmount : flightAmount + insuranceAmount + tourGuideAmount + giftAmount + commissionAmount + advertisingAmount + visaAmount + otherAmount + landtours.reduce((sum, item) => sum + item.amount, 0))}</strong>
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {isOutsourcedTour ? (
+                <div className="p-5 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-200/80 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-xs shrink-0">
+                        🤝
+                      </span>
+                      <div>
+                        <h5 className="font-extrabold text-indigo-950 text-sm flex items-center gap-2">
+                          TOUR GỬI ĐỐI TÁC VẬN HÀNH
+                          <span className="text-[10px] font-bold bg-indigo-200/80 text-indigo-800 px-2 py-0.5 rounded-full border border-indigo-300">
+                            Khóa bảng chi phí lẻ
+                          </span>
+                        </h5>
+                        <p className="text-xs text-indigo-700">
+                          Tour này do Công ty Đối tác trực tiếp tổ chức & điều hành: <strong className="text-indigo-950 font-bold">{selectedTour?.partner_company_name || selectedTour?.partner_name || 'Công ty đối tác'}</strong>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Auto-calculated Net Cost row */}
+                  <div className="bg-white p-4 rounded-xl border border-indigo-150 shadow-2xs space-y-3">
+                    <div className="text-xs font-extrabold text-indigo-950 uppercase tracking-wider flex items-center justify-between border-b border-slate-100 pb-2">
+                      <span>Hạch toán Chi phí Net cố định nộp cho Đối tác</span>
+                      <span className="text-indigo-700 text-sm font-black">{formatVND(outsourcedPartnerNetTotal)}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/60">
+                        <span className="text-slate-500 block text-[11px] font-medium">Đối tác vận hành:</span>
+                        <span className="font-extrabold text-slate-900">{selectedTour?.partner_company_name || selectedTour?.partner_name || 'Chưa cập nhật'}</span>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/60">
+                        <span className="text-slate-500 block text-[11px] font-medium font-medium">Tổng số khách đã chốt:</span>
+                        <span className="font-extrabold text-blue-700">{totalConfirmedPassengers} người lớn & trẻ em</span>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/60">
+                        <span className="text-slate-500 block text-[11px] font-medium">Đơn giá Net / khách:</span>
+                        <span className="font-extrabold text-indigo-700">{formatVND(selectedTour?.partner_net_cost || 0)}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 flex items-center justify-between text-xs">
+                      <span className="text-emerald-900 font-semibold">
+                        💡 Lợi nhuận gộp định mức AD hưởng ({formatVND((selectedTour?.partner_retail_price || 0) - (selectedTour?.partner_net_cost || 0))}/khách x {totalConfirmedPassengers} khách):
+                      </span>
+                      <span className="font-black text-emerald-700 text-sm">
+                        +{formatVND(((selectedTour?.partner_retail_price || 0) - (selectedTour?.partner_net_cost || 0)) * totalConfirmedPassengers)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
                 {/* General Incurred Costs Form */}
                 <div className="space-y-4">
@@ -1485,14 +1610,22 @@ export default function TourCostsManagement() {
                       disabled={!isEditingCosts || (currentRole !== 'admin' && currentRole !== 'operator')}
                     />
 
-                    <FormattedNumberInput
-                      label="Hoa Hồng / Commission"
-                      icon={<Tag className="w-3.5 h-3.5 text-slate-400" />}
-                      value={commissionAmount}
-                      onChange={setCommissionAmount}
-                      placeholder="Nhập tiền hoa hồng..."
-                      disabled={!isEditingCosts || (currentRole !== 'admin' && currentRole !== 'operator')}
-                    />
+                    <div>
+                      <FormattedNumberInput
+                        label="Hoa Hồng / Commission"
+                        icon={<Tag className="w-3.5 h-3.5 text-slate-400" />}
+                        value={commissionAmount}
+                        onChange={() => {}}
+                        placeholder="0 đ"
+                        disabled={true}
+                      />
+                      <div className="mt-1 flex items-start gap-1.5 text-[11px] text-amber-800 bg-amber-50/90 px-2.5 py-1.5 rounded-lg border border-amber-200/90 shadow-2xs font-medium leading-tight">
+                        <span className="font-bold text-amber-600 shrink-0">⚡ Tự động tính:</span>
+                        <span className="break-words">
+                          Tổng hợp từ {selectedTourOrders.length} booking
+                        </span>
+                      </div>
+                    </div>
 
                     <FormattedNumberInput
                       label="Chi Phí Quảng Cáo"
@@ -1595,20 +1728,26 @@ export default function TourCostsManagement() {
                     )}
                   </div>
                 </div>
-
               </div>
+              )}
 
               {/* Total calculation bar for Section 1 */}
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 flex flex-wrap items-center justify-between text-xs font-bold text-slate-700 gap-2">
                 <div className="flex items-center gap-3 text-slate-600 font-semibold">
-                  <span>Chi phí chung: <strong className="text-slate-900">{formatVND(flightAmount + insuranceAmount + tourGuideAmount + giftAmount + commissionAmount + advertisingAmount + visaAmount + otherAmount)}</strong></span>
-                  <span>•</span>
-                  <span>Landtour: <strong className="text-slate-900">{formatVND(landtours.reduce((sum, item) => sum + item.amount, 0))}</strong></span>
+                  {isOutsourcedTour ? (
+                    <span>Chi phí Net nộp Đối tác ({formatVND(selectedTour?.partner_net_cost || 0)}/khách x {totalConfirmedPassengers} khách): <strong className="text-slate-900">{formatVND(outsourcedPartnerNetTotal)}</strong></span>
+                  ) : (
+                    <>
+                      <span>Chi phí chung: <strong className="text-slate-900">{formatVND(flightAmount + insuranceAmount + tourGuideAmount + giftAmount + commissionAmount + advertisingAmount + visaAmount + otherAmount)}</strong></span>
+                      <span>•</span>
+                      <span>Landtour: <strong className="text-slate-900">{formatVND(landtours.reduce((sum, item) => sum + item.amount, 0))}</strong></span>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span>Tổng chi phí Mục 1:</span>
                   <span className="text-sm font-black text-blue-600">
-                    {formatVND(flightAmount + insuranceAmount + tourGuideAmount + giftAmount + commissionAmount + advertisingAmount + visaAmount + otherAmount + landtours.reduce((sum, item) => sum + item.amount, 0))}
+                    {formatVND(isOutsourcedTour ? outsourcedPartnerNetTotal + commissionAmount : flightAmount + insuranceAmount + tourGuideAmount + giftAmount + commissionAmount + advertisingAmount + visaAmount + otherAmount + landtours.reduce((sum, item) => sum + item.amount, 0))}
                   </span>
                 </div>
               </div>

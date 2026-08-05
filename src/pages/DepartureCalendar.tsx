@@ -221,13 +221,6 @@ const TourCard: React.FC<{
                 Biểu giá tour chi tiết theo độ tuổi & dịch vụ
               </h4>
               <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 text-center">
-                <div className="bg-amber-50/90 p-3 rounded-lg border border-amber-200 shadow-2xs flex flex-col justify-center">
-                  <div className="text-xs text-amber-900 mb-1 font-bold flex items-center justify-center gap-1">
-                    <Coins className="w-3.5 h-3.5 text-amber-600" />
-                    Hoa hồng / Khách
-                  </div>
-                  <div className="text-base font-black text-amber-700">{formatCurrency(tour.commission)} VND</div>
-                </div>
                 <div className="bg-blue-50/30 p-3 rounded-lg border border-blue-100/50">
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Người lớn (≥ 10 tuổi)</div>
                   <div className="text-base font-bold text-gray-900">{formatCurrency(tour.price_adult ?? tour.price)} VND</div>
@@ -240,6 +233,10 @@ const TourCard: React.FC<{
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Trẻ nhỏ (&lt; 2 tuổi)</div>
                   <div className="text-base font-bold text-gray-900">{formatCurrency(tour.price_infant ?? Math.round(tour.price * 0.3))} VND</div>
                 </div>
+                <div className="bg-red-50/30 p-3 rounded-lg border border-red-100/50">
+                  <div className="text-xs text-gray-500 mb-1 font-semibold">Phụ thu phòng đơn</div>
+                  <div className="text-base font-bold text-red-600">{formatCurrency(tour.single_room_surcharge ?? 7500000)} VND</div>
+                </div>
                 <div className="bg-sky-50/70 p-3 rounded-lg border border-sky-200/80 shadow-2xs flex flex-col justify-center">
                   <div className="text-xs text-blue-900 mb-1 font-bold flex items-center justify-center gap-1">
                     <FileText className="w-3.5 h-3.5 text-blue-600" />
@@ -247,9 +244,12 @@ const TourCard: React.FC<{
                   </div>
                   <div className="text-base font-black text-blue-700">{tour.price_visa_tour ? `${formatCurrency(tour.price_visa_tour)} VND` : 'Miễn phí'}</div>
                 </div>
-                <div className="bg-red-50/30 p-3 rounded-lg border border-red-100/50">
-                  <div className="text-xs text-gray-500 mb-1 font-semibold">Phụ thu phòng đơn</div>
-                  <div className="text-base font-bold text-red-600">{formatCurrency(tour.single_room_surcharge ?? 7500000)} VND</div>
+                <div className="bg-amber-50/90 p-3 rounded-lg border border-amber-200 shadow-2xs flex flex-col justify-center">
+                  <div className="text-xs text-amber-900 mb-1 font-bold flex items-center justify-center gap-1">
+                    <Coins className="w-3.5 h-3.5 text-amber-600" />
+                    Hoa hồng / Khách
+                  </div>
+                  <div className="text-base font-black text-amber-700">{formatCurrency(tour.commission)} VND</div>
                 </div>
               </div>
             </div>

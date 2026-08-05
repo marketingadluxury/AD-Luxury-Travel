@@ -38,7 +38,18 @@ const NumericFormatInput: React.FC<{
   required?: boolean;
   placeholder?: string;
   className?: string;
-}> = ({ label, value, onChange, required = false, placeholder = '', className = '' }) => {
+  labelClassName?: string;
+  inputClassName?: string;
+}> = ({
+  label,
+  value,
+  onChange,
+  required = false,
+  placeholder = '',
+  className = '',
+  labelClassName = 'block text-sm font-medium text-gray-700 mb-1',
+  inputClassName = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white'
+}) => {
   const [displayValue, setDisplayValue] = useState(() => {
     if (value === '' || value === undefined || value === null) return '';
     return new Intl.NumberFormat('vi-VN').format(value);
@@ -69,12 +80,12 @@ const NumericFormatInput: React.FC<{
 
   return (
     <div className={className}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className={labelClassName}>{label}</label>
       <input
         type="text"
         required={required}
         placeholder={placeholder}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+        className={inputClassName}
         value={displayValue}
         onChange={handleChange}
       />
@@ -431,6 +442,8 @@ export default function ToursManagement() {
   // View mode for tour listing: 'grouped' (default) | 'flat'
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
+  // Filter state for tour operation type
+  const [filterTourType, setFilterTourType] = useState<'all' | 'internal' | 'outsourced'>('all');
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups(prev => ({
@@ -439,10 +452,25 @@ export default function ToursManagement() {
     }));
   };
 
+  // Filtered tours based on selected filterTourType
+  const displayTours = React.useMemo(() => {
+    return tours
+      .filter(t => t.tour_type !== 'visa')
+      .filter(t => {
+        if (filterTourType === 'internal') {
+          return !t.tour_type || t.tour_type === 'internal';
+        }
+        if (filterTourType === 'outsourced') {
+          return t.tour_type === 'outsourced' || t.tour_type === 'partner';
+        }
+        return true;
+      });
+  }, [tours, filterTourType]);
+
   // Group tours by name for easier bulk management
   const groupedTours = React.useMemo<Record<string, Tour[]>>(() => {
     const groups: { [key: string]: Tour[] } = {};
-    const displayTours = tours.filter(t => t.tour_type !== 'visa');
+
     displayTours.forEach(tour => {
       const key = tour.name || 'Hành trình chưa đặt tên';
       if (!groups[key]) {
@@ -459,7 +487,7 @@ export default function ToursManagement() {
       });
     });
     return groups;
-  }, [tours]);
+  }, [displayTours]);
 
   // Handle auto-expanding new groups
   useEffect(() => {
@@ -770,9 +798,23 @@ export default function ToursManagement() {
   };
 
   // Tour Type fields
-  const [tourType, setTourType] = useState<'internal' | 'partner' | 'private' | 'visa'>('internal');
+  const [tourType, setTourType] = useState<'internal' | 'outsourced' | 'partner' | 'private' | 'visa'>('internal');
   const [partnerName, setPartnerName] = useState('');
   const [partnerContact, setPartnerContact] = useState('');
+  const [partnerCompanyName, setPartnerCompanyName] = useState('');
+  const [partnerRetailPrice, setPartnerRetailPrice] = useState<number | ''>('');
+  const [partnerNetCost, setPartnerNetCost] = useState<number | ''>('');
+  const [partnerCommission, setPartnerCommission] = useState<number | ''>('');
+
+  const updateNetCost = (retailVal: number | '', commVal: number | '') => {
+    if (retailVal === '') {
+      setPartnerNetCost('');
+    } else {
+      const r = Number(retailVal);
+      const c = Number(commVal) || 0;
+      setPartnerNetCost(Math.max(0, r - c));
+    }
+  };
   const [organizationName, setOrganizationName] = useState('');
   const [groupLeaderContact, setGroupLeaderContact] = useState('');
   const [customRequirements, setCustomRequirements] = useState('');
@@ -890,8 +932,18 @@ export default function ToursManagement() {
     setItineraryPdfUrl(tour.itinerary_pdf_url || '');
 
     setTourType(tour.tour_type || 'internal');
-    setPartnerName(tour.partner_name || '');
+    setPartnerName(tour.partner_name || tour.partner_company_name || '');
     setPartnerContact(tour.partner_contact || '');
+    setPartnerCompanyName(tour.partner_company_name || tour.partner_name || '');
+    const retail = tour.partner_retail_price ?? '';
+    const net = tour.partner_net_cost ?? '';
+    setPartnerRetailPrice(retail);
+    setPartnerNetCost(net);
+    if (retail !== '' && net !== '') {
+      setPartnerCommission(Math.max(0, Number(retail) - Number(net)));
+    } else {
+      setPartnerCommission('');
+    }
     setOrganizationName(tour.organization_name || '');
     setGroupLeaderContact(tour.group_leader_contact || '');
     setCustomRequirements(tour.custom_requirements || '');
@@ -1099,9 +1151,13 @@ export default function ToursManagement() {
     setCategory(categories[0] || 'Du lịch Đông Nam Á');
     setItineraryPdfUrl('');
     setNoticeSections(DEFAULT_NOTICE_SECTIONS);
-    setTourType(currentRole === 'sale_leader' ? 'partner' : 'internal');
+    setTourType(currentRole === 'sale_leader' ? 'outsourced' : 'internal');
     setPartnerName('');
     setPartnerContact('');
+    setPartnerCompanyName('');
+    setPartnerRetailPrice('');
+    setPartnerNetCost('');
+    setPartnerCommission('');
     setOrganizationName('');
     setGroupLeaderContact('');
     setCustomRequirements('');
@@ -1193,8 +1249,12 @@ export default function ToursManagement() {
       itinerary_pdf_url: itineraryPdfUrl || undefined,
       notice_sections: JSON.stringify(noticeSections),
       tour_type: tourType,
-      partner_name: partnerName || undefined,
+      partner_name: partnerCompanyName || partnerName || undefined,
       partner_contact: partnerContact || undefined,
+      partner_company_name: partnerCompanyName || partnerName || undefined,
+      partner_retail_price: partnerRetailPrice !== '' ? Number(partnerRetailPrice) : 0,
+      partner_net_cost: partnerNetCost !== '' ? Number(partnerNetCost) : 0,
+      ad_commission_amount: Math.max(0, (partnerRetailPrice !== '' ? Number(partnerRetailPrice) : 0) - (partnerNetCost !== '' ? Number(partnerNetCost) : 0)),
       organization_name: organizationName || undefined,
       group_leader_contact: groupLeaderContact || undefined,
       custom_requirements: customRequirements || undefined,
@@ -1553,8 +1613,8 @@ export default function ToursManagement() {
                         value={tourType}
                         onChange={e => setTourType(e.target.value as any)}
                       >
-                        {currentRole !== 'sale_leader' && <option value="internal">🏢 Tour tự vận hành</option>}
-                        <option value="partner">🤝 Gửi khách đối tác</option>
+                        {currentRole !== 'sale_leader' && <option value="internal">🏢 AD Tự vận hành</option>}
+                        <option value="outsourced">🤝 Gửi khách đối tác-F2</option>
                         <option value="private">👑 Tour đoàn riêng</option>
                       </select>
                     </div>
@@ -1563,39 +1623,104 @@ export default function ToursManagement() {
                   {/* Dynamic Tour Type Specific Fields */}
                   {tourType !== 'internal' && (
                     <div className={`p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-200 mt-4 ${
-                      tourType === 'partner' ? 'bg-indigo-50/50 border-indigo-200 text-indigo-900' :
+                      tourType === 'outsourced' || tourType === 'partner' ? 'bg-indigo-50/50 border-indigo-200 text-indigo-900' :
                       tourType === 'private' ? 'bg-amber-50/40 border-amber-200 text-amber-900' :
                       'bg-purple-50/40 border-purple-200 text-purple-900'
                     }`}>
                       <h5 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        {tourType === 'partner' && <>🤝 Thông tin Gửi khách sang Công ty đối tác</>}
+                        {(tourType === 'outsourced' || tourType === 'partner') && <>🤝 Thông tin Gửi khách đối tác-F2</>}
                         {tourType === 'private' && <>👑 Thông tin Yêu cầu Tour đoàn riêng / Custom</>}
                         {tourType === 'visa' && <>🛂 Thông tin Dịch vụ Visa lẻ đặc thù</>}
                       </h5>
 
-                      {tourType === 'partner' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Tên công ty đối tác nhận khách *</label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Ví dụ: Saigontourist, Vietravel..."
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
-                              value={partnerName}
-                              onChange={e => setPartnerName(e.target.value)}
-                            />
+                      {(tourType === 'outsourced' || tourType === 'partner') && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">Tên công ty đối tác vận hành *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Ví dụ: Saigontourist, Vietravel..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold"
+                                value={partnerCompanyName || partnerName}
+                                onChange={e => {
+                                  setPartnerCompanyName(e.target.value);
+                                  setPartnerName(e.target.value);
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">Thông tin liên hệ đối tác (SĐT/Người phụ trách) *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Ví dụ: Anh Nam - 0987xxxxxx"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
+                                value={partnerContact}
+                                onChange={e => setPartnerContact(e.target.value)}
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Thông tin liên hệ đối tác (SĐT/Người phụ trách) *</label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Ví dụ: Anh Nam - 0987xxxxxx"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
-                              value={partnerContact}
-                              onChange={e => setPartnerContact(e.target.value)}
-                            />
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <NumericFormatInput
+                                label="Giá bán niêm yết của Đối tác (VNĐ/Khách) *"
+                                required
+                                value={partnerRetailPrice}
+                                onChange={(val) => {
+                                  setPartnerRetailPrice(val);
+                                  updateNetCost(val, partnerCommission);
+                                }}
+                                placeholder="Ví dụ: 29.000.000"
+                                labelClassName="block text-xs font-semibold text-slate-700 mb-1"
+                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <NumericFormatInput
+                                label="Hoa hồng đối tác chiết khấu cho AD (VNĐ/Khách) *"
+                                required
+                                value={partnerCommission}
+                                onChange={(val) => {
+                                  setPartnerCommission(val);
+                                  updateNetCost(partnerRetailPrice, val);
+                                }}
+                                placeholder="Ví dụ: 2.000.000"
+                                labelClassName="block text-xs font-semibold text-slate-700 mb-1"
+                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                              <p className="text-xs text-blue-700 font-medium mt-1.5 flex items-center gap-1 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md">
+                                <span>👉</span>
+                                <span>Giá net AD phải nộp cho đối tác: <strong className="font-extrabold text-blue-800">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(partnerNetCost) || 0)}</strong> / Khách</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Badge Preview for AD Commission */}
+                          <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 flex items-center justify-between text-xs shadow-2xs">
+                            <div className="flex items-center gap-2">
+                              <span className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-sm">
+                                💰
+                              </span>
+                              <div>
+                                <span className="text-emerald-950 font-extrabold block text-xs">
+                                  Hoa hồng AD hưởng (Chênh lệch Giá Niêm Yết - Giá Net)
+                                </span>
+                                <span className="text-emerald-700 text-[11px]">
+                                  Tự động hạch toán cho mỗi suất khách đặt qua hệ thống
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs text-emerald-800 font-medium block">Lợi nhuận gộp / khách:</span>
+                              <span className="text-base font-black text-emerald-700">
+                                +{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                                  Math.max(0, (Number(partnerRetailPrice) || 0) - (Number(partnerNetCost) || 0))
+                                )}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -2234,38 +2359,113 @@ export default function ToursManagement() {
             </div>
           </div>
 
+          {/* TOP PRIMARY CATEGORY TABS (TO, RÕ RÀNG, TRỰC QUAN NẰM TRÊN CÙNG) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-2 sm:p-2.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="grid grid-cols-3 sm:flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setFilterTourType('all')}
+                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                    filterTourType === 'all'
+                      ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900/10'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                  }`}
+                >
+                  <span className="truncate">Tất cả loại tour</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
+                    filterTourType === 'all' ? 'bg-slate-800 text-slate-200' : 'bg-slate-200/80 text-slate-700'
+                  }`}>
+                    {tours.filter(t => t.tour_type !== 'visa').length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFilterTourType('internal')}
+                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                    filterTourType === 'internal'
+                      ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-600/20'
+                      : 'bg-purple-50/70 text-purple-800 hover:bg-purple-100/80 border border-purple-200/70'
+                  }`}
+                >
+                  <span className="truncate">🏢 AD Tự vận hành</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
+                    filterTourType === 'internal' ? 'bg-purple-800 text-purple-100' : 'bg-purple-200/80 text-purple-900'
+                  }`}>
+                    {tours.filter(t => t.tour_type === 'internal').length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFilterTourType('outsourced')}
+                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                    filterTourType === 'outsourced'
+                      ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-600/20'
+                      : 'bg-indigo-50/70 text-indigo-800 hover:bg-indigo-100/80 border border-indigo-200/70'
+                  }`}
+                >
+                  <span className="truncate">🤝 Gửi khách đối tác-F2</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
+                    filterTourType === 'outsourced' ? 'bg-indigo-800 text-indigo-100' : 'bg-indigo-200/80 text-indigo-900'
+                  }`}>
+                    {tours.filter(t => t.tour_type === 'outsourced' || t.tour_type === 'partner').length}
+                  </span>
+                </button>
+              </div>
+
+              {/* Display subtitle / Active scope context */}
+              <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-500 pr-2">
+                <span>Danh mục chọn:</span>
+                <span className="font-extrabold text-slate-800 px-2 py-1 bg-slate-100 rounded-md border border-slate-200">
+                  {filterTourType === 'all' && '🌐 Tất cả sản phẩm Tour'}
+                  {filterTourType === 'internal' && '🏢 Tour AD Tự vận hành'}
+                  {filterTourType === 'outsourced' && '🤝 Tour Gửi khách đối tác-F2'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* LIST OF ACTIVE TOURS WITH FULL CRUD OPERATIONS */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200/80 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-bold text-gray-900">Danh sách điều phối chỗ & Lịch trình</h3>
-                <span className="text-xs text-gray-500 mt-1 block">Quản lý ngày khởi hành, quỹ phòng và các chiến dịch mở bán hiệu quả.</span>
+                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                  Danh sách điều phối chỗ & Lịch trình
+                  <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    {filterTourType === 'all' ? 'Tất cả' : filterTourType === 'internal' ? 'AD Tự vận hành' : 'Gửi khách đối tác-F2'}
+                  </span>
+                </h3>
+                <span className="text-xs text-gray-500 mt-0.5 block">
+                  Quản lý ngày khởi hành, quỹ chỗ và điều phối tour thuộc phân loại {filterTourType === 'all' ? 'tất cả các loại tour' : filterTourType === 'internal' ? 'AD Tự vận hành' : 'Gửi khách đối tác-F2'}.
+                </span>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 shrink-0">
-                {/* View mode toggle switcher */}
-                <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shrink-0">
+                {/* View mode toggle switcher: Danh sách thẻ vs Danh sách bảng */}
+                <div className="flex bg-slate-200/70 p-1 rounded-xl border border-slate-300/60 shrink-0">
                   <button
                     type="button"
                     onClick={() => setViewMode('grouped')}
-                    className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
                       viewMode === 'grouped' 
-                        ? 'bg-white text-blue-700 shadow-sm' 
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-white text-blue-700 shadow-2xs' 
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Gom nhóm theo Hành Trình
+                    🎴 Danh sách thẻ
                   </button>
                   <button
                     type="button"
                     onClick={() => setViewMode('flat')}
-                    className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
                       viewMode === 'flat' 
-                        ? 'bg-white text-blue-700 shadow-sm' 
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-white text-blue-700 shadow-2xs' 
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Danh sách phẳng
+                    📋 Danh sách bảng
                   </button>
                 </div>
 
@@ -2273,14 +2473,20 @@ export default function ToursManagement() {
                   <button 
                     onClick={() => {
                       resetForm();
+                      if (filterTourType === 'outsourced') {
+                        setTourType('outsourced');
+                      } else {
+                        setTourType('internal');
+                      }
                       setShowAddForm(true);
                       setTimeout(() => {
                         document.getElementById('tour-form-section')?.scrollIntoView({ behavior: 'smooth' });
                       }, 100);
                     }}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-extrabold rounded-xl text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-colors whitespace-nowrap shrink-0"
                   >
-                    <Plus className="w-4 h-4 mr-1.5" /> Thêm Tour Mới
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Thêm {filterTourType === 'outsourced' ? 'Tour Gửi Đối Tác' : 'Tour Mới'}
                   </button>
                 )}
               </div>
@@ -2396,9 +2602,24 @@ export default function ToursManagement() {
                                 {groupTours.map(t => (
                                   <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
                                     <td className="px-6 py-3.5">
-                                      <span className="font-mono font-bold text-blue-700 tracking-tight bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md text-xs inline-block">
-                                        {t.code}
-                                      </span>
+                                      <div className="flex flex-col gap-1 items-start">
+                                        <span className="font-mono font-bold text-blue-700 tracking-tight bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md text-xs inline-block">
+                                          {t.code}
+                                        </span>
+                                        {t.tour_type === 'outsourced' || t.tour_type === 'partner' ? (
+                                          <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                            🤝 Đối tác: {t.partner_company_name || t.partner_name || 'Công ty đối tác'}
+                                          </span>
+                                        ) : t.tour_type === 'private' ? (
+                                          <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                            👑 Tour Đoàn Riêng
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                            🏢 AD Vận Hành
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="px-6 py-3.5">
                                       <div className="font-semibold text-gray-900 text-xs">
@@ -2501,77 +2722,86 @@ export default function ToursManagement() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="px-6 py-3.5 text-left">Mã tour / Danh mục</th>
-                      <th className="px-6 py-3.5 text-left">Tên Hành Trình</th>
-                      <th className="px-6 py-3.5 text-center">Khởi Hành</th>
-                      <th className="px-6 py-3.5 text-center">Giá Tour</th>
-                      <th className="px-6 py-3.5 text-center">Hold / Vé</th>
-                      <th className="px-6 py-3.5 text-center">Ghế (Bán / Giữ / Trống)</th>
-                      <th className="px-6 py-3.5 text-center">Hành động</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
-                    {tours.filter(t => t.tour_type !== 'visa').map(t => (
-                      <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
-                        <td className="px-6 py-3.5">
-                          <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md inline-block">
-                            {t.code}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1 font-semibold uppercase tracking-wider">{t.category || 'Chưa phân mục'}</div>
-                          {/* Tour Type Badge */}
-                          <div className="mt-1.5">
-                            {t.tour_type === 'partner' && (
-                              <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-semibold uppercase">
-                                🤝 Gửi khách đối tác
-                              </span>
-                            )}
-                            {t.tour_type === 'private' && (
-                              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold uppercase">
-                                👑 Tour đoàn riêng
-                              </span>
-                            )}
-                            {t.tour_type === 'visa' && (
-                              <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold uppercase">
-                                🛂 Dịch vụ Visa lẻ
-                              </span>
-                            )}
-                            {(t.tour_type === 'internal' || !t.tour_type) && (
-                              <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full font-semibold uppercase">
-                                🏢 Tour tự chạy
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-3.5 max-w-xs">
-                          <div className="font-bold text-gray-900 text-sm line-clamp-2" title={t.name}>{t.name}</div>
-                          <div className="text-xs text-gray-500 mt-1 font-medium flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <span>{t.duration}</span>
-                              <span>•</span>
-                              <span>Hotel: {t.hotel}</span>
+                {displayTours.length === 0 ? (
+                  <div className="text-center py-12 text-sm text-gray-400">
+                    Chưa có tour du lịch nào thuộc phân loại này được tạo.
+                  </div>
+                ) : (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-6 py-3.5 text-left">Mã tour / Danh mục</th>
+                        <th className="px-6 py-3.5 text-left">Tên Hành Trình</th>
+                        <th className="px-6 py-3.5 text-center">Khởi Hành</th>
+                        <th className="px-6 py-3.5 text-center">Giá Tour</th>
+                        <th className="px-6 py-3.5 text-center">Hold / Vé</th>
+                        <th className="px-6 py-3.5 text-center">Ghế (Bán / Giữ / Trống)</th>
+                        <th className="px-6 py-3.5 text-center">Hành động</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
+                      {displayTours.map(t => (
+                        <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="px-6 py-3.5 min-w-[180px]">
+                            <div className="flex flex-col gap-1.5 items-start">
+                              <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md inline-block">
+                                {t.code}
+                              </div>
+                              <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider truncate max-w-[160px]" title={t.category || 'Chưa phân mục'}>
+                                {t.category || 'Chưa phân mục'}
+                              </div>
+                              {/* Tour Type Badge */}
+                              <div className="flex">
+                                {(t.tour_type === 'partner' || t.tour_type === 'outsourced') && (
+                                  <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
+                                    🤝 Gửi khách đối tác-F2
+                                  </span>
+                                )}
+                                {t.tour_type === 'private' && (
+                                  <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
+                                    👑 Tour đoàn riêng
+                                  </span>
+                                )}
+                                {t.tour_type === 'visa' && (
+                                  <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
+                                    🛂 Dịch vụ Visa lẻ
+                                  </span>
+                                )}
+                                {(t.tour_type === 'internal' || !t.tour_type) && (
+                                  <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
+                                    🏢 AD Tự vận hành
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            
-                            {/* Product-Specific Subtext */}
-                            {t.tour_type === 'partner' && (
-                              <div className="text-xs text-indigo-700 font-medium bg-indigo-50/60 px-2 py-0.5 rounded border border-indigo-100 mt-1">
-                                Đối tác: <span className="underline font-semibold">{t.partner_name}</span> ({t.partner_contact})
+                          </td>
+                          <td className="px-6 py-3.5 min-w-[300px] max-w-md">
+                            <div className="font-bold text-gray-900 text-sm line-clamp-2" title={t.name}>{t.name}</div>
+                            <div className="text-xs text-gray-500 mt-1.5 font-medium flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 whitespace-nowrap overflow-hidden text-ellipsis">
+                                <span className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap inline-block">{t.duration}</span>
+                                <span className="text-gray-300">•</span>
+                                <span className="text-gray-600 truncate" title={`Khách sạn: ${t.hotel}`}>🏨 {t.hotel || 'Chưa cập nhật'}</span>
                               </div>
-                            )}
-                            {t.tour_type === 'private' && (
-                              <div className="text-xs text-amber-800 font-medium bg-amber-50/60 px-2 py-0.5 rounded border border-amber-100 mt-1">
-                                Khách đoàn: <span className="underline font-semibold">{t.organization_name}</span> | Y/C: {t.custom_requirements || 'Không có'}
-                              </div>
-                            )}
-                            {t.tour_type === 'visa' && (
-                              <div className="text-xs text-purple-800 font-medium bg-purple-50/60 px-2 py-0.5 rounded border border-purple-100 mt-1">
-                                Quốc gia: <span className="underline font-semibold">{t.visa_country}</span> | {t.visa_service_type} ({t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
-                              </div>
-                            )}
-                          </div>
-                        </td>
+                              
+                              {/* Product-Specific Subtext */}
+                              {(t.tour_type === 'partner' || t.tour_type === 'outsourced') && (
+                                <div className="text-[11px] text-indigo-700 font-medium bg-indigo-50/60 px-2.5 py-1 rounded border border-indigo-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px]" title={`Đối tác: ${t.partner_name || t.partner_company_name || 'Đối tác'} (${t.partner_contact || 'Chưa có thông tin'})`}>
+                                  🤝 <span className="font-semibold">{t.partner_company_name || t.partner_name || 'Đối tác'}</span> ({t.partner_contact || 'Liên hệ'})
+                                </div>
+                              )}
+                              {t.tour_type === 'private' && (
+                                <div className="text-[11px] text-amber-800 font-medium bg-amber-50/60 px-2.5 py-1 rounded border border-amber-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px]" title={`Đoàn riêng: ${t.organization_name} | Y/C: ${t.custom_requirements || 'Không có'}`}>
+                                  👑 <span className="font-semibold">{t.organization_name}</span> | Y/C: {t.custom_requirements || 'N/A'}
+                                </div>
+                              )}
+                              {t.tour_type === 'visa' && (
+                                <div className="text-[11px] text-purple-800 font-medium bg-purple-50/60 px-2.5 py-1 rounded border border-purple-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px]" title={`Quốc gia: ${t.visa_country} | ${t.visa_service_type} (${t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})`}>
+                                  🛂 <span className="font-semibold">{t.visa_country}</span> | {t.visa_service_type}
+                                </div>
+                              )}
+                            </div>
+                          </td>
                         <td className="px-6 py-3.5 text-center whitespace-nowrap">
                           <div className="font-semibold text-gray-900 text-xs">
                             {t.tour_type === 'visa' 
@@ -2669,9 +2899,10 @@ export default function ToursManagement() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
+        </div>
         </>
       )}
 

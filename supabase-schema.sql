@@ -642,7 +642,24 @@ WHERE selling_price = 0 OR net_payable_amount = 0;
 UPDATE profiles SET role = 'agent' WHERE role = 'CTV';
 UPDATE bookings SET seller_type = 'agent' WHERE seller_type = 'CTV' OR seller_type = 'ctv';
 
+-- ==============================================================================
+-- BẢO MẬT & ĐỒNG BỘ CHO BẢNG ĐỀ NGHỊ THANH TOÁN (PAYMENT PROPOSALS)
+-- ==============================================================================
+-- Kích hoạt RLS (Row Level Security) cho bảng payment_proposals
+ALTER TABLE payment_proposals ENABLE ROW LEVEL SECURITY;
 
+-- Tạo chính sách bảo mật cho người dùng đã đăng nhập (authenticated)
+DROP POLICY IF EXISTS "Allow authenticated access to payment_proposals" ON payment_proposals;
+CREATE POLICY "Allow authenticated access to payment_proposals" ON payment_proposals FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-
-
+-- Kích hoạt Realtime cho bảng payment_proposals (để hiển thị tức thời thay đổi khi nhân viên gửi hoặc quản lý duyệt)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE payment_proposals;
+  ELSE
+    CREATE PUBLICATION supabase_realtime FOR TABLE payment_proposals;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;

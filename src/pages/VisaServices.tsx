@@ -890,7 +890,7 @@ export default function VisaServices() {
   };
 
   // Tour Type fields
-  const [tourType, setTourType] = useState<'internal' | 'partner' | 'private' | 'visa'>('visa');
+  const [tourType, setTourType] = useState<'internal' | 'outsourced' | 'partner' | 'private' | 'visa'>('visa');
   const [partnerName, setPartnerName] = useState('');
   const [partnerContact, setPartnerContact] = useState('');
   const [organizationName, setOrganizationName] = useState('');

@@ -60,10 +60,14 @@ export interface Tour {
   discount?: number;
   itinerary_pdf_url?: string; // Link file PDF lịch trình chi tiết
   notice_sections?: string; // Bảng thông tin đi tour/Lưu ý dưới dạng JSON string
-  tour_type?: 'internal' | 'partner' | 'private' | 'visa';
+  tour_type?: 'internal' | 'outsourced' | 'partner' | 'private' | 'visa';
   // Đối tác nhận khách
   partner_name?: string;
   partner_contact?: string;
+  partner_company_name?: string;
+  partner_retail_price?: number;
+  partner_net_cost?: number;
+  ad_commission_amount?: number;
   // Tour đoàn riêng
   organization_name?: string;
   group_leader_contact?: string;
