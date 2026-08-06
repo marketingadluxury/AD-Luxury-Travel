@@ -27,7 +27,10 @@ import {
   UploadCloud,
   Image as ImageIcon,
   Search,
-  Filter
+  Filter,
+  Phone,
+  Mail,
+  Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import DashboardOperator from '@/components/DashboardOperator';
@@ -436,7 +439,8 @@ export default function ToursManagement() {
     deleteCategory,
     updateCategory,
     currentRole,
-    tourMedia
+    tourMedia,
+    createOrder
   } = useCRM();
 
   // Navigation tabs: 'tours' | 'categories' | 'costs'
@@ -872,6 +876,53 @@ export default function ToursManagement() {
     }
   };
 
+  const handlePrivateContractUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!code.trim()) {
+      toast.error('Vui lòng nhập Mã Tour trước khi tải file hợp đồng lên để hệ thống đặt tên file chính xác!');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingContract(true);
+    setContractUploadError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('uploadType', 'tour');
+      formData.append('tourCode', code.trim());
+      formData.append('category', category || 'Chung');
+      formData.append('file', file);
+
+      const data = await safeFetchApi('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json'
+        },
+        body: formData,
+      });
+
+      if (data && data.url) {
+        setPrivateContractFileUrl(data.url);
+        toast.success('Đã tải file hợp đồng/chương trình tour lên thành công!');
+      } else if (data && data.error) {
+        throw new Error(data.error);
+      } else {
+        console.error('Phản hồi không hợp lệ từ máy chủ:', data);
+        throw new Error('Phản hồi từ máy chủ không chứa đường dẫn file.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setContractUploadError(err.message || 'Lỗi tải file lên');
+      toast.error(err.message || 'Lỗi tải file lên thất bại!');
+    } finally {
+      setIsUploadingContract(false);
+      e.target.value = '';
+    }
+  };
+
   // Tour Type fields
   const [tourType, setTourType] = useState<'internal' | 'outsourced' | 'partner' | 'private' | 'visa'>('internal');
   const [partnerName, setPartnerName] = useState('');
@@ -896,6 +947,21 @@ export default function ToursManagement() {
   const [visaCountry, setVisaCountry] = useState('');
   const [visaServiceType, setVisaServiceType] = useState('');
   const [visaSpeed, setVisaSpeed] = useState<'standard' | 'urgent'>('standard');
+
+  // Private tour specific states
+  const [privateCustomerName, setPrivateCustomerName] = useState('');
+  const [privateCustomerPhone, setPrivateCustomerPhone] = useState('');
+  const [privateCustomerEmail, setPrivateCustomerEmail] = useState('');
+  const [privatePaxCount, setPrivatePaxCount] = useState<number | ''>('');
+  const [privateTotalAmount, setPrivateTotalAmount] = useState<number | ''>('');
+  const [privateContractFileUrl, setPrivateContractFileUrl] = useState('');
+  const [isUploadingContract, setIsUploadingContract] = useState(false);
+  const [contractUploadError, setContractUploadError] = useState<string | null>(null);
+
+  // States for Private Success Modal
+  const [showPrivateSuccessModal, setShowPrivateSuccessModal] = useState(false);
+  const [createdPrivateTour, setCreatedPrivateTour] = useState<any>(null);
+  const [createdPrivateOrder, setCreatedPrivateOrder] = useState<any>(null);
 
   // Inline category creation state
   const [showInlineCatForm, setShowInlineCatForm] = useState(false);
@@ -934,6 +1000,8 @@ export default function ToursManagement() {
       return;
     }
     setEditingTour(tour);
+    setContractUploadError(null);
+    setItineraryUploadError(null);
     setCode(tour.code);
     setName(tour.name);
     setDestination(tour.destination || '');
@@ -1015,6 +1083,25 @@ export default function ToursManagement() {
     setVisaCountry(tour.visa_country || '');
     setVisaServiceType(tour.visa_service_type || '');
     setVisaSpeed(tour.visa_speed || 'standard');
+
+    if (tour.tour_type === 'private') {
+      setPrivateCustomerName(tour.organization_name || '');
+      setPrivateCustomerPhone(tour.group_leader_contact || '');
+      const emailMatch = tour.custom_requirements?.match(/Email:\s*([^\s,;]+)/i);
+      if (emailMatch) {
+        setPrivateCustomerEmail(emailMatch[1]);
+      } else {
+        const linkedOrder = orders.find(o => o.tour_id === tour.id);
+        if (linkedOrder) {
+          setPrivateCustomerEmail((linkedOrder as any).customer_email || (linkedOrder as any).booker_email || '');
+        } else {
+          setPrivateCustomerEmail('');
+        }
+      }
+      setPrivatePaxCount(tour.total_seats || '');
+      setPrivateTotalAmount(tour.price || '');
+      setPrivateContractFileUrl(tour.itinerary_pdf_url || '');
+    }
 
     // Parse disclaimers
     if (tour.notice_sections) {
@@ -1229,6 +1316,14 @@ export default function ToursManagement() {
     setVisaCountry('');
     setVisaServiceType('');
     setVisaSpeed('standard');
+    setPrivateCustomerName('');
+    setPrivateCustomerPhone('');
+    setPrivateCustomerEmail('');
+    setPrivatePaxCount('');
+    setPrivateTotalAmount('');
+    setPrivateContractFileUrl('');
+    setContractUploadError(null);
+    setItineraryUploadError(null);
     setEditingTour(null);
     setShowAddForm(false);
     setShowInlineCatForm(false);
@@ -1253,7 +1348,7 @@ export default function ToursManagement() {
   }, [location.state]);
 
   // Submit handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isCodeDuplicate) {
       toast.error('Mã tour/visa này đã tồn tại, vui lòng chọn mã khác!');
@@ -1263,85 +1358,182 @@ export default function ToursManagement() {
       toast.error('Sale Leader chỉ có quyền tạo Tour gửi khách đối tác hoặc Tour đoàn riêng.');
       return;
     }
-    if (tourType !== 'visa' && (!code || !name || !departureTime || !returnTime)) {
-      toast.error('Vui lòng nhập đầy đủ các trường thông tin bắt buộc (Mã tour, Tên tour, Ngày đi, Ngày về)!');
-      return;
-    }
-    if (tourType === 'visa' && (!code || !name)) {
-      toast.error('Vui lòng nhập Mã visa và Tên visa!');
-      return;
+
+    if (tourType === 'private') {
+      if (!code || !name || !departureTime || !returnTime) {
+        toast.error('Vui lòng nhập đầy đủ các trường thông tin bắt buộc (Mã Tour, Tên đoàn, Ngày đi, Ngày về)!');
+        return;
+      }
+      if (!privateCustomerName || !privateCustomerPhone) {
+        toast.error('Vui lòng nhập đầy đủ Tên cơ quan/Doanh nghiệp và Số điện thoại liên hệ!');
+        return;
+      }
+      if (privatePaxCount === '' || Number(privatePaxCount) <= 0) {
+        toast.error('Vui lòng nhập số lượng khách chốt (Pax) hợp lệ!');
+        return;
+      }
+      if (privateTotalAmount === '' || Number(privateTotalAmount) <= 0) {
+        toast.error('Vui lòng nhập tổng giá trị hợp đồng đoàn (VNĐ) hợp lệ!');
+        return;
+      }
+    } else {
+      if (tourType !== 'visa' && (!code || !name || !departureTime || !returnTime)) {
+        toast.error('Vui lòng nhập đầy đủ các trường thông tin bắt buộc (Mã tour, Tên tour, Ngày đi, Ngày về)!');
+        return;
+      }
+      if (tourType === 'visa' && (!code || !name)) {
+        toast.error('Vui lòng nhập Mã visa và Tên visa!');
+        return;
+      }
     }
 
     const calculatedPrice = price === '' ? 0 : Number(price);
     const effectivePrice = calculatedPrice - (discount === '' ? 0 : Number(discount));
     const calculatedCommission = commission === '' ? 0 : Number(commission);
 
-    const tourData = {
-      code,
-      name,
-      destination: destination || category || 'Chưa xác định',
-      start_date: (tourType !== 'visa' && departureTime) ? departureTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
-      end_date: (tourType !== 'visa' && returnTime) ? returnTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
-      duration,
-      departure_time: (tourType !== 'visa' && departureTime) ? (safeIsoString(departureTime) || null) : null,
-      return_time: (tourType !== 'visa' && returnTime) ? (safeIsoString(returnTime) || null) : null,
-      airline,
-      hotel,
-      price: calculatedPrice,
-      discount: discount === '' ? 0 : Number(discount),
-      price_visa_tour: priceVisaTour === '' ? 0 : Number(priceVisaTour),
-      commission: calculatedCommission,
-      total_seats: Number(totalSeats),
-      overbook_limit: Number(overbookLimit),
-      flight_out: flightOut || undefined,
-      flight_out_transit: flightOutTransit || undefined,
-      flight_in: flightIn || undefined,
-      flight_in_transit: flightInTransit || undefined,
-      transit_info: transitInfo || undefined,
-      guide_name: guideName || undefined,
-      guide_phone: guidePhone || undefined,
-      ticket_status: ticketStatus || undefined,
-      visa_deadline: safeIsoString(visaDeadline),
-      ticket_deadline: safeIsoString(ticketDeadline),
-      description: description || undefined,
-      tour_status: tourStatus,
-      category: category || categories[0],
-      hold_duration_hours: Number(holdDuration),
-      price_adult: priceAdult !== '' ? Number(priceAdult) : effectivePrice,
-      price_child: priceChild !== '' ? Number(priceChild) : Math.round(effectivePrice * 0.8),
-      price_infant: priceInfant !== '' ? Number(priceInfant) : Math.round(effectivePrice * 0.3),
-      single_room_surcharge: singleRoomSurcharge !== '' ? Number(singleRoomSurcharge) : 7500000,
-      itinerary_pdf_url: itineraryPdfUrl || undefined,
-      notice_sections: JSON.stringify(noticeSections),
-      tour_type: tourType,
-      partner_name: partnerCompanyName || partnerName || undefined,
-      partner_contact: partnerContact || undefined,
-      partner_company_name: partnerCompanyName || partnerName || undefined,
-      partner_retail_price: partnerRetailPrice !== '' ? Number(partnerRetailPrice) : 0,
-      partner_net_cost: partnerNetCost !== '' ? Number(partnerNetCost) : 0,
-      ad_commission_amount: Math.max(0, (partnerRetailPrice !== '' ? Number(partnerRetailPrice) : 0) - (partnerNetCost !== '' ? Number(partnerNetCost) : 0)),
-      organization_name: organizationName || undefined,
-      group_leader_contact: groupLeaderContact || undefined,
-      custom_requirements: customRequirements || undefined,
-      visa_country: visaCountry || (tourType === 'visa' ? destination : undefined),
-      visa_service_type: visaServiceType || undefined,
-      visa_speed: visaSpeed || undefined,
-    };
+    let tourData: any = {};
+
+    if (tourType === 'private') {
+      const totalAmountVal = Number(privateTotalAmount);
+      const paxCountVal = Number(privatePaxCount);
+      const avgPrice = Math.round(totalAmountVal / paxCountVal);
+
+      tourData = {
+        code,
+        name,
+        destination: destination || category || 'Chưa xác định',
+        start_date: departureTime ? departureTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
+        end_date: returnTime ? returnTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
+        duration,
+        departure_time: departureTime ? (safeIsoString(departureTime) || null) : null,
+        return_time: returnTime ? (safeIsoString(returnTime) || null) : null,
+        airline: 'Vietnam Airlines',
+        hotel: 'Khách sạn 4*',
+        price: totalAmountVal,
+        discount: 0,
+        price_visa_tour: 0,
+        commission: 0,
+        total_seats: paxCountVal,
+        overbook_limit: 0,
+        tour_status: 'available' as const,
+        category: category || categories[0],
+        hold_duration_hours: 0,
+        price_adult: avgPrice,
+        price_child: 0,
+        price_infant: 0,
+        single_room_surcharge: 0,
+        itinerary_pdf_url: privateContractFileUrl || undefined,
+        notice_sections: JSON.stringify([]),
+        tour_type: 'private' as const,
+        organization_name: privateCustomerName,
+        group_leader_contact: privateCustomerPhone,
+        custom_requirements: privateCustomerEmail ? `Email: ${privateCustomerEmail}` : undefined,
+      };
+    } else {
+      tourData = {
+        code,
+        name,
+        destination: destination || category || 'Chưa xác định',
+        start_date: (tourType !== 'visa' && departureTime) ? departureTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
+        end_date: (tourType !== 'visa' && returnTime) ? returnTime.substring(0, 10) : new Date().toISOString().substring(0, 10),
+        duration,
+        departure_time: (tourType !== 'visa' && departureTime) ? (safeIsoString(departureTime) || null) : null,
+        return_time: (tourType !== 'visa' && returnTime) ? (safeIsoString(returnTime) || null) : null,
+        airline,
+        hotel,
+        price: calculatedPrice,
+        discount: discount === '' ? 0 : Number(discount),
+        price_visa_tour: priceVisaTour === '' ? 0 : Number(priceVisaTour),
+        commission: calculatedCommission,
+        total_seats: Number(totalSeats),
+        overbook_limit: Number(overbookLimit),
+        flight_out: flightOut || undefined,
+        flight_out_transit: flightOutTransit || undefined,
+        flight_in: flightIn || undefined,
+        flight_in_transit: flightInTransit || undefined,
+        transit_info: transitInfo || undefined,
+        guide_name: guideName || undefined,
+        guide_phone: guidePhone || undefined,
+        ticket_status: ticketStatus || undefined,
+        visa_deadline: safeIsoString(visaDeadline),
+        ticket_deadline: safeIsoString(ticketDeadline),
+        description: description || undefined,
+        tour_status: tourStatus,
+        category: category || categories[0],
+        hold_duration_hours: Number(holdDuration),
+        price_adult: priceAdult !== '' ? Number(priceAdult) : effectivePrice,
+        price_child: priceChild !== '' ? Number(priceChild) : Math.round(effectivePrice * 0.8),
+        price_infant: priceInfant !== '' ? Number(priceInfant) : Math.round(effectivePrice * 0.3),
+        single_room_surcharge: singleRoomSurcharge !== '' ? Number(singleRoomSurcharge) : 7500000,
+        itinerary_pdf_url: itineraryPdfUrl || undefined,
+        notice_sections: JSON.stringify(noticeSections),
+        tour_type: tourType,
+        partner_name: partnerCompanyName || partnerName || undefined,
+        partner_contact: partnerContact || undefined,
+        partner_company_name: partnerCompanyName || partnerName || undefined,
+        partner_retail_price: partnerRetailPrice !== '' ? Number(partnerRetailPrice) : 0,
+        partner_net_cost: partnerNetCost !== '' ? Number(partnerNetCost) : 0,
+        ad_commission_amount: Math.max(0, (partnerRetailPrice !== '' ? Number(partnerRetailPrice) : 0) - (partnerNetCost !== '' ? Number(partnerNetCost) : 0)),
+        organization_name: organizationName || undefined,
+        group_leader_contact: groupLeaderContact || undefined,
+        custom_requirements: customRequirements || undefined,
+        visa_country: visaCountry || (tourType === 'visa' ? destination : undefined),
+        visa_service_type: visaServiceType || undefined,
+        visa_speed: visaSpeed || undefined,
+      };
+    }
 
     if (editingTour) {
       // Logic edit
-      updateTour({
+      await updateTour({
         ...editingTour,
         ...tourData,
       } as Tour);
       toast.success(`Đã cập nhật thông tin tour ${code} thành công!`);
+      resetForm();
     } else {
       // Logic add
-      addTour(tourData);
-      toast.success(`Đã thêm tour ${code} khởi hành mới thành công!`);
+      const createdTour = await addTour(tourData);
+      
+      if (tourType === 'private') {
+        if (createdTour) {
+          try {
+            const orderData = {
+              tour_id: createdTour.id,
+              tour_fallback: createdTour,
+              status: 'sure' as const,
+              total_price: Number(privateTotalAmount),
+              adult_price: Math.round(Number(privateTotalAmount) / Number(privatePaxCount)),
+              adult_count: Number(privatePaxCount),
+              booker_name: privateCustomerName,
+              booker_phone: privateCustomerPhone,
+              special_requests: privateCustomerEmail ? `Email: ${privateCustomerEmail}` : '',
+              is_locked: true,
+              seller_type: 'direct' as const
+            };
+            const createdOrder = await createOrder(orderData);
+            if (createdOrder) {
+              setCreatedPrivateTour(createdTour);
+              setCreatedPrivateOrder(createdOrder);
+              setShowPrivateSuccessModal(true);
+              toast.success(`Đã khởi tạo Tour đoàn riêng ${code} và tự động sinh Đơn hàng thành công!`);
+            } else {
+              toast.error('Tour đã được tạo nhưng có lỗi xảy ra khi tự động sinh Đơn hàng liên kết!');
+              resetForm();
+            }
+          } catch (orderErr) {
+            console.error('Lỗi tự động sinh đơn hàng:', orderErr);
+            toast.error('Lỗi khi tự động sinh Đơn hàng liên kết cho Tour đoàn riêng!');
+            resetForm();
+          }
+        } else {
+          toast.error('Lỗi khi thêm Tour đoàn riêng mới!');
+        }
+      } else {
+        toast.success(`Đã thêm tour ${code} khởi hành mới thành công!`);
+        resetForm();
+      }
     }
-
-    resetForm();
   };
 
   // Interactive controls for visualTravelNotesBuilder
@@ -1617,7 +1809,7 @@ export default function ToursManagement() {
         <>
           {/* TOUR FORM SECTION (Both Add & Edit) */}
           {(showAddForm || editingTour) && (
-            <div id="tour-form-section" className="bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden animate-in fade-in duration-200">
+            <div id="tour-form-section" className="bg-white rounded-xl border border-gray-200 shadow-md animate-in fade-in duration-200">
               <div className="px-6 py-4 border-b border-gray-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-base font-black text-gray-900">
                   {editingTour ? `Cập Nhật Tour: ${editingTour.code}` : 'Khai Báo Tour Du Lịch Mới'}
@@ -1791,39 +1983,179 @@ export default function ToursManagement() {
                       )}
 
                       {tourType === 'private' && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Tên cơ quan / Đoàn khách / Doanh nghiệp *</label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Ví dụ: Công ty Techcombank chi nhánh Sài Gòn"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
-                              value={organizationName}
-                              onChange={e => setOrganizationName(e.target.value)}
-                            />
+                        <div className="space-y-6">
+                          <div className="bg-amber-50/20 p-4 rounded-xl border border-amber-200/50 space-y-4">
+                            <div className="flex items-center gap-2 text-amber-800">
+                              <span className="text-lg">💡</span>
+                              <p className="text-xs font-medium leading-relaxed">
+                                <strong>Bản chất nghiệp vụ:</strong> Tour đoàn riêng là 1 Booking trọn gói (1 Tour = 1 Đơn hàng duy nhất). Hệ thống sẽ <strong>TỰ ĐỘNG sinh 1 Đơn hàng (Booking) tương ứng</strong> trong database ngay khi bấm lưu để lược bỏ toàn bộ các bước đặt chỗ, giữ chỗ thủ công phức tạp.
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Đại diện liên hệ (Tên, SĐT, Chức vụ) *</label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Ví dụ: Chị Lan Anh (HR) - 0912xxxxxx"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
-                              value={groupLeaderContact}
-                              onChange={e => setGroupLeaderContact(e.target.value)}
-                            />
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-blue-600" /> Tên cơ quan / Doanh nghiệp / Đoàn khách *
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Ví dụ: Công ty Techcombank - CN Sài Gòn"
+                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  value={privateCustomerName}
+                                  onChange={e => {
+                                    setPrivateCustomerName(e.target.value);
+                                    setOrganizationName(e.target.value);
+                                  }}
+                                />
+                                <User className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <Phone className="w-3.5 h-3.5 text-blue-600" /> Đại diện liên hệ (SĐT) *
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Ví dụ: Chị Lan Anh - 0912345678"
+                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  value={privateCustomerPhone}
+                                  onChange={e => {
+                                    setPrivateCustomerPhone(e.target.value);
+                                    setGroupLeaderContact(e.target.value);
+                                  }}
+                                />
+                                <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <Mail className="w-3.5 h-3.5 text-blue-600" /> Email nhận thông tin hợp đồng
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="email"
+                                  placeholder="Ví dụ: lananh@techcombank.com.vn"
+                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  value={privateCustomerEmail}
+                                  onChange={e => {
+                                    setPrivateCustomerEmail(e.target.value);
+                                    setCustomRequirements(e.target.value ? `Email: ${e.target.value}` : '');
+                                  }}
+                                />
+                                <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Yêu cầu đặc biệt (Gala, Teambuilding, v.v.)</label>
-                            <input
-                              type="text"
-                              placeholder="Ví dụ: Cần Gala dinner, quay phim flycam, Backdrop teambuilding"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
-                              value={customRequirements}
-                              onChange={e => setCustomRequirements(e.target.value)}
-                            />
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <Users className="w-3.5 h-3.5 text-blue-600" /> Số lượng khách chốt (Pax) *
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  required
+                                  min="1"
+                                  placeholder="Ví dụ: 35"
+                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  value={privatePaxCount}
+                                  onChange={e => setPrivatePaxCount(e.target.value !== '' ? Number(e.target.value) : '')}
+                                />
+                                <Users className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                              </div>
+                              <p className="text-[11px] text-gray-400 mt-1">Số lượng khách thực tế tham gia để tính toán giá bình quân.</p>
+                            </div>
+
+                            <div>
+                              <NumericFormatInput
+                                label="Tổng giá trị hợp đồng trọn gói (VNĐ) *"
+                                required
+                                value={privateTotalAmount}
+                                onChange={setPrivateTotalAmount}
+                                placeholder="Ví dụ: 250.000.000"
+                                labelClassName="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-extrabold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                              />
+                              <p className="text-[11px] text-gray-400 mt-1">Tổng tiền ghi nhận trên hợp đồng ký kết với khách hàng.</p>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <UploadCloud className="w-3.5 h-3.5 text-blue-600" /> Đính kèm Hợp đồng / Chương trình Tour
+                              </label>
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <label className={`w-full flex flex-col items-center justify-center border border-dashed rounded-lg cursor-pointer transition-all p-2 bg-white ${
+                                    privateContractFileUrl ? 'border-emerald-300 hover:border-emerald-400 bg-emerald-50/10' : 'border-gray-300 hover:border-blue-400'
+                                  }`}>
+                                    <div className="flex items-center gap-1.5">
+                                      {isUploadingContract ? (
+                                        <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                      ) : privateContractFileUrl ? (
+                                        <span className="text-emerald-600 text-xs font-bold flex items-center gap-1">✅ Đã tải file</span>
+                                      ) : (
+                                        <span className="text-gray-500 text-xs font-medium">Chọn tệp đính kèm</span>
+                                      )}
+                                    </div>
+                                    <input 
+                                      type="file" 
+                                      className="hidden" 
+                                      onChange={handlePrivateContractUpload}
+                                    />
+                                  </label>
+                                </div>
+                                {privateContractFileUrl && (
+                                  <a 
+                                    href={privateContractFileUrl} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="p-2 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg flex items-center justify-center transition-colors shadow-2xs"
+                                    title="Xem file hợp đồng"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </a>
+                                )}
+                              </div>
+                              {contractUploadError && (
+                                <p className="text-[10px] font-semibold text-rose-600 mt-1">⚠️ {contractUploadError}</p>
+                              )}
+                              <p className="text-[11px] text-gray-400 mt-1">Lưu trữ file chương trình/hợp đồng trực tiếp trên server.</p>
+                            </div>
                           </div>
+
+                          {privatePaxCount !== '' && privateTotalAmount !== '' && Number(privatePaxCount) > 0 && (
+                            <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border border-blue-100 flex items-center justify-between text-xs shadow-2xs">
+                              <div className="flex items-center gap-2">
+                                <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
+                                  📊
+                                </span>
+                                <div>
+                                  <span className="text-slate-900 font-extrabold block text-xs">
+                                    Hạch toán nội bộ tự động:
+                                  </span>
+                                  <span className="text-slate-500 text-[11px]">
+                                    Giá bình quân đầu người để lập hóa đơn và theo dõi lãi/lỗ
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs text-slate-500 font-medium block">Giá Net / Pax (Bình quân):</span>
+                                <span className="text-base font-extrabold text-blue-700">
+                                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                                    Math.round(Number(privateTotalAmount) / Number(privatePaxCount))
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1923,7 +2255,7 @@ export default function ToursManagement() {
                 </div>
 
                 {/* 2. Airline, Hotel, PDF Itinerary */}
-                {tourType !== 'visa' && (
+                {tourType !== 'visa' && tourType !== 'private' && (
                   <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
                     <Plane className="w-4 h-4 text-emerald-600" /> Logistics & Lịch Trình PDF
@@ -2029,79 +2361,81 @@ export default function ToursManagement() {
                 )}
 
                 {/* 3. Numeric inputs with dynamic thousands separator formatting */}
-                <div className="space-y-4 pt-4 border-t border-slate-100">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-rose-600" /> Biểu giá & Hoa hồng
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <NumericFormatInput
-                      label={tourType === 'visa' ? "Giá visa (VND) *" : "Giá Tour niêm yết (VND) *"}
-                      required
-                      value={price}
-                      onChange={handlePriceChange}
-                    />
-                    <NumericFormatInput
-                      label="Giảm giá tour (VND)"
-                      value={discount}
-                      onChange={handleDiscountChange}
-                    />
-                    <NumericFormatInput
-                      label="Hoa hồng Sales / Đại lý *"
-                      required
-                      value={commission}
-                      onChange={setCommission}
-                    />
-                    {tourType !== 'visa' && (
+                {tourType !== 'private' && (
+                  <div className="space-y-4 pt-4 border-t border-slate-100">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-rose-600" /> Biểu giá & Hoa hồng
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                       <NumericFormatInput
-                        label="Giá visa đi tour (VND)"
-                        value={priceVisaTour}
-                        onChange={setPriceVisaTour}
+                        label={tourType === 'visa' ? "Giá visa (VND) *" : "Giá Tour niêm yết (VND) *"}
+                        required
+                        value={price}
+                        onChange={handlePriceChange}
                       />
-                    )}
-                    <div className="md:col-span-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 space-y-1">
-                      <div className="text-xs font-bold text-blue-800">Gợi ý tỷ lệ:</div>
-                      <div className="text-[11px] text-blue-600 leading-relaxed">
-                        Sales sẽ thấy giá bán cuối cùng đã trừ hoa hồng hoặc cộng thêm tùy chỉnh. Hãy thiết lập hoa hồng cân đối để tối ưu doanh số của đại lý.
+                      <NumericFormatInput
+                        label="Giảm giá tour (VND)"
+                        value={discount}
+                        onChange={handleDiscountChange}
+                      />
+                      <NumericFormatInput
+                        label="Hoa hồng Sales / Đại lý *"
+                        required
+                        value={commission}
+                        onChange={setCommission}
+                      />
+                      {tourType !== 'visa' && (
+                        <NumericFormatInput
+                          label="Giá visa đi tour (VND)"
+                          value={priceVisaTour}
+                          onChange={setPriceVisaTour}
+                        />
+                      )}
+                      <div className="md:col-span-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 space-y-1">
+                        <div className="text-xs font-bold text-blue-800">Gợi ý tỷ lệ:</div>
+                        <div className="text-[11px] text-blue-600 leading-relaxed">
+                          Sales sẽ thấy giá bán cuối cùng đã trừ hoa hồng hoặc cộng thêm tùy chỉnh. Hãy thiết lập hoa hồng cân đối để tối ưu doanh số của đại lý.
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {tourType !== 'visa' && (
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
-                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-600">Cấu hình giá chi tiết theo độ tuổi</h5>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <NumericFormatInput
-                        label="Giá người lớn"
-                        value={priceAdult}
-                        onChange={setPriceAdult}
-                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Number(price) - Number(discount || 0))}` : 'Như giá tour'}
-                      />
-                      <NumericFormatInput
-                        label="Giá trẻ em (2-10T)"
-                        value={priceChild}
-                        onChange={setPriceChild}
-                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round((Number(price) - Number(discount || 0)) * 0.8))}` : '80% giá tour'}
-                      />
-                      <NumericFormatInput
-                        label="Giá trẻ nhỏ (<2T)"
-                        value={priceInfant}
-                        onChange={setPriceInfant}
-                        placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round((Number(price) - Number(discount || 0)) * 0.3))}` : '30% giá tour'}
-                      />
-                      <NumericFormatInput
-                        label="Phụ thu phòng đơn"
-                        value={singleRoomSurcharge}
-                        onChange={setSingleRoomSurcharge}
-                        placeholder="Mặc định: 7.500.000"
-                      />
+                    {tourType !== 'visa' && (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
+                      <h5 className="text-xs font-black uppercase tracking-wider text-slate-600">Cấu hình giá chi tiết theo độ tuổi</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <NumericFormatInput
+                          label="Giá người lớn"
+                          value={priceAdult}
+                          onChange={setPriceAdult}
+                          placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Number(price) - Number(discount || 0))}` : 'Như giá tour'}
+                        />
+                        <NumericFormatInput
+                          label="Giá trẻ em (2-10T)"
+                          value={priceChild}
+                          onChange={setPriceChild}
+                          placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round((Number(price) - Number(discount || 0)) * 0.8))}` : '80% giá tour'}
+                        />
+                        <NumericFormatInput
+                          label="Giá trẻ nhỏ (<2T)"
+                          value={priceInfant}
+                          onChange={setPriceInfant}
+                          placeholder={price ? `Mặc định: ${new Intl.NumberFormat('vi-VN').format(Math.round((Number(price) - Number(discount || 0)) * 0.3))}` : '30% giá tour'}
+                        />
+                        <NumericFormatInput
+                          label="Phụ thu phòng đơn"
+                          value={singleRoomSurcharge}
+                          onChange={setPriceInfant}
+                          placeholder="Mặc định: 7.500.000"
+                        />
+                      </div>
                     </div>
+                  )}
                   </div>
                 )}
-                </div>
 
                 {/* 4. Seats & Holds */}
-                {tourType !== 'visa' && (
+                {tourType !== 'visa' && tourType !== 'private' && (
                   <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
                     <User className="w-4 h-4 text-purple-600" /> Quỹ Chỗ & Quy Định Hold
@@ -2170,7 +2504,7 @@ export default function ToursManagement() {
                 )}
 
                 {/* Flight numbers / transit details */}
-                {tourType !== 'visa' && (
+                {tourType !== 'visa' && tourType !== 'private' && (
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 pb-1.5 flex items-center gap-1.5">
                     <Plane className="w-4 h-4 text-teal-600" /> Mã hiệu chuyến bay / Quá cảnh
@@ -2270,7 +2604,8 @@ export default function ToursManagement() {
                 )}
 
                 {/* 5. VISUAL TRAVEL NOTES & DISCLAIMER BUILDER (identical to screenshot format) */}
-                <div className="space-y-5 pt-4 border-t border-slate-100">
+                {tourType !== 'private' && (
+                  <div className="space-y-5 pt-4 border-t border-slate-100">
                   <div className="flex justify-between items-center">
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                       <FileText className="w-4 h-4 text-orange-600" />
@@ -2365,6 +2700,7 @@ export default function ToursManagement() {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Submit Center */}
                 <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
@@ -2380,7 +2716,7 @@ export default function ToursManagement() {
                     disabled={isCodeDuplicate}
                     className={`px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-sm ${isCodeDuplicate ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {editingTour ? 'Cập Nhật Tour' : 'Lưu & Đăng Bán'}
+                    {editingTour ? 'Cập Nhật Tour' : (tourType === 'private' ? 'Lưu hợp đồng & Khởi tạo đoàn' : 'Lưu & Đăng Bán')}
                   </button>
                 </div>
               </form>
@@ -3413,6 +3749,130 @@ export default function ToursManagement() {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
               >
                 Đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal for Private Tour Fast-track Creation */}
+      {showPrivateSuccessModal && createdPrivateTour && createdPrivateOrder && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-xl w-full p-6 md:p-8 animate-in zoom-in-95 duration-200 relative overflow-hidden">
+            {/* Decorative background accent */}
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-600" />
+            
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 text-3xl shadow-xs">
+                🎉
+              </div>
+              
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                  Khởi Tạo Tour Đoàn Riêng Thành Công!
+                </h3>
+                <p className="text-sm text-slate-500 font-medium">
+                  Hệ thống đã tự động liên kết và sinh đơn hàng trọn gói tương ứng
+                </p>
+              </div>
+
+              {/* Tour and Order Details Summary */}
+              <div className="w-full bg-slate-50 rounded-xl p-4 border border-slate-200 text-left space-y-3.5 mt-2">
+                <div className="flex justify-between items-center pb-2.5 border-b border-slate-200/60">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thông tin Tour</span>
+                  <span className="px-2.5 py-1 text-[11px] font-black uppercase rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                    Đoàn riêng (Private)
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="space-y-1.5">
+                    <span className="text-slate-400 block font-medium">Tên Tour / Đoàn:</span>
+                    <strong className="text-slate-800 text-[13px] line-clamp-1 block leading-tight">
+                      {createdPrivateTour.title}
+                    </strong>
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-slate-400 block font-medium">Mã Tour hệ thống:</span>
+                    <strong className="text-slate-800 font-bold block bg-slate-200/50 px-2 py-0.5 rounded border border-slate-300 w-fit">
+                      {createdPrivateTour.tour_code}
+                    </strong>
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-slate-400 block font-medium">Đại diện khách hàng:</span>
+                    <strong className="text-slate-800 block">
+                      {createdPrivateOrder.customer_name}
+                    </strong>
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-slate-400 block font-medium">Số lượng khách chốt:</span>
+                    <strong className="text-slate-800 block text-[13px]">
+                      {createdPrivateOrder.adult_count} Khách (Pax)
+                    </strong>
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-400 block font-medium">Tổng giá trị hợp đồng:</span>
+                      <strong className="text-lg font-black text-emerald-600 block">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(createdPrivateOrder.total_price)}
+                      </strong>
+                    </div>
+                    {createdPrivateTour.file_url && (
+                      <a 
+                        href={createdPrivateTour.file_url} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="inline-flex items-center text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        📄 Xem file hợp đồng
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Guide/Callout Box */}
+              <div className="w-full bg-blue-50/40 p-3.5 rounded-xl border border-blue-100/50 flex items-start gap-2.5 text-left">
+                <span className="text-base mt-0.5">⚡</span>
+                <p className="text-[11px] font-semibold text-blue-700 leading-normal">
+                  <strong>Hành động tiếp theo:</strong> Để hoàn thiện đoàn, bạn có thể lập tức nhập danh sách hành khách (để làm thủ tục bảo hiểm/visa) hoặc thiết lập phiếu thu cọc đầu tiên cho kế toán duyệt.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPrivateSuccessModal(false);
+                    window.location.href = `/passengers?search=${encodeURIComponent(createdPrivateOrder.customer_name || '')}`;
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/10 transition-colors cursor-pointer"
+                >
+                  📋 Nhập Danh Sách Hành Khách (Pax)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPrivateSuccessModal(false);
+                    window.location.href = `/accounting?orderId=${createdPrivateOrder.id}`;
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-500/10 transition-colors cursor-pointer"
+                >
+                  💰 Lập Phiếu Thu / Đề Nghị
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPrivateSuccessModal(false);
+                  resetForm();
+                  setShowAddForm(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 font-semibold text-xs pt-2 transition-colors cursor-pointer"
+              >
+                Đóng thông báo & Quay lại danh sách Tour
               </button>
             </div>
           </div>

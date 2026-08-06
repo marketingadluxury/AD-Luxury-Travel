@@ -74,7 +74,7 @@ interface CRMContextType {
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
   updateCategory: (oldCategory: string, newCategory: string) => void;
-  addTour: (tour: Omit<Tour, 'id' | 'sold_seats' | 'hold_seats' | 'available_seats' | 'seat_status'>) => void;
+  addTour: (tour: Omit<Tour, 'id' | 'sold_seats' | 'hold_seats' | 'available_seats' | 'seat_status'>) => Promise<Tour | undefined>;
   updateTour: (tour: Tour) => void;
   deleteTour: (tourId: string) => void;
   createOrder: (orderData: {
@@ -105,7 +105,8 @@ interface CRMContextType {
     surcharge_amount?: number;
     is_locked?: boolean;
     seller_type?: 'direct' | 'agent';
-  }) => void;
+    tour_fallback?: Tour;
+  }) => Promise<Order | undefined>;
   confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
   cancelOrder: (orderId: string, reason?: string) => void;
   requestExtension: (orderId: string, hours: number) => void;
@@ -1840,7 +1841,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     return val;
   };
 
-  const addTour = async (tourData: any) => {
+  const addTour = async (tourData: any): Promise<Tour | undefined> => {
     // Tạo ID an toàn với fallback nếu crypto.randomUUID không khả dụng
     const id = generateSafeUUID();
     
@@ -2009,6 +2010,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         setTours(prev => prev.filter(t => t.id !== id));
       }
     }
+    return newTour;
   };
 
   const updateTour = async (updatedTour: Tour) => {
@@ -2400,8 +2402,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     partner_id?: string;
     original_price?: number;
     selling_price?: number;
-  }) => {
-    const tour = tours.find(t => t.id === orderData.tour_id);
+    tour_fallback?: Tour;
+  }): Promise<Order | undefined> => {
+    const tour = tours.find(t => t.id === orderData.tour_id) || orderData.tour_fallback;
     if (!tour) return;
 
     const adultPrice = Number(orderData.adult_price || 0);
@@ -2534,9 +2537,36 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       visa_submitted_at: (p.passport_url || p.labor_contract_url) ? new Date().toISOString() : undefined
     }));
 
-    // Update tour seats locally
-    const updatedTours = tours.map(t => {
-      if (t.id === orderData.tour_id) {
+    setOrders(prev => [newOrder, ...prev]);
+    setPassengers(prev => [...prev, ...newPassengers]);
+    setTours(prev => {
+      const hasTour = prev.some(t => t.id === orderData.tour_id);
+      if (hasTour) {
+        return prev.map(t => {
+          if (t.id === orderData.tour_id) {
+            const sold_seats = orderData.status === 'sure' ? t.sold_seats + seatsToLock : t.sold_seats;
+            const hold_seats = orderData.status === 'hold' ? t.hold_seats + seatsToLock : t.hold_seats;
+            const available_seats = t.total_seats - sold_seats - hold_seats;
+            const overbook = t.overbook_limit || 0;
+            const totalUsed = sold_seats + hold_seats;
+            let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+            if (totalUsed >= t.total_seats + overbook) {
+              seatStatus = 'Hết chỗ';
+            } else if (totalUsed >= t.total_seats) {
+              seatStatus = 'Overbooked';
+            }
+            return {
+              ...t,
+              sold_seats,
+              hold_seats,
+              available_seats,
+              seat_status: seatStatus
+            } as Tour;
+          }
+          return t;
+        });
+      } else if (orderData.tour_fallback) {
+        const t = orderData.tour_fallback;
         const sold_seats = orderData.status === 'sure' ? t.sold_seats + seatsToLock : t.sold_seats;
         const hold_seats = orderData.status === 'hold' ? t.hold_seats + seatsToLock : t.hold_seats;
         const available_seats = t.total_seats - sold_seats - hold_seats;
@@ -2548,20 +2578,17 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         } else if (totalUsed >= t.total_seats) {
           seatStatus = 'Overbooked';
         }
-        return {
+        const updatedFallback = {
           ...t,
           sold_seats,
           hold_seats,
           available_seats,
           seat_status: seatStatus
         } as Tour;
+        return [...prev, updatedFallback];
       }
-      return t;
+      return prev;
     });
-
-    setOrders(prev => [newOrder, ...prev]);
-    setPassengers(prev => [...prev, ...newPassengers]);
-    setTours(updatedTours);
 
     logActivity({
       action: orderData.status === 'sure' ? 'Tạo Booking chắc chắn (Sure)' : 'Tạo Booking giữ chỗ (Hold)',
@@ -2710,13 +2737,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           }
         }
 
-        const matchingTour = updatedTours.find(t => t.id === orderData.tour_id);
-        if (matchingTour) {
+        if (tour) {
+          const sold_seats = orderData.status === 'sure' ? tour.sold_seats + seatsToLock : tour.sold_seats;
+          const hold_seats = orderData.status === 'hold' ? tour.hold_seats + seatsToLock : tour.hold_seats;
+          const available_seats = tour.total_seats - sold_seats - hold_seats;
+          const overbook = tour.overbook_limit || 0;
+          const totalUsed = sold_seats + hold_seats;
+          let seatStatus: 'Còn chỗ' | 'Hết chỗ' | 'Overbooked' = 'Còn chỗ';
+          if (totalUsed >= tour.total_seats + overbook) {
+            seatStatus = 'Hết chỗ';
+          } else if (totalUsed >= tour.total_seats) {
+            seatStatus = 'Overbooked';
+          }
+
           const { error: tError } = await supabase.from('tours').update({
-            sold_seats: Number(matchingTour.sold_seats),
-            hold_seats: Number(matchingTour.hold_seats),
-            available_seats: Number(matchingTour.available_seats),
-            seat_status: matchingTour.seat_status
+            sold_seats: Number(sold_seats),
+            hold_seats: Number(hold_seats),
+            available_seats: Number(available_seats),
+            seat_status: seatStatus
           }).eq('id', orderData.tour_id);
           if (tError) throw tError;
         }
@@ -2765,6 +2803,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         }));
       }
     }
+    return newOrder;
   };
 
   const addPassengersToOrder = async (orderId: string, passengersData: (Omit<Passenger, 'id' | 'order_id' | 'visa_status'> & { needs_visa_service?: boolean })[]) => {

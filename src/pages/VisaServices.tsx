@@ -1506,7 +1506,7 @@ export default function VisaServices() {
       <>
           {/* TOUR FORM SECTION (Both Add & Edit) */}
           {(showAddForm || editingTour) && (
-            <div id="tour-form-section" className="bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden animate-in fade-in duration-200">
+            <div id="tour-form-section" className="bg-white rounded-xl border border-gray-200 shadow-md animate-in fade-in duration-200">
               <div className="px-6 py-4 border-b border-gray-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-base font-black text-gray-900">
                   {editingTour ? `Cập Nhật Tour: ${editingTour.code}` : 'Khai Báo Tour Du Lịch Mới'}

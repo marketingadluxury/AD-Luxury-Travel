@@ -235,7 +235,7 @@ async function makeFolderPublic(fileId: string, token?: string, userEmail?: stri
     });
   }
 
-  for (const target of targets) {
+  await Promise.all(targets.map(async (target) => {
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -254,7 +254,7 @@ async function makeFolderPublic(fileId: string, token?: string, userEmail?: stri
     } catch (err) {
       console.error(`[Drive] Error sharing with ${target.type === 'domain' ? target.domain : target.emailAddress}:`, err);
     }
-  }
+  }));
 }
 
 async function getFolderWebViewLink(fileId: string, token?: string): Promise<string> {
@@ -935,21 +935,28 @@ app.post(['/api/create-folder', '/create-folder'], async (req, res) => {
   }
 });
 
-// Helper for strict Google Drive file upload (does NOT use Supabase Storage or Base64 fallback anymore)
+// Helper for strict Google Drive file upload with smart Supabase fallback
 async function uploadWith3TierFallback(
   req: express.Request,
   file: Express.Multer.File,
   fileName: string,
   getDriveFolderId: (token: string) => Promise<string>,
   supabaseStoragePath: string,
-  strictDriveOnly: boolean = true
+  strictDriveOnly: boolean = false
 ): Promise<{ url: string; fileId?: string; storage: string; error?: string }> {
   const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
   const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
   const driveActive = hasServiceAccount || hasOAuth;
 
   if (!driveActive) {
-    throw new Error('Hệ thống chưa được cấu hình liên kết tài khoản Google Drive. Vui lòng thiết lập biến môi trường Google Drive API trong cài đặt hệ thống để lưu trữ tài liệu.');
+    if (strictDriveOnly) {
+      throw new Error('Hệ thống chưa được cấu hình liên kết tài khoản Google Drive. Vui lòng thiết lập biến môi trường Google Drive API trong cài đặt hệ thống để lưu trữ tài liệu.');
+    }
+    // Fallback to Supabase Storage
+    console.log('[Upload Fallback] Google Drive is not configured. Falling back to Supabase Storage...');
+    const supabase = getAdminSupabaseClient(req);
+    const publicUrl = await uploadFileToSupabase('crm-attachments', supabaseStoragePath, file.buffer, file.mimetype, supabase);
+    return { url: publicUrl, storage: 'supabase' };
   }
 
   try {
@@ -961,7 +968,18 @@ async function uploadWith3TierFallback(
   } catch (driveErr: any) {
     const driveErrorMsg = driveErr.message || String(driveErr);
     console.warn('[Google Drive Upload Failure] Upload failed:', driveErrorMsg);
-    throw new Error(`Lỗi tải file lên Google Drive: ${driveErrorMsg}. Hệ thống yêu cầu lưu trữ trên Google Drive và không dùng Supabase Storage làm dự phòng.`);
+    if (strictDriveOnly) {
+      throw new Error(`Lỗi tải file lên Google Drive: ${driveErrorMsg}. Hệ thống yêu cầu lưu trữ trên Google Drive và không dùng Supabase Storage làm dự phòng.`);
+    }
+    // Fallback to Supabase Storage
+    console.log('[Upload Fallback] Google Drive upload failed. Falling back to Supabase Storage...', driveErrorMsg);
+    try {
+      const supabase = getAdminSupabaseClient(req);
+      const publicUrl = await uploadFileToSupabase('crm-attachments', supabaseStoragePath, file.buffer, file.mimetype, supabase);
+      return { url: publicUrl, storage: 'supabase' };
+    } catch (supErr: any) {
+      throw new Error(`Lỗi tải file: Cả Google Drive (${driveErrorMsg}) và Supabase Storage (${supErr.message || supErr}) đều thất bại.`);
+    }
   }
 }
 
