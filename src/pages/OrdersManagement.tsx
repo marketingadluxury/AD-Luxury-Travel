@@ -1446,11 +1446,11 @@ export default function OrdersManagement() {
             {/* Step 1: Choose Tour and Hold type */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Chọn Tour du lịch *</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Chọn Tour đoàn riêng *</label>
                 <Select
-                  placeholder="-- Chọn Tour khởi hành --"
+                  placeholder="-- Chọn Tour đoàn riêng --"
                   options={tours
-                    .filter(t => t.tour_type !== 'visa')
+                    .filter(t => t.tour_type === 'private')
                     .map(t => {
                       const maxAllowed = Math.max(0, t.total_seats + (t.overbook_limit || 0) - t.sold_seats - t.hold_seats);
                       return {

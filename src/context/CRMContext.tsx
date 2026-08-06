@@ -3161,9 +3161,43 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const deletePassengerFilesOnDisqualified = async (passengerId: string) => {
+    const p = passengers.find(pass => pass.id === passengerId);
+    if (!p) return;
+
+    const urls: string[] = [];
+    if (p.passport_url) {
+      p.passport_url.split(',').filter(Boolean).forEach(u => urls.push(u.trim()));
+    }
+    if ((p as any).labor_contract_url) {
+      (p as any).labor_contract_url.split(',').filter(Boolean).forEach((u: string) => urls.push(u.trim()));
+    }
+
+    if (urls.length > 0) {
+      console.log(`[Auto-Delete] Hành khách ${p.full_name || p.name || passengerId} có trạng thái Hồ sơ chưa đạt. Tự động xóa ${urls.length} file khỏi Google Drive.`);
+      for (const url of urls) {
+        try {
+          await fetch('/api/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+        } catch (e) {
+          console.warn(`[Auto-Delete] Không thể xóa file ${url} trên Google Drive:`, e);
+        }
+      }
+    }
+  };
+
   const updateVisaStatus = async (passengerId: string, status: Passenger['visa_status'], reason?: string) => {
     const isDisqualified = status === 'disqualified';
+    const isRejected = status === 'rejected';
+    const shouldDeleteFiles = isDisqualified;
     const now = new Date().toISOString();
+
+    if (shouldDeleteFiles) {
+      await deletePassengerFilesOnDisqualified(passengerId);
+    }
 
     setPassengers(prev => prev.map(p => {
       if (p.id === passengerId) {
@@ -3174,7 +3208,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             ? (reason !== undefined ? reason : p.visa_disqualified_reason)
             : undefined,
           // Cập nhật thời gian nộp khi chuyển sang trạng thái processing và chưa có thời gian nộp
-          visa_submitted_at: status === 'processing' && !p.visa_submitted_at ? now : p.visa_submitted_at
+          visa_submitted_at: status === 'processing' && !p.visa_submitted_at ? now : p.visa_submitted_at,
+          passport_url: shouldDeleteFiles ? undefined : p.passport_url,
+          labor_contract_url: shouldDeleteFiles ? undefined : (p as any).labor_contract_url
         };
       }
       return p;
@@ -3205,11 +3241,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         const p = passengers.find(pass => pass.id === passengerId);
         const submittedAt = status === 'processing' && (!p || !p.visa_submitted_at) ? now : (p ? p.visa_submitted_at : null);
 
-        const { error } = await supabase.from('passengers').update({ 
+        const updatePayload: any = { 
           visa_status: status,
           visa_disqualified_reason: finalReason,
           visa_submitted_at: submittedAt
-        }).eq('id', toUuid(passengerId));
+        };
+
+        if (isDisqualified) {
+          updatePayload.passport_url = null;
+          updatePayload.labor_contract_url = null;
+        }
+
+        const { error } = await supabase.from('passengers').update(updatePayload).eq('id', toUuid(passengerId));
         
         if (error) throw error;
       } catch (err) {
@@ -3218,10 +3261,17 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           const p = passengers.find(pass => pass.id === passengerId);
           const submittedAt = status === 'processing' && (!p || !p.visa_submitted_at) ? now : (p ? p.visa_submitted_at : null);
           
-          await supabase.from('passengers').update({ 
+          const updatePayload: any = { 
             visa_status: status,
             visa_submitted_at: submittedAt
-          }).eq('id', toUuid(passengerId));
+          };
+
+          if (isDisqualified) {
+            updatePayload.passport_url = null;
+            updatePayload.labor_contract_url = null;
+          }
+
+          await supabase.from('passengers').update(updatePayload).eq('id', toUuid(passengerId));
         } catch (innerErr) {
           console.error('Lỗi khi cập nhật trạng thái Visa trên Supabase:', innerErr);
         }
@@ -3233,6 +3283,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     const existing = passengers.find(p => p.id === passengerId);
     let visa_submitted_at = updatedData.visa_submitted_at || existing?.visa_submitted_at;
     let visa_status = updatedData.visa_status || existing?.visa_status;
+    const isRejected = visa_status === 'rejected';
+    const isDisqualified = visa_status === 'disqualified';
+    const shouldDeleteFiles = isDisqualified;
+
+    if (shouldDeleteFiles && existing?.visa_status !== 'disqualified') {
+      await deletePassengerFilesOnDisqualified(passengerId);
+      updatedData.passport_url = undefined;
+      updatedData.labor_contract_url = undefined;
+    }
 
     // Cập nhật trạng thái visa dựa trên lựa chọn dịch vụ làm visa qua tour
     if (updatedData.needs_visa_service !== undefined) {
@@ -3269,12 +3328,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
 
     const finalData = { 
-      ...existing, 
-      ...updatedData, 
-      visa_submitted_at, 
-      visa_status, 
-      visa_disqualified_reason,
-      needs_visa_service: updatedData.needs_visa_service !== undefined ? updatedData.needs_visa_service : existing?.needs_visa_service
+       ...existing, 
+       ...updatedData, 
+       passport_url: shouldDeleteFiles ? undefined : (updatedData.passport_url !== undefined ? updatedData.passport_url : existing?.passport_url),
+       labor_contract_url: shouldDeleteFiles ? undefined : (updatedData.labor_contract_url !== undefined ? updatedData.labor_contract_url : existing?.labor_contract_url),
+       visa_submitted_at, 
+       visa_status, 
+       visa_disqualified_reason,
+       needs_visa_service: updatedData.needs_visa_service !== undefined ? updatedData.needs_visa_service : existing?.needs_visa_service
     };
 
     // Recalculate order total if needs_visa_service changed
@@ -3391,8 +3452,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           passport_number: finalData.passport_number,
           phone: finalData.phone,
           dob: finalData.dob,
-          passport_url: finalData.passport_url,
-          labor_contract_url: finalData.labor_contract_url,
+          passport_url: shouldDeleteFiles ? null : finalData.passport_url,
+          labor_contract_url: shouldDeleteFiles ? null : finalData.labor_contract_url,
           visa_status: finalData.visa_status,
           needs_visa_service: finalData.needs_visa_service,
           visa_submitted_at: finalData.visa_submitted_at,
@@ -3412,8 +3473,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             passport_number: finalData.passport_number,
             phone: finalData.phone,
             dob: finalData.dob,
-            passport_url: finalData.passport_url,
-            labor_contract_url: finalData.labor_contract_url,
+            passport_url: shouldDeleteFiles ? null : finalData.passport_url,
+            labor_contract_url: shouldDeleteFiles ? null : finalData.labor_contract_url,
             visa_status: finalData.visa_status
           }).eq('id', toUuid(passengerId));
           

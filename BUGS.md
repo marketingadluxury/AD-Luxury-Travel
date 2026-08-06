@@ -281,6 +281,22 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   3. **Đồng bộ Bảng điều khiển (`Dashboard.tsx`):** Cập nhật hàm tổng hợp `teamsMap` tải danh sách Team linh hoạt từ API `/api/admin/teams`, tự động gom nhóm doanh số, số lượt khách Pax, số đơn hàng và tỷ lệ hoàn thành KPI % của nhân viên theo `team_id` / `team_name` thực tế.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
 
+### 1.34 Giới hạn chọn Tour trong form Tạo Booking mới tại Quản lý Booking chỉ dành cho Tour đoàn riêng
+- **Mô tả yêu cầu:**
+  Giới hạn danh sách Tour du lịch trong dropdown chọn Tour (`Select`) của form Đặt giữ chỗ/Tạo Booking mới tại trang Quản lý Booking (`OrdersManagement.tsx`) chỉ hiển thị duy nhất các **Tour đoàn riêng (`tour_type === 'private'`)**. Đối với các tour ghép, tour tự vận hành (`internal`), hay tour gửi đối tác (`partner`) thì việc đặt giữ chỗ sẽ được thao tác thông qua trang **Lịch khởi hành (`DepartureCalendar.tsx`)**.
+- **Giải pháp:**
+  Cập nhật file `src/pages/OrdersManagement.tsx` tại form tạo mới (`showCreateForm`): thay đổi bộ lọc danh sách tour `.filter(t => t.tour_type !== 'visa')` thành `.filter(t => t.tour_type === 'private')`. Đồng thời cập nhật nhãn `Chọn Tour đoàn riêng *` và placeholder `-- Chọn Tour đoàn riêng --` tương ứng để nâng cao trải nghiệm người dùng.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.35 Chuyển đổi Bộ lọc Team trên Dashboard sang Động theo Cài đặt Hệ thống
+- **Mô tả yêu cầu:**
+  Đồng bộ hóa bộ lọc "Lọc theo Team" ở Bảng điều khiển (Dashboard) để tải dữ liệu danh sách team một cách hoàn toàn tự động và động từ Cài đặt hệ thống (thay vì để cứng tĩnh như ban đầu), nhằm đáp ứng việc cập nhật/thay đổi danh sách team kinh doanh trong cơ sở dữ liệu.
+- **Giải pháp:**
+  1. Khai báo các biến `defaultTeams` và `activeTeams` bằng `useMemo` ngay đầu component `Dashboard.tsx`, tự động sử dụng danh sách `fetchedTeams` từ API `/api/admin/teams` hoặc fallback về cấu hình mặc định.
+  2. Cập nhật `executiveData`'s `useMemo` sử dụng biến `activeTeams` này để thống kê hiệu quả kinh doanh, đồng thời bổ sung `activeTeams` vào mảng dependency để tự động tính toán lại dữ liệu ngay khi danh sách team thay đổi.
+  3. Thay thế các thẻ `<option>` tĩnh chứa tên team cũ tại bộ lọc chọn team thành dạng map động `{activeTeams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

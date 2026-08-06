@@ -23,6 +23,7 @@ interface PassengerInputState {
   dob: string;
   files: File[];
   passport_url?: string;
+  labor_contract_url?: string;
   isPayer: boolean;
   needs_visa_service: boolean;
   gender?: string;
@@ -133,6 +134,8 @@ export default function PassengerInputModal({
       nationality: p.nationality || 'VN',
       passport_issue_date: p.passport_issue_date || '',
       passport_expiry_date: p.passport_expiry_date || '',
+      passport_url: p.passport_url || '',
+      labor_contract_url: p.labor_contract_url || '',
     };
     setPassengers(updated);
     setModalSuggestions([]);
@@ -299,6 +302,7 @@ export default function PassengerInputModal({
           passport_number: p.passport_number.trim().toUpperCase(),
           dob: p.dob,
           passport_url: passportUrls.length > 0 ? passportUrls.join(',') : undefined,
+          labor_contract_url: p.labor_contract_url || undefined,
           is_payer: p.isPayer,
           needs_visa_service: p.needs_visa_service,
           gender: p.gender,
@@ -583,6 +587,39 @@ export default function PassengerInputModal({
                     </label>
                   </div>
 
+                  {((p.passport_url && p.passport_url.trim() !== '') || (p.labor_contract_url && p.labor_contract_url.trim() !== '')) && (
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="text-xs font-black text-emerald-800">Sử dụng lại hồ sơ/giấy tờ cũ</span>
+                      </div>
+                      <div className="space-y-1 pl-6">
+                        {p.passport_url && p.passport_url.split(',').filter(Boolean).map((url, uidx) => {
+                          const nameMatch = url.match(/#filename=(.*)$/);
+                          const filename = nameMatch ? decodeURIComponent(nameMatch[1]) : `Hộ chiếu đính kèm #${uidx + 1}`;
+                          return (
+                            <div key={`pass-${uidx}`} className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                              <span className="truncate max-w-[80%]">{filename}</span>
+                              <span className="text-[9px] text-emerald-500 font-normal italic font-sans">(Sử dụng lại từ GG Drive)</span>
+                            </div>
+                          );
+                        })}
+                        {p.labor_contract_url && p.labor_contract_url.split(',').filter(Boolean).map((url, uidx) => {
+                          const nameMatch = url.match(/#filename=(.*)$/);
+                          const filename = nameMatch ? decodeURIComponent(nameMatch[1]) : `HĐ lao động đính kèm #${uidx + 1}`;
+                          return (
+                            <div key={`labor-${uidx}`} className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                              <span className="truncate max-w-[80%]">{filename}</span>
+                              <span className="text-[9px] text-emerald-500 font-normal italic font-sans">(Sử dụng lại từ GG Drive)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {p.files && p.files.length > 0 ? (
                     <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
                       {p.files.map((file, fileIdx) => (
@@ -599,9 +636,11 @@ export default function PassengerInputModal({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-[10px] text-gray-400 italic font-medium bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                      Chưa chọn tài liệu đính kèm nào cho hành khách này. Bạn có thể chọn file ảnh, PDF, v.v. Tất cả sẽ được tự động tải lên hệ thống khi click "Xác nhận & Chốt chỗ".
-                    </div>
+                    !((p.passport_url && p.passport_url.trim() !== '') || (p.labor_contract_url && p.labor_contract_url.trim() !== '')) && (
+                      <div className="text-[10px] text-gray-400 italic font-medium bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        Chưa chọn tài liệu đính kèm nào cho hành khách này. Bạn có thể chọn file ảnh, PDF, v.v. Tất cả sẽ được tự động tải lên hệ thống khi click "Xác nhận & Chốt chỗ".
+                      </div>
+                    )
                   )}
                 </div>
               </div>

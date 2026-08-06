@@ -113,6 +113,16 @@ export default function Dashboard() {
     return () => { isMounted = false; };
   }, []);
 
+  const defaultTeams = useMemo(() => [
+    { id: 'team-1', name: 'Team Đông Nam Á', leader_name: 'Trần Văn Trưởng (Leader)', kpi_target: 800000000 },
+    { id: 'team-2', name: 'Team Châu Âu & Mỹ', leader_name: 'Nguyễn Thị Hương (Leader)', kpi_target: 1200000000 },
+    { id: 'team-3', name: 'Team Nội Địa & Khác', leader_name: 'Lê Minh Tuấn (Leader)', kpi_target: 500000000 }
+  ], []);
+
+  const activeTeams = useMemo(() => {
+    return fetchedTeams.length > 0 ? fetchedTeams : defaultTeams;
+  }, [fetchedTeams, defaultTeams]);
+
   // Lọc đơn hàng theo thời gian được chọn
   const filteredOrders = useMemo(() => {
     const now = new Date();
@@ -372,17 +382,9 @@ export default function Dashboard() {
     ];
 
     // 5. Khối Báo cáo Hiệu Quả Kinh Doanh Theo Team (Team Performance Summary)
-    // Tự động khởi tạo từ fetchedTeams nếu có, hoặc dùng danh sách mặc định
-    const defaultTeams = [
-      { id: 'team-1', name: 'Team Đông Nam Á', leader_name: 'Trần Văn Trưởng (Leader)', kpi_target: 800000000 },
-      { id: 'team-2', name: 'Team Châu Âu & Mỹ', leader_name: 'Nguyễn Thị Hương (Leader)', kpi_target: 1200000000 },
-      { id: 'team-3', name: 'Team Nội Địa & Khác', leader_name: 'Lê Minh Tuấn (Leader)', kpi_target: 500000000 }
-    ];
-
-    const activeTeamsSource = fetchedTeams.length > 0 ? fetchedTeams : defaultTeams;
     const teamsMap: { [teamKey: string]: TeamPerformanceSummary } = {};
 
-    activeTeamsSource.forEach(t => {
+    activeTeams.forEach(t => {
       teamsMap[t.id] = {
         team_id: t.id,
         team_name: t.name,
@@ -517,7 +519,7 @@ export default function Dashboard() {
       teamPerformanceList,
       salePerformanceList
     };
-  }, [filteredOrders, tours, salesProfiles]);
+  }, [filteredOrders, tours, salesProfiles, activeTeams]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -1527,9 +1529,9 @@ export default function Dashboard() {
                     className="px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-white hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs transition-all"
                   >
                     <option value="all">Tất cả các Team</option>
-                    <option value="Team Đông Nam Á">Team Đông Nam Á</option>
-                    <option value="Team Châu Âu & Mỹ">Team Châu Âu & Mỹ</option>
-                    <option value="Team Nội Địa & Khác">Team Nội Địa & Khác</option>
+                    {activeTeams.map(t => (
+                      <option key={t.id} value={t.name}>{t.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
