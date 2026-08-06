@@ -243,3 +243,45 @@ export function calculateOrderFinancials(input: CalculateFinancialsInput): Calcu
   };
 }
 
+export async function safeFetchApi(url: string, options: RequestInit = {}): Promise<any> {
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch (netErr: any) {
+    console.error(`[safeFetchApi] Network error fetching ${url}:`, netErr);
+    throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Vui lòng kiểm tra kết nối mạng hoặc thử lại sau giây lát.');
+  }
+
+  const resText = await response.text();
+  const trimmedText = resText.trim();
+
+  if (trimmedText.startsWith('<!doctype html') || trimmedText.startsWith('<html')) {
+    console.error(`[safeFetchApi] HTML response received for ${url}:`, trimmedText.substring(0, 200));
+    throw new Error('Máy chủ đang khởi động lại hoặc không thể xử lý yêu cầu (Phản hồi HTML). Vui lòng thử lại sau giây lát.');
+  }
+
+  let data: any = {};
+  if (trimmedText) {
+    try {
+      data = JSON.parse(trimmedText);
+    } catch {
+      if (trimmedText.startsWith('http://') || trimmedText.startsWith('https://')) {
+        return { success: true, url: trimmedText };
+      }
+      throw new Error(`Phản hồi từ máy chủ không hợp lệ (${response.status}): ${trimmedText.substring(0, 100)}`);
+    }
+  }
+
+  if (!response.ok) {
+    const errorMsg = data?.error || data?.message || `Lỗi máy chủ (${response.status})`;
+    throw new Error(errorMsg);
+  }
+
+  return data;
+}
+

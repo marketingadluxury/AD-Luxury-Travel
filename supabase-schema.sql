@@ -643,23 +643,40 @@ UPDATE profiles SET role = 'agent' WHERE role = 'CTV';
 UPDATE bookings SET seller_type = 'agent' WHERE seller_type = 'CTV' OR seller_type = 'ctv';
 
 -- ==============================================================================
--- BẢO MẬT & ĐỒNG BỘ CHO BẢNG ĐỀ NGHỊ THANH TOÁN (PAYMENT PROPOSALS)
+-- BẢNG QUẢN LÝ TEAM KINH DOANH (TEAMS) & PHÂN BỔ NHÂN SỰ
 -- ==============================================================================
--- Kích hoạt RLS (Row Level Security) cho bảng payment_proposals
-ALTER TABLE payment_proposals ENABLE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS teams (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  leader_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  leader_name TEXT,
+  kpi_target NUMERIC DEFAULT 800000000,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Tạo chính sách bảo mật cho người dùng đã đăng nhập (authenticated)
-DROP POLICY IF EXISTS "Allow authenticated access to payment_proposals" ON payment_proposals;
-CREATE POLICY "Allow authenticated access to payment_proposals" ON payment_proposals FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- Bổ sung cột team_id & team_name vào bảng profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id) ON DELETE SET NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS team_name TEXT;
 
--- Kích hoạt Realtime cho bảng payment_proposals (để hiển thị tức thời thay đổi khi nhân viên gửi hoặc quản lý duyệt)
+-- Kích hoạt Row Level Security (RLS)
+ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow authenticated access to teams" ON teams;
+CREATE POLICY "Allow authenticated access to teams" ON teams FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public read access to teams" ON teams;
+CREATE POLICY "Allow public read access to teams" ON teams FOR SELECT TO anon USING (true);
+
+-- Enable Realtime cho bảng teams và payment_proposals
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE teams;
     ALTER PUBLICATION supabase_realtime ADD TABLE payment_proposals;
   ELSE
-    CREATE PUBLICATION supabase_realtime FOR TABLE payment_proposals;
+    CREATE PUBLICATION supabase_realtime FOR TABLE teams, payment_proposals;
   END IF;
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
+

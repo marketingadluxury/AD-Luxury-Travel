@@ -331,6 +331,26 @@ function sanitizePassengers(rawPassengers: Passenger[], rawOrders: Order[]): Pas
   return sanitized;
 }
 
+export const isOrderLocked = (order: Order | null): boolean => {
+  if (!order) return false;
+  // If explicitly unlocked by Sale Leader or Admin
+  if (order.is_locked === false) {
+    return false;
+  }
+  // If explicitly locked by Sale Leader, Admin or system
+  if (order.is_locked === true) {
+    return true;
+  }
+  // Default lock rule when is_locked is undefined:
+  // Lock if order is confirmed ('sure'), fully paid ('paid'), or has payments ('partially_paid')
+  return (
+    order.status === 'sure' ||
+    order.status === 'paid' ||
+    order.payment_status === 'paid' ||
+    order.payment_status === 'partially_paid'
+  );
+};
+
 export const canUnlockOrder = (
   order: Order | null,
   currentRole: Role,
@@ -2992,7 +3012,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     setOrders(prev => prev.map(o => {
       if (o.id === orderId) {
-        return { ...o, status: 'sure', hold_expiry: undefined, total_price: newTotal };
+        return { ...o, status: 'sure', hold_expiry: undefined, total_price: newTotal, is_locked: true };
       }
       return o;
     }));
@@ -3000,7 +3020,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('bookings').update({ status: 'sure', hold_expiry: null, total_amount: newTotal }).eq('id', toUuid(orderId));
+        await supabase.from('bookings').update({ status: 'sure', hold_expiry: null, total_amount: newTotal, is_locked: true }).eq('id', toUuid(orderId));
         await supabase.from('passengers').delete().eq('order_id', toUuid(orderId));
 
         for (const p of newPassengers) {
@@ -3263,16 +3283,61 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       const tour = tours.find(t => t.id === order?.tour_id);
       if (order && tour && tour.price_visa_tour) {
         const diff = updatedData.needs_visa_service ? tour.price_visa_tour : -tour.price_visa_tour;
-        const newTotal = order.total_price + diff;
+        const newTotal = Math.max(0, order.total_price + diff);
+        const currentPaid = order.paid_amount || 0;
+
+        let newPaymentStatus: Order['payment_status'] = order.payment_status;
+        let newOrderStatus: Order['status'] = order.status;
+
+        if (currentPaid >= newTotal && newTotal > 0) {
+          newPaymentStatus = 'paid';
+        } else if (currentPaid > 0) {
+          newPaymentStatus = 'partially_paid';
+          if (newOrderStatus === 'paid') newOrderStatus = 'sure';
+        } else {
+          newPaymentStatus = 'unpaid';
+          if (newOrderStatus === 'paid') newOrderStatus = 'sure';
+        }
         
         // Update order in state
-        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, total_price: newTotal } : o));
+        setOrders(prev => prev.map(o => o.id === order.id ? { 
+          ...o, 
+          total_price: newTotal,
+          payment_status: newPaymentStatus,
+          status: newOrderStatus,
+          is_locked: true
+        } : o));
         
         // Update order in Supabase
         if (isSupabaseConfigured()) {
-          supabase.from('bookings').update({ total_amount: newTotal }).eq('id', toUuid(order.id))
+          supabase.from('bookings').update({ 
+            total_amount: newTotal,
+            payment_status: newPaymentStatus,
+            status: newOrderStatus,
+            is_locked: true
+          }).eq('id', toUuid(order.id))
             .then(({ error }) => {
               if (error) console.error('Lỗi khi cập nhật tổng tiền đơn hàng:', error);
+            });
+        }
+      } else if (order && !order.is_locked) {
+        // Khóa đơn khi lưu tùy chọn visa hoặc thông tin hành khách ngay cả khi không đổi tiền visa
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, is_locked: true } : o));
+        if (isSupabaseConfigured()) {
+          supabase.from('bookings').update({ is_locked: true }).eq('id', toUuid(order.id))
+            .then(({ error }) => {
+              if (error) console.error('Lỗi khi khóa đơn hàng:', error);
+            });
+        }
+      }
+    } else if (existing?.order_id) {
+      const order = orders.find(o => o.id === existing.order_id);
+      if (order && !order.is_locked) {
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, is_locked: true } : o));
+        if (isSupabaseConfigured()) {
+          supabase.from('bookings').update({ is_locked: true }).eq('id', toUuid(order.id))
+            .then(({ error }) => {
+              if (error) console.error('Lỗi khi khóa đơn hàng:', error);
             });
         }
       }

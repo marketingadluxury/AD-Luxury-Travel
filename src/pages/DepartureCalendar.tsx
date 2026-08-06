@@ -58,6 +58,7 @@ const TourCard: React.FC<{
   onBookClick: (tour: Tour) => void;
   onShowNotice: (tour: Tour) => void;
 }> = ({ tour, onBookClick, onShowNotice }) => {
+  const { currentRole } = useCRM();
   const [expanded, setExpanded] = useState(false);
 
   const effectiveTourStatus = getEffectiveTourStatus(tour);
@@ -125,7 +126,7 @@ const TourCard: React.FC<{
           {/* Product type badge and summary details */}
           {(tour.tour_type && tour.tour_type !== 'internal') && (
             <div className="flex flex-wrap gap-2 items-center text-xs mt-1">
-              {tour.tour_type === 'partner' && (
+              {(tour.tour_type === 'partner' || tour.tour_type === 'outsourced') && ['operator', 'admin', 'sale_leader', 'bod'].includes(currentRole) && (
                 <span className="px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60 font-bold uppercase tracking-wide text-[10px] shadow-sm flex items-center gap-1.5">
                   🤝 GỬI KHÁCH ĐỐI TÁC: <span className="underline">{tour.partner_name}</span> ({tour.partner_contact})
                 </span>
@@ -450,17 +451,30 @@ const TourCard: React.FC<{
               </div>
             )}
             <div className="mt-auto pt-6">
-              <button 
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onBookClick(tour);
-                }}
-                className="w-full inline-flex items-center justify-center bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={tour.available_seats === 0}
-              >
-                Giữ chỗ / Tạo Booking
-              </button>
+              {(() => {
+                const depDate = new Date(tour.departure_time || tour.start_date || '');
+                const todayStart = new Date();
+                todayStart.setHours(0, 0, 0, 0);
+                const isDeparted = !isNaN(depDate.getTime()) && depDate < todayStart;
+
+                return (
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isDeparted) onBookClick(tour);
+                    }}
+                    className={`w-full inline-flex items-center justify-center py-2.5 rounded-lg font-semibold transition-colors shadow-sm ${
+                      isDeparted 
+                        ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                    }`}
+                    disabled={isDeparted || tour.available_seats === 0}
+                  >
+                    {isDeparted ? '🔒 Tour đã quá lịch khởi hành' : 'Giữ chỗ / Tạo Booking'}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -748,14 +762,18 @@ export default function DepartureCalendar() {
 
   // Filter application
   const filteredTours = tours.filter(tour => {
-    // Separation: Only exclude visa services from the main departure calendar. Partner and Private tours are still tours.
+    // Separation: Only exclude visa services from the main departure calendar. All tour types (internal, partner, outsourced, private) are shown.
     if (tour.tour_type === 'visa') {
       return false;
     }
 
-    // 0. Only show internal tours for external roles
-    const isInternalUser = ['admin', 'operator', 'sale', 'sale_leader', 'accounting', 'visa', 'bod'].includes(currentRole);
-    if (!isInternalUser && tour.tour_type && tour.tour_type !== 'internal') return false;
+    // Exclude departed tours (tours with departure date before 00:00 today)
+    const depDate = new Date(tour.departure_time || tour.start_date || '');
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    if (!isNaN(depDate.getTime()) && depDate < todayStart) {
+      return false;
+    }
 
     // 1. Search term match code or name
     const matchesSearch = tour.name.toLowerCase().includes(searchTerm.toLowerCase()) || 

@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { motion } from 'motion/react';
 import { Order, Invoice } from '@/types';
-import { parseRefundInfo } from '@/lib/utils';
+import { parseRefundInfo, safeFetchApi } from '@/lib/utils';
 import { CustomSelect, SelectOption } from '@/components/CustomSelect';
 import {
   Receipt,
@@ -353,29 +353,10 @@ export default function AccountingInvoice() {
       if (targetTour?.code) formData.append('tourCode', targetTour.code);
       if (!targetOrder && orderCode) formData.append('orderCode', orderCode.substring(0, 8));
 
-      const uploadRes = await fetch('/api/upload-invoice-receipt', {
+      const resData = await safeFetchApi('/api/upload-invoice-receipt', {
         method: 'POST',
         body: formData,
       });
-
-      if (!uploadRes.ok) {
-        const text = await uploadRes.text();
-        let errData = { error: 'Lỗi upload file' };
-        try { errData = JSON.parse(text); } catch {}
-        throw new Error(errData.error || 'Lỗi khi upload hợp đồng.');
-      }
-
-      const resText = await uploadRes.text();
-      let resData = { url: '' };
-      try {
-        resData = JSON.parse(resText);
-      } catch {
-        if (resText && resText.trim().startsWith('http')) {
-          resData = { url: resText.trim() };
-        } else {
-          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
-        }
-      }
       const contractUrl = resData.url;
 
       // Update in order
@@ -414,29 +395,10 @@ export default function AccountingInvoice() {
       if (resolvedTourCode) formData.append('tourCode', resolvedTourCode);
       if (!targetOrder && !resolvedTourCode) formData.append('orderCode', 'CHIPHI_TOUR');
 
-      const uploadRes = await fetch('/api/upload-invoice-receipt', {
+      const resData = await safeFetchApi('/api/upload-invoice-receipt', {
         method: 'POST',
         body: formData,
       });
-
-      if (!uploadRes.ok) {
-        const text = await uploadRes.text();
-        let errData = { error: 'Lỗi upload file' };
-        try { errData = JSON.parse(text); } catch {}
-        throw new Error(errData.error || 'Lỗi khi upload hóa đơn.');
-      }
-
-      const resText = await uploadRes.text();
-      let resData = { url: '' };
-      try {
-        resData = JSON.parse(resText);
-      } catch {
-        if (resText && resText.trim().startsWith('http')) {
-          resData = { url: resText.trim() };
-        } else {
-          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
-        }
-      }
       const fileUrl = resData.url;
 
       await approveInvoiceReceipt(invoiceId, verifierName, fileUrl);
@@ -531,7 +493,7 @@ export default function AccountingInvoice() {
         const qNoBk = q.replace(/^bk-/, '');
         const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
         const tour = assocOrder ? tours.find(t => t.id === assocOrder.tour_id) : null;
-        const orderCode = assocOrder ? `BK-${assocOrder.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : '');
+        const orderCode = assocOrder ? assocOrder.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
 
         const invCodeMatch = inv.invoice_code && inv.invoice_code.toLowerCase().includes(q);
         const orderIdMatch = inv.order_id && (inv.order_id.toLowerCase().includes(q) || inv.order_id.toLowerCase().includes(qNoBk));
@@ -597,7 +559,7 @@ export default function AccountingInvoice() {
         const qNoBk = q.replace(/^bk-/, '');
         const assocOrder = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
         const tour = assocOrder ? tours.find(t => t.id === assocOrder.tour_id) : null;
-        const orderCode = assocOrder ? `BK-${assocOrder.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : '');
+        const orderCode = assocOrder ? assocOrder.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
 
         const invCodeMatch = inv.invoice_code && inv.invoice_code.toLowerCase().includes(q);
         const orderIdMatch = inv.order_id && (inv.order_id.toLowerCase().includes(q) || inv.order_id.toLowerCase().includes(qNoBk));
@@ -662,7 +624,7 @@ export default function AccountingInvoice() {
       if (!group) {
         const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
         const tour = order ? tours.find(t => t.id === order.tour_id) : null;
-        const orderCode = order ? `BK-${order.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : 'Chưa rõ');
+        const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : 'Chưa rõ');
         const orderPassengers = order ? passengers.filter(p => p.order_id === order.id) : [];
         const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
         const leadName = (order?.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
@@ -715,7 +677,7 @@ export default function AccountingInvoice() {
         const q = searchTerm.toLowerCase().trim().replace(/^#/, '');
         const qNoBk = q.replace(/^bk-/, '');
         const tour = tours.find(t => t.id === o.tour_id);
-        const orderCode = `BK-${o.id.substring(0, 8).toUpperCase()}`;
+        const orderCode = o.id.substring(0, 8).toUpperCase();
         const codeMatch = o.id.toLowerCase().includes(q) || o.id.toLowerCase().includes(qNoBk) || orderCode.toLowerCase().includes(q);
         const nameMatch = o.booker_name && o.booker_name.toLowerCase().includes(q);
         const companyMatch = o.vat_company_name && o.vat_company_name.toLowerCase().includes(q);
@@ -1167,7 +1129,7 @@ export default function AccountingInvoice() {
                     ? order.booker_name
                     : (leadPassenger?.full_name || 'Khách trưởng đoàn');
                   const phone = order?.booker_phone || leadPassenger?.phone || '';
-                  const orderCode = order ? `BK-${order.id.substring(0, 8).toUpperCase()}` : (inv.order_id ? `BK-${inv.order_id.substring(0, 8).toUpperCase()}` : '');
+                  const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
 
                   return (
                     <div 
@@ -1204,19 +1166,25 @@ export default function AccountingInvoice() {
                         </div>
 
                         {/* Status & Short Info ALWAYS visible */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2.5 text-xs bg-slate-50/80 p-2.5 rounded-lg border border-slate-150">
-                          <div className="flex items-center gap-1.5 text-slate-900 font-extrabold min-w-0">
-                            <User className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span className="truncate">{leadName}</span>
-                            {phone && (
-                              <span className="text-emerald-800 font-bold font-mono text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                        <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80 mb-2.5 space-y-2">
+                          <div className="flex items-start justify-between gap-2 border-b border-slate-200/60 pb-2">
+                            <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-xs min-w-0 flex-1">
+                              <User className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="font-extrabold text-slate-900 break-words leading-tight">{leadName}</span>
+                            </div>
+                            <div className="shrink-0">
+                              {getReceiptStatusBadge(inv.status)}
+                            </div>
+                          </div>
+
+                          {phone && (
+                            <div className="flex items-center justify-between text-xs pt-0.5">
+                              <span className="text-[11px] text-slate-500 font-medium">Số điện thoại:</span>
+                              <span className="text-emerald-800 font-bold font-mono text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/80">
                                 📞 {phone}
                               </span>
-                            )}
-                          </div>
-                          <div className="shrink-0 self-start sm:self-auto">
-                            {getReceiptStatusBadge(inv.status)}
-                          </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Summary preview line when collapsed */}
@@ -1263,19 +1231,17 @@ export default function AccountingInvoice() {
                               </div>
                             )}
 
-                            {/* Order Association & Booker */}
+                            {/* Order Association */}
                             {orderCode && (
-                              <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 font-semibold flex items-center justify-between flex-wrap gap-1.5">
-                                <div className="min-w-0 flex-1 leading-snug">
-                                  <span className="text-gray-500">Khách / Người nộp:</span> <strong className="text-gray-900 font-bold">{leadName}</strong> {phone ? <span className="text-blue-950 font-semibold font-mono">({phone})</span> : ''}
-                                </div>
+                              <div className="text-[10px] text-blue-700 bg-blue-50/50 p-2 rounded-lg border border-blue-100 font-semibold flex items-center justify-between gap-1.5">
+                                <span className="text-gray-600 font-semibold">Booking liên kết:</span>
                                 <span 
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     navigator.clipboard.writeText(orderCode);
                                     toast.success(`Đã sao chép mã booking: ${orderCode}`);
                                   }}
-                                  className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 font-bold hover:bg-blue-50 hover:text-blue-900 cursor-pointer inline-flex items-center gap-1 group/copy transition-colors shrink-0 shadow-2xs"
+                                  className="font-mono bg-white px-2 py-0.5 rounded border border-blue-200 font-bold text-blue-900 hover:bg-blue-50 cursor-pointer inline-flex items-center gap-1 group/copy transition-colors shrink-0 shadow-2xs"
                                   title="Bấm để sao chép mã booking"
                                 >
                                   #{orderCode}
@@ -1292,28 +1258,6 @@ export default function AccountingInvoice() {
                               </p>
                             </div>
 
-                            {/* Bank Transfer Info */}
-                            {parsedInfo.method === 'transfer' && (
-                              <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
-                                <span className="text-blue-800 font-black uppercase text-[10px] tracking-wider block mb-2 border-b border-blue-200/50 pb-1">
-                                  Thông tin nộp tiền Ngân hàng
-                                </span>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                  <div>
-                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Ngân hàng</span>
-                                    <span className="font-semibold text-blue-950 text-xs">{parsedInfo.bankName || '---'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Số tài khoản</span>
-                                    <span className="font-semibold text-blue-950 text-xs">{parsedInfo.accountNumber || '---'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-blue-500 font-bold text-[9px] uppercase tracking-wider block mb-0.5">Chủ tài khoản</span>
-                                    <span className="font-bold text-blue-950 text-xs uppercase">{parsedInfo.accountName ? parsedInfo.accountName.toUpperCase() : '---'}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
 
                             {/* Minh chứng & Thao tác */}
                             <div className="p-2.5 bg-slate-50/80 rounded-lg border border-gray-150 text-xs flex flex-col gap-2">
@@ -1519,7 +1463,7 @@ export default function AccountingInvoice() {
                   const tour = tours.find(t => t.id === order.tour_id);
                   const orderPassengers = passengers.filter(p => p.order_id === order.id);
                   const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
-                  const orderCode = `BK-${order.id.substring(0, 8).toUpperCase()}`;
+                  const orderCode = order.id.substring(0, 8).toUpperCase();
 
                   return (
                     <div 
@@ -1869,33 +1813,39 @@ export default function AccountingInvoice() {
                         </div>
 
                         {/* Status Badge & Contact Info ALWAYS visible */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2.5 text-xs bg-rose-50/50 p-2.5 rounded-lg border border-rose-150">
-                          <div className="flex items-center gap-1.5 text-slate-900 font-extrabold min-w-0">
-                            <User className="w-4 h-4 text-rose-600 shrink-0" />
-                            <span className="truncate">
-                              {parsedInfo.accountName || (inv.order_id ? (orders.find(o => o.id === inv.order_id)?.booker_name || passengers.find(p => p.order_id === inv.order_id)?.full_name) : null) || 'Khách / Đối tác nhận chi'}
-                            </span>
-                            {(inv.order_id ? (orders.find(o => o.id === inv.order_id)?.booker_phone || passengers.find(p => p.order_id === inv.order_id)?.phone) : null) && (
-                              <span className="text-rose-900 font-bold font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-rose-200 shrink-0">
+                        <div className="bg-rose-50/40 p-2.5 rounded-xl border border-rose-200/60 mb-2.5 space-y-2">
+                          <div className="flex items-start justify-between gap-2 border-b border-rose-200/50 pb-2">
+                            <div className="flex items-center gap-1.5 text-slate-900 font-extrabold text-xs min-w-0 flex-1">
+                              <User className="w-4 h-4 text-rose-600 shrink-0" />
+                              <span className="font-extrabold text-slate-900 break-words leading-tight">
+                                {parsedInfo.accountName || (inv.order_id ? (orders.find(o => o.id === inv.order_id)?.booker_name || passengers.find(p => p.order_id === inv.order_id)?.full_name) : null) || 'Khách / Đối tác nhận chi'}
+                              </span>
+                            </div>
+                            <div className="shrink-0">
+                              {inv.status === 'pending' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                                  <Clock className="w-3 h-3 mr-1 text-amber-600 animate-spin" /> Chờ duyệt
+                                </span>
+                              ) : inv.status === 'approved' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
+                                  <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Đã chi
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
+                                  <X className="w-3.5 h-3.5 mr-1 text-rose-600" /> Từ chối
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {(inv.order_id ? (orders.find(o => o.id === inv.order_id)?.booker_phone || passengers.find(p => p.order_id === inv.order_id)?.phone) : null) && (
+                            <div className="flex items-center justify-between text-xs pt-0.5">
+                              <span className="text-[11px] text-slate-500 font-medium">Số điện thoại:</span>
+                              <span className="text-rose-900 font-bold font-mono text-[11px] bg-white px-2 py-0.5 rounded border border-rose-200">
                                 📞 {orders.find(o => o.id === inv.order_id)?.booker_phone || passengers.find(p => p.order_id === inv.order_id)?.phone}
                               </span>
-                            )}
-                          </div>
-                          <div className="shrink-0 self-start sm:self-auto">
-                            {inv.status === 'pending' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
-                                <Clock className="w-3 h-3 mr-1 text-amber-600 animate-spin" /> Chờ duyệt
-                              </span>
-                            ) : inv.status === 'approved' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
-                                <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Đã chi
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
-                                <X className="w-3.5 h-3.5 mr-1 text-rose-600" /> Từ chối
-                              </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Collapsed summary line */}
@@ -2877,29 +2827,10 @@ export default function AccountingInvoice() {
                       if (resolvedTourCode) formData.append('tourCode', resolvedTourCode);
                       if (!targetOrder && !resolvedTourCode) formData.append('orderCode', 'CHIPHI_TOUR');
 
-                      const uploadRes = await fetch('/api/upload-invoice-receipt', {
+                      const resData = await safeFetchApi('/api/upload-invoice-receipt', {
                         method: 'POST',
                         body: formData,
                       });
-
-                      if (!uploadRes.ok) {
-                        const text = await uploadRes.text();
-                        let errData = { error: 'Lỗi upload file' };
-                        try { errData = JSON.parse(text); } catch {}
-                        throw new Error(errData.error || 'Lỗi khi upload hóa đơn lên Google Drive.');
-                      }
-
-                      const resText = await uploadRes.text();
-                      let resData: any = {};
-                      try {
-                        resData = JSON.parse(resText);
-                      } catch {
-                        if (resText && resText.trim().startsWith('http')) {
-                          resData = { url: resText.trim() };
-                        } else {
-                          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
-                        }
-                      }
                       fileUrl = resData.url;
                     }
 
@@ -3065,29 +2996,10 @@ export default function AccountingInvoice() {
                     if (resolvedTourCode) formData.append('tourCode', resolvedTourCode);
                     if (!targetOrder && !resolvedTourCode) formData.append('orderCode', 'CHIPHI_TOUR');
 
-                    const uploadRes = await fetch('/api/upload-invoice-receipt', {
+                    const resData = await safeFetchApi('/api/upload-invoice-receipt', {
                       method: 'POST',
                       body: formData,
                     });
-
-                    if (!uploadRes.ok) {
-                      const text = await uploadRes.text();
-                      let errData = { error: 'Lỗi upload file' };
-                      try { errData = JSON.parse(text); } catch {}
-                      throw new Error(errData.error || 'Lỗi khi upload hóa đơn lên Google Drive.');
-                    }
-
-                    const resText = await uploadRes.text();
-                    let resData: any = {};
-                    try {
-                      resData = JSON.parse(resText);
-                    } catch {
-                      if (resText && resText.trim().startsWith('http')) {
-                        resData = { url: resText.trim() };
-                      } else {
-                        throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
-                      }
-                    }
                     
                     await uploadInvoiceProof(uploadProofTarget.id, resData.url);
                     

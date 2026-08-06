@@ -5,8 +5,61 @@ export interface User {
   email: string;
   full_name: string;
   role: Role;
+  team_id?: string | null;
+  team_name?: string | null;
   leader_id?: string | null;
   leader_name?: string | null;
+}
+
+export interface Profile {
+  id: string;
+  full_name?: string;
+  phone?: string;
+  company_name?: string;
+  role: Role;
+  team_id?: string | null;
+  team_name?: string | null;
+  leader_id?: string | null;
+  leader_name?: string | null;
+  email?: string;
+  created_at?: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  leader_id?: string | null;
+  leader_name?: string | null;
+  kpi_target?: number;
+  created_at?: string;
+}
+
+export interface TeamPerformanceSummary {
+  team_id: string;
+  team_name: string;
+  leader_id?: string;
+  leader_name: string;
+  pax_count: number;
+  total_orders: number;
+  revenue: number;
+  net_profit: number;
+  kpi_target: number;
+  kpi_percentage: number;
+}
+
+export interface SalePerformanceSummary {
+  sale_id: string;
+  sale_name: string;
+  team_id?: string;
+  team_name: string;
+  total_orders: number;
+  pax_count: number;
+  revenue: number;
+  net_profit: number;
+  direct_orders_count: number;
+  assisted_ctv_orders_count: number;
+  kpi_target?: number;
+  kpi_percentage?: number;
 }
 
 export type TourStatus = 'available' | 'noshop' | 'last_minute' | 'holiday' | 'on_sale' | 'full';

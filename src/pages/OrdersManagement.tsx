@@ -2,7 +2,7 @@ import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import Select from 'react-select';
-import { useCRM, canUnlockOrder } from '@/context/CRMContext';
+import { useCRM, canUnlockOrder, isOrderLocked } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order, Passenger } from '@/types';
 import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy, Filter, RotateCcw, Layers, List, Calendar, MapPin, Building, Coins, Phone } from 'lucide-react';
@@ -16,10 +16,11 @@ import { PassengerDocumentList } from '../components/PassengerDocumentList';
 import { TimeRangeFilter } from '../components/TimeRangeFilter';
 import { CustomSelect } from '../components/CustomSelect';
 import { isDateInTimeRange } from '../lib/dateUtils';
+import { safeFetchApi } from '../lib/utils';
 
 export default function OrdersManagement() {
   const location = useLocation();
-  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, updateOrder, createInvoiceReceipt, currentRole, profilesList } = useCRM();
+  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, deletePassenger, updateOrder, createInvoiceReceipt, currentRole, profilesList } = useCRM();
   const { profile, user } = useAuth();
 
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
@@ -54,29 +55,10 @@ export default function OrdersManagement() {
         formData.append('tourCode', targetTour.code);
       }
 
-      const response = await fetch('/api/upload-invoice-receipt', {
+      const resData = await safeFetchApi('/api/upload-invoice-receipt', {
         method: 'POST',
         body: formData,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData = { error: 'Tải lên không thành công' };
-        try { errorData = JSON.parse(errorText); } catch {}
-        throw new Error(errorData.error || 'Tải lên không thành công');
-      }
-
-      const resText = await response.text();
-      let resData: any = {};
-      try {
-        resData = JSON.parse(resText);
-      } catch {
-        if (resText && resText.trim().startsWith('http')) {
-          resData = { url: resText.trim() };
-        } else {
-          throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
-        }
-      }
       await updateOrder(orderId, { contract_url: resData.url });
       toast.success('Tải lên hợp đồng thành công!', { id: toastId });
     } catch (err: any) {
@@ -112,9 +94,9 @@ export default function OrdersManagement() {
 
   const handleCopyOrderCode = (e: React.MouseEvent, orderId: string) => {
     e.stopPropagation();
-    const shortCode = `#${orderId.substring(0, 8)}`;
-    navigator.clipboard.writeText(shortCode);
-    toast.success(`Đã sao chép mã đơn hàng: ${shortCode}`);
+    const cleanCode = orderId.substring(0, 8).toUpperCase();
+    navigator.clipboard.writeText(cleanCode);
+    toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
   };
 
   const isOrderInLeaderTeam = React.useCallback((o: any, leaderProfile: any, profiles: any[]) => {
@@ -1135,7 +1117,7 @@ export default function OrdersManagement() {
                 </span>
                 <input
                   type="text"
-                  placeholder="Mã BK, tên khách, SĐT, Tour..."
+                  placeholder="Mã đơn hàng, tên khách, SĐT, Tour..."
                   value={orderSearchTerm}
                   onChange={e => setOrderSearchTerm(e.target.value)}
                   className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
@@ -2118,9 +2100,10 @@ export default function OrdersManagement() {
               const isExpanded = expandedOrderId === order.id;
               const orderInvoices = invoices.filter(inv => inv.order_id === order.id);
               const approvedPaidAmount = orderInvoices.filter(inv => inv.type === 'receipt' && inv.status === 'approved').reduce((sum, inv) => sum + inv.amount, 0);
-              const hasApprovedReceipt = approvedPaidAmount > 0;
-              const isPartiallyPaid = hasApprovedReceipt && approvedPaidAmount < order.total_price;
-              const isFullyPaid = hasApprovedReceipt && approvedPaidAmount >= order.total_price;
+              const effectivePaidAmount = Math.max(approvedPaidAmount, order.paid_amount || 0);
+              const hasApprovedReceipt = effectivePaidAmount > 0 || order.payment_status === 'partially_paid' || order.payment_status === 'paid' || order.status === 'paid';
+              const isFullyPaid = order.status === 'paid' || order.payment_status === 'paid' || (effectivePaidAmount >= order.total_price - 100 && order.total_price > 0);
+              const isPartiallyPaid = !isFullyPaid && (hasApprovedReceipt || effectivePaidAmount > 0 || order.payment_status === 'partially_paid');
 
               const visaPassengersCount = orderPassengers.filter(p => p.needs_visa_service).length;
               const tourDiscount = tour?.discount || 0;
@@ -2808,13 +2791,25 @@ export default function OrdersManagement() {
                                 <button
                                   type="button"
                                   onClick={() => setOrderToAddPassengers(order.id)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold transition-colors"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
                                   Nhập thông tin {(order.adult_count || 0) + (order.child_count || 0) + (order.infant_count || 0) - orderPassengers.length} khách còn thiếu
                                 </button>
                               )}
                             </div>
+
+                            {orderPassengers.length > ((order.adult_count || 0) + (order.child_count || 0) + (order.infant_count || 0)) && (
+                              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                  <span>
+                                    <strong>Cảnh báo:</strong> Đơn hàng khai báo <strong>{orderPassengers.length} hành khách</strong>, vượt quá số chỗ đăng ký trên đơn (<strong>{(order.adult_count || 0) + (order.child_count || 0) + (order.infant_count || 0)} khách</strong>). Vui lòng dùng nút <strong>"Xóa"</strong> đối với khách thừa bên dưới hoặc bấm <strong>"Chỉnh sửa"</strong> bảng giá để điều chỉnh lại số chỗ.
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
                             {orderPassengers.length === 0 ? (
                               <p className="text-xs text-gray-500 italic py-4 text-center">Chưa có thông tin chi tiết từng hành khách. Vui lòng thêm khách hàng.</p>
                             ) : (
@@ -2896,16 +2891,37 @@ export default function OrdersManagement() {
                                           )}
                                         </td>
                                         <td className="py-2.5 pl-3 pr-1 text-right font-semibold whitespace-nowrap">
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingPassenger(passenger);
-                                              setIsEditPassengerOpen(true);
-                                            }}
-                                            className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
-                                          >
-                                            Sửa
-                                          </button>
+                                          <div className="flex items-center justify-end gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingPassenger(passenger);
+                                                setIsEditPassengerOpen(true);
+                                              }}
+                                              className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                                            >
+                                              Sửa
+                                            </button>
+                                            {(!isOrderLocked(order) || ['admin', 'sale_leader'].includes(currentRole)) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setConfirmModalData({
+                                                    isOpen: true,
+                                                    title: 'Xác nhận xóa hành khách',
+                                                    message: `Bạn có chắc chắn muốn xóa hành khách "${passenger.full_name || 'chưa đặt tên'}" khỏi đơn hàng này không?`,
+                                                    onConfirm: async () => {
+                                                      await deletePassenger(passenger.id);
+                                                      setConfirmModalData(prev => ({ ...prev, isOpen: false }));
+                                                    }
+                                                  });
+                                                }}
+                                                className="text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer ml-1"
+                                              >
+                                                Xóa
+                                              </button>
+                                            )}
+                                          </div>
                                         </td>
                                       </tr>
                                     ))}
@@ -3229,12 +3245,13 @@ export default function OrdersManagement() {
                         <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto justify-end">
                           {/* Nút Khóa / Mở khóa booking dành cho Admin & Sale Leader */}
                           {['admin', 'sale_leader'].includes(currentRole) && order.status !== 'cancelled' && (() => {
+                            const isLocked = isOrderLocked(order);
                             const isAllowedToUnlock = canUnlockOrder(order, currentRole, profile, profilesList);
                             return (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (order.is_locked) {
+                                  if (isLocked) {
                                     if (!isAllowedToUnlock) {
                                       const creatorName = order.created_by || 'nhân viên thuộc nhóm khác';
                                       toast.error(`Bạn không có quyền mở khóa booking này. Booking do ${creatorName} tạo. Leader chỉ được mở khóa đơn của thành viên nhóm mình.`);
@@ -3248,21 +3265,21 @@ export default function OrdersManagement() {
                                   }
                                 }}
                                 className={`px-3.5 py-2 text-xs font-bold rounded-lg border transition-all inline-flex items-center gap-1.5 cursor-pointer ${
-                                  order.is_locked
+                                  isLocked
                                     ? isAllowedToUnlock
-                                      ? 'text-amber-800 bg-amber-50 border-amber-300 hover:bg-amber-100'
+                                      ? 'text-amber-800 bg-amber-50 border-amber-300 hover:bg-amber-100 shadow-xs'
                                       : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-75'
                                     : 'text-slate-700 bg-slate-50 border-slate-200 hover:bg-slate-100'
                                 }`}
                                 title={
-                                  order.is_locked
+                                  isLocked
                                     ? isAllowedToUnlock
                                       ? 'Bấm để mở khóa booking'
                                       : 'Bạn không có quyền mở khóa booking của thành viên thuộc nhóm khác'
                                     : 'Bấm để khóa booking'
                                 }
                               >
-                                {order.is_locked ? (
+                                {isLocked ? (
                                   <>
                                     <Unlock className={`w-3.5 h-3.5 ${isAllowedToUnlock ? 'text-amber-600' : 'text-gray-400'}`} />
                                     Mở khóa đơn
@@ -3853,26 +3870,10 @@ export default function OrdersManagement() {
                       formData.append('tourCode', targetTour.code);
                     }
 
-                    const uploadRes = await fetch('/api/upload-invoice-receipt', {
+                    const resData = await safeFetchApi('/api/upload-invoice-receipt', {
                       method: 'POST',
                       body: formData,
                     });
-
-                    if (!uploadRes.ok) {
-                      throw new Error('Lỗi tải ảnh minh chứng lên hệ thống lưu trữ.');
-                    }
-
-                    const resText = await uploadRes.text();
-                    let resData: any = {};
-                    try {
-                      resData = JSON.parse(resText);
-                    } catch {
-                      if (resText && resText.trim().startsWith('http')) {
-                        resData = { url: resText.trim() };
-                      } else {
-                        throw new Error(`Định dạng phản hồi từ máy chủ không đúng: ${resText.substring(0, 100)}`);
-                      }
-                    }
 
                     // 2. Hủy đơn hàng nếu chưa hủy
                     if (cancelPaymentOrder.status !== 'cancelled') {

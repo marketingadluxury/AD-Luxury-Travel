@@ -360,9 +360,9 @@ export default function VisaProcessing() {
                         <span 
                           onClick={(e) => {
                             e.stopPropagation();
-                            const code = `#${passenger.order_id.substring(0, 8)}`;
-                            navigator.clipboard.writeText(code);
-                            toast.success(`Đã sao chép mã đơn hàng: ${code}`);
+                            const cleanCode = passenger.order_id.substring(0, 8).toUpperCase();
+                            navigator.clipboard.writeText(cleanCode);
+                            toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
                           }}
                           className="font-semibold text-gray-800 hover:text-blue-600 cursor-pointer inline-flex items-center gap-1 group/copy"
                           title="Bấm để sao chép mã đơn hàng"

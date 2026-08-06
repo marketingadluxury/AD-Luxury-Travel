@@ -853,9 +853,9 @@ export default function PassengersManagement() {
                                                    type="button"
                                                    onClick={(e) => {
                                                      e.stopPropagation();
-                                                     const code = `#${b.order_id.substring(0, 8)}`;
-                                                     navigator.clipboard.writeText(code);
-                                                     toast.success(`Đã sao chép mã đơn hàng: ${code}`);
+                                                     const cleanCode = b.order_id.substring(0, 8).toUpperCase();
+                                                     navigator.clipboard.writeText(cleanCode);
+                                                     toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
                                                    }}
                                                    className="hover:text-blue-800 hover:underline inline-flex items-center gap-1 cursor-pointer group/copy"
                                                    title="Bấm để sao chép mã đơn hàng"
@@ -1057,9 +1057,9 @@ export default function PassengersManagement() {
                                                    type="button"
                                                    onClick={(e) => {
                                                      e.stopPropagation();
-                                                     const code = `#${rel.order_id.substring(0, 8)}`;
-                                                     navigator.clipboard.writeText(code);
-                                                     toast.success(`Đã sao chép mã đơn hàng: ${code}`);
+                                                     const cleanCode = rel.order_id.substring(0, 8).toUpperCase();
+                                                     navigator.clipboard.writeText(cleanCode);
+                                                     toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
                                                    }}
                                                    className="hover:text-blue-800 hover:underline inline-flex items-center gap-1 cursor-pointer group/copy"
                                                    title="Bấm để sao chép mã đơn hàng"

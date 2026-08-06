@@ -2,7 +2,7 @@ import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { X, Bed, Percent, Info, RefreshCw, Lock, Copy, Coins, Plus, Trash2, Tag } from 'lucide-react';
 import { Order, SurchargeItem } from '../types';
-import { useCRM, canUnlockOrder } from '../context/CRMContext';
+import { useCRM, canUnlockOrder, isOrderLocked } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { formatNumber, parseNumber, calculateOrderFinancials } from '@/lib/utils';
 
@@ -222,7 +222,7 @@ export default function EditOrderModal({
 
   if (!isOpen || !order) return null;
 
-  const isOrderConfirmed = order.status === 'sure' || order.status === 'paid' || Boolean(order.is_locked);
+  const isOrderConfirmed = isOrderLocked(order);
   const canUnlock = canUnlockOrder(order, currentRole, profile, profilesList);
   const isPrivilegedRole = currentRole === 'admin' || (currentRole === 'sale_leader' && canUnlock);
   const canEditFinancials = isPrivilegedRole || !isOrderConfirmed;

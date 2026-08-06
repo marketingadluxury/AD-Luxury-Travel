@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Tour, TourStatus } from '@/types';
+import { safeFetchApi } from '@/lib/utils';
 import {
   Plus,
   User,
@@ -24,7 +25,9 @@ import {
   ChevronDown,
   ChevronUp,
   UploadCloud,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Search,
+  Filter
 } from 'lucide-react';
 import { format } from 'date-fns';
 import DashboardOperator from '@/components/DashboardOperator';
@@ -444,6 +447,18 @@ export default function ToursManagement() {
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
   // Filter state for tour operation type
   const [filterTourType, setFilterTourType] = useState<'all' | 'internal' | 'outsourced'>('all');
+  // Filter state for time status: 'upcoming' (default) | 'departed' | 'all'
+  const [filterTimeStatus, setFilterTimeStatus] = useState<'upcoming' | 'departed' | 'all'>('upcoming');
+  // Filter state for departure month
+  const [filterMonth, setFilterMonth] = useState<string>('all');
+  // Filter state for category
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  // Search term
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups(prev => ({
@@ -452,20 +467,84 @@ export default function ToursManagement() {
     }));
   };
 
-  // Filtered tours based on selected filterTourType
+  // Reset page when any filter or view mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTourType, filterTimeStatus, filterMonth, filterCategory, searchTerm, viewMode, itemsPerPage]);
+
+  // Extract available departure months (YYYY-MM) from all tours
+  const availableMonths = React.useMemo(() => {
+    const monthsSet = new Set<string>();
+    tours.filter(t => t.tour_type !== 'visa').forEach(t => {
+      const dateStr = t.departure_time || t.start_date;
+      if (dateStr) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+          const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          monthsSet.add(mKey);
+        }
+      }
+    });
+    return Array.from(monthsSet).sort();
+  }, [tours]);
+
+  const todayStart = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  // Filtered tours based on selected filters
   const displayTours = React.useMemo(() => {
     return tours
       .filter(t => t.tour_type !== 'visa')
       .filter(t => {
+        // 1. Operation type
         if (filterTourType === 'internal') {
-          return !t.tour_type || t.tour_type === 'internal';
+          if (t.tour_type && t.tour_type !== 'internal') return false;
+        } else if (filterTourType === 'outsourced') {
+          if (t.tour_type !== 'outsourced' && t.tour_type !== 'partner') return false;
         }
-        if (filterTourType === 'outsourced') {
-          return t.tour_type === 'outsourced' || t.tour_type === 'partner';
+
+        // 2. Time status (upcoming vs departed)
+        const depDate = new Date(t.departure_time || t.start_date || '');
+        const isDeparted = !isNaN(depDate.getTime()) && depDate < todayStart;
+
+        if (filterTimeStatus === 'upcoming') {
+          if (isDeparted) return false;
+        } else if (filterTimeStatus === 'departed') {
+          if (!isDeparted) return false;
         }
+
+        // 3. Month filter
+        if (filterMonth !== 'all') {
+          const dateStr = t.departure_time || t.start_date;
+          if (dateStr) {
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+              const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+              if (mKey !== filterMonth) return false;
+            } else return false;
+          } else return false;
+        }
+
+        // 4. Category filter
+        if (filterCategory !== 'all' && t.category !== filterCategory) {
+          return false;
+        }
+
+        // 5. Search term
+        if (searchTerm.trim() !== '') {
+          const term = searchTerm.toLowerCase();
+          const matchName = (t.name || '').toLowerCase().includes(term);
+          const matchCode = (t.code || '').toLowerCase().includes(term);
+          const matchDest = (t.destination || '').toLowerCase().includes(term);
+          if (!matchName && !matchCode && !matchDest) return false;
+        }
+
         return true;
       });
-  }, [tours, filterTourType]);
+  }, [tours, filterTourType, filterTimeStatus, filterMonth, filterCategory, searchTerm, todayStart]);
 
   // Group tours by name for easier bulk management
   const groupedTours = React.useMemo<Record<string, Tour[]>>(() => {
@@ -488,6 +567,22 @@ export default function ToursManagement() {
     });
     return groups;
   }, [displayTours]);
+
+  // Pagination calculations
+  const totalGroupItems = Object.keys(groupedTours).length;
+  const totalGroupPages = Math.ceil(totalGroupItems / itemsPerPage) || 1;
+  const paginatedGroupEntries = React.useMemo(() => {
+    const entries = Object.entries(groupedTours);
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    return entries.slice(startIdx, startIdx + itemsPerPage);
+  }, [groupedTours, currentPage, itemsPerPage]);
+
+  const totalFlatItems = displayTours.length;
+  const totalFlatPages = Math.ceil(totalFlatItems / itemsPerPage) || 1;
+  const paginatedFlatTours = React.useMemo(() => {
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    return displayTours.slice(startIdx, startIdx + itemsPerPage);
+  }, [displayTours, currentPage, itemsPerPage]);
 
   // Handle auto-expanding new groups
   useEffect(() => {
@@ -755,57 +850,18 @@ export default function ToursManagement() {
       formData.append('category', category || 'Chung');
       formData.append('file', file);
 
-      const res = await fetch('/api/upload', {
+      const data = await safeFetchApi('/api/upload', {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json'
-        },
         body: formData,
       });
-
-      if (!res.ok) {
-        let errorMsg = 'Không thể tải file lên hệ thống';
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errJson = await res.json();
-          errorMsg = errJson.error || errorMsg;
-        } else {
-          try {
-            const errText = await res.text();
-            if (errText.trim().startsWith('<!doctype html') || errText.trim().startsWith('<html')) {
-              errorMsg = 'Máy chủ phản hồi không đúng định dạng (HTML). Vui lòng cấu hình Google Drive hoặc kiểm tra lại file upload.';
-            } else {
-              errorMsg = errText || errorMsg;
-            }
-          } catch {
-            errorMsg = `Lỗi máy chủ: ${res.status}`;
-          }
-        }
-        throw new Error(errorMsg);
-      }
-
-      const text = await res.text();
-      let data: any = null;
-      try {
-        if (text.trim().startsWith('<!doctype html') || text.trim().startsWith('<html')) {
-          throw new Error('Máy chủ phản hồi không đúng định dạng HTML thay vì JSON.');
-        }
-        data = JSON.parse(text);
-      } catch (err: any) {
-        if (text && text.trim().startsWith('http')) {
-          data = { success: true, url: text.trim() };
-        } else {
-          throw new Error(err.message || `Phản hồi từ máy chủ không hợp lệ: ${text.substring(0, 100)}`);
-        }
-      }
 
       if (data && data.url) {
         setItineraryPdfUrl(data.url);
       } else if (data && data.error) {
         throw new Error(data.error);
       } else {
-        console.error('Phản hồi không hợp lệ từ máy chủ:', text.substring(0, 200));
-        throw new Error(`Phản hồi từ máy chủ không hợp lệ: ${text.substring(0, 100)}`);
+        console.error('Phản hồi không hợp lệ từ máy chủ:', data);
+        throw new Error('Phản hồi từ máy chủ không chứa đường dẫn file.');
       }
     } catch (err: any) {
       console.error(err);
@@ -2369,13 +2425,14 @@ export default function ToursManagement() {
           </div>
 
           {/* TOP PRIMARY CATEGORY TABS (TO, RÕ RÀNG, TRỰC QUAN NẰM TRÊN CÙNG) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-2 sm:p-2.5">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div className="grid grid-cols-3 sm:flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 space-y-3">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+              {/* Filter Tour Type */}
+              <div className="grid grid-cols-3 sm:flex items-center gap-1.5 sm:gap-2 w-full lg:w-auto">
                 <button
                   type="button"
                   onClick={() => setFilterTourType('all')}
-                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
                     filterTourType === 'all'
                       ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900/10'
                       : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
@@ -2392,7 +2449,7 @@ export default function ToursManagement() {
                 <button
                   type="button"
                   onClick={() => setFilterTourType('internal')}
-                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
                     filterTourType === 'internal'
                       ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-600/20'
                       : 'bg-purple-50/70 text-purple-800 hover:bg-purple-100/80 border border-purple-200/70'
@@ -2402,14 +2459,14 @@ export default function ToursManagement() {
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
                     filterTourType === 'internal' ? 'bg-purple-800 text-purple-100' : 'bg-purple-200/80 text-purple-900'
                   }`}>
-                    {tours.filter(t => t.tour_type === 'internal').length}
+                    {tours.filter(t => t.tour_type === 'internal' || !t.tour_type).length}
                   </span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setFilterTourType('outsourced')}
-                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
                     filterTourType === 'outsourced'
                       ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-600/20'
                       : 'bg-indigo-50/70 text-indigo-800 hover:bg-indigo-100/80 border border-indigo-200/70'
@@ -2424,14 +2481,132 @@ export default function ToursManagement() {
                 </button>
               </div>
 
-              {/* Display subtitle / Active scope context */}
-              <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-500 pr-2">
-                <span>Danh mục chọn:</span>
-                <span className="font-extrabold text-slate-800 px-2 py-1 bg-slate-100 rounded-md border border-slate-200">
-                  {filterTourType === 'all' && '🌐 Tất cả sản phẩm Tour'}
-                  {filterTourType === 'internal' && '🏢 Tour AD Tự vận hành'}
-                  {filterTourType === 'outsourced' && '🤝 Tour Gửi khách đối tác-F2'}
-                </span>
+              {/* Time Status Tabs: Upcoming vs Departed vs All */}
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0 self-start lg:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setFilterTimeStatus('upcoming')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                    filterTimeStatus === 'upcoming'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>🟢 Đang mở bán</span>
+                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterTimeStatus === 'upcoming' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'}`}>
+                    {tours.filter(t => t.tour_type !== 'visa' && (!t.departure_time || new Date(t.departure_time) >= todayStart)).length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFilterTimeStatus('departed')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                    filterTimeStatus === 'departed'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>📁 Đã khởi hành</span>
+                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterTimeStatus === 'departed' ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-700'}`}>
+                    {tours.filter(t => t.tour_type !== 'visa' && t.departure_time && new Date(t.departure_time) < todayStart).length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFilterTimeStatus('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                    filterTimeStatus === 'all'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>🌐 Tất cả thời gian</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Secondary Filter Bar: Search, Month, Category */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+              {/* Search input */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm mã tour, tên hành trình, điểm đến..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Month filter dropdown */}
+              <div className="relative">
+                <select
+                  value={filterMonth}
+                  onChange={e => setFilterMonth(e.target.value)}
+                  className="w-full py-2 px-3 text-xs border border-gray-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700 transition-all appearance-none pr-8"
+                >
+                  <option value="all">📅 Tất cả tháng khởi hành</option>
+                  {availableMonths.map(m => {
+                    const [year, month] = m.split('-');
+                    return (
+                      <option key={m} value={m}>
+                        Tháng {month}/{year}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+
+              {/* Category filter dropdown */}
+              <div className="relative">
+                <select
+                  value={filterCategory}
+                  onChange={e => setFilterCategory(e.target.value)}
+                  className="w-full py-2 px-3 text-xs border border-gray-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700 transition-all appearance-none pr-8"
+                >
+                  <option value="all">🏷️ Tất cả danh mục thị trường</option>
+                  {categories.map(c => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+
+              {/* Reset filters button or Active Filters Badge */}
+              <div className="flex items-center justify-between gap-2">
+                {(searchTerm || filterMonth !== 'all' || filterCategory !== 'all' || filterTimeStatus !== 'upcoming' || filterTourType !== 'all') ? (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setFilterMonth('all');
+                      setFilterCategory('all');
+                      setFilterTimeStatus('upcoming');
+                      setFilterTourType('all');
+                    }}
+                    className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span>↺ Xóa tất cả bộ lọc</span>
+                  </button>
+                ) : (
+                  <div className="text-xs font-medium text-slate-500 flex items-center gap-1.5 px-2">
+                    <Filter className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Đang xem: <strong className="text-slate-800 font-extrabold">{displayTours.length}</strong> tour khả dụng</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2503,10 +2678,10 @@ export default function ToursManagement() {
 
             {viewMode === 'grouped' ? (
               <div className="p-6 space-y-6">
-                {Object.keys(groupedTours).length === 0 ? (
-                  <div className="text-center py-12 text-sm text-gray-400">Chưa có tour du lịch nào được tạo.</div>
+                {totalGroupItems === 0 ? (
+                  <div className="text-center py-12 text-sm text-gray-400 font-medium">Không tìm thấy tour du lịch nào phù hợp với bộ lọc hiện tại.</div>
                 ) : (
-                  Object.entries(groupedTours).map(([groupName, groupToursList]) => {
+                  paginatedGroupEntries.map(([groupName, groupToursList]) => {
                     const groupTours = groupToursList as Tour[];
                     const isExpanded = expandedGroups[groupName];
                     const firstTour = groupTours[0];
@@ -2608,13 +2783,21 @@ export default function ToursManagement() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
-                                {groupTours.map(t => (
-                                  <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                                {groupTours.map(t => {
+                                  const depDate = new Date(t.departure_time || t.start_date || '');
+                                  const isDeparted = !isNaN(depDate.getTime()) && depDate < todayStart;
+                                  return (
+                                  <tr key={t.id} className={`hover:bg-gray-50/60 transition-colors ${isDeparted ? 'bg-slate-50/50' : ''}`}>
                                     <td className="px-6 py-3.5">
                                       <div className="flex flex-col gap-1 items-start">
                                         <span className="font-mono font-bold text-blue-700 tracking-tight bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md text-xs inline-block">
                                           {t.code}
                                         </span>
+                                        {isDeparted && (
+                                          <span className="text-[10px] font-extrabold text-slate-600 bg-slate-200/80 border border-slate-300 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                            📁 Đã khởi hành
+                                          </span>
+                                        )}
                                         {t.tour_type === 'outsourced' || t.tour_type === 'partner' ? (
                                           <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
                                             🤝 Đối tác: {t.partner_company_name || t.partner_name || 'Công ty đối tác'}
@@ -2631,7 +2814,7 @@ export default function ToursManagement() {
                                       </div>
                                     </td>
                                     <td className="px-6 py-3.5">
-                                      <div className="font-semibold text-gray-900 text-xs">
+                                      <div className={`font-semibold text-xs ${isDeparted ? 'text-slate-500 line-through' : 'text-gray-900'}`}>
                                         {t.tour_type === 'visa' ? t.duration : (t.departure_time ? format(new Date(t.departure_time), 'dd/MM/yyyy HH:mm') : '-')}
                                       </div>
                                       {t.visa_deadline && (
@@ -2719,7 +2902,8 @@ export default function ToursManagement() {
                                       </div>
                                     </td>
                                   </tr>
-                                ))}
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -2731,9 +2915,9 @@ export default function ToursManagement() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                {displayTours.length === 0 ? (
-                  <div className="text-center py-12 text-sm text-gray-400">
-                    Chưa có tour du lịch nào thuộc phân loại này được tạo.
+                {totalFlatItems === 0 ? (
+                  <div className="text-center py-12 text-sm text-gray-400 font-medium">
+                    Không tìm thấy tour du lịch nào phù hợp với bộ lọc hiện tại.
                   </div>
                 ) : (
                   <table className="min-w-full divide-y divide-gray-200">
@@ -2749,13 +2933,21 @@ export default function ToursManagement() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
-                      {displayTours.map(t => (
-                        <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                      {paginatedFlatTours.map(t => {
+                        const depDate = new Date(t.departure_time || t.start_date || '');
+                        const isDeparted = !isNaN(depDate.getTime()) && depDate < todayStart;
+                        return (
+                        <tr key={t.id} className={`hover:bg-gray-50/60 transition-colors ${isDeparted ? 'bg-slate-50/50' : ''}`}>
                           <td className="px-6 py-3.5 min-w-[180px]">
                             <div className="flex flex-col gap-1.5 items-start">
                               <div className="font-bold text-blue-700 tracking-tight text-xs bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-md inline-block">
                                 {t.code}
                               </div>
+                              {isDeparted && (
+                                <span className="text-[10px] font-extrabold text-slate-600 bg-slate-200/80 border border-slate-300 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  📁 Đã khởi hành
+                                </span>
+                              )}
                               <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider truncate max-w-[160px]" title={t.category || 'Chưa phân mục'}>
                                 {t.category || 'Chưa phân mục'}
                               </div>
@@ -2905,13 +3097,96 @@ export default function ToursManagement() {
                           </div>
                         </td>
                       </tr>
+                      );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {/* PAGINATION FOOTER CONTROL BAR */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-500 font-medium flex flex-wrap items-center gap-2">
+                <span>Hiển thị</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={e => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="py-1 px-2 border border-slate-200 rounded-lg bg-white text-xs font-bold text-slate-800 shadow-2xs"
+                >
+                  <option value={5}>5 phần tử / trang</option>
+                  <option value={10}>10 phần tử / trang</option>
+                  <option value={20}>20 phần tử / trang</option>
+                  <option value={50}>50 phần tử / trang</option>
+                </select>
+                <span>
+                  {viewMode === 'grouped'
+                    ? `(Tổng số ${totalGroupItems} chuỗi tour, Trang ${currentPage} / ${totalGroupPages})`
+                    : `(Tổng số ${totalFlatItems} đợt tour, Trang ${currentPage} / ${totalFlatPages})`
+                  }
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                  className="px-2.5 py-1 text-xs font-bold border border-slate-200 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Về trang đầu tiên"
+                >
+                  « Đầu
+                </button>
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  className="px-3 py-1 text-xs font-bold border border-slate-200 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Trang trước"
+                >
+                  ‹ Trước
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: viewMode === 'grouped' ? totalGroupPages : totalFlatPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === (viewMode === 'grouped' ? totalGroupPages : totalFlatPages) || Math.abs(p - currentPage) <= 1)
+                    .map((p, idx, arr) => (
+                      <React.Fragment key={p}>
+                        {idx > 0 && p - arr[idx - 1] > 1 && <span className="text-xs text-slate-400 px-0.5">...</span>}
+                        <button
+                          onClick={() => setCurrentPage(p)}
+                          className={`w-7 h-7 rounded-lg text-xs font-black transition-all ${
+                            currentPage === p
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </React.Fragment>
                     ))}
-                  </tbody>
-                </table>
-              )}
+                </div>
+
+                <button
+                  disabled={currentPage === (viewMode === 'grouped' ? totalGroupPages : totalFlatPages)}
+                  onClick={() => setCurrentPage(prev => Math.min(viewMode === 'grouped' ? totalGroupPages : totalFlatPages, prev + 1))}
+                  className="px-3 py-1 text-xs font-bold border border-slate-200 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Trang sau"
+                >
+                  Sau ›
+                </button>
+                <button
+                  disabled={currentPage === (viewMode === 'grouped' ? totalGroupPages : totalFlatPages)}
+                  onClick={() => setCurrentPage(viewMode === 'grouped' ? totalGroupPages : totalFlatPages)}
+                  className="px-2.5 py-1 text-xs font-bold border border-slate-200 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Đến trang cuối cùng"
+                >
+                  Cuối »
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+          </div>
         </>
       )}
 

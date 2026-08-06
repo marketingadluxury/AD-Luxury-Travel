@@ -585,9 +585,9 @@ export default function VisaOrders() {
                             <span 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const shortCode = `#${order.id.substring(0, 8)}`;
-                                navigator.clipboard.writeText(shortCode);
-                                toast.success(`Đã sao chép mã đơn hàng: ${shortCode}`);
+                                const cleanCode = order.id.substring(0, 8).toUpperCase();
+                                navigator.clipboard.writeText(cleanCode);
+                                toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
                               }}
                               className="font-mono font-bold text-blue-600 hover:text-blue-800 cursor-pointer inline-flex items-center gap-1 group/copy"
                               title="Bấm để sao chép mã đơn hàng"

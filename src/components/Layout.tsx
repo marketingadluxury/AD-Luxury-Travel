@@ -63,7 +63,6 @@ import { FeedbackModal } from './FeedbackModal';
 
 const navigation = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
-  { name: 'Điều hành chiến lược', href: '/dashboard/executive', icon: TrendingUp, roleAccess: ['admin', 'bod'] },
   { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide'] },
   { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },

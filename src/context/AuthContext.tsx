@@ -9,7 +9,10 @@ export interface UserProfile {
   phone: string;
   company_name: string;
   role: Role;
+  team_id?: string | null;
+  team_name?: string | null;
   leader_id?: string | null;
+  leader_name?: string | null;
   email?: string;
 }
 

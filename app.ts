@@ -1488,6 +1488,8 @@ let mockUsers: {
   company_name?: string;
   role: string;
   leader_id?: string | null;
+  team_id?: string | null;
+  team_name?: string | null;
   created_at: string;
 }[] = [
   {
@@ -1518,6 +1520,143 @@ let mockUsers: {
     created_at: new Date().toISOString()
   }
 ];
+
+let mockTeams = [
+  {
+    id: 'e8c3b7a5-9a84-4632-bd88-0677efbc2891',
+    name: 'Team Đông Nam Á',
+    leader_id: null,
+    leader_name: 'Trần Văn Trưởng (Leader)',
+    kpi_target: 800000000,
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+    name: 'Team Châu Âu & Mỹ',
+    leader_id: null,
+    leader_name: 'Nguyễn Thị Hương (Leader)',
+    kpi_target: 1200000000,
+    created_at: new Date().toISOString()
+  },
+  {
+    id: '6ec0bd7f-11c0-43da-975e-2bab1a9cef77',
+    name: 'Team Nội Địa & Khác',
+    leader_id: null,
+    leader_name: 'Lê Minh Tuấn (Leader)',
+    kpi_target: 500000000,
+    created_at: new Date().toISOString()
+  }
+];
+
+// GET list of teams
+app.get(['/api/admin/teams', '/admin/teams', '/api/teams'], async (req, res) => {
+  try {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+      return res.json(mockTeams);
+    }
+    const client = getAdminSupabaseClient(req);
+    const { data: teams, error } = await client.from('teams').select('*').order('created_at', { ascending: true });
+    if (error || !teams || teams.length === 0) {
+      return res.json(mockTeams);
+    }
+    res.json(teams);
+  } catch (err) {
+    res.json(mockTeams);
+  }
+});
+
+// CREATE team
+app.post(['/api/admin/teams', '/admin/teams', '/api/teams'], express.json(), async (req, res) => {
+  try {
+    const { name, leader_id, leader_name, kpi_target } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Tên Team là bắt buộc.' });
+    }
+    const newTeam = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      leader_id: leader_id || null,
+      leader_name: leader_name || null,
+      kpi_target: Number(kpi_target) || 0,
+      created_at: new Date().toISOString()
+    };
+
+    mockTeams.unshift(newTeam);
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    if (supabaseUrl && !supabaseUrl.includes('placeholder')) {
+      const client = getAdminSupabaseClient(req);
+      const { data, error } = await client.from('teams').insert([{
+        id: newTeam.id,
+        name: newTeam.name,
+        leader_id: newTeam.leader_id,
+        leader_name: newTeam.leader_name,
+        kpi_target: newTeam.kpi_target
+      }]).select().maybeSingle();
+      if (!error && data) {
+        return res.json({ success: true, team: data });
+      }
+    }
+    res.json({ success: true, team: newTeam });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Lỗi tạo team mới' });
+  }
+});
+
+// UPDATE team
+app.put(['/api/admin/teams/:id', '/admin/teams/:id', '/api/teams/:id'], express.json(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, leader_id, leader_name, kpi_target } = req.body;
+
+    const idx = mockTeams.findIndex(t => t.id === id);
+    if (idx !== -1) {
+      mockTeams[idx] = {
+        ...mockTeams[idx],
+        name: name !== undefined ? name.trim() : mockTeams[idx].name,
+        leader_id: leader_id !== undefined ? leader_id : mockTeams[idx].leader_id,
+        leader_name: leader_name !== undefined ? leader_name : mockTeams[idx].leader_name,
+        kpi_target: kpi_target !== undefined ? Number(kpi_target) : mockTeams[idx].kpi_target
+      };
+    }
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    if (supabaseUrl && !supabaseUrl.includes('placeholder')) {
+      const client = getAdminSupabaseClient(req);
+      // Sử dụng upsert thay vì update để chèn mới mock team nếu nó chưa từng được lưu trong DB
+      await client.from('teams').upsert({
+        id: id,
+        name: name?.trim(),
+        leader_id: leader_id || null,
+        leader_name: leader_name || null,
+        kpi_target: Number(kpi_target) || 0
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Lỗi cập nhật team' });
+  }
+});
+
+// DELETE team
+app.delete(['/api/admin/teams/:id', '/admin/teams/:id', '/api/teams/:id'], async (req, res) => {
+  try {
+    const { id } = req.params;
+    mockTeams = mockTeams.filter(t => t.id !== id);
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    if (supabaseUrl && !supabaseUrl.includes('placeholder')) {
+      const client = getAdminSupabaseClient(req);
+      await client.from('profiles').update({ team_id: null, team_name: null }).eq('team_id', id);
+      await client.from('teams').delete().eq('id', id);
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Lỗi xóa team' });
+  }
+});
 
 // GET list of users/profiles
 app.get(['/api/admin/users', '/admin/users'], async (req, res) => {
@@ -1559,6 +1698,8 @@ app.get(['/api/admin/users', '/admin/users'], async (req, res) => {
         company_name: p.company_name || '',
         role: p.role || 'CTV',
         leader_id: p.leader_id || null,
+        team_id: p.team_id || null,
+        team_name: p.team_name || null,
         created_at: p.created_at,
         email: authUser?.email || p.email || ''
       };
@@ -1578,7 +1719,7 @@ app.get(['/api/admin/users', '/admin/users'], async (req, res) => {
 // CREATE a new user/profile
 app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) => {
   try {
-    const { full_name, phone, company_name, role, email, password, leader_id } = req.body;
+    const { full_name, phone, company_name, role, email, password, leader_id, team_id, team_name } = req.body;
     
     if (!email || !full_name) {
       return res.status(400).json({ error: 'Email và họ tên là bắt buộc.' });
@@ -1594,6 +1735,8 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
       company_name: company_name || '',
       role: role || 'CTV',
       leader_id: leader_id || null,
+      team_id: team_id || null,
+      team_name: team_name || null,
       email,
       created_at: new Date().toISOString()
     };
@@ -1631,14 +1774,17 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
       phone: phone || '',
       company_name: company_name || '',
       role: role || 'CTV',
-      leader_id: leader_id || null
+      leader_id: leader_id || null,
+      team_id: team_id || null,
+      team_name: team_name || null
     };
 
     let { error: pError } = await client.from('profiles').upsert(profileUpsertData);
     
-    if (pError && (pError.message?.includes('leader_id') || pError.message?.includes('schema cache'))) {
-      console.warn('Cột leader_id chưa có trong Supabase schema cache. Thử lại không có leader_id...');
-      delete profileUpsertData.leader_id;
+    if (pError && (pError.message?.includes('team_id') || pError.message?.includes('leader_id') || pError.message?.includes('schema cache'))) {
+      console.warn('Cột team_id/leader_id chưa có trong Supabase schema cache. Thử lại lọc bớt cột...');
+      delete profileUpsertData.team_id;
+      delete profileUpsertData.team_name;
       const retryRes = await client.from('profiles').upsert(profileUpsertData);
       pError = retryRes.error;
     }
@@ -1660,6 +1806,8 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
         company_name,
         role,
         leader_id: leader_id || null,
+        team_id: team_id || null,
+        team_name: team_name || null,
         email,
         created_at: new Date().toISOString()
       }
@@ -1674,7 +1822,7 @@ app.post(['/api/admin/users', '/admin/users'], express.json(), async (req, res) 
 app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, phone, company_name, role, email, password, leader_id } = req.body;
+    const { full_name, phone, company_name, role, email, password, leader_id, team_id, team_name } = req.body;
     
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1689,6 +1837,8 @@ app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req
         company_name: company_name !== undefined ? company_name : mockUsers[userIndex].company_name,
         role: role !== undefined ? role : mockUsers[userIndex].role,
         leader_id: leader_id !== undefined ? leader_id : (mockUsers[userIndex] as any).leader_id,
+        team_id: team_id !== undefined ? team_id : (mockUsers[userIndex] as any).team_id,
+        team_name: team_name !== undefined ? team_name : (mockUsers[userIndex] as any).team_name,
         email: email !== undefined ? email : mockUsers[userIndex].email
       };
     }
@@ -1708,15 +1858,16 @@ app.put(['/api/admin/users/:id', '/admin/users/:id'], express.json(), async (req
       company_name,
       role
     };
-    if (leader_id !== undefined) {
-      profileUpdateData.leader_id = leader_id || null;
-    }
+    if (leader_id !== undefined) profileUpdateData.leader_id = leader_id || null;
+    if (team_id !== undefined) profileUpdateData.team_id = team_id || null;
+    if (team_name !== undefined) profileUpdateData.team_name = team_name || null;
 
     let { error: pError } = await client.from('profiles').update(profileUpdateData).eq('id', id);
     
-    if (pError && (pError.message?.includes('leader_id') || pError.message?.includes('schema cache'))) {
-      console.warn('Cột leader_id chưa có trong Supabase schema cache. Thử lại không có leader_id...');
-      delete profileUpdateData.leader_id;
+    if (pError && (pError.message?.includes('team_id') || pError.message?.includes('leader_id') || pError.message?.includes('schema cache'))) {
+      console.warn('Cột team_id/leader_id chưa có trong Supabase schema cache. Thử lại không có team_id...');
+      delete profileUpdateData.team_id;
+      delete profileUpdateData.team_name;
       const retryRes = await client.from('profiles').update(profileUpdateData).eq('id', id);
       pError = retryRes.error;
     }
@@ -2209,7 +2360,7 @@ app.post('/api/submit-feedback', express.json(), async (req, res) => {
 
 // Global JSON error handler to prevent HTML error responses
 
-app.use('/api/*', (req, res, next) => {
+app.use('/api', (req, res) => {
   console.warn(`[404] API Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ error: `API route ${req.originalUrl} không tồn tại trên máy chủ.` });
 });

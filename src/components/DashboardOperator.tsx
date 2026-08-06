@@ -35,7 +35,7 @@ export default function DashboardOperator() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  const [daysFilter, setDaysFilter] = useState<number>(30);
+  const [daysFilter, setDaysFilter] = useState<number>(99999);
   const [selectedDestination, setSelectedDestination] = useState<string>('all');
   const [selectedTourType, setSelectedTourType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -53,13 +53,13 @@ export default function DashboardOperator() {
   }, [tours]);
 
   const daysFilterOptions = useMemo(() => [
+    { value: '99999', label: 'Tất cả thời gian' },
     { value: '7', label: 'Trong vòng 7 ngày tới' },
     { value: '15', label: 'Trong vòng 15 ngày tới' },
     { value: '30', label: 'Trong vòng 30 ngày tới' },
     { value: '60', label: 'Trong vòng 60 ngày tới' },
     { value: '90', label: 'Trong vòng 90 ngày tới (3 tháng)' },
     { value: '180', label: 'Trong vòng 180 ngày tới (6 tháng)' },
-    { value: '99999', label: 'Tất cả thời gian' },
   ], []);
 
   const tourTypeOptions = useMemo(() => [
@@ -420,14 +420,29 @@ export default function DashboardOperator() {
     let hold = 0;
     let sure = 0;
 
+    const getTourDate = (t: any): Date | null => {
+      const raw = t.start_date || t.departure_time;
+      if (!raw) return null;
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
     const matchesFilters = (t: any) => {
       if (t.tour_type === 'visa') return false; // Exclude visa services
       if (selectedDestination !== 'all' && t.destination !== selectedDestination) return false;
-      if (selectedTourType !== 'all' && t.tour_type !== selectedTourType) return false;
+      if (selectedTourType !== 'all') {
+        if (selectedTourType === 'partner') {
+          if (t.tour_type !== 'partner' && t.tour_type !== 'outsourced') return false;
+        } else if (selectedTourType === 'internal') {
+          if (t.tour_type && t.tour_type !== 'internal') return false;
+        } else {
+          if (t.tour_type !== selectedTourType) return false;
+        }
+      }
       if (searchTerm.trim() !== '') {
         const cleanTerm = removeDiacritics(searchTerm.toLowerCase());
-        const cleanCode = removeDiacritics((t.code || '').toLowerCase());
-        const cleanName = removeDiacritics((t.name || '').toLowerCase());
+        const cleanCode = removeDiacritics((t.code || t.tour_code || '').toLowerCase());
+        const cleanName = removeDiacritics((t.name || t.title || '').toLowerCase());
         if (!cleanCode.includes(cleanTerm) && !cleanName.includes(cleanTerm)) return false;
       }
       return true;
@@ -452,26 +467,30 @@ export default function DashboardOperator() {
 
     const upcoming = tours.filter(t => {
       if (!matchesFilters(t)) return false;
-      if (!t.start_date) return false;
-      const start = new Date(t.start_date);
+      const start = getTourDate(t);
+      if (!start) return false;
       const diff = differenceInDays(start, today);
-      return diff >= 0 && diff <= daysFilter;
-    }).sort((a, b) => new Date(a.start_date!).getTime() - new Date(b.start_date!).getTime());
+      return diff >= 0 && (daysFilter === 99999 || diff <= daysFilter);
+    }).sort((a, b) => {
+      const dA = getTourDate(a);
+      const dB = getTourDate(b);
+      return (dA ? dA.getTime() : 0) - (dB ? dB.getTime() : 0);
+    });
 
     const upcomingTickets = tours.filter(t => {
       if (!matchesFilters(t)) return false;
-      if (!t.start_date) return false;
-      const start = new Date(t.start_date);
+      const start = getTourDate(t);
+      if (!start) return false;
       const tourStartDiff = differenceInDays(start, today);
       if (tourStartDiff < 0) return false; // Exclude already departed tours
 
       const deadline = t.ticket_deadline ? new Date(t.ticket_deadline) : start;
       const diff = differenceInDays(deadline, today);
 
-      return (t.ticket_status === 'CHỜ XUẤT VÉ' || !t.ticket_status) && diff <= daysFilter;
+      return (t.ticket_status === 'CHỜ XUẤT VÉ' || !t.ticket_status) && (daysFilter === 99999 || diff <= daysFilter);
     }).sort((a, b) => {
-      const deadlineA = a.ticket_deadline ? new Date(a.ticket_deadline) : new Date(a.start_date!);
-      const deadlineB = b.ticket_deadline ? new Date(b.ticket_deadline) : new Date(b.start_date!);
+      const deadlineA = a.ticket_deadline ? new Date(a.ticket_deadline) : (getTourDate(a) || new Date());
+      const deadlineB = b.ticket_deadline ? new Date(b.ticket_deadline) : (getTourDate(b) || new Date());
       return deadlineA.getTime() - deadlineB.getTime();
     });
 
@@ -480,19 +499,22 @@ export default function DashboardOperator() {
       if (!t.visa_deadline) return false;
       const deadline = new Date(t.visa_deadline);
       const diff = differenceInDays(deadline, today);
-      // Ensure the tour hasn't departed yet
-      const start = t.start_date ? new Date(t.start_date) : new Date();
+      const start = getTourDate(t) || new Date();
       const tourStartDiff = differenceInDays(start, today);
-      return tourStartDiff >= 0 && diff <= daysFilter; 
+      return tourStartDiff >= 0 && (daysFilter === 99999 || diff <= daysFilter); 
     }).sort((a, b) => new Date(a.visa_deadline!).getTime() - new Date(b.visa_deadline!).getTime());
 
     const departed = tours.filter(t => {
       if (!matchesFilters(t)) return false;
-      if (!t.start_date) return false;
-      const start = new Date(t.start_date);
+      const start = getTourDate(t);
+      if (!start) return false;
       const diff = differenceInDays(start, today);
-      return diff < 0 && Math.abs(diff) <= daysFilter;
-    }).sort((a, b) => new Date(b.start_date!).getTime() - new Date(a.start_date!).getTime()); // Sort newest first
+      return diff < 0 && (daysFilter === 99999 || Math.abs(diff) <= daysFilter);
+    }).sort((a, b) => {
+      const dA = getTourDate(a);
+      const dB = getTourDate(b);
+      return (dB ? dB.getTime() : 0) - (dA ? dA.getTime() : 0);
+    }); // Sort newest first
 
     return {
       holdSeats: hold,
@@ -513,11 +535,11 @@ export default function DashboardOperator() {
             <Filter className="w-5 h-5 text-blue-600" />
             <h2 className="font-bold text-gray-800 text-base">Bộ lọc chi tiết điều phối</h2>
           </div>
-          {(searchTerm || daysFilter !== 30 || selectedDestination !== 'all' || selectedTourType !== 'all') && (
+          {(searchTerm || daysFilter !== 99999 || selectedDestination !== 'all' || selectedTourType !== 'all') && (
             <button
               onClick={() => {
                 setSearchTerm('');
-                setDaysFilter(30);
+                setDaysFilter(99999);
                 setSelectedDestination('all');
                 setSelectedTourType('all');
               }}
@@ -600,11 +622,13 @@ export default function DashboardOperator() {
               <p className="text-gray-500 text-sm text-center py-4">Không có tour nào sắp khởi hành</p>
             ) : (
               <div className="space-y-4">
-                {upcomingTours.map(t => (
+                {upcomingTours.map(t => {
+                  const tourDate = t.start_date || t.departure_time;
+                  return (
                   <div key={t.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0 hover:bg-slate-50/50 p-1.5 rounded-lg transition-colors">
                     <div className="flex justify-between items-start mb-1">
                       <p className="font-bold text-sm text-blue-950 cursor-pointer hover:text-blue-600 font-mono bg-blue-50/50 px-1.5 py-0.5 rounded border border-blue-100" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.code}</p>
-                      <p className="text-xs font-bold text-gray-500">{format(new Date(t.start_date!), 'dd/MM/yyyy')}</p>
+                      <p className="text-xs font-bold text-gray-500">{tourDate ? format(new Date(tourDate), 'dd/MM/yyyy') : 'N/A'}</p>
                     </div>
                     <p className="text-xs text-gray-600 line-clamp-1 cursor-pointer hover:text-blue-600" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.name}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 cursor-pointer" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>
@@ -613,7 +637,7 @@ export default function DashboardOperator() {
                       <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">Trống: {Math.max(0, t.total_seats - t.sold_seats - t.hold_seats)}</span>
                     </div>
                   </div>
-                ))}
+                );})}
               </div>
             )}
           </div>
@@ -634,6 +658,7 @@ export default function DashboardOperator() {
             ) : (
               <div className="space-y-4">
                 {upcomingTicketTours.map(t => {
+                  const tourDate = t.start_date || t.departure_time;
                   const deadline = t.ticket_deadline ? new Date(t.ticket_deadline) : null;
                   const daysLeft = deadline ? differenceInDays(deadline, new Date()) : null;
                   const isUrgent = daysLeft !== null && daysLeft <= 3;
@@ -642,7 +667,7 @@ export default function DashboardOperator() {
                   <div key={t.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0 hover:bg-slate-50/50 p-1.5 rounded-lg transition-colors">
                     <div className="flex justify-between items-start mb-1">
                       <p className="font-bold text-sm text-indigo-950 cursor-pointer hover:text-indigo-600 font-mono bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.code}</p>
-                      <p className="text-xs font-bold text-gray-500">KH: {format(new Date(t.start_date!), 'dd/MM/yyyy')}</p>
+                      <p className="text-xs font-bold text-gray-500">KH: {tourDate ? format(new Date(tourDate), 'dd/MM/yyyy') : 'N/A'}</p>
                     </div>
                     <p className="text-xs text-gray-600 line-clamp-1 cursor-pointer hover:text-indigo-600" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.name}</p>
                     <div className="mt-2 space-y-1.5 cursor-pointer" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>
@@ -729,11 +754,13 @@ export default function DashboardOperator() {
               <p className="text-gray-500 text-sm text-center py-4">Không có tour nào đã khởi hành</p>
             ) : (
               <div className="space-y-4">
-                {departedTours.map(t => (
+                {departedTours.map(t => {
+                  const tourDate = t.start_date || t.departure_time;
+                  return (
                   <div key={t.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0 hover:bg-slate-50/50 p-1.5 rounded-lg transition-colors">
                     <div className="flex justify-between items-start mb-1">
                       <p className="font-bold text-sm text-gray-800 cursor-pointer hover:text-blue-600 font-mono bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.code}</p>
-                      <p className="text-xs font-bold text-gray-500">{format(new Date(t.start_date!), 'dd/MM/yyyy')}</p>
+                      <p className="text-xs font-bold text-gray-500">{tourDate ? format(new Date(tourDate), 'dd/MM/yyyy') : 'N/A'}</p>
                     </div>
                     <p className="text-xs text-gray-600 line-clamp-1 cursor-pointer hover:text-blue-600" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>{t.name}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 cursor-pointer" onClick={() => { setSelectedTour(t); setShowPassengersModal(true); }}>
@@ -741,7 +768,7 @@ export default function DashboardOperator() {
                       <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">Hold: {t.hold_seats}</span>
                     </div>
                   </div>
-                ))}
+                );})}
               </div>
             )}
           </div>

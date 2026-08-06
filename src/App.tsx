@@ -16,7 +16,6 @@ import Settings from './pages/Settings';
 import ActivityLogs from './pages/ActivityLogs';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
-import ExecutiveDashboard from './pages/ExecutiveDashboard';
 import TourMediaManagement from './pages/TourMediaManagement';
 import { GuestPhotoUploadPage } from './pages/GuestPhotoUploadPage';
 import { CRMProvider } from './context/CRMContext';
@@ -58,7 +57,6 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<DepartureCalendar />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/dashboard/executive" element={<ExecutiveDashboard />} />
             <Route path="/tours" element={<ToursManagement />} />
             <Route path="/tour-media" element={<TourMediaManagement />} />
             <Route path="/guest-upload" element={<GuestPhotoUploadPage />} />

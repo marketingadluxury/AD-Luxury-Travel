@@ -3,8 +3,9 @@ import { X, Upload, CheckCircle2, FileText, Trash2, ExternalLink, AlertTriangle,
 import { Passenger } from '../types';
 import { DatePicker } from './DatePicker';
 
-import { useCRM } from '../context/CRMContext';
+import { useCRM, isOrderLocked } from '../context/CRMContext';
 import { extractFileNameFromUrl } from './PassengerDocumentList';
+import { safeFetchApi } from '../lib/utils';
 
 interface EditPassengerModalProps {
   isOpen: boolean;
@@ -35,11 +36,9 @@ export default function EditPassengerModal({
 }: EditPassengerModalProps) {
   const { orders, currentRole } = useCRM();
   const order = passenger ? orders.find(o => o.id === passenger.order_id) : null;
-  const isOrderExplicitlyLocked = Boolean(order?.is_locked);
+  const isOrderExplicitlyLocked = isOrderLocked(order);
   const isPrivilegedRole = ['admin', 'sale_leader'].includes(currentRole);
-  const hasConfirmedVisaChoice = Boolean(passenger && (passenger.needs_visa_service !== undefined && passenger.needs_visa_service !== null));
-  const isVisaOptionLocked = isOrderExplicitlyLocked || hasConfirmedVisaChoice;
-  const canEditVisaOption = isPrivilegedRole || !isVisaOptionLocked;
+  const canEditVisaOption = isPrivilegedRole || !isOrderExplicitlyLocked;
 
   const [fullName, setFullName] = useState('');
   const [passportNumber, setPassportNumber] = useState('');
@@ -102,36 +101,19 @@ export default function EditPassengerModal({
         formData.append('fullName', fullName || 'KHACH_HANG');
         formData.append('file', file);
 
-        const res = await fetch('/api/upload', {
+        const data = await safeFetchApi('/api/upload', {
           method: 'POST',
           body: formData
         });
 
-        if (!res.ok) {
-          let errorMsg = `Không thể tải file ${file.name} lên`;
-          const contentType = res.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errJson = await res.json();
-            errorMsg = errJson.error || errorMsg;
+        if (data.url) {
+          let finalUrl = data.url;
+          if (!finalUrl.includes('#filename=')) {
+            finalUrl += `#filename=${encodeURIComponent(file.name)}`;
           }
-          throw new Error(errorMsg);
-        }
-
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await res.json();
-          if (data.success && data.url) {
-            let finalUrl = data.url;
-            if (!finalUrl.includes('#filename=')) {
-              finalUrl += `#filename=${encodeURIComponent(file.name)}`;
-            }
-            newUrls.push(finalUrl);
-          } else {
-            throw new Error(data.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
-          }
+          newUrls.push(finalUrl);
         } else {
-          console.warn('Backend returned non-JSON response for upload');
-          throw new Error(`Định dạng phản hồi không hợp lệ khi tải file ${file.name}`);
+          throw new Error(data.error || `Lỗi khi tải file ${file.name} lên hệ thống`);
         }
       }
 
@@ -149,23 +131,13 @@ export default function EditPassengerModal({
     setDeletingState(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/delete', {
+      await safeFetchApi('/api/delete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ url: urlToDelete })
       });
-
-      if (!res.ok) {
-        let errorMsg = 'Xóa file thất bại';
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errJson = await res.json();
-          errorMsg = errJson.error || errorMsg;
-        }
-        console.warn('Xóa file thất bại hoặc file không tồn tại:', errorMsg);
-      }
 
       setUploadedUrls(prev => prev.filter(url => url !== urlToDelete));
       setShowDeletedAlert(true);

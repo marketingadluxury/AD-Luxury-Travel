@@ -4,6 +4,7 @@ import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order } from '@/types';
 import toast from 'react-hot-toast';
+import { safeFetchApi } from '@/lib/utils';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -39,7 +40,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
 
   if (!isOpen || !order) return null;
 
-  const orderCode = `BK-${order.id.substring(0, 8).toUpperCase()}`;
+  const orderCode = `#${order.id.substring(0, 8).toUpperCase()}`;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -74,43 +75,10 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
       }
 
       // 2. Call upload API
-      const uploadRes = await fetch('/api/upload-invoice-receipt', {
+      const resData = await safeFetchApi('/api/upload-invoice-receipt', {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json'
-        },
         body: formData,
       });
-
-      if (!uploadRes.ok) {
-        let errData: any = {};
-        try {
-          const text = await uploadRes.text();
-          if (text.trim().startsWith('<!doctype html') || text.trim().startsWith('<html')) {
-            errData = { error: 'Máy chủ phản hồi không đúng định dạng (HTML). Vui lòng kiểm tra lại cấu hình lưu trữ Google Drive/Supabase hoặc liên hệ quản trị viên.' };
-          } else {
-            errData = JSON.parse(text);
-          }
-        } catch {
-          errData = { error: `Lỗi máy chủ: ${uploadRes.status}` };
-        }
-        throw new Error(errData.error || 'Lỗi khi upload hóa đơn lên Google Drive.');
-      }
-
-      const resText = await uploadRes.text();
-      let resData: any = {};
-      try {
-        if (resText.trim().startsWith('<!doctype html') || resText.trim().startsWith('<html')) {
-          throw new Error('Máy chủ phản hồi không đúng định dạng HTML thay vì JSON.');
-        }
-        resData = JSON.parse(resText);
-      } catch (err: any) {
-        if (resText && resText.trim().startsWith('http')) {
-          resData = { url: resText.trim(), success: true };
-        } else {
-          throw new Error(err.message || `Phản hồi từ máy chủ không hợp lệ: ${resText.substring(0, 100)}`);
-        }
-      }
       
       // 3. Create invoice receipt in state & DB
       await createInvoiceReceipt({
@@ -213,7 +181,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
                 <p className="text-xs font-semibold text-gray-600">
                   {file ? file.name : 'Nhấp hoặc kéo thả để tải lên biên lai'}
                 </p>
-                <p className="text-[10px] text-gray-400">Hỗ trợ JPG, PNG, PDF (Tự động tải lên Google Drive của Booking)</p>
+                <p className="text-[10px] text-gray-400">Hỗ trợ JPG, PNG, PDF</p>
               </div>
             </div>
           </div>
