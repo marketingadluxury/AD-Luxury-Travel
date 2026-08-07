@@ -297,6 +297,75 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   3. Thay thế các thẻ `<option>` tĩnh chứa tên team cũ tại bộ lọc chọn team thành dạng map động `{activeTeams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}`.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
 
+### 1.36 Ẩn Tour Đoàn Riêng khỏi Lịch Khởi Hành & Chuẩn Hóa Giao Diện Quản Lý Tour Đoàn Riêng
+- **Mô tả yêu cầu:**
+  1. Loại bỏ các **Tour đoàn riêng (`tour_type === 'private'`)** khỏi màn hình **Lịch khởi hành (`DepartureCalendar.tsx`)** vì đây là các tour đặt theo hợp đồng riêng của tổ chức/doanh nghiệp, không mở bán lẻ giữ chỗ công khai cho Sale/Đại lý.
+  2. Chuẩn hóa giao diện quản lý và thao tác đối với Tour đoàn riêng tại **Quản lý Tour (`ToursManagement.tsx`)** sao cho không quản lý/thao tác như tour ghép thông thường:
+     - Ẩn các nút "Thêm ngày đi mới" và "Tạo hàng loạt (Series)" trên thanh tiêu đề nhóm tour.
+     - Cột **Giờ Giữ & Vé**: Hiển thị badge `👑 Theo Hợp đồng` thay cho thời gian giữ chỗ 48h / vé.
+     - Cột **Trạng thái chỗ**: Hiển thị badge `👑 Trọn đoàn ({pax} Khách)` thay cho đếm số ghế Sure/Hold/Trống.
+     - Cột **Hành động**: Ẩn nút "Sao chép ngày khởi hành" (Clone) đối với Tour đoàn riêng vì hợp đồng đoàn riêng là duy nhất, không dùng làm mẫu chuỗi khởi hành.
+- **Giải pháp:**
+  1. Cập nhật `src/pages/DepartureCalendar.tsx` bổ sung điều kiện lọc `if (tour.tour_type === 'visa' || tour.tour_type === 'private') return false;` tại `filteredTours`.
+  2. Cập nhật `src/pages/ToursManagement.tsx` điều chỉnh điều kiện hiển thị nút header `firstTour.tour_type !== 'private'`, badge cột "Giờ Giữ & Vé" và "Trạng thái chỗ", đồng thời ẩn nút `handleCloneTour` khi `t.tour_type === 'private'`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.37 Sửa Lỗi Giữ Nguyên Giá Tour Đoàn Riêng & Bổ Sung Đồng Bộ Đơn Hàng Liên Kết & Hoa Hồng
+- **Mô tả yêu cầu:**
+  1. Sửa lỗi đối với Tour đoàn riêng (`tour_type === 'private'`): khi người dùng sửa giá tour trọn gói (ví dụ 150.000.000 VNĐ cho 30 pax) và hoa hồng, khi reload lại trang thì giá tour bị đổi lại thành giá bình quân mỗi khách (5.000.000 VNĐ).
+  2. Đảm bảo Đơn hàng (Booking) tự động sinh của Tour đoàn riêng cũng cho phép thanh toán nhiều đợt bình thường và được đồng bộ lại số tiền hợp đồng (`total_price`), số khách (`adult_count`) khi cập nhật Tour đoàn riêng.
+- **Giải pháp:**
+  1. Sửa hàm `addTour` và `updateTour` trong `src/context/CRMContext.tsx`: Đối với Tour đoàn riêng (`tour_type === 'private'`), giữ nguyên `price` là Tổng giá trị hợp đồng trọn gói (ví dụ 150.000.000 VNĐ), không bị ghi đè bởi `price_adult` (5.000.000 VNĐ) khi đẩy dữ liệu lên Supabase.
+  2. Cập nhật `src/pages/ToursManagement.tsx`:
+     - Bổ sung ô nhập "Hoa hồng trích thưởng/chiết khấu (VNĐ)" vào biểu mẫu khai báo/chỉnh sửa Tour đoàn riêng để linh hoạt quản lý hoa hồng cho đại lý/Sale/người giới thiệu đoàn.
+     - Khi thực hiện cập nhật Tour đoàn riêng, tự động tìm Đơn hàng (Booking) liên kết và gọi `updateOrder` để đồng bộ lại `total_price`, `adult_count`, tên và điện thoại người đặt.
+  3. Xác nhận quy trình thanh toán nhiều đợt: Đơn hàng của Tour đoàn riêng hoàn toàn là một Booking tiêu chuẩn trong hệ thống, tự động hiển thị trên Quản lý Đơn hàng (`OrdersManagement.tsx`) và Kế toán (`AccountingInvoice.tsx`) để tạo các Phiếu thu đợt 1, đợt 2, đợt 3... bình thường.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.38 Tự Động 100% Khởi Tạo & Đồng Bộ Booking Cho Tour Đoàn Riêng
+- **Mô tả yêu cầu:**
+  - Quy trình sinh Đơn hàng (Booking) cho Tour đoàn riêng phải hoàn toàn tự động 100%, không cần người dùng phải bấm nút khởi tạo thủ công nữa.
+- **Giải pháp:**
+  1. **Cập nhật `src/context/CRMContext.tsx`**: Bỏ qua hạn chế chỗ trống (`allowedMaxSeats < seatsToLock`) khi `tour_type === 'private'` để đảm bảo đơn hàng đoàn riêng luôn khởi tạo thành công.
+  2. **Cập nhật `src/pages/ToursManagement.tsx`**:
+     - Thêm cơ chế **Auto-Sync (useEffect background listener)**: Tự động rà soát danh sách Tour đoàn riêng. Bất kỳ Tour đoàn riêng nào chưa có Booking liên kết trong `orders` sẽ tự động kích hoạt `createOrder` sinh ngay Booking tiêu chuẩn mà không cần thao tác bấm nút.
+     - Hiển thị badge xanh `✓ Booking #XXXXXX` tự động trên danh sách Tour.
+     - Khi tạo mới hoặc cập nhật thông tin Tour đoàn riêng, hệ thống tự động sinh/cập nhật Booking tương ứng.
+  3. **Cập nhật `src/pages/OrdersManagement.tsx`**: Cho phép chọn và hiển thị đầy đủ Đơn hàng Tour đoàn riêng trong danh sách Quản lý Đơn hàng & Kế toán.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.39 Cập Nhật Hiển Thị Badge Trạng Thái "👑 TOUR ĐOÀN RIÊNG" Trong Quản Lý Booking
+- **Mô tả yêu cầu:**
+  - Điều chỉnh nhãn hiển thị tại trang Quản lý Booking cho các đơn hàng Tour đoàn riêng từ "SURE CHỖ" thành "👑 TOUR ĐOÀN RIÊNG", do Tour đoàn riêng được bán theo hợp đồng trọn gói và không áp dụng quy trình giữ chỗ/sure chỗ thông thường.
+- **Giải pháp:**
+  1. **Cập nhật `src/pages/OrdersManagement.tsx`**:
+     - Tại danh sách Booking: Đổi badge trạng thái của Tour đoàn riêng (`tour?.tour_type === 'private'`) thành **`👑 TOUR ĐOÀN RIÊNG`** nổi bật với màu vàng hổ phách (`bg-amber-50 text-amber-800 border-amber-200`).
+     - Tại phần Chi tiết Booking rộng: Hiển thị nhãn **`👑 Tour đoàn riêng (Hợp đồng trọn gói)`**.
+     - Tại Bảng Thống kê Tổng quan (Modal): Cột trạng thái hiển thị **`ĐOÀN RIÊNG`**.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.40 Xử Lý Lỗi Nút Xóa Tour Không Phản Hồi (Tích Hợp Modal Xác Nhận)
+- **Mô tả yêu cầu:**
+  - Khi bấm nút biểu tượng thùng rác (Xóa Tour) tại danh sách Quản lý Tour (`ToursManagement.tsx`), hệ thống không hiển thị gì và không thực hiện thao tác xóa.
+- **Nguyên nhân & Giải pháp:**
+  - **Nguyên nhân:** Đoạn mã sử dụng hàm xác nhận mặc định `confirm()` của trình duyệt. Do ứng dụng chạy trong môi trường iFrame (Preview), hàm `window.confirm()` bị trình duyệt chặn (block modal) dẫn đến không hiển thị hộp thoại xác nhận.
+  - **Giải pháp:**
+    1. **Cập nhật `src/pages/ToursManagement.tsx`**: Xóa bỏ `confirm()` mặc định và thay bằng **Modal Popup Xác Nhận Xóa Tour** giao diện chuẩn React với overlay mờ, badge mã tour, tên tour, cảnh báo màu đỏ và nút bấm "Xác nhận Xóa Tour" & "Hủy bỏ".
+    2. **Cập nhật `src/pages/TourMediaManagement.tsx`**: Thay thế `confirm()` khi xóa file ảnh đoàn bằng Modal Popup Xác nhận Xóa File tương tự.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.41 Ngăn Chặn, Tự Động Dọn Dẹp Trùng Lặp Booking & Bỏ Popup Modal Khi Tạo Tour Đoàn Riêng
+- **Mô tả yêu cầu:**
+  - Giải thích chức năng của bảng Popup thông báo thành công và xóa bỏ bảng này khỏi giao diện.
+  - Kiểm tra và xử lý triệt để tình trạng tự động sinh ra 2 đơn hàng (Booking) trùng lặp khi khởi tạo Tour đoàn riêng.
+- **Nguyên nhân & Giải pháp:**
+  - **Mô tả Popup:** Bảng trong ảnh là **Modal thông báo khởi tạo Tour đoàn riêng thành công** tích hợp các nút truy cập nhanh (Nhập danh sách Pax & Lập phiếu thu).
+  - **Nguyên nhân bị tạo 2 Booking trùng:** Khi gọi `createOrder`, lệnh `creatingPrivateTourOrderSetRef.current.add(tour.id)` nằm sau câu lệnh `await supabase.from('bookings').select(...)`. Do đó khi 2 cuộc gọi diễn ra đồng thời (từ `handleSaveTour` và `useEffect` auto-sync), cuộc gọi thứ 2 lọt qua kiểm tra trước khi cuộc gọi thứ 1 kịp thêm ID vào Set.
+  - **Giải pháp xử lý:**
+    1. **Cập nhật `src/pages/ToursManagement.tsx`**: Xóa bỏ hoàn toàn Popup Modal (`showPrivateSuccessModal`, `createdPrivateTour`, `createdPrivateOrder` và đoạn render JSX). Sau khi khởi tạo Tour đoàn riêng thành công, tự động reset form và đóng giao diện nhập liệu.
+    2. **Cập nhật `src/context/CRMContext.tsx`**: Chuyển lệnh `creatingPrivateTourOrderSetRef.current.add(tour.id)` lên ngay dòng đầu tiên của `if (isPrivateTour)` trước các câu lệnh `await` để khóa đồng bộ (synchronously) tuyệt đối 100%, ngăn chặn hoàn toàn việc gọi trùng lệnh `createOrder`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

@@ -762,8 +762,8 @@ export default function DepartureCalendar() {
 
   // Filter application
   const filteredTours = tours.filter(tour => {
-    // Separation: Only exclude visa services from the main departure calendar. All tour types (internal, partner, outsourced, private) are shown.
-    if (tour.tour_type === 'visa') {
+    // Separation: Exclude visa services and private tours from the main departure calendar.
+    if (tour.tour_type === 'visa' || tour.tour_type === 'private') {
       return false;
     }
 

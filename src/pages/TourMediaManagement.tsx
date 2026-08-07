@@ -162,11 +162,17 @@ export default function TourMediaManagement() {
     }
   };
 
-  const handleDeleteMedia = async (id: string, fileUrl: string, fileName: string) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa file "${fileName}" khỏi danh sách?`)) return;
+  const [deletingMediaItem, setDeletingMediaItem] = useState<{ id: string; fileUrl: string; fileName: string } | null>(null);
+
+  const handleDeleteMedia = (id: string, fileUrl: string, fileName: string) => {
+    setDeletingMediaItem({ id, fileUrl, fileName });
+  };
+
+  const confirmDeleteMedia = async () => {
+    if (!deletingMediaItem) return;
+    const { id, fileUrl, fileName } = deletingMediaItem;
 
     try {
-      // Attempt backend delete if URL exists
       if (fileUrl) {
         await fetch('/api/delete', {
           method: 'POST',
@@ -176,10 +182,12 @@ export default function TourMediaManagement() {
       }
 
       await deleteTourMedia(id);
-      toast.success('Đã xóa thành công!');
+      toast.success(`Đã xóa file "${fileName}" thành công!`);
     } catch (err) {
       console.error('Lỗi xóa media:', err);
       toast.error('Có lỗi xảy ra khi xóa file!');
+    } finally {
+      setDeletingMediaItem(null);
     }
   };
 
@@ -458,6 +466,46 @@ export default function TourMediaManagement() {
           tours={validTours}
           defaultTourId={linkModalTourId}
         />
+      )}
+
+      {/* Modal Popup Xác Nhận Xóa File Media */}
+      {deletingMediaItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-scaleUp">
+            <div className="flex items-center gap-3.5 text-rose-600">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100/80 flex items-center justify-center shrink-0 border border-rose-200">
+                <Trash2 className="w-6 h-6 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Xác nhận XÓA file ảnh</h3>
+                <p className="text-xs text-rose-600 font-semibold">Hành động này không thể hoàn tác!</p>
+              </div>
+            </div>
+
+            <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 text-xs text-gray-800 space-y-1.5">
+              <p className="font-semibold text-gray-900">Tên file:</p>
+              <p className="font-bold text-rose-700 break-all">{deletingMediaItem.fileName}</p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingMediaItem(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold text-xs hover:bg-gray-50 transition-all cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteMedia}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xác nhận Xóa File
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

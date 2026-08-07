@@ -783,7 +783,33 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               net_payable_amount: b.net_payable_amount !== undefined && b.net_payable_amount !== null ? Number(b.net_payable_amount) : undefined,
               agent_commission_amount: b.agent_commission_amount !== undefined && b.agent_commission_amount !== null ? Number(b.agent_commission_amount) : undefined
             }));
-            setOrders(fetchedOrders);
+            // Tự động dọn dẹp các booking trùng lặp của cùng 1 tour đoàn riêng
+            const privateTourIds = new Set((fetchedTours.length > 0 ? fetchedTours : tours).filter(t => t.tour_type === 'private').map(t => t.id));
+            const seenPrivateTourIds = new Set<string>();
+            const cleanedOrders: Order[] = [];
+            const duplicateOrderIdsToDelete: string[] = [];
+
+            for (const order of fetchedOrders) {
+              if (order.tour_id && privateTourIds.has(order.tour_id) && order.status !== 'cancelled') {
+                if (seenPrivateTourIds.has(order.tour_id)) {
+                  duplicateOrderIdsToDelete.push(order.id);
+                  continue;
+                }
+                seenPrivateTourIds.add(order.tour_id);
+              }
+              cleanedOrders.push(order);
+            }
+
+            if (duplicateOrderIdsToDelete.length > 0 && isSupabaseConfigured()) {
+              console.log('Tự động dọn dẹp các đơn hàng trùng lặp của Tour đoàn riêng:', duplicateOrderIdsToDelete);
+              for (const dupId of duplicateOrderIdsToDelete) {
+                supabase.from('bookings').delete().eq('id', toUuid(dupId)).then(({ error }) => {
+                  if (error) console.warn('Lỗi khi xóa booking trùng lặp:', error);
+                });
+              }
+            }
+
+            setOrders(cleanedOrders);
             console.log('Đã nạp thành công Bookings từ Supabase');
           } else {
             const seededOrders: Order[] = [
@@ -1697,6 +1723,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   };
 
   const releaseExpiredHoldsRef = useRef(releaseExpiredHolds);
+  const creatingPrivateTourOrderSetRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     releaseExpiredHoldsRef.current = releaseExpiredHolds;
   });
@@ -1846,7 +1873,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     const id = generateSafeUUID();
     
     // Đảm bảo các giá trị số là số
-    const priceAdult = Number(tourData.price_adult || tourData.price || 0);
+    const isPrivate = tourData.tour_type === 'private';
+    const priceVal = isPrivate 
+      ? Number(tourData.price || 0) 
+      : Number(tourData.price !== undefined && tourData.price !== 0 ? tourData.price : (tourData.price_adult || 0));
+    const priceAdult = Number(tourData.price_adult !== undefined && tourData.price_adult !== 0 ? tourData.price_adult : (tourData.price || 0));
     const totalSeats = Number(tourData.total_seats || 0);
     const priceVisaTour = Number(tourData.price_visa_tour || 0);
 
@@ -1907,7 +1938,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           start_date: tourData.start_date || departureDate,
           end_date: tourData.end_date || departureDate,
           duration: cleanValueForSupabase(tourData.duration),
-          price: priceAdult,
+          price: priceVal,
           cost: 0,
           total_seats: totalSeats,
           available_seats: totalSeats,
@@ -2224,7 +2255,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     if (isSupabaseConfigured()) {
       try {
         // Đảm bảo các giá trị số là số
-        const priceAdult = Number(updatedTour.price_adult || updatedTour.price || 0);
+        const isPrivate = updatedTour.tour_type === 'private';
+        const priceVal = isPrivate 
+          ? Number(updatedTour.price || 0) 
+          : Number(updatedTour.price !== undefined && updatedTour.price !== 0 ? updatedTour.price : (updatedTour.price_adult || 0));
+        const priceAdult = Number(updatedTour.price_adult !== undefined && updatedTour.price_adult !== 0 ? updatedTour.price_adult : (updatedTour.price || 0));
         const totalSeats = Number(updatedTour.total_seats || 0);
 
         // Chuẩn hóa ngày khởi hành
@@ -2250,7 +2285,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           start_date: startDate,
           end_date: endDate,
           duration: cleanValueForSupabase(updatedTour.duration),
-          price: priceAdult,
+          price: priceVal,
           total_seats: totalSeats,
           available_seats: cleanValueForSupabase(nextTour.available_seats, true),
           sold_seats: cleanValueForSupabase(updatedTour.sold_seats, true),
@@ -2424,7 +2459,46 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     const allowedMaxSeats = tour.total_seats + (tour.overbook_limit || 0) - tour.sold_seats - tour.hold_seats;
 
-    if (allowedMaxSeats < seatsToLock) {
+    const isPrivateTour = tour.tour_type === 'private';
+    if (isPrivateTour) {
+      if (creatingPrivateTourOrderSetRef.current.has(tour.id)) {
+        console.warn('Đang trong tiến trình tạo booking cho Tour đoàn riêng, hủy gọi trùng:', tour.id);
+        const existingInMemoryOrder = orders.find(o => o.tour_id === tour.id && o.status !== 'cancelled');
+        return existingInMemoryOrder;
+      }
+
+      // Khóa ngay lập tức trước khi thực hiện các tác vụ async bên dưới
+      creatingPrivateTourOrderSetRef.current.add(tour.id);
+
+      const existingOrder = orders.find(o => o.tour_id === tour.id && o.status !== 'cancelled');
+      if (existingOrder) {
+        console.warn('Tour đoàn riêng đã có đơn hàng trong state local, hủy tạo trùng:', existingOrder.id);
+        creatingPrivateTourOrderSetRef.current.delete(tour.id);
+        return existingOrder;
+      }
+
+      if (isSupabaseConfigured()) {
+        try {
+          const { data: dbBookings } = await supabase
+            .from('bookings')
+            .select('id, tour_id, status')
+            .eq('tour_id', toUuid(tour.id))
+            .neq('status', 'cancelled')
+            .limit(1);
+
+          if (dbBookings && dbBookings.length > 0) {
+            console.warn('Tour đoàn riêng đã có đơn hàng trong Supabase DB, hủy tạo trùng:', dbBookings[0].id);
+            creatingPrivateTourOrderSetRef.current.delete(tour.id);
+            const foundOrder = orders.find(o => o.id === dbBookings[0].id);
+            return foundOrder;
+          }
+        } catch (dbCheckErr) {
+          console.warn('Lỗi khi kiểm tra booking trùng trong DB:', dbCheckErr);
+        }
+      }
+    }
+
+    if (!isPrivateTour && allowedMaxSeats < seatsToLock) {
       toast.error(`Không đủ chỗ trống để đặt tour! (Tối đa khả dụng bao gồm overbooking: ${allowedMaxSeats})`);
       return;
     }
@@ -2802,6 +2876,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           return t;
         }));
       }
+    }
+    if (isPrivateTour) {
+      creatingPrivateTourOrderSetRef.current.delete(tour.id);
     }
     return newOrder;
   };

@@ -778,6 +778,14 @@ export default function OrdersManagement() {
     const targetTour = tours.find(t => t.id === tourId);
     if (!targetTour) return;
 
+    if (targetTour.tour_type === 'private') {
+      setAdultCount(targetTour.total_seats || 1);
+      setChildCount(0);
+      if (targetTour.organization_name) setBookerName(targetTour.organization_name);
+      if (targetTour.group_leader_contact) setBookerPhone(targetTour.group_leader_contact);
+      return;
+    }
+
     const maxAllowed = Math.max(0, targetTour.total_seats + (targetTour.overbook_limit || 0) - targetTour.sold_seats - targetTour.hold_seats);
     if (adultCount + childCount > maxAllowed) {
       let newAdult = Math.min(adultCount, maxAllowed);
@@ -1456,7 +1464,7 @@ export default function OrdersManagement() {
                       return {
                         value: t.id,
                         label: `[${t.code}] ${t.name} (Còn ${t.available_seats} chỗ${t.overbook_limit ? `, OB tối đa: +${t.overbook_limit}` : ''})`,
-                        isDisabled: maxAllowed <= 0
+                        isDisabled: false
                       };
                     })}
                   value={tours.find(t => t.id === selectedTourId) ? {
@@ -2232,20 +2240,28 @@ export default function OrdersManagement() {
                       {/* Non-hold Status & Expand Indicator */}
                       <div className="flex items-center justify-between lg:justify-end gap-3.5 min-w-[110px] shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-gray-100">
                         <div>
-                          {order.status === 'sure' && !hasApprovedReceipt && (
-                            <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              Sure chỗ
+                          {tour?.tour_type === 'private' ? (
+                            <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                              👑 Tour đoàn riêng
                             </span>
-                          )}
-                          {(order.payment_status === 'paid' || isFullyPaid) && order.status !== 'cancelled' && (
-                            <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                              Đã thanh toán
-                            </span>
-                          )}
-                          {(order.status === 'sure' && isPartiallyPaid && order.payment_status !== 'paid') && (
-                            <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
-                              Thanh toán một phần
-                            </span>
+                          ) : (
+                            <>
+                              {order.status === 'sure' && !hasApprovedReceipt && (
+                                <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Sure chỗ
+                                </span>
+                              )}
+                              {(order.payment_status === 'paid' || isFullyPaid) && order.status !== 'cancelled' && (
+                                <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                  Đã thanh toán
+                                </span>
+                              )}
+                              {(order.status === 'sure' && isPartiallyPaid && order.payment_status !== 'paid') && (
+                                <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
+                                  Thanh toán một phần
+                                </span>
+                              )}
+                            </>
                           )}
                           {order.status === 'cancelled' && (() => {
                             const refundInvoices = invoices.filter(inv => inv.order_id === order.id && inv.type === 'payment');
@@ -3389,7 +3405,11 @@ export default function OrdersManagement() {
                             </button>
                           )}
 
-                          {order.status === 'sure' && !hasApprovedReceipt && (
+                          {tour?.tour_type === 'private' ? (
+                            <span className="px-3.5 py-2 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg inline-flex items-center">
+                              👑 Tour đoàn riêng (Hợp đồng trọn gói)
+                            </span>
+                          ) : order.status === 'sure' && !hasApprovedReceipt && (
                             <span className="px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg inline-flex items-center">
                               <Check className="w-4 h-4 mr-1.5" /> Đã chốt thành công (Sure)
                             </span>
@@ -4335,11 +4355,12 @@ export default function OrdersManagement() {
                               </td>
                               <td className="p-3 text-center">
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                                  tour?.tour_type === 'private' ? 'bg-amber-50 text-amber-800 border-amber-200' :
                                   order.status === 'hold' ? 'bg-amber-50 text-amber-800 border-amber-200' :
                                   ['sure', 'paid'].includes(order.status) ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
                                   'bg-gray-50 text-gray-600 border-gray-200'
                                 }`}>
-                                  {order.status === 'hold' ? 'HOLD' : 'SURE'}
+                                  {tour?.tour_type === 'private' ? 'ĐOÀN RIÊNG' : order.status === 'hold' ? 'HOLD' : 'SURE'}
                                 </span>
                               </td>
                               <td className="p-3 text-center">

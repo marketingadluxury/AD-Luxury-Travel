@@ -1,5 +1,5 @@
 import toast from 'react-hot-toast';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Tour, TourStatus } from '@/types';
@@ -440,7 +440,8 @@ export default function ToursManagement() {
     updateCategory,
     currentRole,
     tourMedia,
-    createOrder
+    createOrder,
+    updateOrder
   } = useCRM();
 
   // Navigation tabs: 'tours' | 'categories' | 'costs'
@@ -958,10 +959,8 @@ export default function ToursManagement() {
   const [isUploadingContract, setIsUploadingContract] = useState(false);
   const [contractUploadError, setContractUploadError] = useState<string | null>(null);
 
-  // States for Private Success Modal
-  const [showPrivateSuccessModal, setShowPrivateSuccessModal] = useState(false);
-  const [createdPrivateTour, setCreatedPrivateTour] = useState<any>(null);
-  const [createdPrivateOrder, setCreatedPrivateOrder] = useState<any>(null);
+  // State for Delete Tour confirmation modal
+  const [deletingTour, setDeletingTour] = useState<Tour | null>(null);
 
   // Inline category creation state
   const [showInlineCatForm, setShowInlineCatForm] = useState(false);
@@ -1120,6 +1119,75 @@ export default function ToursManagement() {
       document.getElementById('tour-form-section')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   };
+
+  // Helper function to create missing order for a private tour
+  const handleCreateMissingPrivateOrder = async (tour: Tour) => {
+    try {
+      const paxCount = tour.total_seats || 1;
+      const totalAmount = tour.price || 0;
+      const orderData = {
+        tour_id: tour.id,
+        tour_fallback: tour,
+        status: 'sure' as const,
+        total_price: Number(totalAmount),
+        adult_price: Math.round(Number(totalAmount) / Number(paxCount)),
+        adult_count: Number(paxCount),
+        booker_name: tour.organization_name || 'Khách đoàn',
+        booker_phone: tour.group_leader_contact || '0000000000',
+        special_requests: tour.custom_requirements || '',
+        is_locked: true,
+        seller_type: 'direct' as const
+      };
+      const created = await createOrder(orderData);
+      if (created) {
+        toast.success(`Đã tự động khởi tạo Đơn hàng (Booking) thành công cho Tour đoàn riêng ${tour.code}!`);
+      } else {
+        toast.error('Có lỗi xảy ra khi tạo Đơn hàng!');
+      }
+    } catch (err) {
+      console.error('Lỗi khi khởi tạo Đơn hàng liên kết:', err);
+      toast.error('Lỗi khi tạo Đơn hàng liên kết!');
+    }
+  };
+
+  // Auto Sync: Tự động khởi tạo Booking cho bất kỳ Tour đoàn riêng nào chưa có đơn hàng liên kết
+  const syncingPrivateToursRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!tours || tours.length === 0 || !orders) return;
+
+    const privateTours = tours.filter(t => t.tour_type === 'private');
+    if (privateTours.length === 0) return;
+
+    privateTours.forEach(async (pTour) => {
+      const hasOrder = orders.some(o => o.tour_id === pTour.id);
+      if (!hasOrder && !syncingPrivateToursRef.current.has(pTour.id)) {
+        syncingPrivateToursRef.current.add(pTour.id);
+        try {
+          const paxCount = pTour.total_seats || 1;
+          const totalAmount = pTour.price || 0;
+          const orderData = {
+            tour_id: pTour.id,
+            tour_fallback: pTour,
+            status: 'sure' as const,
+            total_price: Number(totalAmount),
+            adult_price: Math.round(Number(totalAmount) / Number(paxCount)),
+            adult_count: Number(paxCount),
+            booker_name: pTour.organization_name || 'Khách đoàn',
+            booker_phone: pTour.group_leader_contact || '0000000000',
+            special_requests: pTour.custom_requirements || '',
+            is_locked: true,
+            seller_type: 'direct' as const
+          };
+          await createOrder(orderData);
+        } catch (err) {
+          console.error('Lỗi khi tự động sinh Booking cho Tour đoàn riêng:', err);
+        } finally {
+          syncingPrivateToursRef.current.delete(pTour.id);
+        }
+      }
+    });
+  }, [tours, orders, createOrder]);
 
   // Trigger duplicate/clone and populate form
   const handleCloneTour = (tour: Tour) => {
@@ -1412,7 +1480,7 @@ export default function ToursManagement() {
         price: totalAmountVal,
         discount: 0,
         price_visa_tour: 0,
-        commission: 0,
+        commission: calculatedCommission,
         total_seats: paxCountVal,
         overbook_limit: 0,
         tour_status: 'available' as const,
@@ -1489,6 +1557,46 @@ export default function ToursManagement() {
         ...editingTour,
         ...tourData,
       } as Tour);
+
+      if (tourType === 'private') {
+        const linkedOrder = orders.find(o => o.tour_id === editingTour.id);
+        if (linkedOrder) {
+          try {
+            await updateOrder(linkedOrder.id, {
+              total_price: Number(privateTotalAmount),
+              adult_count: Number(privatePaxCount),
+              booker_name: privateCustomerName,
+              booker_phone: privateCustomerPhone,
+              special_requests: privateCustomerEmail ? `Email: ${privateCustomerEmail}` : '',
+            });
+          } catch (orderErr) {
+            console.error('Lỗi tự động cập nhật Đơn hàng liên kết:', orderErr);
+          }
+        } else {
+          try {
+            const paxCount = Number(privatePaxCount) || editingTour.total_seats || 1;
+            const totalAmount = Number(privateTotalAmount) || editingTour.price || 0;
+            const orderData = {
+              tour_id: editingTour.id,
+              tour_fallback: { ...editingTour, ...tourData },
+              status: 'sure' as const,
+              total_price: totalAmount,
+              adult_price: Math.round(totalAmount / paxCount),
+              adult_count: paxCount,
+              booker_name: privateCustomerName || editingTour.organization_name || 'Khách đoàn',
+              booker_phone: privateCustomerPhone || editingTour.group_leader_contact || '0000000000',
+              special_requests: privateCustomerEmail ? `Email: ${privateCustomerEmail}` : (editingTour.custom_requirements || ''),
+              is_locked: true,
+              seller_type: 'direct' as const
+            };
+            await createOrder(orderData);
+            toast.success('Đã tự động khởi tạo Đơn hàng (Booking) liên kết mới cho Tour đoàn riêng!');
+          } catch (orderErr) {
+            console.error('Lỗi khi tự động khởi tạo Đơn hàng liên kết:', orderErr);
+          }
+        }
+      }
+
       toast.success(`Đã cập nhật thông tin tour ${code} thành công!`);
       resetForm();
     } else {
@@ -1497,6 +1605,7 @@ export default function ToursManagement() {
       
       if (tourType === 'private') {
         if (createdTour) {
+          syncingPrivateToursRef.current.add(createdTour.id);
           try {
             const orderData = {
               tour_id: createdTour.id,
@@ -1513,18 +1622,16 @@ export default function ToursManagement() {
             };
             const createdOrder = await createOrder(orderData);
             if (createdOrder) {
-              setCreatedPrivateTour(createdTour);
-              setCreatedPrivateOrder(createdOrder);
-              setShowPrivateSuccessModal(true);
               toast.success(`Đã khởi tạo Tour đoàn riêng ${code} và tự động sinh Đơn hàng thành công!`);
             } else {
               toast.error('Tour đã được tạo nhưng có lỗi xảy ra khi tự động sinh Đơn hàng liên kết!');
-              resetForm();
             }
           } catch (orderErr) {
             console.error('Lỗi tự động sinh đơn hàng:', orderErr);
             toast.error('Lỗi khi tự động sinh Đơn hàng liên kết cho Tour đoàn riêng!');
+          } finally {
             resetForm();
+            setShowAddForm(false);
           }
         } else {
           toast.error('Lỗi khi thêm Tour đoàn riêng mới!');
@@ -1532,6 +1639,7 @@ export default function ToursManagement() {
       } else {
         toast.success(`Đã thêm tour ${code} khởi hành mới thành công!`);
         resetForm();
+        setShowAddForm(false);
       }
     }
   };
@@ -1591,9 +1699,19 @@ export default function ToursManagement() {
       toast.error('Sale Leader không có quyền xóa Tour tự vận hành.');
       return;
     }
-    if (confirm(`Bạn có chắc chắn muốn XÓA vĩnh viễn tour ${tour.code}? Các đơn đặt giữ chỗ liên quan có thể bị ảnh hưởng.`)) {
-      deleteTour(tour.id);
-      toast.success(`Đã xóa tour ${tour.code} ra khỏi cơ sở dữ liệu.`);
+    setDeletingTour(tour);
+  };
+
+  const handleConfirmDeleteTour = async () => {
+    if (!deletingTour) return;
+    try {
+      await deleteTour(deletingTour.id);
+      toast.success(`Đã xóa tour ${deletingTour.code || ''} ra khỏi cơ sở dữ liệu.`);
+    } catch (err) {
+      console.error('Lỗi khi xóa tour:', err);
+      toast.error('Lỗi khi xóa tour');
+    } finally {
+      setDeletingTour(null);
     }
   };
 
@@ -2054,7 +2172,7 @@ export default function ToursManagement() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div>
                               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                 <Users className="w-3.5 h-3.5 text-blue-600" /> Số lượng khách chốt (Pax) *
@@ -2085,6 +2203,18 @@ export default function ToursManagement() {
                                 inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-extrabold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               />
                               <p className="text-[11px] text-gray-400 mt-1">Tổng tiền ghi nhận trên hợp đồng ký kết với khách hàng.</p>
+                            </div>
+
+                            <div>
+                              <NumericFormatInput
+                                label="Hoa hồng trích thưởng/chiết khấu (VNĐ)"
+                                value={commission}
+                                onChange={setCommission}
+                                placeholder="Ví dụ: 5.000.000"
+                                labelClassName="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-emerald-700"
+                              />
+                              <p className="text-[11px] text-gray-400 mt-1">Hoa hồng dành cho đại lý, Sale hoặc giới thiệu đoàn.</p>
                             </div>
 
                             <div>
@@ -3070,7 +3200,7 @@ export default function ToursManagement() {
 
                           <div className="flex items-center gap-2.5 self-end md:self-auto" onClick={e => e.stopPropagation()}>
                             {/* Quick Add Departure button */}
-                            {firstTour.tour_type !== 'visa' && (
+                            {firstTour.tour_type !== 'visa' && firstTour.tour_type !== 'private' && (
                               <button
                                 type="button"
                                 onClick={() => handleAddDepartureQuick(firstTour)}
@@ -3082,7 +3212,7 @@ export default function ToursManagement() {
                             )}
 
                             {/* Bulk Create Series button */}
-                            {firstTour.tour_type !== 'visa' && (
+                            {firstTour.tour_type !== 'visa' && firstTour.tour_type !== 'private' && (
                               <button
                                 type="button"
                                 onClick={() => handleOpenBulkModal(firstTour)}
@@ -3173,6 +3303,10 @@ export default function ToursManagement() {
                                     <td className="px-6 py-3.5 text-center whitespace-nowrap">
                                       {t.tour_type === 'visa' ? (
                                         <span className="text-xs text-gray-400 italic">Không áp dụng</span>
+                                      ) : t.tour_type === 'private' ? (
+                                        <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-block">
+                                          👑 Theo Hợp đồng
+                                        </span>
                                       ) : (
                                         <>
                                           <div className="text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md inline-block">
@@ -3187,6 +3321,27 @@ export default function ToursManagement() {
                                     <td className="px-6 py-3.5 text-center whitespace-nowrap">
                                       {t.tour_type === 'visa' ? (
                                         <span className="text-xs text-gray-400 italic">Không giới hạn</span>
+                                      ) : t.tour_type === 'private' ? (
+                                        <div className="flex flex-col items-center gap-1.5">
+                                          <span className="text-xs font-extrabold text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md inline-block">
+                                            👑 Trọn đoàn ({t.total_seats || t.available_seats || 0} Khách)
+                                          </span>
+                                          {(() => {
+                                            const linkedOrder = orders.find(o => o.tour_id === t.id);
+                                            if (linkedOrder) {
+                                              return (
+                                                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1" title="Đã tự động khởi tạo đơn hàng Booking">
+                                                  ✓ Booking #{linkedOrder.id.substring(0, 8).toUpperCase()}
+                                                </span>
+                                              );
+                                            }
+                                            return (
+                                              <span className="text-[11px] font-medium text-amber-700 bg-amber-50/80 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 animate-pulse">
+                                                ⏳ Đang tự động tạo Booking...
+                                              </span>
+                                            );
+                                          })()}
+                                        </div>
                                       ) : (
                                         <div className="inline-flex gap-1.5 font-semibold text-xs items-center">
                                           <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200" title="Đã bán chắc chắn">
@@ -3209,14 +3364,16 @@ export default function ToursManagement() {
                                     <td className="px-6 py-3 text-center whitespace-nowrap">
                                       <div className="flex items-center justify-center gap-1.5">
                                         {/* Duplicate/Clone */}
-                                        <button
-                                          onClick={() => handleCloneTour(t)}
-                                          disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
-                                          className={`p-1.5 text-blue-600 rounded-lg transition-colors border border-blue-100 bg-blue-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-blue-50"}`}
-                                          title="Sao chép ngày khởi hành"
-                                        >
-                                          <Copy className="w-4 h-4" />
-                                        </button>
+                                        {t.tour_type !== 'private' && (
+                                          <button
+                                            onClick={() => handleCloneTour(t)}
+                                            disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
+                                            className={`p-1.5 text-blue-600 rounded-lg transition-colors border border-blue-100 bg-blue-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-blue-50"}`}
+                                            title="Sao chép ngày khởi hành"
+                                          >
+                                            <Copy className="w-4 h-4" />
+                                          </button>
+                                        )}
                                         {/* Edit */}
                                         <button
                                           onClick={() => startEdit(t)}
@@ -3366,6 +3523,10 @@ export default function ToursManagement() {
                         <td className="px-6 py-3.5 text-center">
                           {t.tour_type === 'visa' ? (
                             <span className="text-xs text-gray-400 italic">Không áp dụng</span>
+                          ) : t.tour_type === 'private' ? (
+                            <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-block">
+                              👑 Theo Hợp đồng
+                            </span>
                           ) : (
                             <>
                               <div className="text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md inline-block">
@@ -3380,6 +3541,27 @@ export default function ToursManagement() {
                         <td className="px-6 py-3.5 whitespace-nowrap text-center">
                           {t.tour_type === 'visa' ? (
                             <span className="text-xs text-gray-400 italic">Không giới hạn</span>
+                          ) : t.tour_type === 'private' ? (
+                            <div className="flex flex-col items-center gap-1.5">
+                              <span className="text-xs font-extrabold text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md inline-block">
+                                👑 Trọn đoàn ({t.total_seats || t.available_seats || 0} Khách)
+                              </span>
+                              {(() => {
+                                const linkedOrder = orders.find(o => o.tour_id === t.id);
+                                if (linkedOrder) {
+                                  return (
+                                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1" title="Đã tự động khởi tạo đơn hàng Booking">
+                                      ✓ Booking #{linkedOrder.id.substring(0, 8).toUpperCase()}
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="text-[11px] font-medium text-amber-700 bg-amber-50/80 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 animate-pulse">
+                                    ⏳ Đang tự động tạo Booking...
+                                  </span>
+                                );
+                              })()}
+                            </div>
                           ) : (
                             <div className="inline-flex gap-1.5 text-xs font-semibold items-center">
                               <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200" title="Đã bán chắc chắn">
@@ -3402,14 +3584,16 @@ export default function ToursManagement() {
                         <td className="px-6 py-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
                             {/* Duplicate/Clone action */}
-                            <button
-                              onClick={() => handleCloneTour(t)}
-                              disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
-                                          className={`p-1.5 text-blue-600 rounded-lg transition-colors border border-blue-100 bg-blue-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-blue-50"}`}
-                              title="Sao chép tour sang ngày khởi hành khác"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
+                            {t.tour_type !== 'private' && (
+                              <button
+                                onClick={() => handleCloneTour(t)}
+                                disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
+                                            className={`p-1.5 text-blue-600 rounded-lg transition-colors border border-blue-100 bg-blue-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-blue-50"}`}
+                                title="Sao chép tour sang ngày khởi hành khác"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            )}
                             
                             {/* Edit action */}
                             <button
@@ -3755,124 +3939,47 @@ export default function ToursManagement() {
         </div>
       )}
 
-      {/* Success Modal for Private Tour Fast-track Creation */}
-      {showPrivateSuccessModal && createdPrivateTour && createdPrivateOrder && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-xl w-full p-6 md:p-8 animate-in zoom-in-95 duration-200 relative overflow-hidden">
-            {/* Decorative background accent */}
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-600" />
-            
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 text-3xl shadow-xs">
-                🎉
+      {/* Modal Popup Xác Nhận Xóa Tour */}
+      {deletingTour && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-scaleUp">
+            <div className="flex items-center gap-3.5 text-rose-600">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100/80 flex items-center justify-center shrink-0 border border-rose-200">
+                <Trash2 className="w-6 h-6 text-rose-600" />
               </div>
-              
-              <div className="space-y-1">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                  Khởi Tạo Tour Đoàn Riêng Thành Công!
-                </h3>
-                <p className="text-sm text-slate-500 font-medium">
-                  Hệ thống đã tự động liên kết và sinh đơn hàng trọn gói tương ứng
-                </p>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Xác nhận XÓA vĩnh viễn Tour</h3>
+                <p className="text-xs text-rose-600 font-semibold">Hành động này không thể hoàn tác!</p>
               </div>
+            </div>
 
-              {/* Tour and Order Details Summary */}
-              <div className="w-full bg-slate-50 rounded-xl p-4 border border-slate-200 text-left space-y-3.5 mt-2">
-                <div className="flex justify-between items-center pb-2.5 border-b border-slate-200/60">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thông tin Tour</span>
-                  <span className="px-2.5 py-1 text-[11px] font-black uppercase rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                    Đoàn riêng (Private)
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="space-y-1.5">
-                    <span className="text-slate-400 block font-medium">Tên Tour / Đoàn:</span>
-                    <strong className="text-slate-800 text-[13px] line-clamp-1 block leading-tight">
-                      {createdPrivateTour.title}
-                    </strong>
-                  </div>
-                  <div className="space-y-1.5">
-                    <span className="text-slate-400 block font-medium">Mã Tour hệ thống:</span>
-                    <strong className="text-slate-800 font-bold block bg-slate-200/50 px-2 py-0.5 rounded border border-slate-300 w-fit">
-                      {createdPrivateTour.tour_code}
-                    </strong>
-                  </div>
-                  <div className="space-y-1.5">
-                    <span className="text-slate-400 block font-medium">Đại diện khách hàng:</span>
-                    <strong className="text-slate-800 block">
-                      {createdPrivateOrder.customer_name}
-                    </strong>
-                  </div>
-                  <div className="space-y-1.5">
-                    <span className="text-slate-400 block font-medium">Số lượng khách chốt:</span>
-                    <strong className="text-slate-800 block text-[13px]">
-                      {createdPrivateOrder.adult_count} Khách (Pax)
-                    </strong>
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2 pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                    <div>
-                      <span className="text-slate-400 block font-medium">Tổng giá trị hợp đồng:</span>
-                      <strong className="text-lg font-black text-emerald-600 block">
-                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(createdPrivateOrder.total_price)}
-                      </strong>
-                    </div>
-                    {createdPrivateTour.file_url && (
-                      <a 
-                        href={createdPrivateTour.file_url} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className="inline-flex items-center text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        📄 Xem file hợp đồng
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
+            <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 space-y-2 text-xs text-gray-700">
+              <p className="font-semibold text-gray-900">
+                Mã tour: <span className="text-rose-700 font-extrabold">{deletingTour.code}</span>
+              </p>
+              <p className="font-medium text-gray-800 line-clamp-2">
+                Tên tour: <span className="font-bold">{deletingTour.name}</span>
+              </p>
+              <p className="text-[11px] text-rose-800 pt-2 border-t border-rose-200/60 leading-relaxed">
+                ⚠️ <strong>Cảnh báo:</strong> Khi xóa tour, toàn bộ thông tin tour và các đơn đặt giữ chỗ (Booking) liên quan đến tour này có thể bị ảnh hưởng.
+              </p>
+            </div>
 
-              {/* Guide/Callout Box */}
-              <div className="w-full bg-blue-50/40 p-3.5 rounded-xl border border-blue-100/50 flex items-start gap-2.5 text-left">
-                <span className="text-base mt-0.5">⚡</span>
-                <p className="text-[11px] font-semibold text-blue-700 leading-normal">
-                  <strong>Hành động tiếp theo:</strong> Để hoàn thiện đoàn, bạn có thể lập tức nhập danh sách hành khách (để làm thủ tục bảo hiểm/visa) hoặc thiết lập phiếu thu cọc đầu tiên cho kế toán duyệt.
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPrivateSuccessModal(false);
-                    window.location.href = `/passengers?search=${encodeURIComponent(createdPrivateOrder.customer_name || '')}`;
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/10 transition-colors cursor-pointer"
-                >
-                  📋 Nhập Danh Sách Hành Khách (Pax)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPrivateSuccessModal(false);
-                    window.location.href = `/accounting?orderId=${createdPrivateOrder.id}`;
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-500/10 transition-colors cursor-pointer"
-                >
-                  💰 Lập Phiếu Thu / Đề Nghị
-                </button>
-              </div>
-
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  setShowPrivateSuccessModal(false);
-                  resetForm();
-                  setShowAddForm(false);
-                }}
-                className="text-slate-400 hover:text-slate-600 font-semibold text-xs pt-2 transition-colors cursor-pointer"
+                onClick={() => setDeletingTour(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold text-xs hover:bg-gray-50 transition-all cursor-pointer"
               >
-                Đóng thông báo & Quay lại danh sách Tour
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTour}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xác nhận Xóa Tour
               </button>
             </div>
           </div>
