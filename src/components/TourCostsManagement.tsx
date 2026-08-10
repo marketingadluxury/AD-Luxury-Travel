@@ -34,7 +34,12 @@ import {
   ChevronUp,
   Layers,
   Edit3,
-  Building2
+  Building2,
+  Filter,
+  FilterX,
+  X,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -129,6 +134,7 @@ export default function TourCostsManagement() {
     updateTourCost, 
     currentRole,
     invoices,
+    categories,
     createInvoiceReceipt,
     uploadInvoiceProof,
     deleteInvoiceReceipt
@@ -136,7 +142,14 @@ export default function TourCostsManagement() {
 
   const { profile } = useAuth();
 
+  // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterTourType, setFilterTourType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterProfit, setFilterProfit] = useState<string>('all');
+
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
 
   // States for active Tour Cost form being edited
@@ -177,8 +190,116 @@ export default function TourCostsManagement() {
   const [instAccountNameMap, setInstAccountNameMap] = useState<Record<string, string>>({});
   const [isUploadingProofFor, setIsUploadingProofFor] = useState<string | null>(null);
 
+  // Helper to format currency
+  const formatVND = (num: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+  };
+
+  // Helper to calculate summary stats for a single tour card in overview
+  const getTourSummaryStats = (tour: Tour) => {
+    const tourOrders = orders.filter(o => o.tour_id === tour.id && o.status !== 'cancelled');
+    const totalRevenue = tourOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+    const orderIds = tourOrders.map(o => o.id);
+    const collectedRevenue = invoices
+      .filter(inv => inv.type === 'receipt' && inv.status === 'approved' && inv.order_id && orderIds.includes(inv.order_id))
+      .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+
+    const isOutsourced = tour.tour_type === 'outsourced' || tour.tour_type === 'partner';
+    const costRecord = tourCosts.find(c => c.tourId === tour.id);
+    let totalCosts = 0;
+
+    if (isOutsourced) {
+      const totalPassengers = tourOrders.reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+      const visaExp = (costRecord?.visaAmount || 0) * totalPassengers;
+      const otherExp = costRecord?.otherAmount || 0;
+      totalCosts = (tour.partner_net_cost || 0) * totalPassengers + (costRecord?.commissionAmount || 0) + visaExp + otherExp;
+    } else if (costRecord) {
+      const totalPassengers = tourOrders.reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
+      const sumLandtours = (costRecord.landtours || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+      const sumExtraPartners = (costRecord.partnerPayments || [])
+        .filter(p => {
+          const name = (p.partnerName || '').trim().toLowerCase();
+          const isStandard = [
+            'hãng hàng không / đại lý vé máy bay',
+            'công ty bảo hiểm du lịch',
+            'hướng dẫn viên (tạm ứng chi phí điều hành tour)',
+            'đối tác cung ứng quà tặng du lịch',
+            'đại lý (hoa hồng bán tour)',
+            'đại lý & ctv (hoa hồng bán tour)',
+            'đối tác quảng cáo / marketing',
+            'nhà cung cấp dịch vụ visa',
+            'chi phí vận hành khác'
+          ].includes(name) || name.startsWith('landtour:');
+          return !isStandard;
+        })
+        .reduce((sum, item) => sum + (item.amountToPay || 0), 0);
+
+      const visaExp = (costRecord.visaAmount || 0) * totalPassengers;
+      totalCosts = (costRecord.flightAmount || 0) +
+        (costRecord.insuranceAmount || 0) +
+        (costRecord.tourGuideAmount || 0) +
+        (costRecord.giftAmount || 0) +
+        (costRecord.commissionAmount || 0) +
+        (costRecord.advertisingAmount || 0) +
+        visaExp +
+        (costRecord.otherAmount || 0) +
+        sumLandtours +
+        sumExtraPartners;
+    }
+    const netProfit = totalRevenue - totalCosts;
+    const progressPercent = totalRevenue > 0 ? Math.round((collectedRevenue / totalRevenue) * 100) : 0;
+
+    const getTourStatusBadge = () => {
+      if (tour.status === 'cancelled') {
+        return { label: 'Đã hủy', className: 'bg-red-100 text-red-800 border border-red-200' };
+      }
+      const todayStr = new Date().toISOString().substring(0, 10);
+      const startDate = tour.start_date || (tour.departure_time ? tour.departure_time.substring(0, 10) : '');
+      const endDate = tour.end_date || (tour.return_time ? tour.return_time.substring(0, 10) : '');
+
+      if (tour.status === 'completed' || (endDate && endDate < todayStr)) {
+        return { label: 'Đã hoàn thành', className: 'bg-blue-100 text-blue-800 border border-blue-200' };
+      }
+      if (tour.status === 'active' || (startDate && endDate && startDate <= todayStr && endDate >= todayStr)) {
+        return { label: 'Đang chạy', className: 'bg-green-100 text-green-800 border border-green-200' };
+      }
+      return { label: 'Sắp khởi hành', className: 'bg-amber-100 text-amber-800 border border-amber-200' };
+    };
+
+    return {
+      tourOrders,
+      totalRevenue,
+      collectedRevenue,
+      totalCosts,
+      netProfit,
+      progressPercent,
+      statusBadge: getTourStatusBadge()
+    };
+  };
+
+  // Extracted available departure months from tours list (Format: MM/YYYY)
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    tours.forEach(t => {
+      const dStr = t.start_date || (t.departure_time ? t.departure_time.substring(0, 10) : '');
+      if (dStr && dStr.length >= 7) {
+        const parts = dStr.split('-');
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+          monthsSet.add(`${parts[1]}/${parts[0]}`);
+        }
+      }
+    });
+    return Array.from(monthsSet).sort((a, b) => {
+      const [mA, yA] = a.split('/');
+      const [mB, yB] = b.split('/');
+      return `${yB}-${mB}`.localeCompare(`${yA}-${mA}`);
+    });
+  }, [tours]);
+
   // Filter tours (exclude visa services, and exclude internal tours for sale_leader)
   const filteredTours = useMemo(() => {
+    const todayStr = new Date().toISOString().substring(0, 10);
+
     return tours
       .filter(t => t.tour_type !== 'visa')
       .filter(t => {
@@ -187,11 +308,108 @@ export default function TourCostsManagement() {
         }
         return true;
       })
-      .filter(t => 
-        t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.code.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-  }, [tours, searchTerm, currentRole]);
+      // 1. Search term (code, name, destination, category)
+      .filter(t => {
+        if (!searchTerm.trim()) return true;
+        const term = searchTerm.toLowerCase().trim();
+        return (
+          (t.name || '').toLowerCase().includes(term) ||
+          (t.code || '').toLowerCase().includes(term) ||
+          (t.category || '').toLowerCase().includes(term) ||
+          (t.destination || '').toLowerCase().includes(term)
+        );
+      })
+      // 2. Tour type filter
+      .filter(t => {
+        if (filterTourType === 'all') return true;
+        if (filterTourType === 'internal') return !t.tour_type || t.tour_type === 'internal';
+        if (filterTourType === 'partner') return t.tour_type === 'partner' || t.tour_type === 'outsourced';
+        if (filterTourType === 'private') return t.tour_type === 'private';
+        return true;
+      })
+      // 3. Status filter
+      .filter(t => {
+        if (filterStatus === 'all') return true;
+        const startDate = t.start_date || (t.departure_time ? t.departure_time.substring(0, 10) : '');
+        const endDate = t.end_date || (t.return_time ? t.return_time.substring(0, 10) : '');
+
+        if (filterStatus === 'upcoming') {
+          return t.status !== 'cancelled' && t.status !== 'completed' && (!startDate || startDate >= todayStr);
+        }
+        if (filterStatus === 'departed') {
+          return t.status === 'completed' || (endDate && endDate < todayStr);
+        }
+        if (filterStatus === 'active') {
+          return t.status === 'active' || (startDate && endDate && startDate <= todayStr && endDate >= todayStr);
+        }
+        if (filterStatus === 'cancelled') {
+          return t.status === 'cancelled';
+        }
+        return true;
+      })
+      // 4. Month filter (MM/YYYY)
+      .filter(t => {
+        if (filterMonth === 'all') return true;
+        const startDate = t.start_date || (t.departure_time ? t.departure_time.substring(0, 10) : '');
+        if (!startDate) return false;
+        const parts = startDate.split('-');
+        if (parts.length < 2) return false;
+        const tourMonthYear = `${parts[1]}/${parts[0]}`;
+        return tourMonthYear === filterMonth;
+      })
+      // 5. Category filter
+      .filter(t => {
+        if (filterCategory === 'all') return true;
+        return (t.category || 'Chung') === filterCategory;
+      })
+      // 6. Profit status filter
+      .filter(t => {
+        if (filterProfit === 'all') return true;
+        const stats = getTourSummaryStats(t);
+        if (filterProfit === 'profit') return stats.netProfit > 0;
+        if (filterProfit === 'loss') return stats.netProfit < 0;
+        if (filterProfit === 'even') return stats.netProfit === 0;
+        return true;
+      });
+  }, [tours, searchTerm, currentRole, filterTourType, filterStatus, filterMonth, filterCategory, filterProfit, orders, invoices, tourCosts]);
+
+  // Aggregate stats across all currently filtered tours
+  const aggregateFilteredStats = useMemo(() => {
+    let totalRevenue = 0;
+    let totalCosts = 0;
+    let totalNetProfit = 0;
+
+    filteredTours.forEach(tour => {
+      const stats = getTourSummaryStats(tour);
+      totalRevenue += stats.totalRevenue;
+      totalCosts += stats.totalCosts;
+      totalNetProfit += stats.netProfit;
+    });
+
+    return {
+      count: filteredTours.length,
+      totalRevenue,
+      totalCosts,
+      totalNetProfit
+    };
+  }, [filteredTours, orders, invoices, tourCosts]);
+
+  const isAnyFilterActive =
+    searchTerm.trim() !== '' ||
+    filterTourType !== 'all' ||
+    filterStatus !== 'all' ||
+    filterMonth !== 'all' ||
+    filterCategory !== 'all' ||
+    filterProfit !== 'all';
+
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setFilterTourType('all');
+    setFilterStatus('all');
+    setFilterMonth('all');
+    setFilterCategory('all');
+    setFilterProfit('all');
+  };
 
   // Selected tour object
   const selectedTour = useMemo(() => {
@@ -381,11 +599,6 @@ export default function TourCostsManagement() {
       }
     }
   }, [selectedTourId, tourCosts, tours]);
-
-  // Helper to format currency
-  const formatVND = (num: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
-  };
 
   // Add landtour NCC item
   const handleAddLandtour = async () => {
@@ -1200,115 +1413,194 @@ export default function TourCostsManagement() {
   const netProfit = totalRevenue - totalCosts;
   const marginPercent = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-  // Helper to calculate summary stats for a single tour card in overview
-  const getTourSummaryStats = (tour: Tour) => {
-    const tourOrders = orders.filter(o => o.tour_id === tour.id && o.status !== 'cancelled');
-    const totalRevenue = tourOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-    const orderIds = tourOrders.map(o => o.id);
-    const collectedRevenue = invoices
-      .filter(inv => inv.type === 'receipt' && inv.status === 'approved' && inv.order_id && orderIds.includes(inv.order_id))
-      .reduce((sum, inv) => sum + (inv.amount || 0), 0);
-
-    const isOutsourced = tour.tour_type === 'outsourced' || tour.tour_type === 'partner';
-    const costRecord = tourCosts.find(c => c.tourId === tour.id);
-    let totalCosts = 0;
-
-    if (isOutsourced) {
-      const totalPassengers = tourOrders.reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
-      const visaExp = (costRecord?.visaAmount || 0) * totalPassengers;
-      const otherExp = costRecord?.otherAmount || 0;
-      totalCosts = (tour.partner_net_cost || 0) * totalPassengers + (costRecord?.commissionAmount || 0) + visaExp + otherExp;
-    } else if (costRecord) {
-      const totalPassengers = tourOrders.reduce((sum, o) => sum + (o.adult_count || 0) + (o.child_count || 0), 0);
-      const sumLandtours = (costRecord.landtours || []).reduce((sum, item) => sum + (item.amount || 0), 0);
-      const sumExtraPartners = (costRecord.partnerPayments || [])
-        .filter(p => {
-          const name = (p.partnerName || '').trim().toLowerCase();
-          const isStandard = [
-            'hãng hàng không / đại lý vé máy bay',
-            'công ty bảo hiểm du lịch',
-            'hướng dẫn viên (tạm ứng chi phí điều hành tour)',
-            'đối tác cung ứng quà tặng du lịch',
-            'đại lý (hoa hồng bán tour)',
-            'đại lý & ctv (hoa hồng bán tour)',
-            'đối tác quảng cáo / marketing',
-            'nhà cung cấp dịch vụ visa',
-            'chi phí vận hành khác'
-          ].includes(name) || name.startsWith('landtour:');
-          return !isStandard;
-        })
-        .reduce((sum, item) => sum + (item.amountToPay || 0), 0);
-
-      const visaExp = (costRecord.visaAmount || 0) * totalPassengers;
-      totalCosts = (costRecord.flightAmount || 0) +
-        (costRecord.insuranceAmount || 0) +
-        (costRecord.tourGuideAmount || 0) +
-        (costRecord.giftAmount || 0) +
-        (costRecord.commissionAmount || 0) +
-        (costRecord.advertisingAmount || 0) +
-        visaExp +
-        (costRecord.otherAmount || 0) +
-        sumLandtours +
-        sumExtraPartners;
-    }
-    const netProfit = totalRevenue - totalCosts;
-    const progressPercent = totalRevenue > 0 ? Math.round((collectedRevenue / totalRevenue) * 100) : 0;
-
-    const getTourStatusBadge = () => {
-      if (tour.status === 'cancelled') {
-        return { label: 'Đã hủy', className: 'bg-red-100 text-red-800 border border-red-200' };
-      }
-      const todayStr = new Date().toISOString().substring(0, 10);
-      const startDate = tour.start_date || (tour.departure_time ? tour.departure_time.substring(0, 10) : '');
-      const endDate = tour.end_date || (tour.return_time ? tour.return_time.substring(0, 10) : '');
-
-      if (tour.status === 'completed' || (endDate && endDate < todayStr)) {
-        return { label: 'Đã hoàn thành', className: 'bg-blue-100 text-blue-800 border border-blue-200' };
-      }
-      if (tour.status === 'active' || (startDate && endDate && startDate <= todayStr && endDate >= todayStr)) {
-        return { label: 'Đang chạy', className: 'bg-green-100 text-green-800 border border-green-200' };
-      }
-      return { label: 'Sắp khởi hành', className: 'bg-amber-100 text-amber-800 border border-amber-200' };
-    };
-
-    return {
-      tourOrders,
-      totalRevenue,
-      collectedRevenue,
-      totalCosts,
-      netProfit,
-      progressPercent,
-      statusBadge: getTourStatusBadge()
-    };
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {!selectedTour ? (
         /* OVERVIEW VIEW: GRID OF TOUR CARDS MATCHING KẾ TOÁN */
         <div className="space-y-6">
-          {/* Header & Search */}
-          <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-blue-600" />
-                Danh sách Tour & Bảng hạch toán Chi phí - Lãi lỗ
-              </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Chọn một tour bên dưới để mở chi tiết bảng kê chi phí, hoa hồng, landtour và xem báo cáo lãi lỗ thực tế.
-              </p>
+          {/* Header & Comprehensive Multi-Criteria Filter Panel */}
+          <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+            {/* Top Row: Title & Aggregate Summary Cards for Filtered Tours */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-blue-600" />
+                  Danh sách Tour & Bảng hạch toán Chi phí - Lãi lỗ
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Chọn một tour bên dưới để mở chi tiết bảng kê chi phí, hoa hồng, landtour và xem báo cáo lãi lỗ thực tế.
+                </p>
+              </div>
+
+              {/* Aggregate Summary Badges */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
+                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200/80 text-left">
+                  <p className="text-[10px] font-bold text-gray-500 uppercase">Tổng số tour</p>
+                  <p className="text-sm font-black text-gray-900 mt-0.5">{aggregateFilteredStats.count} tour</p>
+                </div>
+                <div className="bg-blue-50/60 p-2.5 rounded-lg border border-blue-150 text-left">
+                  <p className="text-[10px] font-bold text-blue-600 uppercase">Doanh thu dự kiến</p>
+                  <p className="text-xs font-black text-blue-800 mt-0.5 truncate">{formatVND(aggregateFilteredStats.totalRevenue)}</p>
+                </div>
+                <div className="bg-amber-50/60 p-2.5 rounded-lg border border-amber-150 text-left">
+                  <p className="text-[10px] font-bold text-amber-700 uppercase">Tổng chi phí</p>
+                  <p className="text-xs font-black text-amber-800 mt-0.5 truncate">{formatVND(aggregateFilteredStats.totalCosts)}</p>
+                </div>
+                <div className={`p-2.5 rounded-lg border text-left ${aggregateFilteredStats.totalNetProfit >= 0 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-800' : 'bg-rose-50/60 border-rose-200 text-rose-800'}`}>
+                  <p className="text-[10px] font-bold uppercase">Lợi nhuận ròng</p>
+                  <p className="text-xs font-black mt-0.5 truncate">{formatVND(aggregateFilteredStats.totalNetProfit)}</p>
+                </div>
+              </div>
             </div>
 
-            <div className="relative w-full sm:w-80">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                placeholder="Tìm theo mã tour hoặc tên tour..."
-              />
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+            {/* Filter Controls Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {/* 1. Keyword Search */}
+              <div className="relative col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 placeholder:text-gray-400 font-medium"
+                  placeholder="Tìm tên tour, mã tour, điểm đến..."
+                />
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* 2. Tour Type Filter */}
+              <div>
+                <select
+                  value={filterTourType}
+                  onChange={(e) => setFilterTourType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                >
+                  <option value="all">📂 Tất cả loại tour</option>
+                  <option value="internal">🏠 Tour tự vận hành</option>
+                  <option value="partner">🤝 Tour gửi đối tác (F2)</option>
+                  <option value="private">👑 Tour đoàn riêng</option>
+                </select>
+              </div>
+
+              {/* 3. Departure Status Filter */}
+              <div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                >
+                  <option value="all">🕒 Tất cả trạng thái</option>
+                  <option value="upcoming">⏳ Sắp khởi hành</option>
+                  <option value="active">🟢 Đang chạy</option>
+                  <option value="departed">📁 Đã hoàn thành / Khởi hành</option>
+                  <option value="cancelled">❌ Đã hủy</option>
+                </select>
+              </div>
+
+              {/* 4. Month Filter */}
+              <div>
+                <select
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                >
+                  <option value="all">📅 Tất cả tháng khởi hành</option>
+                  {availableMonths.map(m => (
+                    <option key={m} value={m}>Tháng {m}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 5. Category Filter */}
+              <div>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                >
+                  <option value="all">🏷️ Tất cả danh mục</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 6. Profit / Loss Status Filter */}
+              <div>
+                <select
+                  value={filterProfit}
+                  onChange={(e) => setFilterProfit(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                >
+                  <option value="all">📊 Tất cả hạch toán</option>
+                  <option value="profit">📈 Có lãi (Lợi nhuận &gt; 0)</option>
+                  <option value="loss">📉 Bị lỗ (Lợi nhuận &lt; 0)</option>
+                  <option value="even">⚖️ Hòa vốn / Chưa hạch toán</option>
+                </select>
+              </div>
             </div>
+
+            {/* Active Filters Bar & Reset */}
+            {isAnyFilterActive && (
+              <div className="pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-bold text-gray-500 text-[11px] flex items-center gap-1">
+                    <Filter className="w-3.5 h-3.5 text-blue-600" /> Đang lọc theo:
+                  </span>
+                  {searchTerm && (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-medium text-[11px] flex items-center gap-1">
+                      Từ khóa: "{searchTerm}"
+                      <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={() => setSearchTerm('')} />
+                    </span>
+                  )}
+                  {filterTourType !== 'all' && (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-medium text-[11px] flex items-center gap-1">
+                      Loại: {filterTourType === 'internal' ? 'Tour tự vận hành' : filterTourType === 'partner' ? 'Tour gửi đối tác' : 'Tour đoàn riêng'}
+                      <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={() => setFilterTourType('all')} />
+                    </span>
+                  )}
+                  {filterStatus !== 'all' && (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-medium text-[11px] flex items-center gap-1">
+                      Trạng thái: {filterStatus === 'upcoming' ? 'Sắp khởi hành' : filterStatus === 'active' ? 'Đang chạy' : filterStatus === 'departed' ? 'Đã hoàn thành' : 'Đã hủy'}
+                      <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={() => setFilterStatus('all')} />
+                    </span>
+                  )}
+                  {filterMonth !== 'all' && (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-medium text-[11px] flex items-center gap-1">
+                      Tháng: {filterMonth}
+                      <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={() => setFilterMonth('all')} />
+                    </span>
+                  )}
+                  {filterCategory !== 'all' && (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-medium text-[11px] flex items-center gap-1">
+                      Danh mục: {filterCategory}
+                      <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={() => setFilterCategory('all')} />
+                    </span>
+                  )}
+                  {filterProfit !== 'all' && (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200 font-medium text-[11px] flex items-center gap-1">
+                      Hạch toán: {filterProfit === 'profit' ? 'Có lãi' : filterProfit === 'loss' ? 'Bị lỗ' : 'Hòa vốn'}
+                      <X className="w-3 h-3 hover:text-red-500 cursor-pointer" onClick={() => setFilterProfit('all')} />
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={resetAllFilters}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-md transition-colors font-bold text-[11px] flex items-center gap-1 border border-red-200 cursor-pointer ml-auto"
+                >
+                  <FilterX className="w-3.5 h-3.5" />
+                  <span>Xóa tất cả bộ lọc</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Grid Tour Cards */}

@@ -72,7 +72,7 @@ const navigation = [
   { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin', 'bod'] },
   { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod'] },
-  { name: 'Đại lý (Agent)', href: '/customers', icon: Users, roleAccess: ['admin', 'bod'] },
+  { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting'] },
   { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];

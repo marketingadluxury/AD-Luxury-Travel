@@ -10,6 +10,15 @@ CREATE TABLE IF NOT EXISTS profiles (
   company_name TEXT,
   role TEXT DEFAULT 'CTV',
   leader_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  leader_name TEXT,
+  email TEXT,
+  address TEXT,
+  bank_name TEXT,
+  bank_account_number TEXT,
+  bank_account_holder TEXT,
+  notes TEXT,
+  status TEXT DEFAULT 'active',
+  tier TEXT DEFAULT 'Standard',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
@@ -654,11 +663,29 @@ CREATE TABLE IF NOT EXISTS teams (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Bổ sung cột team_id & team_name vào bảng profiles
+-- Bổ sung cột team_id, team_name và các trường mở rộng vào bảng profiles
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id) ON DELETE SET NULL;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS team_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS leader_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bank_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bank_account_number TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bank_account_holder TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'Standard';
 
--- Kích hoạt Row Level Security (RLS)
+-- Gỡ bỏ ràng buộc khóa ngoại tới auth.users(id) nếu có để cho phép lưu profile của Đại lý/CTV tạo thủ công từ giao diện
+ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+
+-- Kích hoạt Row Level Security (RLS) & cấp quyền truy cập đầy đủ cho profiles
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow authenticated access to profiles" ON profiles;
+DROP POLICY IF EXISTS "Allow public access to profiles" ON profiles;
+CREATE POLICY "Allow public access to profiles" ON profiles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow authenticated access to teams" ON teams;
@@ -667,14 +694,15 @@ CREATE POLICY "Allow authenticated access to teams" ON teams FOR ALL TO authenti
 DROP POLICY IF EXISTS "Allow public read access to teams" ON teams;
 CREATE POLICY "Allow public read access to teams" ON teams FOR SELECT TO anon USING (true);
 
--- Enable Realtime cho bảng teams và payment_proposals
+-- Enable Realtime cho bảng teams, profiles và payment_proposals
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE teams;
+    ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
     ALTER PUBLICATION supabase_realtime ADD TABLE payment_proposals;
   ELSE
-    CREATE PUBLICATION supabase_realtime FOR TABLE teams, payment_proposals;
+    CREATE PUBLICATION supabase_realtime FOR TABLE teams, profiles, payment_proposals;
   END IF;
 EXCEPTION
   WHEN OTHERS THEN NULL;

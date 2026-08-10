@@ -14,6 +14,14 @@ export interface UserProfile {
   leader_id?: string | null;
   leader_name?: string | null;
   email?: string;
+  address?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_holder?: string;
+  notes?: string;
+  status?: 'active' | 'inactive';
+  tier?: string;
+  created_at?: string;
 }
 
 interface AuthContextType {
@@ -150,16 +158,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateProfile = async (newProfile: Partial<UserProfile>) => {
     if (!user) return;
-    if (!isSupabaseConfigured()) {
+    const isRealUUID = (idStr: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr);
+
+    if (!isSupabaseConfigured() || !isRealUUID(user.id)) {
       setProfile(prev => prev ? { ...prev, ...newProfile } : null);
       return;
     }
-    const { error } = await supabase
-      .from('profiles')
-      .update(newProfile)
-      .eq('id', user.id);
-    
-    if (error) throw error;
+    let currentPayload: Record<string, any> = { ...newProfile };
+    let retryCount = 0;
+    let success = false;
+    let lastError: any = null;
+
+    while (retryCount < 5 && !success) {
+      const { error } = await supabase
+        .from('profiles')
+        .update(currentPayload)
+        .eq('id', user.id);
+
+      if (!error) {
+        success = true;
+        break;
+      }
+      lastError = error;
+      const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+
+      if (error.code === '42703' || error.code === 'PGRST204' || (errorMsg && errorMsg.includes('Could not find the'))) {
+        const match = errorMsg.match(/'([^']+)' column/) || errorMsg.match(/column "([^"]+)"/);
+        if (match && match[1]) {
+          const missingCol = match[1];
+          console.warn(`[Self-Healing] Cột '${missingCol}' không tồn tại trong bảng profiles, loại bỏ và thử lại...`);
+          delete currentPayload[missingCol];
+          retryCount++;
+          continue;
+        }
+      }
+      break;
+    }
+
+    if (!success && lastError) {
+      console.warn('Không thể đồng bộ profile lên Supabase (chỉ lưu local state):', lastError);
+    }
     setProfile(prev => prev ? { ...prev, ...newProfile } : null);
   };
 

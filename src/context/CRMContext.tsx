@@ -67,6 +67,9 @@ interface CRMContextType {
   markAllNotificationsAsRead: () => void;
   profilesList: UserProfile[];
   refreshProfiles: () => Promise<void>;
+  addAgentProfile: (profileData: Omit<UserProfile, 'id'> & { id?: string }) => Promise<UserProfile>;
+  updateAgentProfile: (id: string, updatedData: Partial<UserProfile>) => Promise<void>;
+  deleteAgentProfile: (id: string) => Promise<void>;
   currentRole: Role;
   setCurrentRole: (role: Role) => void;
   displayRole: Role;
@@ -398,32 +401,228 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [profilesList, setProfilesList] = useState<UserProfile[]>([]);
 
+  const saveProfilesToLocalStorage = (list: UserProfile[]) => {
+    try {
+      localStorage.setItem('tour_crm_agent_profiles', JSON.stringify(list));
+    } catch (err) {
+      console.warn('Không thể lưu agent profiles vào localStorage:', err);
+    }
+  };
+
   const refreshProfiles = async () => {
     try {
+      let remoteProfiles: UserProfile[] = [];
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase.from('profiles').select('*');
-        if (!error && data) {
-          setProfilesList(data as UserProfile[]);
-          return;
+        if (!error && data && data.length > 0) {
+          remoteProfiles = data as UserProfile[];
         }
       }
-      const res = await fetch('/api/admin/users');
-      if (res.ok) {
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const text = await res.text();
-          try {
-            const data = JSON.parse(text);
-            if (Array.isArray(data)) {
-              setProfilesList(data);
+      
+      if (remoteProfiles.length === 0) {
+        const res = await fetch('/api/admin/users');
+        if (res.ok) {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const text = await res.text();
+            try {
+              const data = JSON.parse(text);
+              if (Array.isArray(data)) {
+                remoteProfiles = data;
+              }
+            } catch (e) {
+              console.warn('Lỗi parse JSON danh sách profiles:', e);
             }
-          } catch (e) {
-            console.warn('Lỗi parse JSON danh sách profiles:', e);
           }
         }
       }
+
+      // Merge với dữ liệu tùy chỉnh từ localStorage
+      const cached = localStorage.getItem('tour_crm_agent_profiles');
+      if (cached) {
+        try {
+          const localProfiles = JSON.parse(cached) as UserProfile[];
+          if (Array.isArray(localProfiles) && localProfiles.length > 0) {
+            const profileMap = new Map<string, UserProfile>();
+            remoteProfiles.forEach(p => profileMap.set(p.id, p));
+            localProfiles.forEach(p => profileMap.set(p.id, p));
+            const merged = Array.from(profileMap.values());
+            setProfilesList(merged);
+            return;
+          }
+        } catch (e) {
+          console.warn('Lỗi parse local profiles:', e);
+        }
+      }
+
+      if (remoteProfiles.length > 0) {
+        setProfilesList(remoteProfiles);
+      }
     } catch (err) {
       console.warn('Lỗi khi tải danh sách profiles:', err);
+    }
+  };
+
+  const isRealUUID = (idStr: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr);
+
+  const addAgentProfile = async (profileData: Omit<UserProfile, 'id'> & { id?: string }): Promise<UserProfile> => {
+    const rawId = profileData.id || generateSafeUUID();
+    const realUuid = toUuid(rawId);
+    const newProfile: UserProfile = {
+      ...profileData,
+      id: realUuid,
+      created_at: profileData.created_at || new Date().toISOString(),
+      status: profileData.status || 'active',
+      tier: profileData.tier || 'Standard'
+    };
+
+    setProfilesList(prev => {
+      const filtered = prev.filter(p => p.id !== realUuid && p.id !== rawId);
+      const updated = [newProfile, ...filtered];
+      saveProfilesToLocalStorage(updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        let currentPayload: Record<string, any> = { ...newProfile, id: realUuid };
+        let retryCount = 0;
+        let success = false;
+        let lastError: any = null;
+
+        while (retryCount < 5 && !success) {
+          const { error } = await supabase.from('profiles').upsert([currentPayload], { onConflict: 'id' });
+          if (!error) {
+            success = true;
+            break;
+          }
+          lastError = error;
+          const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+
+          if (error.code === '42703' || error.code === 'PGRST204' || (errorMsg && errorMsg.includes('Could not find the'))) {
+            const match = errorMsg.match(/'([^']+)' column/) || errorMsg.match(/column "([^"]+)"/);
+            if (match && match[1]) {
+              const missingCol = match[1];
+              console.warn(`[Self-Healing] Cột '${missingCol}' không tồn tại trong bảng profiles, loại bỏ và thử lại...`);
+              delete currentPayload[missingCol];
+              retryCount++;
+              continue;
+            }
+          }
+          break;
+        }
+
+        if (!success && lastError) {
+          console.warn('Không thể đồng bộ profile lên Supabase (chỉ lưu local):', lastError);
+        }
+      } catch (err) {
+        console.warn('Không thể thêm profile lên Supabase:', err);
+      }
+    }
+
+    logActivity({
+      action: `Thêm mới ${newProfile.role === 'agent' ? 'Đại lý' : 'CTV'}: ${newProfile.full_name}`,
+      module: 'Thành viên',
+      details: `Công ty: ${newProfile.company_name || 'N/A'}, SĐT: ${newProfile.phone}`
+    });
+
+    return newProfile;
+  };
+
+  const updateAgentProfile = async (id: string, updatedData: Partial<UserProfile>): Promise<void> => {
+    const realUuid = toUuid(id);
+    setProfilesList(prev => {
+      const exists = prev.some(p => p.id === id || p.id === realUuid);
+      let updated: UserProfile[];
+      if (exists) {
+        updated = prev.map(p => (p.id === id || p.id === realUuid) ? { ...p, ...updatedData, id: realUuid } : p);
+      } else {
+        updated = [{
+          id: realUuid,
+          full_name: updatedData.full_name || 'Đại lý',
+          role: updatedData.role || 'agent',
+          status: 'active',
+          tier: 'Standard',
+          ...updatedData
+        } as UserProfile, ...prev];
+      }
+      saveProfilesToLocalStorage(updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        let currentPayload: Record<string, any> = { ...updatedData, id: realUuid };
+        let retryCount = 0;
+        let success = false;
+        let lastError: any = null;
+
+        while (retryCount < 5 && !success) {
+          const { error } = await supabase.from('profiles').upsert([currentPayload], { onConflict: 'id' });
+          if (!error) {
+            success = true;
+            break;
+          }
+          lastError = error;
+          const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+
+          if (error.code === '42703' || error.code === 'PGRST204' || (errorMsg && errorMsg.includes('Could not find the'))) {
+            const match = errorMsg.match(/'([^']+)' column/) || errorMsg.match(/column "([^"]+)"/);
+            if (match && match[1]) {
+              const missingCol = match[1];
+              console.warn(`[Self-Healing] Cột '${missingCol}' không tồn tại trong bảng profiles, loại bỏ và thử lại...`);
+              delete currentPayload[missingCol];
+              retryCount++;
+              continue;
+            }
+          }
+          break;
+        }
+
+        if (!success && lastError) {
+          console.warn('Không thể đồng bộ profile lên Supabase (chỉ lưu local):', lastError);
+        }
+      } catch (err) {
+        console.warn('Không thể cập nhật profile lên Supabase:', err);
+      }
+    }
+
+    const updated = profilesList.find(p => p.id === id || p.id === realUuid);
+    if (updated) {
+      logActivity({
+        action: `Cập nhật thông tin ${updated.role === 'agent' ? 'Đại lý' : 'CTV'}: ${updated.full_name}`,
+        module: 'Thành viên',
+        details: `Cập nhật profile ID #${id}`
+      });
+    }
+  };
+
+  const deleteAgentProfile = async (id: string): Promise<void> => {
+    const realUuid = toUuid(id);
+    const target = profilesList.find(p => p.id === id || p.id === realUuid);
+    setProfilesList(prev => {
+      const updated = prev.filter(p => p.id !== id && p.id !== realUuid);
+      saveProfilesToLocalStorage(updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('profiles').delete().eq('id', realUuid);
+        if (error) {
+          console.warn('Không thể xóa profile trên Supabase (chỉ xóa local):', error);
+        }
+      } catch (err) {
+        console.warn('Lỗi khi xóa profile:', err);
+      }
+    }
+
+    if (target) {
+      logActivity({
+        action: `Xóa ${target.role === 'agent' ? 'Đại lý' : 'CTV'}: ${target.full_name}`,
+        module: 'Thành viên',
+        details: `Đã xóa profile ID #${id}`
+      });
     }
   };
 
@@ -5101,6 +5300,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       markAllNotificationsAsRead,
       profilesList,
       refreshProfiles,
+      addAgentProfile,
+      updateAgentProfile,
+      deleteAgentProfile,
       currentRole,
       setCurrentRole,
       displayRole,

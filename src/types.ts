@@ -22,6 +22,13 @@ export interface Profile {
   leader_id?: string | null;
   leader_name?: string | null;
   email?: string;
+  address?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_holder?: string;
+  notes?: string;
+  status?: 'active' | 'inactive';
+  tier?: string;
   created_at?: string;
 }
 

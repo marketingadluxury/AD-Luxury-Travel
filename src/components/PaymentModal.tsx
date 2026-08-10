@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, Loader2 } from 'lucide-react';
+import { X, Upload, Loader2, CheckCircle2, FileText, Trash2, Image as ImageIcon } from 'lucide-react';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order } from '@/types';
@@ -101,6 +101,12 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
     }
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in duration-200" id="payment-modal-container">
@@ -112,7 +118,7 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
           <button 
             type="button"
             onClick={onClose} 
-            className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg transition-colors"
+            className="text-gray-400 hover:text-gray-600 bg-white border border-gray-200 p-1.5 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -165,25 +171,97 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
             />
           </div>
 
-          {/* File Upload */}
+          {/* File Upload Area */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 uppercase block">Ảnh biên lai / Hóa đơn chuyển khoản <span className="text-rose-500">*</span></label>
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 transition-colors relative">
-              <input
-                type="file"
-                required
-                accept="image/*,application/pdf"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                onChange={handleFileChange}
-              />
-              <div className="space-y-1">
-                <Upload className="w-8 h-8 text-gray-400 mx-auto" />
-                <p className="text-xs font-semibold text-gray-600">
-                  {file ? file.name : 'Nhấp hoặc kéo thả để tải lên biên lai'}
-                </p>
-                <p className="text-[10px] text-gray-400">Hỗ trợ JPG, PNG, PDF</p>
+            <label className="text-xs font-bold text-gray-700 uppercase block">
+              Ảnh biên lai / Hóa đơn chuyển khoản <span className="text-rose-500">*</span>
+            </label>
+
+            {!file ? (
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-5 text-center hover:bg-blue-50/50 hover:border-blue-400 transition-all relative group cursor-pointer">
+                <input
+                  type="file"
+                  required
+                  accept="image/*,application/pdf"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  onChange={handleFileChange}
+                />
+                <div className="space-y-2 flex flex-col items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800">
+                      Nhấp hoặc kéo thả để tải lên biên lai
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Định dạng hỗ trợ: JPG, PNG, PDF (Hình ảnh hóa đơn chuyển tiền)
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-emerald-50/80 border-2 border-emerald-300 rounded-xl p-3.5 transition-all relative animate-in fade-in duration-200">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 rounded-md border border-emerald-300">
+                          ✓ Đã chọn file thành công
+                        </span>
+                        <span className="text-[11px] font-medium text-emerald-700">
+                          {formatFileSize(file.size)}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-gray-900 truncate mt-1" title={file.name}>
+                        {file.name}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <label className="p-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors cursor-pointer flex items-center gap-1" title="Đổi sang file khác">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Đổi file</span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFile(null)}
+                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Xóa file đã chọn"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Thumbnail Preview if file is an image */}
+                {file.type.startsWith('image/') && (
+                  <div className="mt-3 pt-2.5 border-t border-emerald-200/80 flex items-center gap-3">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt="Preview biên lai"
+                      className="w-14 h-14 object-cover rounded-lg border border-emerald-300 shadow-xs shrink-0"
+                    />
+                    <div className="text-[11px] text-emerald-800 space-y-0.5">
+                      <p className="font-bold flex items-center gap-1">
+                        <ImageIcon className="w-3.5 h-3.5 text-emerald-600" /> Xem trước hóa đơn chuyển tiền
+                      </p>
+                      <p className="text-emerald-600">Sẵn sàng gửi để Kế toán phê duyệt</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Footer buttons */}
@@ -192,14 +270,14 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
               type="button"
               disabled={isUploading}
               onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Hủy bỏ
             </button>
             <button
               type="submit"
               disabled={isUploading}
-              className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all flex items-center justify-center shadow-md disabled:bg-blue-400 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all flex items-center justify-center shadow-md disabled:bg-blue-400 disabled:cursor-not-allowed cursor-pointer"
             >
               {isUploading ? (
                 <>
@@ -215,3 +293,4 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
     </div>
   );
 }
+
