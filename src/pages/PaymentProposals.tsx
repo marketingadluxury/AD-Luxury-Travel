@@ -7,6 +7,7 @@ import { PaymentProposal, ProposalStatus } from '@/types';
 import { DatePicker } from '@/components/DatePicker';
 import { TimeRangeFilter } from '@/components/TimeRangeFilter';
 import { isDateInTimeRange } from '@/lib/dateUtils';
+import { formatDateVi, formatDateTimeVi } from '@/lib/utils';
 import {
   FileCheck,
   Plus,
@@ -624,7 +625,7 @@ export default function PaymentProposals() {
                           <span>{p.code}</span>
                         </div>
                         <div className="text-[10px] font-sans text-gray-400 font-normal">
-                          {p.created_at ? new Date(p.created_at).toLocaleDateString('vi-VN') : ''}
+                          {p.created_at ? formatDateVi(p.created_at) : ''}
                         </div>
                       </td>
 
@@ -662,7 +663,7 @@ export default function PaymentProposals() {
                         </div>
                         {p.due_date && (
                           <div className="text-[10px] text-gray-400 mt-0.5">
-                            Hạn: {p.due_date}
+                            Hạn: {formatDateVi(p.due_date)}
                           </div>
                         )}
                       </td>
@@ -890,7 +891,7 @@ export default function PaymentProposals() {
                         <option value="">-- Chọn Tour --</option>
                         {tours.map(t => (
                           <option key={t.id} value={t.id}>
-                            [{t.code}] {t.name} ({t.start_date})
+                            [{t.code}] {t.name} ({formatDateVi(t.start_date)})
                           </option>
                         ))}
                       </select>
@@ -1248,7 +1249,10 @@ export default function PaymentProposals() {
                     <div>Người đề nghị: <strong>{selectedProposal.created_by_name}</strong></div>
                     <div>Vai trò: <strong className="uppercase">{selectedProposal.created_by_role}</strong></div>
                     <div>Hình thức: <strong>{selectedProposal.payment_method}</strong></div>
-                    <div>Ngày tạo: <strong>{selectedProposal.created_at ? new Date(selectedProposal.created_at).toLocaleString('vi-VN') : ''}</strong></div>
+                    <div>Ngày tạo: <strong>{selectedProposal.created_at ? formatDateTimeVi(selectedProposal.created_at) : ''}</strong></div>
+                    {selectedProposal.due_date && (
+                      <div className="col-span-2">Hạn thanh toán dự kiến: <strong className="text-rose-600">{formatDateVi(selectedProposal.due_date)}</strong></div>
+                    )}
                   </div>
                 </div>
 

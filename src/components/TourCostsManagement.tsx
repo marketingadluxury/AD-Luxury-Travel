@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, LandtourCost, PartnerPayment, PartnerPaymentInstallment } from '@/types';
+import { formatDateVi } from '@/lib/utils';
 import { DatePicker } from '@/components/DatePicker';
 import {
   Plus,
@@ -1642,7 +1643,7 @@ export default function TourCostsManagement() {
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <span className="flex items-center gap-1 font-mono">
                         <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                        {tour.start_date ? tour.start_date : '---'}
+                        {tour.start_date ? formatDateVi(tour.start_date) : '---'}
                       </span>
                       <span className="flex items-center gap-1">
                         <Briefcase className="w-3.5 h-3.5 text-gray-400" />
@@ -1732,7 +1733,7 @@ export default function TourCostsManagement() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-md">{selectedTour.code}</span>
-                  <span className="text-gray-400 font-mono text-xs">| Khởi hành: {selectedTour.start_date || '---'}</span>
+                  <span className="text-gray-400 font-mono text-xs">| Khởi hành: {selectedTour.start_date ? formatDateVi(selectedTour.start_date) : '---'}</span>
                 </div>
                 <h3 className="text-lg font-extrabold text-gray-900 mt-2">{selectedTour.name}</h3>
                 <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">

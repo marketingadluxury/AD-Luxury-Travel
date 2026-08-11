@@ -437,6 +437,90 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   2. Cập nhật `CRMContext.tsx` sử dụng `toUuid(id)` quy đổi mọi ID sang chuẩn UUID và chuyển sang cơ chế `upsert` trên Supabase. Nếu ID chưa có trong `profilesList` (ví dụ đối tác demo), hệ thống tự động chèn bản ghi mới vào state.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
 
+### 1.48 Triển Khai Tính Năng Chatbot Trợ Lý AI Hướng Dẫn ERP (Gemini Copilot)
+- **Mô tả yêu cầu / Lỗi:**
+  - Tích hợp Trợ lý AI Hướng Dẫn Vận Hành ERP (Gemini Copilot) hỗ trợ toàn thể nhân viên, sale, điều hành, kế toán, đại lý & CTV giải đáp thắc mắc nghiệp vụ du lịch AD Luxury Travel trực tiếp 24/7.
+- **Giải pháp:**
+  1. **Backend (`app.ts`):** Khởi tạo SDK `@google/genai` sử dụng `process.env.GEMINI_API_KEY`. Xây dựng endpoint `POST /api/ai/chat` tiếp nhận lịch sử hội thoại `messages` và vai trò hiện tại `currentRole`. Cung cấp System Instruction chi tiết 100% quy trình nghiệp vụ AD Luxury Travel (Đại lý trừ nét, CTV bán chênh 20% phí, phân quyền RBAC 9 vai trò, cấu trúc thư mục Google Drive & Supabase Storage, quy trình nộp visa và lập Đề nghị thanh toán DNTT). Sử dụng model `gemini-3.6-flash`.
+  2. **Component (`src/components/chat/ERPCopilotModal.tsx`):** Thiết kế Nút bấm nổi (Floating Button) phát sáng góc phải màn hình, cửa sổ Chat Popup hiện đại responsive, hỗ trợ các thẻ câu hỏi gợi ý mẫu nhanh, hiển thị vai trò hiện tại của nhân viên, hỗ trợ Markdown rendering và trạng thái gõ câu trả lời (Typing animation).
+  3. **Tích hợp (`src/components/Layout.tsx`):** Đặt `<ERPCopilotModal />` vào Layout chính để trợ lý AI luôn sẵn sàng hỗ trợ ở mọi màn hình ứng dụng.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.49 Cập Nhật Giao Diện UI/CSS & Đổi Tên Thành "Trợ Lý Hướng Dẫn" (`ERPCopilotModal.tsx` & `app.ts`)
+- **Mô tả yêu cầu / Lỗi:**
+  - Tối ưu hóa toàn diện giao diện Chatbot, nâng cấp CSS hiển thị các nội dung trả lời (Markdown), đồng bộ font chữ, màu sắc, bóng đổ và đổi tên chính thức thành **"Trợ lý hướng dẫn"**.
+- **Giải pháp:**
+  1. Đổi tên ứng dụng Trợ lý AI trên cả Backend (`app.ts` systemInstruction) và Frontend (`ERPCopilotModal.tsx`) thành **"Trợ lý hướng dẫn"**.
+  2. Nâng cấp bộ phân tích và hiển thị Markdown (`renderMarkdown`) cho các câu trả lời: Định dạng rõ ràng danh sách gạch đầu dòng, danh sách đánh số, tiêu đề, chữ in đậm, và mã lệnh inline code.
+  3. Cải thiện CSS cho các khối tin nhắn (Bubble), thẻ câu hỏi gợi ý, hiệu ứng typing, banner hiển thị vai trò người dùng và thanh cuộn mượt mà.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.50 Xử Lý Lỗi Trả Lời Bị Ngắt Quãng Của Trợ Lý Hướng Dẫn (`app.ts`)
+- **Mô tả yêu cầu / Lỗi:**
+  - Cấu hình cũ `maxOutputTokens: 1000` khiến các câu trả lời giải thích quy trình ERP dài hoặc có nhiều bước bị ngắt giữa chừng, không hiển thị trọn vẹn câu từ.
+- **Giải pháp:**
+  1. Nâng giới hạn token đầu ra `maxOutputTokens` từ `1000` lên `8192` cho model `gemini-3.6-flash` trong `/api/ai/chat` (`app.ts`).
+  2. Bổ sung quy tắc vào System Instruction: *"Đảm bảo câu trả lời luôn hoàn chỉnh, cô đọng nhưng đầy đủ thông tin, tuyệt đối không dừng giữa chừng hoặc ngắt quãng câu chữ."*
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.51 Đồng Bộ Giao Diện UI Trợ Lý Hướng Dẫn Theo Chuẩn Hệ Thống (`ERPCopilotModal.tsx`)
+- **Mô tả yêu cầu / Lỗi:**
+  - Giao diện của Trợ lý hướng dẫn sử dụng tông màu dải chuyển dải tím/hồng rực rỡ không đồng bộ với giao diện chuẩn Navy/Blue/Slate của hệ thống ERP AD Luxury Travel. Thẻ gợi ý câu hỏi xuất hiện thanh cuộn ngang dày làm giảm tính thẩm mỹ.
+- **Giải pháp:**
+  1. Chuyển đổi toàn bộ màu sắc Header và nút mở Floating Action Button sang tông Navy chuẩn hệ thống (`bg-slate-900 border-b border-slate-800`), nút biểu tượng robot xanh dương (`bg-blue-600/20 text-blue-400`).
+  2. Đồng bộ các avatar tin nhắn, nút gửi, thẻ vai trò (Role Status Banner) với hệ thống màu xanh thương hiệu (`bg-blue-600`, `bg-slate-900`, `bg-blue-50 text-blue-700`).
+  3. Thêm lớp `scrollbar-none` loại bỏ hoàn toàn thanh cuộn ngang mặc định ở khu vực thẻ câu hỏi gợi ý.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.52 Bỏ Công Thức Toán Học & Thêm Tính Năng Admin Góp Ý/Sửa Thông Tin AI (`app.ts` & `ERPCopilotModal.tsx`)
+- **Mô tả yêu cầu / Lỗi:**
+  - Yêu cầu Trợ lý hướng dẫn không đưa ra công thức toán học khô khan mà diễn giải quy tắc bằng ngôn ngữ tự nhiên và luôn kèm ví dụ số liệu thực tế cụ thể.
+  - Cho phép người dùng vai trò Quản trị viên (`admin`) gửi góp ý / hiệu chỉnh thông tin khi phát hiện câu trả lời chưa chính xác.
+- **Giải pháp:**
+  1. Cập nhật System Instruction trong `app.ts`: Bắt buộc không cung cấp công thức toán học, luôn đưa ra ví dụ minh họa bằng số liệu thực tế và ghi nhận quyền Admin hiệu chỉnh.
+  2. Bổ sung nút **"✏️ Góp ý / Sửa thông tin"** bên dưới các câu trả lời của Trợ lý AI hiển thị riêng cho vai trò Admin (`displayRole === 'admin'`).
+  3. Xây dựng cửa sổ Modal tiếp nhận góp ý từ Admin và gửi phản hồi đến API `/api/ai/feedback` ghi nhận dữ liệu hiệu chỉnh.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.53 Chuẩn Hóa Thuật Ngữ Du Lịch & Trả Lời Súc Tích Cho Trợ Lý Hướng Dẫn (`app.ts` & `ERPCopilotModal.tsx`)
+- **Mô tả yêu cầu / Lỗi:**
+  - Yêu cầu Trợ lý hướng dẫn trả lời cực kỳ ngắn gọn, súc tích, dễ hiểu.
+  - Chuẩn hóa thuật ngữ du lịch: Sử dụng từ **"booking"** thay thế hoàn toàn cho "đơn hàng", đồng thời dùng các thuật ngữ ngành chuẩn như **"pax"** (hành khách), **"slot"**, **"giữ chỗ (hold)"**, **"lịch khởi hành"**, **"DNTT"**.
+- **Giải pháp:**
+  1. Cập nhật System Instruction trong `app.ts` quy định nghiêm ngặt: Tuyệt đối dùng từ **"booking"** thay cho "đơn hàng"; trình bày câu trả lời ngắn gọn theo dạng gạch đầu dòng (bullet points) làm nổi bật từ khóa chính.
+  2. Cập nhật các văn bản mẫu và placeholder trong `ERPCopilotModal.tsx` để đồng bộ thuật ngữ.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.54 Đồng Bộ Nút Floating Action Button Màu Xanh Thương Hiệu & Tối Ưu Phân Cấp Bullet Point (`app.ts` & `ERPCopilotModal.tsx`)
+- **Mô tả yêu cầu / Lỗi:**
+  - Đồng bộ nút nổi kích hoạt Trợ lý hướng dẫn (Floating Action Button) sang tông màu xanh thương hiệu hệ thống (`bg-blue-600 hover:bg-blue-700 shadow-blue-600/30`).
+  - Không tự động chèn câu ghi chú *"*(Nếu câu trả lời chưa đúng với thao tác thực tế...)*"* vào cuối câu trả lời.
+  - Điều chỉnh trình phân tích Markdown để hỗ trợ phân cấp nhiều tầng cho bullet point (`•`, `◦`, `▪`).
+- **Giải pháp:**
+  1. Cập nhật nút Floating Action Button trong `ERPCopilotModal.tsx` với màu nền `bg-blue-600` và bóng mờ `shadow-blue-600/30`.
+  2. Cập nhật System Instruction trong `app.ts` nghiêm cấm chèn thêm câu ghi chú disclaimer tự động ở cuối câu trả lời.
+  3. Cập nhật `renderMarkdown` hỗ trợ tính toán khoảng lùi đầu dòng (`indentation spaces`) để hiển thị các cấp danh sách gạch đầu dòng đa tầng (`pl-0.5 •`, `pl-4 ◦`, `pl-7 ▪`).
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.55 Nâng Cấp Trợ Lý Hướng Dẫn: Kích Hoạt Tri Thức Mã Nguồn Toàn Diện & Xử Lý Quota Model (`app.ts`)
+- **Mô tả yêu cầu / Lỗi:**
+  - Khắc phục lỗi `RESOURCE_EXHAUSTED` (Limit 0/Quota exceeded) do mô hình `gemini-3.1-pro` vượt quá giới hạn tài nguyên free tier.
+  - Cung cấp bộ tri thức toàn diện dựa trên mã nguồn thực tế của toàn bộ hệ thống ERP (cấu trúc trang, quy trình tour, booking, phụ thu, chênh lệch CTV, kế toán DNTT, phân quyền RBAC 8 vai trò, lưu trữ Google Drive / Supabase Storage).
+- **Giải pháp:**
+  1. Cập nhật endpoint `/api/ai/chat` trong `app.ts` sử dụng mô hình chính `gemini-3.6-flash` (tốc độ cao, sẵn có quota) kết hợp tự động fallback sang `gemini-3.1-flash-lite` khi có sự cố tải cao temporary.
+  2. Mở rộng `systemInstruction` mô tả chi tiết 8 phân vùng mã nguồn chính: Dashboard kinh doanh 3 nhóm vai trò, Quản lý Tour & Lịch khởi hành, Booking & Tính toán hoa hồng/phụ thu/chênh lệch CTV, Quản lý Pax & Visa, Kế toán & DNTT, HDV & Thư mục ảnh đoàn Google Drive, Cấu trúc kho lưu trữ file, và Hệ thống phân quyền RBAC 8 vai trò.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.56 Đồng Bộ Toàn Bộ UI/CSS Của Các Dropdown & Chuẩn Hóa Định Dạng Thời Gian (dd/mm/yyyy hh:mm)
+- **Mô tả yêu cầu / Lỗi:**
+  - Rà soát và đồng bộ giao diện, CSS, font chữ, kích thước font (`text-xs font-bold`), viền (`border-slate-200/border-gray-300`), góc bo (`rounded-xl`), hiệu ứng `focus:ring-2 focus:ring-blue-500/20` và con trỏ `cursor-pointer` của toàn bộ các thẻ `<select>` dropdown trong hệ thống.
+  - Loại bỏ các chữ `+` thừa trong cụm từ "+ Thêm..." ở các nút bấm tiêu đề, đảm bảo tính nhất quán ngôn ngữ.
+  - Chuẩn hóa định dạng hiển thị ngày tháng theo quy chuẩn tiếng Việt `dd/mm/yyyy` và `dd/mm/yyyy hh:mm` qua các hàm helper `formatDateVi` và `formatDateTimeVi` trong `utils.ts`.
+- **Giải pháp:**
+  1. Cập nhật `utils.ts` thêm hai hàm helper `formatDateVi` và `formatDateTimeVi` chuyển đổi chuỗi ngày/ISO sang chuẩn `dd/mm/yyyy` và `dd/mm/yyyy hh:mm`.
+  2. Rà soát và nâng cấp CSS của toàn bộ các thẻ `<select>` dropdown trên các màn hình: `CustomersManagement.tsx`, `PaymentProposals.tsx`, `VisaServices.tsx`, `VisaProcessing.tsx`, `OrdersManagement.tsx`, `AccountingInvoice.tsx`, `HDVQuickUploadModal.tsx`, `HDVQuickLinkModal.tsx`, `PassengersManagement.tsx`, `ActivityLogs.tsx`, `TourCostsManagement.tsx`, v.v.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

@@ -14,6 +14,41 @@ export const parseNumber = (str: string) => {
   return parseInt(str.replace(/\./g, ''), 10) || 0;
 };
 
+export function formatDateVi(dateInput?: string | Date | null): string {
+  if (!dateInput) return '';
+  const dateStr = String(dateInput).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+export function formatDateTimeVi(dateInput?: string | Date | null): string {
+  if (!dateInput) return '';
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return String(dateInput);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch {
+    return String(dateInput);
+  }
+}
+
 export interface ParsedRefundInfo {
   method: 'transfer' | 'cash' | null;
   bankName?: string;

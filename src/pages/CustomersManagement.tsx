@@ -543,7 +543,7 @@ export default function CustomersManagement() {
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Thêm Đại lý / CTV mới</span>
+              <span>Thêm Đại lý / CTV mới</span>
             </button>
           )}
         </div>
