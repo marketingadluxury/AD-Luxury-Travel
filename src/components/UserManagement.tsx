@@ -867,7 +867,7 @@ export default function UserManagement() {
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                    className="w-full px-3.5 py-2 border border-slate-300 bg-white rounded-xl text-xs font-extrabold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all cursor-pointer"
+                    className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
                   >
                     {Object.entries(ROLE_LABELS).map(([key, val]) => (
                       <option key={key} value={key}>{val.label}</option>
@@ -892,7 +892,7 @@ export default function UserManagement() {
                         team_name: selectedT ? selectedT.name : ''
                       });
                     }}
-                    className="w-full px-3.5 py-2 border border-indigo-200 bg-indigo-50/50 rounded-xl text-xs font-extrabold text-indigo-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all cursor-pointer"
+                    className="w-full h-9 px-3 py-1.5 border border-indigo-200 bg-indigo-50/50 rounded-lg text-xs font-semibold text-indigo-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all cursor-pointer"
                   >
                     <option value="">-- Chưa gán Team nào --</option>
                     {teams.map(t => (
@@ -912,7 +912,7 @@ export default function UserManagement() {
                   <select
                     value={formData.leader_id || ''}
                     onChange={(e) => setFormData({ ...formData, leader_id: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-slate-300 bg-white rounded-xl text-xs font-extrabold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all cursor-pointer"
+                    className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
                   >
                     <option value="">-- Không chọn (Tự do / Top Leader) --</option>
                     {users

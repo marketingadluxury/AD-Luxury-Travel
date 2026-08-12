@@ -1481,7 +1481,7 @@ export default function TourCostsManagement() {
                 <select
                   value={filterTourType}
                   onChange={(e) => setFilterTourType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
                 >
                   <option value="all">📂 Tất cả loại tour</option>
                   <option value="internal">🏠 Tour tự vận hành</option>
@@ -1495,7 +1495,7 @@ export default function TourCostsManagement() {
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
                 >
                   <option value="all">🕒 Tất cả trạng thái</option>
                   <option value="upcoming">⏳ Sắp khởi hành</option>
@@ -1510,7 +1510,7 @@ export default function TourCostsManagement() {
                 <select
                   value={filterMonth}
                   onChange={(e) => setFilterMonth(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
                 >
                   <option value="all">📅 Tất cả tháng khởi hành</option>
                   {availableMonths.map(m => (
@@ -1524,7 +1524,7 @@ export default function TourCostsManagement() {
                 <select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
                 >
                   <option value="all">🏷️ Tất cả danh mục</option>
                   {categories.map(cat => (
@@ -1538,7 +1538,7 @@ export default function TourCostsManagement() {
                 <select
                   value={filterProfit}
                   onChange={(e) => setFilterProfit(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
                 >
                   <option value="all">📊 Tất cả hạch toán</option>
                   <option value="profit">📈 Có lãi (Lợi nhuận &gt; 0)</option>
@@ -2010,8 +2010,8 @@ export default function TourCostsManagement() {
                         placeholder="0 đ"
                         disabled={true}
                       />
-                      <div className="mt-1 flex items-start gap-1.5 text-[11px] text-amber-800 bg-amber-50/90 px-2.5 py-1.5 rounded-lg border border-amber-200/90 shadow-2xs font-medium leading-tight">
-                        <span className="font-bold text-amber-600 shrink-0">⚡ Tự động tính:</span>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50/90 px-2.5 py-1.5 rounded-lg border border-amber-200/90 shadow-2xs font-medium leading-normal">
+                        <span className="font-bold text-amber-600 shrink-0 whitespace-nowrap">⚡ Tự động tính:</span>
                         <span className="break-words">
                           Tổng hợp từ {selectedTourOrders.length} booking
                         </span>
@@ -2036,12 +2036,12 @@ export default function TourCostsManagement() {
                         placeholder="Nhập chi phí visa / khách..."
                         disabled={!isEditingCosts || (currentRole !== 'admin' && currentRole !== 'operator')}
                       />
-                      <div className="mt-1 flex items-start gap-1.5 text-[11px] text-blue-900 bg-blue-50/90 px-2.5 py-1.5 rounded-lg border border-blue-200/90 shadow-2xs font-medium leading-tight">
-                        <span className="font-bold text-blue-600 shrink-0">⚡ Tổng tiền Visa đoàn:</span>
-                        <span className="font-extrabold text-blue-800">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-blue-900 bg-blue-50/90 px-2.5 py-1.5 rounded-lg border border-blue-200/90 shadow-2xs font-medium leading-normal">
+                        <span className="font-bold text-blue-600 shrink-0 whitespace-nowrap">⚡ Tổng tiền Visa đoàn:</span>
+                        <span className="font-extrabold text-blue-800 whitespace-nowrap">
                           {formatVND(visaAmount * totalConfirmedPassengers)}
                         </span>
-                        <span className="text-slate-500 text-[10px]">({formatVND(visaAmount)}/khách × {totalConfirmedPassengers} khách)</span>
+                        <span className="text-slate-500 text-[10px] break-words">({formatVND(visaAmount)}/khách × {totalConfirmedPassengers} khách)</span>
                       </div>
                     </div>
 
@@ -2535,13 +2535,13 @@ export default function TourCostsManagement() {
                                   <Plus className="w-3.5 h-3.5 text-blue-600" /> Thêm đợt thanh toán mới
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs items-end">
                                   <div className="space-y-1">
                                     <label className="block text-[10px] font-bold text-slate-500">Số tiền đợt này</label>
                                     <input
                                       type="text"
                                       placeholder="VNĐ..."
-                                      className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-800"
+                                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-bold text-slate-800 outline-none transition-all"
                                       value={instAmountMap[item.id] === undefined || instAmountMap[item.id] === '' ? '' : new Intl.NumberFormat('vi-VN').format(Number(instAmountMap[item.id]))}
                                       onChange={e => {
                                         const digits = e.target.value.replace(/\D/g, '');
@@ -2553,7 +2553,7 @@ export default function TourCostsManagement() {
                                   <div className="space-y-1">
                                     <label className="block text-[10px] font-bold text-slate-500">Phương thức</label>
                                     <select
-                                      className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 bg-white font-medium"
+                                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-medium text-slate-800 outline-none transition-all cursor-pointer"
                                       value={instMethodMap[item.id] || 'Chuyển khoản'}
                                       onChange={e => setInstMethodMap(prev => ({ ...prev, [item.id]: e.target.value }))}
                                     >
@@ -2577,7 +2577,7 @@ export default function TourCostsManagement() {
                                     <input
                                       type="text"
                                       placeholder="VD: Đợt 1 cọc 30%..."
-                                      className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 bg-white font-medium"
+                                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-medium text-slate-800 outline-none transition-all"
                                       value={instNoteMap[item.id] || ''}
                                       onChange={e => setInstNoteMap(prev => ({ ...prev, [item.id]: e.target.value }))}
                                     />
@@ -2595,7 +2595,7 @@ export default function TourCostsManagement() {
                                         <input
                                           type="text"
                                           placeholder="VD: Vietcombank, Techcombank..."
-                                          className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
+                                          className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                           value={instBankNameMap[item.id] || ''}
                                           onChange={e => setInstBankNameMap(prev => ({ ...prev, [item.id]: e.target.value }))}
                                         />
@@ -2605,7 +2605,7 @@ export default function TourCostsManagement() {
                                         <input
                                           type="text"
                                           placeholder="VD: 10123456789..."
-                                          className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs bg-white font-mono font-bold text-slate-800 focus:ring-1 focus:ring-blue-500"
+                                          className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-mono font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                                           value={instAccountNumberMap[item.id] || ''}
                                           onChange={e => setInstAccountNumberMap(prev => ({ ...prev, [item.id]: e.target.value }))}
                                         />
@@ -2615,7 +2615,7 @@ export default function TourCostsManagement() {
                                         <input
                                           type="text"
                                           placeholder="VD: NGUYEN VAN A..."
-                                          className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs bg-white font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 uppercase"
+                                          className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none uppercase transition-all"
                                           value={instAccountNameMap[item.id] || ''}
                                           onChange={e => setInstAccountNameMap(prev => ({ ...prev, [item.id]: e.target.value.toUpperCase() }))}
                                         />

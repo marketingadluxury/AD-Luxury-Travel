@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem } from '../types';
+import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem, ChatMessage, ChatChannel } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 
@@ -147,7 +147,23 @@ interface CRMContextType {
   fetchTourMedia: (tourId?: string) => Promise<TourMedia[]>;
   addTourMedia: (mediaData: Omit<TourMedia, 'id' | 'created_at'> & { id?: string }) => Promise<TourMedia>;
   deleteTourMedia: (mediaId: string, fileUrl?: string) => Promise<void>;
+  chatMessages: ChatMessage[];
+  sendChatMessage: (messageData: Omit<ChatMessage, 'id' | 'created_at'>) => Promise<ChatMessage>;
+  addChatReaction: (messageId: string, emoji: string, userName: string) => Promise<void>;
+  chatChannels: ChatChannel[];
+  createChatChannel: (channelData: { name: string; description: string; icon?: string; members?: string[]; role_access?: string[] }) => Promise<ChatChannel>;
+  updateChatChannel: (id: string, channelData: Partial<ChatChannel>) => Promise<void>;
+  deleteChatChannel: (id: string) => Promise<void>;
 }
+
+export const DEFAULT_CHAT_CHANNELS: ChatChannel[] = [
+  { id: 'chung', name: 'Kênh Chung', description: 'Kênh thảo luận chung cho toàn thể cán bộ nhân viên', icon: '💬', type: 'preset' },
+  { id: 'dieu-hanh', name: 'Phòng Điều hành', description: 'Kênh Điều hành Tour, Lịch trình, HDV & Đối tác', icon: '🧭', type: 'preset', role_access: ['operator', 'admin', 'bod'] },
+  { id: 'kinh-doanh', name: 'Kinh doanh & Sale', description: 'Kênh Kinh doanh, Sale & Giữ chỗ Booking', icon: '📈', type: 'preset', role_access: ['sale', 'sale_leader', 'admin', 'bod'] },
+  { id: 'ke-toan', name: 'Kế toán & Tài chính', description: 'Kênh Kế toán, Phiếu thu, Chi & Hoàn tiền', icon: '💰', type: 'preset', role_access: ['accounting', 'admin', 'bod'] },
+  { id: 'visa', name: 'Dịch vụ Visa', description: 'Kênh Hồ sơ & Dịch vụ Visa', icon: '📑', type: 'preset', role_access: ['visa', 'admin', 'bod'] },
+  { id: 'hdv-doan', name: 'Hướng dẫn viên & Tour', description: 'Kênh Hướng dẫn viên, Ảnh đoàn & Nhật ký Tour', icon: '📸', type: 'preset', role_access: ['tour_guide', 'operator', 'admin', 'bod'] },
+];
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
 
@@ -700,6 +716,47 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [paymentProposals, setPaymentProposals] = useState<PaymentProposal[]>([]);
   const [tourMedia, setTourMedia] = useState<TourMedia[]>([]);
+  const [chatChannels, setChatChannels] = useState<ChatChannel[]>(() => {
+    try {
+      const local = localStorage.getItem('crm_chat_channels');
+      if (local) {
+        const parsed: ChatChannel[] = JSON.parse(local);
+        const customChannels = parsed.filter(x => x.type === 'custom');
+        return [...DEFAULT_CHAT_CHANNELS, ...customChannels];
+      }
+    } catch (e) {
+      console.error('Lỗi đọc crm_chat_channels:', e);
+    }
+    return DEFAULT_CHAT_CHANNELS;
+  });
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const local = localStorage.getItem('crm_chat_messages');
+      if (local) return JSON.parse(local);
+    } catch (e) {
+      console.error('Lỗi đọc crm_chat_messages:', e);
+    }
+    return [
+      {
+        id: 'msg-init-1',
+        channel_id: 'chung',
+        sender_id: 'admin-1',
+        sender_name: 'Quản trị viên AD Luxury',
+        sender_role: 'admin',
+        content: 'Chào mừng cả team đến với hệ thống Trò chuyện Nội bộ CRM! Chúc mọi người một ngày làm việc hiệu quả.',
+        created_at: new Date(Date.now() - 3600000).toISOString()
+      },
+      {
+        id: 'msg-init-2',
+        channel_id: 'dieu-hanh',
+        sender_id: 'op-1',
+        sender_name: 'Điều hành Tour',
+        sender_role: 'operator',
+        content: 'Các tour khởi hành tuần này đã sẵn sàng danh sách xe và khách sạn.',
+        created_at: new Date(Date.now() - 1800000).toISOString()
+      }
+    ];
+  });
 
   const logActivity = async (logData: {
     action: string;
@@ -5236,6 +5293,162 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     });
   };
 
+  const sendChatMessage = async (msgData: Omit<ChatMessage, 'id' | 'created_at'>): Promise<ChatMessage> => {
+    const newMsg: ChatMessage = {
+      ...msgData,
+      id: generateSafeUUID(),
+      created_at: new Date().toISOString()
+    };
+
+    setChatMessages(prev => {
+      const updated = [...prev, newMsg];
+      try {
+        localStorage.setItem('crm_chat_messages', JSON.stringify(updated.slice(-300)));
+      } catch (e) {
+        console.error('Lỗi lưu crm_chat_messages:', e);
+      }
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('chat_messages').insert({
+          id: newMsg.id,
+          channel_id: newMsg.channel_id || null,
+          recipient_id: newMsg.recipient_id || null,
+          sender_id: newMsg.sender_id,
+          sender_name: newMsg.sender_name,
+          sender_role: newMsg.sender_role,
+          content: newMsg.content,
+          attachments: newMsg.attachments || null,
+          tour_code: newMsg.tour_code || null,
+          order_code: newMsg.order_code || null,
+          proposal_code: newMsg.proposal_code || null,
+          reply_to: newMsg.reply_to || null,
+          created_at: newMsg.created_at
+        });
+      } catch (err) {
+        console.warn('Lưu chat_messages lên Supabase thất bại:', err);
+      }
+    }
+
+    return newMsg;
+  };
+
+  const createChatChannel = async (channelData: { name: string; description: string; icon?: string; members?: string[]; role_access?: string[] }): Promise<ChatChannel> => {
+    const newChannel: ChatChannel = {
+      id: `channel-${Date.now()}`,
+      name: channelData.name,
+      description: channelData.description || '',
+      icon: channelData.icon || '💬',
+      role_access: channelData.role_access || [],
+      members: channelData.members || [],
+      created_by: profile?.id || user?.id || 'system',
+      type: 'custom',
+      created_at: new Date().toISOString()
+    };
+
+    setChatChannels(prev => {
+      const updated = [...prev, newChannel];
+      try {
+        localStorage.setItem('crm_chat_channels', JSON.stringify(updated.filter(c => c.type === 'custom')));
+      } catch (e) {
+        console.error('Lỗi lưu crm_chat_channels:', e);
+      }
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('chat_channels').insert({
+          id: newChannel.id,
+          name: newChannel.name,
+          description: newChannel.description,
+          icon: newChannel.icon,
+          role_access: newChannel.role_access,
+          members: newChannel.members,
+          created_by: newChannel.created_by,
+          created_at: newChannel.created_at
+        });
+      } catch (err) {
+        console.warn('Lưu chat_channels lên Supabase thất bại:', err);
+      }
+    }
+
+    return newChannel;
+  };
+
+  const updateChatChannel = async (id: string, channelData: Partial<ChatChannel>): Promise<void> => {
+    setChatChannels(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...channelData } : c);
+      try {
+        localStorage.setItem('crm_chat_channels', JSON.stringify(updated.filter(c => c.type === 'custom')));
+      } catch (e) {
+        console.error('Lỗi lưu crm_chat_channels:', e);
+      }
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('chat_channels').update({
+          ...(channelData.name ? { name: channelData.name } : {}),
+          ...(channelData.description !== undefined ? { description: channelData.description } : {}),
+          ...(channelData.icon ? { icon: channelData.icon } : {}),
+          ...(channelData.members !== undefined ? { members: channelData.members } : {}),
+          ...(channelData.role_access !== undefined ? { role_access: channelData.role_access } : {})
+        }).eq('id', id);
+      } catch (err) {
+        console.warn('Cập nhật chat_channels trên Supabase thất bại:', err);
+      }
+    }
+  };
+
+  const deleteChatChannel = async (id: string): Promise<void> => {
+    setChatChannels(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      try {
+        localStorage.setItem('crm_chat_channels', JSON.stringify(updated.filter(c => c.type === 'custom')));
+      } catch (e) {
+        console.error('Lỗi lưu crm_chat_channels:', e);
+      }
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('chat_channels').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Xóa chat_channels trên Supabase thất bại:', err);
+      }
+    }
+  };
+
+  const addChatReaction = async (messageId: string, emoji: string, userName: string): Promise<void> => {
+    setChatMessages(prev => {
+      const updated = prev.map(msg => {
+        if (msg.id === messageId) {
+          const reactions = { ...(msg.reactions || {}) };
+          const userList = reactions[emoji] || [];
+          if (userList.includes(userName)) {
+            reactions[emoji] = userList.filter(u => u !== userName);
+            if (reactions[emoji].length === 0) delete reactions[emoji];
+          } else {
+            reactions[emoji] = [...userList, userName];
+          }
+          return { ...msg, reactions };
+        }
+        return msg;
+      });
+      try {
+        localStorage.setItem('crm_chat_messages', JSON.stringify(updated.slice(-300)));
+      } catch (e) {
+        console.error('Lỗi lưu crm_chat_messages:', e);
+      }
+      return updated;
+    });
+  };
+
   const syncedTours = React.useMemo(() => {
     if (!tours || tours.length === 0) return tours;
     return tours.map(t => {
@@ -5350,7 +5563,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       tourMedia,
       fetchTourMedia,
       addTourMedia,
-      deleteTourMedia
+      deleteTourMedia,
+      chatMessages,
+      sendChatMessage,
+      addChatReaction,
+      chatChannels,
+      createChatChannel,
+      updateChatChannel,
+      deleteChatChannel
     }}>
       {children}
     </CRMContext.Provider>

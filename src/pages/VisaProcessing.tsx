@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Passenger } from '@/types';
-import { FileText, Check, AlertCircle, Search, Copy, Pencil } from 'lucide-react';
+import { FileText, Check, AlertCircle, Search, Copy, Pencil, LayoutGrid, List, User, Clock, CheckCircle, XCircle, Paperclip, Eye, X, FileCheck, Calendar, Compass } from 'lucide-react';
 import { format } from 'date-fns';
 import { PassengerDocumentList } from '@/components/PassengerDocumentList';
 import { TimeRangeFilter } from '@/components/TimeRangeFilter';
@@ -57,8 +57,7 @@ function DisqualifiedReasonInput({ passengerId, initialReason, onSave }: Disqual
           <button
             type="button"
             onClick={handleEdit}
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer border border-blue-200 shadow-2xs ml-[10px]"
-            style={{ marginLeft: '10px' }}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer border border-blue-200 shadow-2xs"
             title="Chỉnh sửa nội dung giải trình"
           >
             <Pencil className="w-3 h-3 text-blue-600" />
@@ -129,6 +128,8 @@ export default function VisaProcessing() {
   const location = useLocation();
   const { passengers, orders, tours, updateVisaStatus } = useCRM();
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [selectedPassengerDetail, setSelectedPassengerDetail] = useState<Passenger | null>(null);
   const [disqualifiedReasonModal, setDisqualifiedReasonModal] = useState<{ name: string; reason: string } | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -244,23 +245,61 @@ export default function VisaProcessing() {
     }
   };
 
+  const kanbanColumns = [
+    { id: 'pending', title: '⏳ 1. Chờ tiếp nhận', color: 'amber', bgHeader: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
+    { id: 'processing', title: '🔄 2. Đang làm / Nộp LSQ', color: 'blue', bgHeader: 'bg-blue-600 text-white', borderCol: 'border-blue-200 bg-blue-50/20' },
+    { id: 'approved', title: '✅ 3. Đã có Visa', color: 'emerald', bgHeader: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
+    { id: 'disqualified', title: '⚠️ 3. Hồ sơ chưa đạt', color: 'orange', bgHeader: 'bg-amber-600 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
+    { id: 'rejected', title: '❌ 3. Bị từ chối', color: 'rose', bgHeader: 'bg-rose-600 text-white', borderCol: 'border-rose-200 bg-rose-50/20' },
+  ];
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto font-sans">
       {/* Header card */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <h2 className="text-xl font-bold text-gray-900">Xử lý & Cấp duyệt Visa</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Xem thông tin giấy tờ, hồ sơ làm visa do sale upload lên và cập nhật trạng thái làm visa cho từng hành khách.
-        </p>
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Xử lý & Cấp duyệt Visa</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Xem thông tin giấy tờ, hồ sơ làm visa do sale upload lên và cập nhật trạng thái làm visa cho từng hành khách.
+          </p>
+        </div>
+
+        {/* CONTROLS SWITCHER: KANBAN vs LIST */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode('kanban')}
+            className={`h-8 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              viewMode === 'kanban'
+                ? 'bg-white text-blue-700 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+            <span>Bảng Kanban</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`h-8 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              viewMode === 'list'
+                ? 'bg-white text-blue-700 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <List className="w-3.5 h-3.5 text-purple-600" />
+            <span>Dạng Danh Sách</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Overview tabs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm space-y-0 relative z-20">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-0 relative z-20">
         {/* Hàng 1: Bộ lọc trạng thái */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-gray-100 bg-white rounded-t-xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-slate-100 bg-white rounded-t-2xl">
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Trạng thái Visa:</span>
-            <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Trạng thái Visa:</span>
+            <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
               {['all', 'pending', 'processing', 'approved', 'rejected', 'disqualified'].map(status => {
                 const label = status === 'all' ? 'Tất cả' :
                               status === 'pending' ? 'Chờ duyệt' :
@@ -271,8 +310,8 @@ export default function VisaProcessing() {
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                      filterStatus === status ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      filterStatus === status ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     {label}
@@ -282,24 +321,24 @@ export default function VisaProcessing() {
             </div>
           </div>
 
-          <div className="text-xs text-gray-500 font-medium shrink-0">
-            Hiển thị <span className="font-semibold text-gray-900">{visaPassengers.length}</span> hồ sơ khách hàng.
+          <div className="text-xs text-slate-500 font-medium shrink-0">
+            Hiển thị <span className="font-extrabold text-slate-900">{visaPassengers.length}</span> hồ sơ khách hàng.
           </div>
         </div>
 
         {/* Hàng 2: Tìm kiếm, lọc thời gian và sắp xếp */}
-        <div className="p-4 bg-slate-50 border-t border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-3 rounded-b-xl">
+        <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3 rounded-b-2xl">
           {/* Ô tìm kiếm */}
           <div className="relative">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
+              <Search className="h-4 w-4 text-slate-400" />
             </span>
             <input
               type="text"
               placeholder="Tìm tên khách, hộ chiếu, tour..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-slate-800"
             />
           </div>
 
@@ -312,14 +351,14 @@ export default function VisaProcessing() {
             endDate={filterEndDate}
             onChangeEndDate={setFilterEndDate}
             prefixText="Nộp/Tạo"
-            selectClassName="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+            selectClassName="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
           />
 
           {/* Sắp xếp */}
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-semibold cursor-pointer"
           >
             <option value="newest_created">Sắp xếp: Khách mới nhất</option>
             <option value="oldest_created">Sắp xếp: Khách cũ nhất</option>
@@ -329,141 +368,381 @@ export default function VisaProcessing() {
         </div>
       </div>
 
-      {/* Passengers list for Visa review */}
-      <div className="grid grid-cols-1 gap-6">
-        {visaPassengers.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 py-16 text-center shadow-sm">
-            <FileText className="w-14 h-14 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm font-medium">Không tìm thấy hồ sơ visa nào cần xử lý.</p>
-          </div>
-        ) : (
-          visaPassengers.map(passenger => {
-            const order = orders.find(o => o.id === passenger.order_id);
-            const tour = tours.find(t => t.id === order?.tour_id);
+      {/* VIEW MODE 1: COMPACT KANBAN BOARD WITH UNIFORM COLUMNS */}
+      {viewMode === 'kanban' && (
+        <div className="w-full pb-6">
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
+            {kanbanColumns.map(col => {
+              const colPassengers = visaPassengers.filter(p => {
+                if (col.id === 'pending') return p.visa_status === 'pending' || !p.visa_status;
+                return p.visa_status === col.id;
+              });
 
-            return (
-              <div key={passenger.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <div className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                  {/* Left block: Passenger info & Tour */}
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-bold text-gray-900">{passenger.full_name}</h3>
-                      {passenger.is_payer && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-700 uppercase">Trưởng đoàn</span>
-                      )}
-                      {getStatusBadge(passenger.visa_status, passenger.visa_disqualified_reason)}
+              return (
+                <div key={col.id} className={`rounded-2xl border ${col.borderCol} p-3 flex flex-col space-y-3 h-full max-h-[80vh] min-w-0`}>
+                  {/* COLUMN HEADER */}
+                  <div className={`p-2.5 rounded-xl shadow-2xs flex items-center justify-between ${col.bgHeader}`}>
+                  <h4 className="text-xs font-black uppercase tracking-wider line-clamp-1">{col.title}</h4>
+                  <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full shrink-0">
+                    {colPassengers.length}
+                  </span>
+                </div>
+
+                {/* COMPACT PASSENGER CARDS IN COLUMN */}
+                <div className="space-y-3 flex-1 overflow-y-auto pr-1 pb-1 scrollbar-thin">
+                  {colPassengers.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 font-medium text-xs border border-dashed border-slate-300 rounded-xl bg-white/50">
+                      Không có hồ sơ
                     </div>
+                  ) : (
+                    colPassengers.map(passenger => {
+                      const order = orders.find(o => o.id === passenger.order_id);
+                      const tour = tours.find(t => t.id === order?.tour_id);
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-gray-600">
-                      <div>
-                        <span className="text-gray-400">Mã đơn:</span>{' '}
-                        <span 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const cleanCode = passenger.order_id.substring(0, 8).toUpperCase();
-                            navigator.clipboard.writeText(cleanCode);
-                            toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
-                          }}
-                          className="font-semibold text-gray-800 hover:text-blue-600 cursor-pointer inline-flex items-center gap-1 group/copy"
-                          title="Bấm để sao chép mã đơn hàng"
+                      // Đếm số lượng file đính kèm
+                      const docsCount = (passenger.passport_url ? passenger.passport_url.split(',').filter(Boolean).length : 0) +
+                                       (passenger.labor_contract_url ? passenger.labor_contract_url.split(',').filter(Boolean).length : 0);
+
+                      return (
+                        <div 
+                          key={passenger.id} 
+                          onClick={() => setSelectedPassengerDetail(passenger)}
+                          className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all space-y-2.5 cursor-pointer group"
                         >
-                          #{passenger.order_id.substring(0, 8)}
-                          <Copy className="w-3.5 h-3.5 text-gray-400 group-hover/copy:text-blue-600 opacity-60 group-hover/copy:opacity-100 transition-opacity" />
-                        </span>
-                      </div>
-                      <div>
-                        {tour?.tour_type === 'visa' ? (
-                          <>
-                            <span className="text-gray-400">Dịch vụ:</span>{' '}
-                            <span className="px-2 py-0.5 rounded text-xs font-bold bg-purple-50 text-purple-700 border border-purple-100">
-                              🛂 Visa lẻ {tour.visa_country}
+                          {/* Name & Role Badge */}
+                          <div className="flex items-start justify-between gap-1 border-b border-slate-100 pb-2">
+                            <div className="overflow-hidden">
+                              <h5 className="font-extrabold text-slate-900 text-xs flex items-center gap-1 group-hover:text-blue-700 transition-colors line-clamp-1">
+                                <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span className="truncate">{passenger.full_name}</span>
+                              </h5>
+                              {passenger.is_payer && (
+                                <span className="inline-block mt-0.5 px-1.5 py-0.5 text-[9px] font-extrabold rounded bg-blue-100 text-blue-700 uppercase">
+                                  Trưởng đoàn
+                                </span>
+                              )}
+                            </div>
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const cleanCode = passenger.order_id.substring(0, 8).toUpperCase();
+                                navigator.clipboard.writeText(cleanCode);
+                                toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
+                              }}
+                              className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 shrink-0 hover:bg-slate-200 transition-colors"
+                              title="Bấm để sao chép mã đơn"
+                            >
+                              #{passenger.order_id.substring(0, 8)}
                             </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-gray-400">Tour đặt:</span>{' '}
-                            <span className="font-semibold text-blue-600">{tour?.code}</span>
-                          </>
+                          </div>
+
+                          {/* Tour / Service Name */}
+                          <div className="text-[11px] space-y-1 text-slate-600">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-slate-400 text-[10px]">Dịch vụ:</span>
+                              <span className="font-bold text-blue-700 truncate max-w-[130px] text-right">
+                                {tour?.tour_type === 'visa' ? `Visa ${tour.visa_country}` : (tour?.code || 'Tour')}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-slate-400 text-[10px]">Ngày nộp:</span>
+                              <span className="font-semibold text-emerald-700 text-[10px]">
+                                {passenger.visa_submitted_at ? format(new Date(passenger.visa_submitted_at), 'dd/MM/yyyy') : 'Chưa có'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Footer: Document count & View Detail Indicator */}
+                          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60 inline-flex items-center gap-1">
+                              <Paperclip className="w-3 h-3" />
+                              {docsCount} file
+                            </span>
+
+                            <span className="font-bold text-blue-600 group-hover:underline inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Eye className="w-3 h-3" /> Chi tiết
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          </div>
+        </div>
+      )}
+
+      {/* VIEW MODE 2: LIST VIEW */}
+      {viewMode === 'list' && (
+        <div className="grid grid-cols-1 gap-6">
+          {visaPassengers.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 py-16 text-center shadow-2xs">
+              <FileText className="w-14 h-14 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-500 text-sm font-medium">Không tìm thấy hồ sơ visa nào cần xử lý.</p>
+            </div>
+          ) : (
+            visaPassengers.map(passenger => {
+              const order = orders.find(o => o.id === passenger.order_id);
+              const tour = tours.find(t => t.id === order?.tour_id);
+
+              return (
+                <div key={passenger.id} className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    {/* Left block: Passenger info & Tour */}
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-bold text-slate-900">{passenger.full_name}</h3>
+                        {passenger.is_payer && (
+                          <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-700 uppercase">Trưởng đoàn</span>
+                        )}
+                        {getStatusBadge(passenger.visa_status, passenger.visa_disqualified_reason)}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-slate-600">
+                        <div>
+                          <span className="text-slate-400">Mã đơn:</span>{' '}
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const cleanCode = passenger.order_id.substring(0, 8).toUpperCase();
+                              navigator.clipboard.writeText(cleanCode);
+                              toast.success(`Đã sao chép mã đơn hàng: ${cleanCode}`);
+                            }}
+                            className="font-semibold text-slate-800 hover:text-blue-600 cursor-pointer inline-flex items-center gap-1 group/copy"
+                            title="Bấm để sao chép mã đơn hàng"
+                          >
+                            #{passenger.order_id.substring(0, 8)}
+                            <Copy className="w-3.5 h-3.5 text-slate-400 group-hover/copy:text-blue-600 opacity-60 group-hover/copy:opacity-100 transition-opacity" />
+                          </span>
+                        </div>
+                        <div>
+                          {tour?.tour_type === 'visa' ? (
+                            <>
+                              <span className="text-slate-400">Dịch vụ:</span>{' '}
+                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-purple-50 text-purple-700 border border-purple-100">
+                                🛂 Visa lẻ {tour.visa_country}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-slate-400">Tour đặt:</span>{' '}
+                              <span className="font-semibold text-blue-600">{tour?.code}</span>
+                            </>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Ngày sinh:</span>{' '}
+                          <span className="font-medium text-slate-800">
+                            {passenger.dob ? format(new Date(passenger.dob), 'dd/MM/yyyy') : 'Chưa nhập'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Phân loại/Cấp độ:</span>{' '}
+                          <span className="font-semibold text-slate-800">
+                            {tour?.tour_type === 'visa' ? (
+                              <span className="text-xs">
+                                {tour.visa_service_type} ({tour.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
+                              </span>
+                            ) : (
+                              'Visa đi Tour'
+                            )}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Thời gian nộp:</span>{' '}
+                          <span className="font-semibold text-emerald-600">
+                            {passenger.visa_submitted_at ? format(new Date(passenger.visa_submitted_at), 'dd/MM/yyyy HH:mm') : 'Chưa cập nhật'}
+                          </span>
+                        </div>
+                        {tour?.visa_deadline && (
+                          <div className="text-rose-600 font-medium">
+                            <span>Hạn nộp Visa:</span> {format(new Date(tour.visa_deadline), 'dd/MM/yyyy')}
+                          </div>
                         )}
                       </div>
-                      <div>
-                        <span className="text-gray-400">Ngày sinh:</span>{' '}
-                        <span className="font-medium text-gray-800">
-                          {passenger.dob ? format(new Date(passenger.dob), 'dd/MM/yyyy') : 'Chưa nhập'}
-                        </span>
+                    </div>
+
+                    {/* Middle block: Documents list */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 w-full md:w-auto md:min-w-[280px] md:max-w-[340px]">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Giấy tờ Sale đã upload</span>
+                        {passenger.passport_url && (
+                          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                            {passenger.passport_url.split(',').filter(Boolean).length} file
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <span className="text-gray-400">Phân loại/Cấp độ:</span>{' '}
-                        <span className="font-semibold text-gray-800">
-                          {tour?.tour_type === 'visa' ? (
-                            <span className="text-xs">
-                              {tour.visa_service_type} ({tour.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})
-                            </span>
-                          ) : (
-                            'Visa đi Tour'
-                          )}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Thời gian nộp:</span>{' '}
-                        <span className="font-semibold text-emerald-600">
-                          {passenger.visa_submitted_at ? format(new Date(passenger.visa_submitted_at), 'dd/MM/yyyy HH:mm') : 'Chưa cập nhật'}
-                        </span>
-                      </div>
-                      {tour?.visa_deadline && (
-                        <div className="text-red-600 font-medium">
-                          <span>Hạn nộp Visa:</span> {format(new Date(tour.visa_deadline), 'dd/MM/yyyy')}
+                      
+                      <PassengerDocumentList 
+                        passportUrl={passenger.passport_url}
+                        laborContractUrl={passenger.labor_contract_url}
+                        maxInitialDisplay={3}
+                        variant="card"
+                      />
+                    </div>
+
+                    {/* Right block: Actions to update state */}
+                    <div className="flex flex-col gap-2 w-full md:w-auto md:min-w-[180px]">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1">Cập nhật trạng thái</span>
+                      <select
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-semibold text-slate-800 cursor-pointer"
+                        value={passenger.visa_status}
+                        onChange={e => {
+                          const newStatus = e.target.value as Passenger['visa_status'];
+                          if (newStatus === 'disqualified') {
+                            updateVisaStatus(passenger.id, newStatus, passenger.visa_disqualified_reason || '');
+                          } else {
+                            updateVisaStatus(passenger.id, newStatus);
+                          }
+                        }}
+                      >
+                        <option value="pending">Chờ tiếp nhận</option>
+                        <option value="processing">Đang nộp hồ sơ</option>
+                        <option value="approved">Đã duyệt (Có Visa)</option>
+                        <option value="rejected">Bị từ chối</option>
+                        <option value="disqualified">Hồ sơ chưa đạt</option>
+                      </select>
+
+                      {passenger.visa_status === 'disqualified' && (
+                        <div className="mt-2.5 p-3.5 bg-rose-50/40 border border-rose-100 rounded-lg">
+                          <DisqualifiedReasonInput 
+                            passengerId={passenger.id} 
+                            initialReason={passenger.visa_disqualified_reason || ''} 
+                            onSave={updateVisaStatus} 
+                          />
                         </div>
                       )}
                     </div>
                   </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
-                   {/* Middle block: Documents list */}
-                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2 w-full md:w-auto md:min-w-[280px] md:max-w-[340px]">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Giấy tờ Sale đã upload</span>
-                      {passenger.passport_url && (
-                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                          {passenger.passport_url.split(',').filter(Boolean).length} file
+      {/* FULL PASSENGER DETAIL POPUP MODAL */}
+      {selectedPassengerDetail && (() => {
+        const p = selectedPassengerDetail;
+        const order = orders.find(o => o.id === p.order_id);
+        const tour = tours.find(t => t.id === order?.tour_id);
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={() => setSelectedPassengerDetail(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 p-6 space-y-6 font-sans" onClick={e => e.stopPropagation()}>
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-extrabold text-sm flex items-center justify-center shrink-0">
+                    {p.full_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <span>{p.full_name}</span>
+                      {p.is_payer && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-700 uppercase">
+                          Trưởng đoàn
                         </span>
                       )}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Đơn hàng: <strong className="text-slate-800">#{p.order_id.substring(0, 8)}</strong> • Nộp ngày: {p.visa_submitted_at ? format(new Date(p.visa_submitted_at), 'dd/MM/yyyy HH:mm') : 'Chưa cập nhật'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(p.visa_status, p.visa_disqualified_reason)}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPassengerDetail(null)}
+                    className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid Body */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left Column: Personal & Tour Details */}
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-2">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <User className="w-4 h-4 text-blue-600" /> Thông tin Hành khách
+                    </h4>
+                    <div className="text-xs space-y-1.5 text-slate-700">
+                      <div><span className="text-slate-500">Giới tính:</span> <strong>{p.gender === 'male' ? 'Nam' : 'Nữ'}</strong></div>
+                      <div><span className="text-slate-500">Ngày sinh:</span> <strong>{p.dob ? format(new Date(p.dob), 'dd/MM/yyyy') : 'Chưa nhập'}</strong></div>
+                      <div><span className="text-slate-500">Số Hộ Chiếu:</span> <strong className="font-mono text-blue-700">{p.passport_number || 'Chưa cập nhật'}</strong></div>
+                      {p.passport_expiry && (
+                        <div><span className="text-slate-500">Hạn Hộ Chiếu:</span> <strong>{format(new Date(p.passport_expiry), 'dd/MM/yyyy')}</strong></div>
+                      )}
+                      {p.phone && <div><span className="text-slate-500">Số điện thoại:</span> <strong>{p.phone}</strong></div>}
                     </div>
-                    
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-2">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Compass className="w-4 h-4 text-purple-600" /> Chi tiết Tour / Dịch vụ Visa
+                    </h4>
+                    <div className="text-xs space-y-1.5 text-slate-700">
+                      <div><span className="text-slate-500">Loại dịch vụ:</span> <strong>{tour?.tour_type === 'visa' ? `Visa lẻ ${tour?.visa_country || ''}` : 'Visa đi Tour'}</strong></div>
+                      {tour && <div><span className="text-slate-500">Tên Tour/Dịch vụ:</span> <strong className="text-blue-700">{tour.code} - {tour.title}</strong></div>}
+                      {tour?.visa_deadline && (
+                        <div className="text-rose-600 font-bold flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" /> Hạn nộp Visa: {format(new Date(tour.visa_deadline), 'dd/MM/yyyy')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Documents & Status Selector */}
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-2">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Paperclip className="w-4 h-4 text-emerald-600" /> Giấy tờ do Sale upload
+                    </h4>
                     <PassengerDocumentList 
-                      passportUrl={passenger.passport_url}
-                      laborContractUrl={passenger.labor_contract_url}
-                      maxInitialDisplay={3}
+                      passportUrl={p.passport_url}
+                      laborContractUrl={p.labor_contract_url}
+                      maxInitialDisplay={5}
                       variant="card"
                     />
                   </div>
 
-                  {/* Right block: Actions to update state */}
-                  <div className="flex flex-col gap-2 w-full md:w-auto md:min-w-[180px]">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Cập nhật trạng thái</span>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      ⚙️ Cập nhật Trạng Thái Visa
+                    </h4>
                     <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold text-gray-700"
-                      value={passenger.visa_status}
+                      className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-bold text-slate-800 cursor-pointer"
+                      value={p.visa_status}
                       onChange={e => {
                         const newStatus = e.target.value as Passenger['visa_status'];
                         if (newStatus === 'disqualified') {
-                          updateVisaStatus(passenger.id, newStatus, passenger.visa_disqualified_reason || '');
+                          updateVisaStatus(p.id, newStatus, p.visa_disqualified_reason || '');
                         } else {
-                          updateVisaStatus(passenger.id, newStatus);
+                          updateVisaStatus(p.id, newStatus);
                         }
                       }}
                     >
-                      <option value="pending">Chờ tiếp nhận</option>
-                      <option value="processing">Đang nộp hồ sơ</option>
-                      <option value="approved">Đã duyệt (Có Visa)</option>
-                      <option value="rejected">Bị từ chối</option>
-                      <option value="disqualified">Hồ sơ chưa đạt</option>
+                      <option value="pending">⏳ 1. Chờ tiếp nhận hồ sơ</option>
+                      <option value="processing">🔄 2. Đang nộp / Xử lý LSQ</option>
+                      <option value="approved">✅ 3. Đã duyệt (Có Visa)</option>
+                      <option value="disqualified">⚠️ 3. Hồ sơ chưa đạt</option>
+                      <option value="rejected">❌ 3. Bị từ chối (Trượt)</option>
                     </select>
 
-                    {passenger.visa_status === 'disqualified' && (
-                      <div className="mt-2.5 p-3.5 bg-rose-50/40 border border-rose-100 rounded-lg">
+                    {p.visa_status === 'disqualified' && (
+                      <div className="pt-2">
                         <DisqualifiedReasonInput 
-                          passengerId={passenger.id} 
-                          initialReason={passenger.visa_disqualified_reason || ''} 
+                          passengerId={p.id} 
+                          initialReason={p.visa_disqualified_reason || ''} 
                           onSave={updateVisaStatus} 
                         />
                       </div>
@@ -471,10 +750,21 @@ export default function VisaProcessing() {
                   </div>
                 </div>
               </div>
-            );
-          })
-        )}
-      </div>
+
+              {/* Modal Footer */}
+              <div className="border-t border-slate-100 pt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPassengerDetail(null)}
+                  className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  Đóng cửa sổ
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Disqualified Reason Modal */}
       {disqualifiedReasonModal && (
@@ -495,15 +785,15 @@ export default function VisaProcessing() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Khách hàng</span>
-                <span className="text-sm font-extrabold text-gray-950 uppercase mt-0.5 block">{disqualifiedReasonModal.name}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Khách hàng</span>
+                <span className="text-sm font-extrabold text-slate-950 uppercase mt-0.5 block">{disqualifiedReasonModal.name}</span>
               </div>
               <div className="p-4 bg-rose-50/50 rounded-lg border border-rose-100">
                 <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block mb-1">Lý do cụ thể</span>
                 <p className="text-xs font-semibold text-rose-950 whitespace-pre-wrap leading-relaxed">{disqualifiedReasonModal.reason}</p>
               </div>
             </div>
-            <div className="bg-gray-50 px-6 py-3 flex justify-end">
+            <div className="bg-slate-50 px-6 py-3 flex justify-end">
               <button
                 type="button"
                 onClick={() => setDisqualifiedReasonModal(null)}

@@ -371,5 +371,34 @@ export interface TourMedia {
   created_at: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  channel_id?: string;
+  recipient_id?: string;
+  sender_id: string;
+  sender_name: string;
+  sender_role: string;
+  content: string;
+  attachments?: { url: string; name: string; type: 'image' | 'file' }[];
+  tour_code?: string;
+  order_code?: string;
+  proposal_code?: string;
+  reactions?: Record<string, string[]>;
+  reply_to?: { id: string; sender_name: string; content: string };
+  created_at: string;
+}
+
+export interface ChatChannel {
+  id: string;
+  name: string;
+  description: string;
+  role_access?: string[];
+  icon?: string;
+  type?: 'preset' | 'custom';
+  members?: string[];
+  created_by?: string;
+  created_at?: string;
+}
+
 
 

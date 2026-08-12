@@ -52,3 +52,53 @@ export async function ensureBucketExists(bucketName: string = 'AD Luxury Travel'
   }
 }
 
+/**
+ * Helper upload file lên hệ thống CRM qua /api/upload hoặc Supabase Storage
+ */
+export async function uploadFileToCRM(
+  file: File,
+  bucketName: string = 'crm-attachments',
+  uploadType: string = 'chat'
+): Promise<{ url: string; file_id?: string; name: string }> {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('uploadType', uploadType);
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.url) {
+        return { url: data.url, file_id: data.file_id, name: file.name };
+      }
+    }
+  } catch (e) {
+    console.warn('Upload via /api/upload error, falling back to Supabase/ObjectUrl:', e);
+  }
+
+  // Fallback if /api/upload is not configured or offline
+  try {
+    if (isSupabaseConfigured()) {
+      await ensureBucketExists(bucketName);
+      const safeFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { data, error } = await supabase.storage.from(bucketName).upload(safeFileName, file);
+      if (!error && data) {
+        const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(data.path);
+        if (publicUrlData?.publicUrl) {
+          return { url: publicUrlData.publicUrl, name: file.name };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Supabase storage fallback upload error:', err);
+  }
+
+  // Local URL fallback
+  return { url: URL.createObjectURL(file), name: file.name };
+}
+
+

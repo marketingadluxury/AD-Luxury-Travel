@@ -337,7 +337,7 @@ export const GuestPhotoUploadPage: React.FC<GuestPhotoUploadPageProps> = ({ defa
                   <select
                     value={selectedTourId}
                     onChange={(e) => setSelectedTourId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-teal-500 shadow-xs"
+                    className="w-full h-9 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 cursor-pointer outline-none transition-all"
                   >
                     {availableTours.length === 0 ? (
                       <option value="">(Chưa có danh sách Tour nào)</option>

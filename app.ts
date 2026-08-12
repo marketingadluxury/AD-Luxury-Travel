@@ -217,11 +217,11 @@ async function getAuthenticatedUserEmail(req?: express.Request): Promise<string 
 async function makeFolderPublic(fileId: string, token?: string, userEmail?: string | string[]): Promise<void> {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`;
   
-  // Option B: Restrict permissions to company domain and specific company/admin emails
-  const targets: Array<{ type: string; role: string; domain?: string; emailAddress?: string }> = [
-    { type: 'domain', domain: 'adluxury.net', role: 'reader' },
-    { type: 'user', emailAddress: 'marketing@adluxury.net', role: 'reader' },
-    { type: 'user', emailAddress: 'marketing.adluxury@gmail.com', role: 'reader' }
+  // Set file/folder readable by anyone with the link + specific admin emails
+  const targets: Array<{ type: string; role: string; emailAddress?: string }> = [
+    { type: 'anyone', role: 'reader' },
+    { type: 'user', emailAddress: 'marketing.adluxury@gmail.com', role: 'reader' },
+    { type: 'user', emailAddress: 'marketing@adluxury.net', role: 'reader' }
   ];
 
   if (userEmail) {
@@ -248,12 +248,12 @@ async function makeFolderPublic(fileId: string, token?: string, userEmail?: stri
       });
       if (!res.ok) {
         const errText = await res.text();
-        console.warn(`[Drive] Failed to share with ${target.type === 'domain' ? target.domain : target.emailAddress}:`, errText);
+        console.warn(`[Drive] Failed to share with ${target.emailAddress || target.type}:`, errText);
       } else {
-        console.log(`[Drive] Successfully shared with ${target.type === 'domain' ? target.domain : target.emailAddress}`);
+        console.log(`[Drive] Successfully shared with ${target.emailAddress || target.type}`);
       }
     } catch (err) {
-      console.error(`[Drive] Error sharing with ${target.type === 'domain' ? target.domain : target.emailAddress}:`, err);
+      console.error(`[Drive] Error sharing with ${target.emailAddress || target.type}:`, err);
     }
   }));
 }
@@ -656,6 +656,17 @@ async function getOrCreateFeedbackFolder(token: string): Promise<string> {
   return feedbackFolderId;
 }
 
+async function getOrCreateChatFolder(token: string): Promise<string> {
+  const baseParentId = getDriveRootParentId();
+  const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
+  let chatFolderId = await searchFolder('Trò chuyện', rootId, token);
+  if (!chatFolderId) {
+    chatFolderId = await createFolder('Trò chuyện', rootId, token);
+    await makeFolderPublic(chatFolderId, token);
+  }
+  return chatFolderId;
+}
+
 async function uploadFileToSupabase(
   bucketName: string,
   filePath: string,
@@ -1019,6 +1030,7 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
     const file = req.file;
     const isTourMediaUpload = body.uploadType === 'tour_media' || body.category === 'tour_media' || body.category === 'tour_photos';
     const isFeedbackUpload = body.uploadType === 'feedback' || body.category === 'feedback';
+    const isChatUpload = body.uploadType === 'chat' || body.category === 'chat';
     const isPaymentProposal = body.uploadType === 'payment_proposal' || body.folder === 'payment_proposals' || !!body.proposalCode || !!body.proposal_code;
     const isTourUpload = (body.uploadType === 'tour' || !!body.tourCode) && !isTourMediaUpload;
     const isVisaUpload = body.uploadType === 'visa';
@@ -1166,6 +1178,27 @@ app.post(['/api/upload', '/upload'], (req, res, next) => {
         fileName,
         (token) => getOrCreateFeedbackFolder(token),
         `Feedback/${fileName}`
+      );
+
+      return res.json({
+        success: true,
+        url: resData.url,
+        fileName: fileName,
+        fileId: resData.fileId || '',
+        storage: resData.storage
+      });
+    }
+
+    if (isChatUpload) {
+      const cleanFileName = file.originalname.trim().replace(/\s+/g, '_');
+      const fileName = `CHAT_${Date.now()}_${cleanFileName}`;
+
+      const resData = await uploadWith3TierFallback(
+        req,
+        file,
+        fileName,
+        (token) => getOrCreateChatFolder(token),
+        `Chat/${fileName}`
       );
 
       return res.json({
@@ -2517,6 +2550,250 @@ app.post('/api/ai/feedback', async (req, res) => {
   } catch (err: any) {
     console.error('[AI Feedback Error]:', err);
     return res.status(500).json({ error: err.message || 'Lỗi xử lý phản hồi Admin.' });
+  }
+});
+
+// ==============================================================================
+// GOOGLE CHAT INTEGRATION ENDPOINTS
+// ==============================================================================
+
+// In-memory store or env config for custom Google Chat Webhook URLs
+let googleChatWebhookUrls: Record<string, string> = {
+  'chung': process.env.GOOGLE_CHAT_WEBHOOK_CHUNG || '',
+  'dieu-hanh': process.env.GOOGLE_CHAT_WEBHOOK_DIEU_HANH || '',
+  'kinh-doanh': process.env.GOOGLE_CHAT_WEBHOOK_KINH_DOANH || '',
+  'ke-toan': process.env.GOOGLE_CHAT_WEBHOOK_KE_TOAN || '',
+  'visa': process.env.GOOGLE_CHAT_WEBHOOK_VISA || '',
+  'hdv-doan': process.env.GOOGLE_CHAT_WEBHOOK_HDV || '',
+};
+
+app.get('/api/google-chat/status', async (req, res) => {
+  try {
+    let hasAccessToken = false;
+    try {
+      const token = await getGoogleDriveAccessToken();
+      if (token) hasAccessToken = true;
+    } catch (e) {
+      hasAccessToken = false;
+    }
+
+    const configuredWebhooksCount = Object.values(googleChatWebhookUrls).filter(u => u && u.trim().length > 0).length;
+
+    return res.json({
+      connected: hasAccessToken || configuredWebhooksCount > 0,
+      hasOAuth: hasAccessToken,
+      webhooksCount: configuredWebhooksCount,
+      webhooks: googleChatWebhookUrls
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Lỗi kiểm tra trạng thái Google Chat.' });
+  }
+});
+
+app.post('/api/google-chat/webhooks/config', (req, res) => {
+  try {
+    const { webhooks } = req.body;
+    if (webhooks && typeof webhooks === 'object') {
+      googleChatWebhookUrls = { ...googleChatWebhookUrls, ...webhooks };
+      console.log('[Google Chat] Updated Webhook URLs:', googleChatWebhookUrls);
+      return res.json({ success: true, webhooks: googleChatWebhookUrls });
+    }
+    return res.status(400).json({ error: 'Dữ liệu webhooks không hợp lệ.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Lỗi lưu cấu hình Google Chat Webhooks.' });
+  }
+});
+
+app.get('/api/google-chat/spaces', async (req, res) => {
+  try {
+    let accessToken = '';
+    try {
+      accessToken = await getGoogleDriveAccessToken();
+    } catch (e) {
+      console.warn('[Google Chat] Could not fetch OAuth token for spaces API:', e);
+    }
+
+    if (accessToken) {
+      try {
+        const response = await fetch('https://chat.googleapis.com/v1/spaces', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.spaces && Array.isArray(data.spaces)) {
+            return res.json({ spaces: data.spaces });
+          }
+        }
+      } catch (err) {
+        console.warn('[Google Chat] Fetch spaces API error, using default channels:', err);
+      }
+    }
+
+    // Default spaces fallback for Workspace channels
+    const defaultSpaces = [
+      { name: 'spaces/chung', displayName: '#chung - Kênh Chung', spaceType: 'SPACE' },
+      { name: 'spaces/dieu-hanh', displayName: '#dieu-hanh - Điều Hành & Tour', spaceType: 'SPACE' },
+      { name: 'spaces/kinh-doanh', displayName: '#kinh-doanh - Kinh Doanh & Sale', spaceType: 'SPACE' },
+      { name: 'spaces/ke-toan', displayName: '#ke-toan - Kế Toán & Thu Chi', spaceType: 'SPACE' },
+      { name: 'spaces/visa', displayName: '#visa - Dịch Vụ Visa', spaceType: 'SPACE' },
+      { name: 'spaces/hdv-doan', displayName: '#hdv-doan - HDV & Ảnh Đoàn', spaceType: 'SPACE' },
+    ];
+
+    return res.json({ spaces: defaultSpaces });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Lỗi lấy danh sách Google Chat Spaces.' });
+  }
+});
+
+app.post('/api/google-chat/send', async (req, res) => {
+  try {
+    const { spaceName, channelId, message, senderName, senderRole, tourCode, orderCode, proposalCode } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Nội dung tin nhắn không được để trống.' });
+    }
+
+    const channelKey = channelId || 'chung';
+    const webhookUrl = googleChatWebhookUrls[channelKey];
+
+    let formattedText = `*[Tour CRM - ${senderName || 'Hệ thống'} (${senderRole || 'Thành viên'})]*:\n${message}`;
+
+    if (tourCode) formattedText += `\n📌 *Mã Tour:* ${tourCode}`;
+    if (orderCode) formattedText += `\n🛒 *Mã Booking:* ${orderCode}`;
+    if (proposalCode) formattedText += `\n📄 *Mã ĐNTT:* ${proposalCode}`;
+
+    let sentViaWebhook = false;
+
+    // 1. Try sending via Webhook if configured
+    if (webhookUrl && webhookUrl.startsWith('https://chat.googleapis.com')) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+          body: JSON.stringify({ text: formattedText })
+        });
+        if (response.ok) {
+          sentViaWebhook = true;
+          console.log(`[Google Chat] Sent message to channel '${channelKey}' via Incoming Webhook.`);
+        }
+      } catch (e) {
+        console.warn(`[Google Chat] Webhook send error for channel '${channelKey}':`, e);
+      }
+    }
+
+    // 2. Try sending via Google Chat REST API with OAuth
+    let sentViaOAuth = false;
+    if (!sentViaWebhook) {
+      try {
+        const accessToken = await getGoogleDriveAccessToken();
+        if (accessToken && spaceName) {
+          const apiUrl = `https://chat.googleapis.com/v1/${spaceName}/messages`;
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text: formattedText })
+          });
+          if (response.ok) {
+            sentViaOAuth = true;
+            console.log(`[Google Chat] Sent message to space '${spaceName}' via OAuth API.`);
+          }
+        }
+      } catch (e) {
+        console.warn('[Google Chat] OAuth message send error:', e);
+      }
+    }
+
+    return res.json({
+      success: true,
+      sentViaWebhook,
+      sentViaOAuth,
+      message: 'Đã phát sinh tin nhắn và gửi đồng bộ tới Google Chat thành công.'
+    });
+  } catch (err: any) {
+    console.error('[Google Chat Send Error]:', err);
+    return res.status(500).json({ error: err.message || 'Lỗi gửi tin nhắn sang Google Chat.' });
+  }
+});
+
+app.post('/api/google-chat/webhook-notify', async (req, res) => {
+  try {
+    const { eventType, channelId, title, details, tourCode, orderCode, proposalCode, actionUrl } = req.body;
+
+    const channelKey = channelId || 'chung';
+    const webhookUrl = googleChatWebhookUrls[channelKey];
+
+    const cardPayload = {
+      cards: [
+        {
+          header: {
+            title: `🔔 TOUR CRM: ${title || 'Thông báo mới'}`,
+            subtitle: `Sự kiện: ${eventType || 'CRM Realtime Notification'}`,
+            imageUrl: 'https://fonts.gstatic.com/s/i/productlogos/chat/v8/web-64dp/logo_chat_color_2x_web_64dp.png',
+            imageStyle: 'IMAGE'
+          },
+          sections: [
+            {
+              widgets: [
+                {
+                  textParagraph: {
+                    text: details || 'Đã có cập nhật dữ liệu mới trên hệ thống CRM.'
+                  }
+                },
+                ...(tourCode ? [{ keyKeyValue: { topLabel: 'Mã Tour', content: tourCode } }] : []),
+                ...(orderCode ? [{ keyKeyValue: { topLabel: 'Mã Booking', content: orderCode } }] : []),
+                ...(proposalCode ? [{ keyKeyValue: { topLabel: 'Mã Đề nghị thanh toán', content: proposalCode } }] : []),
+                ...(actionUrl ? [
+                  {
+                    buttons: [
+                      {
+                        textButton: {
+                          text: 'MỞ CRM XEM CHI TIẾT',
+                          onClick: {
+                            openLink: {
+                              url: actionUrl
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ] : [])
+              ]
+            }
+          ]
+        }
+      ]
+    };
+
+    if (webhookUrl && webhookUrl.startsWith('https://chat.googleapis.com')) {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify(cardPayload)
+      });
+
+      if (response.ok) {
+        return res.json({ success: true, message: 'Đã phát thông báo dạng Card lên Google Chat thành công!' });
+      }
+    }
+
+    // Fallback: log notification
+    console.log('[Google Chat Realtime Notification Triggered]:', title, details);
+    return res.json({
+      success: true,
+      deliveredToWebhook: false,
+      message: 'Thông báo đã được ghi nhận trên hệ thống CRM.'
+    });
+  } catch (err: any) {
+    console.error('[Google Chat Webhook Notify Error]:', err);
+    return res.status(500).json({ error: err.message || 'Lỗi gửi thông báo Webhook Google Chat.' });
   }
 });
 

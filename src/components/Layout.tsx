@@ -16,6 +16,7 @@ import {
   TrendingUp,
   History,
   MessageSquarePlus,
+  MessageSquare,
   Menu,
   X,
   Smartphone,

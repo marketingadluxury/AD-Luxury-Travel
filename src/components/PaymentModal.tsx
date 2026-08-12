@@ -243,23 +243,6 @@ export default function PaymentModal({ isOpen, onClose, order }: PaymentModalPro
                     </button>
                   </div>
                 </div>
-
-                {/* Thumbnail Preview if file is an image */}
-                {file.type.startsWith('image/') && (
-                  <div className="mt-3 pt-2.5 border-t border-emerald-200/80 flex items-center gap-3">
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt="Preview biên lai"
-                      className="w-14 h-14 object-cover rounded-lg border border-emerald-300 shadow-xs shrink-0"
-                    />
-                    <div className="text-[11px] text-emerald-800 space-y-0.5">
-                      <p className="font-bold flex items-center gap-1">
-                        <ImageIcon className="w-3.5 h-3.5 text-emerald-600" /> Xem trước hóa đơn chuyển tiền
-                      </p>
-                      <p className="text-emerald-600">Sẵn sàng gửi để Kế toán phê duyệt</p>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>

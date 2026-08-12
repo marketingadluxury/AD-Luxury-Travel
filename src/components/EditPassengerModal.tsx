@@ -244,7 +244,7 @@ export default function EditPassengerModal({
               <select
                 value={gender}
                 onChange={e => setGender(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+                className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer"
               >
                 <option value="">Chọn</option>
                 <option value="Mr">Mr (Nam)</option>

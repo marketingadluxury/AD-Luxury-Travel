@@ -464,10 +464,10 @@ const TourCard: React.FC<{
                       e.stopPropagation();
                       if (!isDeparted) onBookClick(tour);
                     }}
-                    className={`w-full inline-flex items-center justify-center py-2.5 rounded-lg font-semibold transition-colors shadow-sm ${
+                    className={`w-full inline-flex items-center justify-center h-9 px-4 rounded-lg text-xs font-bold transition-colors shadow-sm cursor-pointer ${
                       isDeparted 
                         ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300'
-                        : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border border-transparent'
                     }`}
                     disabled={isDeparted || tour.available_seats === 0}
                   >
@@ -816,15 +816,15 @@ export default function DepartureCalendar() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Filters and Actions */}
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-4">
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
         <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
           <div className="relative flex-1 w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
+              <Search className="h-5 w-5 text-slate-400" />
             </div>
             <input
               type="text"
-              className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
+              className="block w-full h-9 pl-10 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
               placeholder="Tìm kiếm theo mã tour, tên tour..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -841,14 +841,14 @@ export default function DepartureCalendar() {
                 { value: 'price_asc', label: 'Giá tăng dần' },
                 { value: 'price_desc', label: 'Giá giảm dần' },
               ]}
-              buttonClassName="w-full sm:w-auto px-3.5 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+              buttonClassName="w-full sm:w-auto h-9 px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 hover:bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-sm transition-all cursor-pointer"
             />
             <button 
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border text-xs sm:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+              className={`inline-flex items-center justify-center h-9 px-3.5 py-1.5 border text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
                 showAdvancedFilters 
                   ? 'bg-blue-50 text-blue-700 border-blue-300' 
-                  : 'bg-white text-slate-700 border-gray-300 hover:bg-gray-50'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
               }`}
             >
               <Filter className="h-4 w-4 mr-1.5 shrink-0" />
@@ -857,10 +857,10 @@ export default function DepartureCalendar() {
             {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader' || currentRole === 'bod') && (
               <button 
                 onClick={() => navigate('/tours', { state: { openCreateModal: true } })}
-                className="inline-flex items-center justify-center px-3 sm:px-4 py-2.5 border border-transparent shadow-xs text-xs sm:text-sm font-bold rounded-lg text-white bg-[#0038A8] hover:bg-[#002a80] transition-colors cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center justify-center h-9 px-3.5 py-1.5 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Plus className="h-4 w-4 mr-1.5 shrink-0" />
-                <span>Tạo Tour mới</span>
+                <span>Thêm Tour Mới</span>
               </button>
             )}
           </div>
@@ -868,7 +868,7 @@ export default function DepartureCalendar() {
 
         {/* Advanced Filters section */}
         {showAdvancedFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-150 animate-in fade-in duration-150">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200 animate-in fade-in duration-150">
             {/* Filter by Time */}
             <div>
               <TimeRangeFilter
@@ -879,13 +879,13 @@ export default function DepartureCalendar() {
                 onChangeStartDate={setSelectedStartDate}
                 endDate={selectedEndDate}
                 onChangeEndDate={setSelectedEndDate}
-                selectClassName="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                selectClassName="w-full h-9 pl-3 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
               />
             </div>
 
             {/* Filter by Category */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Danh mục sản phẩm</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Danh mục sản phẩm</label>
               <CustomSelect
                 value={selectedCategory}
                 onChange={setSelectedCategory}
@@ -894,12 +894,13 @@ export default function DepartureCalendar() {
                   ...categories.map((cat) => ({ value: cat, label: cat })),
                 ]}
                 className="w-full"
+                buttonClassName="w-full h-9 px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 hover:bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-sm transition-all cursor-pointer"
               />
             </div>
 
             {/* Filter by Tour Status */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tình trạng tour</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tình trạng tour</label>
               <CustomSelect
                 value={selectedTourStatus}
                 onChange={setSelectedTourStatus}
@@ -913,6 +914,7 @@ export default function DepartureCalendar() {
                   { value: 'full', label: 'Kín chỗ' },
                 ]}
                 className="w-full"
+                buttonClassName="w-full h-9 px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 hover:bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-sm transition-all cursor-pointer"
               />
             </div>
 
@@ -927,7 +929,7 @@ export default function DepartureCalendar() {
                   setSelectedTourStatus('all');
                   setSearchTerm('');
                 }}
-                className="text-xs font-semibold text-red-600 hover:text-red-800 flex items-center cursor-pointer"
+                className="text-xs font-bold text-red-600 hover:text-red-800 flex items-center cursor-pointer transition-colors"
               >
                 <X className="w-3.5 h-3.5 mr-1" /> Xóa bộ lọc
               </button>
@@ -1041,12 +1043,12 @@ export default function DepartureCalendar() {
                 </div>
 
                 {showCustomerSelector && (
-                  <div className="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-3 animate-in fade-in duration-200">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 animate-in fade-in duration-200">
                     <div className="flex items-center gap-2">
                       <input 
                         type="text"
                         placeholder="Tìm theo tên, SĐT hoặc hộ chiếu..."
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-slate-400"
                         value={customerSearchQuery}
                         onChange={e => setCustomerSearchQuery(e.target.value)}
                       />
@@ -1054,13 +1056,13 @@ export default function DepartureCalendar() {
                         <button 
                           type="button"
                           onClick={() => setCustomerSearchQuery('')}
-                          className="text-xs text-gray-500 hover:text-gray-700 font-medium shrink-0 bg-white border border-gray-200 px-2 py-1 rounded"
+                          className="h-9 text-xs text-slate-500 hover:text-slate-700 font-semibold shrink-0 bg-white border border-slate-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
                         >
                           Xoá
                         </button>
                       )}
                     </div>
-                    <div className="max-h-48 overflow-y-auto divide-y divide-gray-150 border border-gray-200 rounded-lg bg-white shadow-inner">
+                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-150 border border-slate-200 rounded-lg bg-white shadow-inner">
                       {uniqueCustomers
                         .filter(c => {
                           const q = removeDiacritics(customerSearchQuery.toLowerCase().trim());
@@ -1112,21 +1114,21 @@ export default function DepartureCalendar() {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className={`relative ${focusedInput === 'name' ? 'z-30' : 'z-20'}`}>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
                         Họ và tên khách trưởng nhóm *
                       </label>
                       <input 
                         type="text"
                         required
                         placeholder="Nhập họ và tên trưởng nhóm đại diện"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white uppercase font-bold outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 uppercase font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={bookerName}
                         onChange={e => setBookerName(e.target.value.toUpperCase())}
                         onFocus={() => setFocusedInput('name')}
                         onBlur={() => setTimeout(() => setFocusedInput(null), 250)}
                       />
                       {focusedInput === 'name' && suggestions.length > 0 && (
-                        <div className="absolute z-50 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-xl divide-y divide-gray-100">
+                        <div className="absolute z-50 w-full bg-white border border-slate-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-xl divide-y divide-slate-100">
                           {suggestions.map(p => (
                             <div 
                               key={p.id}
@@ -1136,13 +1138,13 @@ export default function DepartureCalendar() {
                               <div>
                                 <div className="font-bold text-slate-800">{p.full_name}</div>
                                 {p.passport_number && (
-                                  <span className="text-[10px] text-gray-400 font-mono">HC: {p.passport_number}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono">HC: {p.passport_number}</span>
                                 )}
                               </div>
                               <div className="text-right">
                                 <div className="font-semibold text-blue-600">{p.phone || 'Chưa có SĐT'}</div>
                                 {p.dob && (
-                                  <div className="text-[9px] text-gray-400">NS: {p.dob}</div>
+                                  <div className="text-[9px] text-slate-400">NS: {p.dob}</div>
                                 )}
                               </div>
                             </div>
@@ -1151,21 +1153,21 @@ export default function DepartureCalendar() {
                       )}
                     </div>
                     <div className={`relative ${focusedInput === 'phone' ? 'z-30' : 'z-10'}`}>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
                         Số điện thoại liên hệ *
                       </label>
                       <input 
                         type="text"
                         required
                         placeholder="Nhập số điện thoại trưởng nhóm"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white font-semibold outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={bookerPhone}
                         onChange={e => setBookerPhone(e.target.value)}
                         onFocus={() => setFocusedInput('phone')}
                         onBlur={() => setTimeout(() => setFocusedInput(null), 250)}
                       />
                       {focusedInput === 'phone' && suggestions.length > 0 && (
-                        <div className="absolute z-50 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-xl divide-y divide-gray-100">
+                        <div className="absolute z-50 w-full bg-white border border-slate-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-xl divide-y divide-slate-100">
                           {suggestions.map(p => (
                             <div 
                               key={p.id}
@@ -1175,13 +1177,13 @@ export default function DepartureCalendar() {
                               <div>
                                 <div className="font-bold text-slate-800">{p.full_name}</div>
                                 {p.passport_number && (
-                                  <span className="text-[10px] text-gray-400 font-mono">HC: {p.passport_number}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono">HC: {p.passport_number}</span>
                                 )}
                               </div>
                               <div className="text-right">
                                 <div className="font-bold text-blue-600">{p.phone || 'Chưa có SĐT'}</div>
                                 {p.dob && (
-                                  <div className="text-[9px] text-gray-400">NS: {p.dob}</div>
+                                  <div className="text-[9px] text-slate-400">NS: {p.dob}</div>
                                 )}
                               </div>
                             </div>
@@ -1199,33 +1201,33 @@ export default function DepartureCalendar() {
                   2. Số lượng khách (Tính giá tạm tính)
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 space-y-1">
-                    <label className="block text-xs font-bold text-gray-700">Người lớn (≥ 10 tuổi) *</label>
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+                    <label className="block text-xs font-bold text-slate-700">Người lớn (≥ 10 tuổi) *</label>
                     <input 
                       type="number"
                       min="1"
                       required
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm bg-white font-bold text-blue-700"
+                      className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-blue-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       value={adultCount}
                       onChange={e => handleAdultCountChange(Number(e.target.value))}
                     />
                   </div>
-                  <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 space-y-1">
-                    <label className="block text-xs font-bold text-gray-700">Trẻ em (2 - &lt; 10 tuổi)</label>
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+                    <label className="block text-xs font-bold text-slate-700">Trẻ em (2 - &lt; 10 tuổi)</label>
                     <input 
                       type="number"
                       min="0"
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm bg-white font-bold"
+                      className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       value={childCount}
                       onChange={e => handleChildCountChange(Number(e.target.value))}
                     />
                   </div>
-                  <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 space-y-1">
-                    <label className="block text-xs font-bold text-gray-700">Trẻ nhỏ (&lt; 2 tuổi)</label>
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+                    <label className="block text-xs font-bold text-slate-700">Trẻ nhỏ (&lt; 2 tuổi)</label>
                     <input 
                       type="number"
                       min="0"
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm bg-white font-bold"
+                      className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       value={infantCount}
                       onChange={e => setInfantCount(Math.max(0, Number(e.target.value)))}
                     />
@@ -1245,7 +1247,7 @@ export default function DepartureCalendar() {
                     <input 
                       type="number"
                       min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                       value={singleRoomCount}
                       onChange={e => setSingleRoomCount(Math.max(0, Number(e.target.value)))}
                     />
@@ -1253,7 +1255,7 @@ export default function DepartureCalendar() {
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-gray-600">Thông tin ghép phòng (Lẻ nam / Lẻ nữ)</label>
                     <select 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
                       value={roomShareInfo}
                       onChange={e => setRoomShareInfo(e.target.value)}
                     >
@@ -1294,34 +1296,34 @@ export default function DepartureCalendar() {
                     </div>
                   </div>
                   {vatOption === 'Xuất VAT' && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3 mb-4">
-                      <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Thông tin xuất hóa đơn</h4>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3 mb-4">
+                      <h4 className="text-xs font-bold text-slate-700 uppercase mb-2">Thông tin xuất hóa đơn</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Tên công ty <span className="text-red-500">*</span></label>
-                          <input type="text" value={vatCompanyName} onChange={e => setVatCompanyName(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="CÔNG TY TNHH..." required />
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Tên công ty <span className="text-red-500">*</span></label>
+                          <input type="text" value={vatCompanyName} onChange={e => setVatCompanyName(e.target.value)} className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder-slate-400" placeholder="CÔNG TY TNHH..." required />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Mã số thuế <span className="text-red-500">*</span></label>
-                          <input type="text" value={vatTaxCode} onChange={e => setVatTaxCode(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Nhập mã số thuế..." required />
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Mã số thuế <span className="text-red-500">*</span></label>
+                          <input type="text" value={vatTaxCode} onChange={e => setVatTaxCode(e.target.value)} className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder-slate-400" placeholder="Nhập mã số thuế..." required />
                         </div>
                         <div className="md:col-span-2">
-                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Địa chỉ xuất hóa đơn <span className="text-red-500">*</span></label>
-                          <input type="text" value={vatAddress} onChange={e => setVatAddress(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Địa chỉ đăng ký kinh doanh..." required />
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Địa chỉ xuất hóa đơn <span className="text-red-500">*</span></label>
+                          <input type="text" value={vatAddress} onChange={e => setVatAddress(e.target.value)} className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder-slate-400" placeholder="Địa chỉ đăng ký kinh doanh..." required />
                         </div>
                         <div className="md:col-span-2">
-                          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Email nhận hóa đơn <span className="text-red-500">*</span></label>
-                          <input type="email" value={vatEmail} onChange={e => setVatEmail(e.target.value)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-sm bg-white" placeholder="Email nhận hóa đơn điện tử..." required />
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Email nhận hóa đơn <span className="text-red-500">*</span></label>
+                          <input type="email" value={vatEmail} onChange={e => setVatEmail(e.target.value)} className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder-slate-400" placeholder="Email nhận hóa đơn điện tử..." required />
                         </div>
                       </div>
                     </div>
                   )}
                   <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-gray-600">Yêu cầu đặc biệt (Ghi chú thêm)</label>
+                    <label className="block text-xs font-semibold text-slate-600">Yêu cầu đặc biệt (Ghi chú thêm)</label>
                     <textarea 
                       rows={2}
                       placeholder="Nhập các yêu cầu ăn uống, phòng ở đặc biệt..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder-slate-400"
                       value={specialRequests}
                       onChange={e => setSpecialRequests(e.target.value)}
                     />
@@ -1349,7 +1351,7 @@ export default function DepartureCalendar() {
                           <input
                             type="text"
                             placeholder="Nhập Tên CTV, SĐT, số tiền hoa hồng..."
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white focus:ring-1 focus:ring-amber-500 outline-none font-medium"
+                            className="w-full h-9 px-3 py-1.5 border border-amber-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all placeholder-slate-400"
                             value={ctvInfo}
                             onChange={e => {
                               setCtvInfo(e.target.value);
@@ -1462,7 +1464,7 @@ export default function DepartureCalendar() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
                 <button 
                   type="button"
                   onClick={() => {
@@ -1479,25 +1481,21 @@ export default function DepartureCalendar() {
     setVatTaxCode('');
     setVatAddress('');
     setVatEmail('');
-    setVatCompanyName('');
-    setVatTaxCode('');
-    setVatAddress('');
-    setVatEmail('');
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 bg-white transition-colors"
+                  className="h-9 px-4 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 bg-white transition-colors cursor-pointer"
                 >
                   Nhập lại (Reset)
                 </button>
                 <button 
                   type="button"
                   onClick={() => setSelectedTourForBooking(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 bg-white transition-colors"
+                  className="h-9 px-4 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 bg-white transition-colors cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
                 <button 
                   type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all"
+                  className="h-9 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   Lưu thông tin giữ chỗ
                 </button>
@@ -1510,21 +1508,21 @@ export default function DepartureCalendar() {
       {/* Travel disclaimers modal */}
       {noticeTour && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200 relative">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200 relative">
             {/* Modal Header */}
-            <div className="sticky top-0 bg-slate-50 border-b border-gray-200 p-5 z-10 flex justify-between items-center">
+            <div className="sticky top-0 bg-slate-50 border-b border-slate-200 p-5 z-10 flex justify-between items-center">
               <div>
                 <h3 className="text-sm font-black text-slate-900 flex items-center uppercase tracking-wider">
                   <FileText className="w-5 h-5 mr-2 text-orange-600" />
                   Bảng thông tin & Quy định lưu ý đi Tour
                 </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Mã tour: <span className="font-bold text-blue-700">{noticeTour.code}</span> — Tên hành trình: <span className="font-semibold text-gray-800">{noticeTour.name}</span>
+                <p className="text-xs text-slate-500 mt-1">
+                  Mã tour: <span className="font-bold text-blue-700">{noticeTour.code}</span> — Tên hành trình: <span className="font-semibold text-slate-800">{noticeTour.name}</span>
                 </p>
               </div>
               <button
                 onClick={() => setNoticeTour(null)}
-                className="p-1.5 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800"
+                className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-slate-800 cursor-pointer"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -1568,15 +1566,15 @@ export default function DepartureCalendar() {
                     </div>
                     
                     {/* Table Grid structure */}
-                    <div className="border border-gray-250 rounded-b-lg overflow-hidden divide-y divide-gray-250">
+                    <div className="border border-slate-200 rounded-b-lg overflow-hidden divide-y divide-slate-200">
                       {sec.items && sec.items.map((row: any, rowIdx: number) => (
-                        <div key={rowIdx} className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-gray-250 hover:bg-slate-50/50 transition-colors">
+                        <div key={rowIdx} className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200 hover:bg-slate-50/50 transition-colors">
                           {/* Left column / key Label */}
                           <div className="md:w-[220px] shrink-0 bg-emerald-50/50 text-emerald-900 font-extrabold p-3 text-xs leading-relaxed flex items-center">
                             {row.key}
                           </div>
                           {/* Right column / value Description */}
-                          <div className="flex-1 p-4 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          <div className="flex-1 p-4 text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
                             {row.value}
                           </div>
                         </div>
@@ -1588,10 +1586,10 @@ export default function DepartureCalendar() {
             </div>
 
             {/* Modal Footer */}
-            <div className="sticky bottom-0 bg-slate-50 border-t border-gray-200 p-4 flex justify-end">
+            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-4 flex justify-end">
               <button
                 onClick={() => setNoticeTour(null)}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-md transition-all"
+                className="h-9 px-5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
               >
                 Đóng thông tin
               </button>

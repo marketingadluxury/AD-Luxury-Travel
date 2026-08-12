@@ -574,7 +574,7 @@ export default function PassengersManagement() {
               <select
                 value={selectedTier}
                 onChange={e => setSelectedTier(e.target.value)}
-                className="w-full pl-3 pr-8 py-2.5 border border-slate-300/90 rounded-xl text-xs font-bold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                className="w-full h-9 pl-3 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="all">👑 Mọi Hạng thành viên</option>
                 <option value="Hạng Đồng">🟤 Hạng Đồng</option>
@@ -589,7 +589,7 @@ export default function PassengersManagement() {
               <select
                 value={selectedVisaStatus}
                 onChange={e => setSelectedVisaStatus(e.target.value)}
-                className="w-full pl-3 pr-8 py-2.5 border border-slate-300/90 rounded-xl text-xs font-bold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                className="w-full h-9 pl-3 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="all">🛂 Mọi Visa status (Mới nhất)</option>
                 <option value="pending">⏳ Chờ nộp hồ sơ</option>
@@ -605,7 +605,7 @@ export default function PassengersManagement() {
               <select
                 value={selectedTourId}
                 onChange={e => setSelectedTourId(e.target.value)}
-                className="w-full pl-3 pr-8 py-2.5 border border-slate-300/90 rounded-xl text-xs font-bold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 truncate"
+                className="w-full h-9 pl-3 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 truncate"
               >
                 <option value="all">🗺️ Khách từng đi bất kỳ Tour nào</option>
                 {tours.map(t => (

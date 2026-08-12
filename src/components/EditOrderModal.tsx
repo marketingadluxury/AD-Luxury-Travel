@@ -452,10 +452,10 @@ export default function EditOrderModal({
                 disabled={!canEditFinancials}
                 value={vatOption}
                 onChange={(e) => setVatOption(e.target.value)}
-                className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                className={`w-full h-9 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
                   !canEditFinancials
                     ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
-                    : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
+                    : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 cursor-pointer'
                 }`}
               >
                 <option value="Không xuất VAT">Không xuất VAT</option>
@@ -584,10 +584,10 @@ export default function EditOrderModal({
                   disabled={!canEditFinancials}
                   value={discountType}
                   onChange={(e) => setDiscountType(e.target.value as 'percent' | 'amount')}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                  className={`w-full h-9 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
                     !canEditFinancials
                       ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
-                      : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white'
+                      : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 cursor-pointer'
                   }`}
                 >
                   <option value="amount">Số tiền (đ)</option>

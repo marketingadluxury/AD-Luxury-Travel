@@ -521,6 +521,123 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   2. Rà soát và nâng cấp CSS của toàn bộ các thẻ `<select>` dropdown trên các màn hình: `CustomersManagement.tsx`, `PaymentProposals.tsx`, `VisaServices.tsx`, `VisaProcessing.tsx`, `OrdersManagement.tsx`, `AccountingInvoice.tsx`, `HDVQuickUploadModal.tsx`, `HDVQuickLinkModal.tsx`, `PassengersManagement.tsx`, `ActivityLogs.tsx`, `TourCostsManagement.tsx`, v.v.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
 
+### 1.57 Tích Hợp Hệ Thống Trò Chuyện Nội Bộ (Internal Team Chat) Song Song Trên CRM
+- **Mô tả yêu cầu / Lỗi:**
+  - Tích hợp tính năng Chat nội bộ cho công ty lữ hành hoạt động song song với hệ thống CRM (thay thế/song song Zalo).
+  - Yêu cầu kênh phòng ban (`#chung`, `#dieu-hanh`, `#kinh-doanh`, `#ke-toan`, `#visa`, `#hdv-doan`), chat 1-1 cá nhân, đính kèm file/ảnh, thả emoji cảm xúc, trả lời tin nhắn, và đặc biệt hỗ trợ **gắn thẻ nhanh mã Tour, mã Booking, mã ĐNTT** vào nội dung chat.
+  - Tích hợp cả trang quản lý chat chuyên dụng (`/chat`) trên Sidebar và **Cửa sổ Chat Nổi (Floating Chat Drawer)** góc phải màn hình để trao đổi công việc trực tiếp mà không cần rời khỏi trang hiện tại.
+- **Giải pháp:**
+  1. Tạo component `TeamChat.tsx` tại `/src/pages/TeamChat.tsx` với giao diện chia 2 cột chuyên nghiệp: Sidebar danh sách Kênh phòng ban/Chat 1-1 và Khung nhắn tin thời gian thực.
+  2. Tạo component `FloatingChatDrawer.tsx` tại `/src/components/chat/FloatingChatDrawer.tsx` hiển thị nút Chat nổi cố định ở góc dưới bên phải giao diện chung (`Layout.tsx`), cho phép mở drawer trò chuyện song song mọi lúc.
+  3. Bổ sung bảng `chat_messages` và kích hoạt Supabase Realtime trong `supabase-schema.sql` cùng việc mở rộng `CRMContext.tsx` quản lý state `chatMessages`, `sendChatMessage`, `addChatReaction`.
+  4. Bổ sung hàm helper `uploadFileToCRM` trong `src/lib/supabase.ts` để lưu trữ ảnh/file chat lên Google Drive hoặc Supabase Storage.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.58 Tạm Thời Ẩn Widget Trợ Lý Hướng Dẫn AI (ERPCopilotModal)
+- **Mô tả yêu cầu / Lỗi:**
+  - Theo yêu cầu từ người dùng: Tạm thời ẩn nút/khung Trợ lý Hướng dẫn AI (Gemini Copilot) trên giao diện hệ thống.
+- **Giải pháp:**
+  - Tạm thời comment out component `<ERPCopilotModal />` tại `src/components/Layout.tsx` để ẩn widget trợ lý trên toàn hệ thống mà vẫn giữ nguyên mã nguồn để dễ dàng tái kích hoạt khi cần.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.59 Tích Hợp Google Chat Workspace & API Webhooks Đồng Bộ Với CRM
+- **Mô tả yêu cầu / Lỗi:**
+  - Tích hợp ứng dụng Google Chat chính chủ của công ty thay vì build hệ thống chat độc lập hoàn toàn, đồng thời nhúng các API & Webhooks đồng bộ dữ liệu thời gian thực giữa Google Chat và CRM.
+  - Trả lời thắc mắc của người dùng về nơi lưu trữ hình ảnh, file chat: Dữ liệu được lưu trực tiếp trên hạ tầng Google Chat & Google Drive Workspace thuộc công ty.
+- **Giải pháp:**
+  1. Cấu hình OAuth Scopes cho Google Chat API (`https://www.googleapis.com/auth/chat.messages`, `https://www.googleapis.com/auth/chat.spaces.readonly`).
+  2. Bổ sung các backend endpoints trong `app.ts`:
+     - `GET /api/google-chat/status`: Kiểm tra trạng thái kết nối Google Chat OAuth & Webhook.
+     - `POST /api/google-chat/webhooks/config`: Lưu cấu hình Incoming Webhooks cho từng kênh Space (`#chung`, `#dieu-hanh`, `#kinh-doanh`, `#ke-toan`, `#visa`, `#hdv-doan`).
+     - `GET /api/google-chat/spaces`: Lấy danh sách Google Chat Spaces.
+     - `POST /api/google-chat/send`: Gửi tin nhắn đồng bộ sang Google Chat Space.
+     - `POST /api/google-chat/webhook-notify`: Phát thông báo dạng Card tự động lên Google Chat Space khi có sự kiện CRM (Booking, ĐNTT, Tour).
+  3. Cập nhật `TeamChat.tsx` & `FloatingChatDrawer.tsx`:
+     - Tích hợp nút **"📂 Mở Google Chat (chat.google.com)"** giúp truy cập nhanh bản Web/App.
+     - Bổ sung modal **"⚙️ Cấu hình Webhooks Google Chat Space"** cho Quản trị viên/Điều hành.
+     - Tự động gọi API `/api/google-chat/send` khi phát sinh tin nhắn hoặc gắn mã CRM (Tour, Booking, ĐNTT).
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.60 Gỡ Bỏ Giao Diện Trò Chuyện Nội Bộ Độc Lập Trực Tiếp Trên CRM (Sử Dụng Google Chat)
+- **Mô tả yêu cầu / Lỗi:**
+  - Theo yêu cầu mới nhất từ người dùng: Gỡ bỏ hoàn toàn phần trò chuyện nội bộ (menu tab và cửa sổ chat nổi) trên giao diện hệ thống CRM để nhân viên trao đổi trực tiếp trên ứng dụng **Google Chat (Workspace)** của công ty.
+- **Giải pháp:**
+  1. Loại bỏ mục menu "Trò chuyện nội bộ" khỏi thanh điều hướng Sidebar tại `src/components/Layout.tsx`.
+  2. Gỡ bỏ component cửa sổ chat nổi `<FloatingChatDrawer />` khỏi giao diện chung `Layout.tsx`.
+  3. Gỡ bỏ route `/chat` khỏi `src/App.tsx`.
+  4. Giữ lại các API backend Google Chat Webhooks (`/api/google-chat/webhook-notify`) để hệ thống CRM tiếp tục phát thông báo real-time tự động lên các Space Google Chat khi có Booking, ĐNTT hoặc sự kiện Tour.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.61 Tích Hợp Google Apps Script (GAS) WebApp Bot Thông Báo Google Chat Không Cần Workspace Webhook
+- **Mô tả yêu cầu / Lỗi:**
+  - Do tài khoản không sử dụng bản trả phí Google Workspace bị giới hạn nút "Thêm Webhook" trực tiếp trên không gian Google Chat, người dùng cung cấp giải pháp sử dụng **Google Apps Script (GAS) Web App** đóng vai trò Trung gian (Proxy/Bot) đẩy tin nhắn trực tiếp từ CRM sang các không gian Google Chat (`ADLC Official`, `ADL - VISA`, `ADL - ĐIỀU HÀNH`, `ADL - KẾ TOÁN`, `ADL - MARKETING`, v.v.).
+- **Giải pháp:**
+  1. Tích hợp endpoint `POST /api/notifications/google-chat-gas` trong backend (`app.ts`) gửi thông tin `{ title, message, orderCode, amount, tourCode, proposalCode }` tới URL Google Apps Script WebApp (`https://script.google.com/macros/s/AKfycbwpI2I54dVdPVMeWpFO7J0Kz2Bn20NQEMvbo0uz7ubTmcehJgZ5KeAycWtyWRTpTFM0/exec`).
+  2. Tự động liên kết chuyển tiếp tất cả thông báo từ hệ thống CRM (`/api/google-chat/webhook-notify`) tới Google Apps Script WebApp để thông báo real-time được chuyển ngay tới các Không gian Google Chat tương ứng.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.62 Loại Bỏ Khối Xem Trước (Preview) Ảnh Biên Lai / Hóa Đơn Khi Chọn File Để Tránh Tải Trùng & Tốn Egress
+- **Mô tả yêu cầu / Lỗi:**
+  - Loại bỏ hoàn toàn khối hiển thị xem trước (preview thumbnail image) bên dưới khung tải file hóa đơn/biên lai chuyển tiền nhằm tối ưu hiệu năng, giảm dung lượng bộ nhớ render và tránh làm quá tải lưu lượng Egress mạng.
+- **Giải pháp:**
+  1. Loại bỏ đoạn mã `<img src={URL.createObjectURL(file)} alt="Preview biên lai" ... />` và khung chữ "Xem trước hóa đơn chuyển tiền" trong `src/components/PaymentModal.tsx`.
+  2. Loại bỏ các khối xem trước ảnh biên lai tương tự trong `src/pages/AccountingInvoice.tsx`.
+  3. Giữ nguyên thẻ trạng thái đã chọn file thành công kèm tên file, dung lượng file, nút đổi file và nút xóa file.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.63 Sửa Lỗi Phân Quyền Google Drive (Failed to share with adluxury.net)
+- **Mô tả yêu cầu / Lỗi:**
+  - Lỗi `[Drive] Failed to share with adluxury.net` xuất hiện khi hệ thống cố gắng phân quyền thư mục theo domain `type: 'domain'` đối với các tài khoản Google Drive cá nhân/không thuộc Workspace quản trị domain.
+- **Giải pháp:**
+  1. Thay thế phân quyền `type: 'domain'` thành `type: 'anyone', role: 'reader'` trong hàm `makeFolderPublic` tại `app.ts` để đảm bảo liên kết file/thư mục tải lên Google Drive được đọc chính xác bởi người dùng được phân quyền trên CRM.
+  2. Xử lý an toàn các cảnh báo chia sẻ email để tránh làm gián đoạn tiến trình lưu trữ tài liệu.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.64 Khôi Phục Hệ Thống Trò Chuyện Nội Bộ Trực Tiếp Trên CRM & Bỏ GAS Integration
+- **Mô tả yêu cầu / Lỗi:**
+  - Bỏ phần tích hợp Google Apps Script (GAS) WebApp bot và khôi phục lại tính năng **Trò chuyện nội bộ** trực tiếp trên CRM.
+- **Giải pháp:**
+  1. Loại bỏ các endpoint và logic chuyển tiếp tin nhắn sang GAS WebApp trong `app.ts`.
+  2. Khôi phục tab menu "Trò chuyện nội bộ" (`/chat`) trên Sidebar (`src/components/Layout.tsx`) và kích hoạt lại route `/chat` (`src/App.tsx`).
+  3. Kích hoạt lại cửa sổ chat nổi song song `<FloatingChatDrawer />` hỗ trợ chat theo Kênh (Chung, Điều hành, Sale, Kế toán, Visa, HDV) và Nhắn tin trực tiếp (Direct Message).
+  4. Hỗ trợ đính kèm file/ảnh (Supabase Storage/Drive), tag mã CRM (Tour, Booking, ĐNTT) và thả cảm xúc tin nhắn.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.65 Gỡ Bỏ Mục Trò Chuyện Nội Bộ (Phát Triển Thành App Dự Án Riêng)
+- **Mô tả yêu cầu / Lỗi:**
+  - Theo yêu cầu của người dùng, gỡ bỏ hoàn toàn mục Trò chuyện nội bộ khỏi dự án Tour CRM hiện tại để phát triển thành một dự án riêng biệt độc lập và tích hợp lại sau.
+- **Giải pháp:**
+  1. Loại bỏ mục menu "Trò chuyện nội bộ" khỏi thanh điều hướng Sidebar tại `src/components/Layout.tsx`.
+  2. Gỡ bỏ cửa sổ chat nổi `<FloatingChatDrawer />` khỏi giao diện chung `src/components/Layout.tsx`.
+  3. Gỡ bỏ route `/chat` khỏi `src/App.tsx`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.66 Bật Lại Tính Năng Trợ Lý AI Hướng Dẫn Vận Hành ERP (Gemini Copilot)
+- **Mô tả yêu cầu / Lỗi:**
+  - Kích hoạt lại tính năng Trợ lý hướng dẫn AI Copilot giải đáp thắc mắc nghiệp vụ, phân quyền, hoa hồng, nộp file Visa và hướng dẫn tạo tour cho người dùng trên hệ thống.
+- **Giải pháp:**
+  1. Kích hoạt lại component `<ERPCopilotModal />` tại `src/components/Layout.tsx`.
+  2. Hiển thị nút bấm nổi góc dưới bên phải màn hình **"Trợ lý hướng dẫn 🤖"** đi kèm gợi ý câu hỏi nhanh, giao diện chat thông minh và hỗ trợ gửi góp ý hiệu chỉnh thông tin dành cho Quản trị viên (Admin).
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.67 Sửa Lỗi Cắt Chữ / Tràn Khung UI Thẻ "Tổng Tiền Visa Đoàn" Khi Nhập Chi Phí Tour
+- **Mô tả yêu cầu / Lỗi:**
+  - Thẻ hiển thị tự động tính toán "⚡ Tổng tiền Visa đoàn" trong Bảng khai báo chi phí Tour (`src/components/TourCostsManagement.tsx`) bị xuống dòng gãy chữ và đè khuất phần text dòng thứ 2 `(4.500.000 đ/khách × 15 khách)` khi cột có kích thước hẹp.
+- **Giải pháp:**
+  1. Cập nhật thẻ chứa badge từ `flex items-start leading-tight` sang `flex flex-wrap items-center gap-1.5 leading-normal` để thẻ tự động mở rộng chiều cao mềm mại khi có thêm dòng.
+  2. Bổ sung class `whitespace-nowrap` cho nhãn tiêu đề và số tiền tổng `67.500.000 đ` để tránh ngắt đôi số tiền.
+  3. Chuẩn hóa đồng bộ class tương tự cho thẻ "⚡ Tự động tính" của ô Hoa hồng / Commission.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.68 Đồng Bộ Chiều Cao, Font Size Và Style Dropdown Trên Toàn Hệ Thống
+- **Mô tả yêu cầu / Lỗi:**
+  - Lệch kích thước ô, font-size và kiểu dáng dropdown giữa ô nhập liệu (`<input>`), danh sách chọn (`<select>`) và bộ chọn ngày (`<DatePicker>`) khiến giao diện dạng bảng/grid không phẳng hàng. Các thẻ danh sách option mặc định bị nền xám và sai font chữ.
+- **Giải pháp:**
+  1. **Chuẩn hóa CSS Toàn hệ thống (`src/index.css`):** Thiết lập quy tắc CSS toàn cục cho `<select>` và `<select option>` dùng font `Plus Jakarta Sans`, background trắng, màu chữ nhã nhặn, hover xanh dương `bg-blue-50 text-blue-700` và mũi tên Chevron chuẩn.
+  2. **Chuẩn hóa `<DatePicker>` (`src/components/DatePicker.tsx`):** Cập nhật chiều cao mặc định `h-9` (36px), `text-xs font-medium`, `border-slate-300 rounded-lg` giúp phẳng hàng tuyệt đối 100% với các ô input & select bên cạnh.
+  3. **Cập nhật Form Đợt Thanh Toán (`src/components/TourCostsManagement.tsx`):** Chuẩn hóa tất cả các ô trong form "Thêm đợt thanh toán mới" (Số tiền, Phương thức, Ngày thanh toán, Ghi chú, Ngân hàng, STK, Chủ TK) đồng bộ kích thước `h-9 px-2.5 py-1.5 text-xs rounded-lg border-slate-300 focus:ring-2 focus:ring-blue-500/20`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

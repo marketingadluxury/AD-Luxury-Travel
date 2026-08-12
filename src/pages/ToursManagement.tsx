@@ -1927,16 +1927,16 @@ export default function ToursManagement() {
         <>
           {/* TOUR FORM SECTION (Both Add & Edit) */}
           {(showAddForm || editingTour) && (
-            <div id="tour-form-section" className="bg-white rounded-xl border border-gray-200 shadow-md animate-in fade-in duration-200">
-              <div className="px-6 py-4 border-b border-gray-100 bg-slate-50/50 flex items-center justify-between">
-                <h3 className="text-base font-black text-gray-900">
+            <div id="tour-form-section" className="bg-white rounded-xl border border-slate-200 shadow-sm animate-in fade-in duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <h3 className="text-base font-black text-slate-900">
                   {editingTour ? `Cập Nhật Tour: ${editingTour.code}` : 'Khai Báo Tour Du Lịch Mới'}
                 </h3>
                 <button 
                   onClick={resetForm}
-                  className="p-1 hover:bg-slate-200 rounded-full transition-colors"
+                  className="p-1 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
                 >
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="w-5 h-5 text-slate-500" />
                 </button>
               </div>
 
@@ -1948,43 +1948,43 @@ export default function ToursManagement() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{tourType === 'visa' ? 'Mã visa *' : 'Mã tour *'}</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">{tourType === 'visa' ? 'Mã visa *' : 'Mã tour *'}</label>
                       <input 
                         type="text" 
                         required
                         placeholder="Ví dụ: THAILAN-5D-ART"
-                        className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold ${isCodeDuplicate ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                        className={`w-full h-9 px-3 py-1.5 border rounded-lg text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all uppercase ${isCodeDuplicate ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-white'}`}
                         value={code}
                         onChange={e => setCode(e.target.value.toUpperCase())}
                       />
                       {isCodeDuplicate && <p className="text-red-500 text-xs mt-1 font-semibold">{tourType === 'visa' ? 'Mã visa này đã tồn tại!' : 'Mã tour này đã tồn tại!'}</p>}
                     </div>
                     <div className="md:col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{tourType === 'visa' ? 'Tên visa *' : 'Tên tour *'}</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">{tourType === 'visa' ? 'Tên visa *' : 'Tên tour *'}</label>
                       <input 
                         type="text" 
                         required
                         placeholder="Ví dụ: [SÀI GÒN] THÁI LAN: BANGKOK - PATTAYA..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all uppercase"
                         value={name}
                         onChange={e => setName(e.target.value.toUpperCase())}
                       />
                     </div>
                     <div className="md:col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Điểm đến / Quốc gia *</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Điểm đến / Quốc gia *</label>
                       <input 
                         type="text" 
                         required
                         placeholder="Ví dụ: Thái Lan, Châu Âu..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={destination}
                         onChange={e => setDestination(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Loại hình sản phẩm *</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Loại hình sản phẩm *</label>
                       <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-semibold text-slate-800"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                         value={tourType}
                         onChange={e => setTourType(e.target.value as any)}
                       >
@@ -2012,12 +2012,12 @@ export default function ToursManagement() {
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-700 mb-1">Tên công ty đối tác vận hành *</label>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">Tên công ty đối tác vận hành *</label>
                               <input
                                 type="text"
                                 required
                                 placeholder="Ví dụ: Saigontourist, Vietravel..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold"
+                                className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-bold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 value={partnerCompanyName || partnerName}
                                 onChange={e => {
                                   setPartnerCompanyName(e.target.value);
@@ -2026,12 +2026,12 @@ export default function ToursManagement() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-700 mb-1">Thông tin liên hệ đối tác (SĐT/Người phụ trách) *</label>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">Thông tin liên hệ đối tác (SĐT/Người phụ trách) *</label>
                               <input
                                 type="text"
                                 required
                                 placeholder="Ví dụ: Anh Nam - 0987xxxxxx"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
+                                className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 value={partnerContact}
                                 onChange={e => setPartnerContact(e.target.value)}
                               />
@@ -2049,8 +2049,8 @@ export default function ToursManagement() {
                                   updateNetCost(val, partnerCommission);
                                 }}
                                 placeholder="Ví dụ: 29.000.000"
-                                labelClassName="block text-xs font-semibold text-slate-700 mb-1"
-                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                labelClassName="block text-xs font-semibold text-slate-600 mb-1"
+                                inputClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-bold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                               />
                             </div>
                             <div>
@@ -2063,8 +2063,8 @@ export default function ToursManagement() {
                                   updateNetCost(partnerRetailPrice, val);
                                 }}
                                 placeholder="Ví dụ: 2.000.000"
-                                labelClassName="block text-xs font-semibold text-slate-700 mb-1"
-                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                labelClassName="block text-xs font-semibold text-slate-600 mb-1"
+                                inputClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-bold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                               />
                               <p className="text-xs text-blue-700 font-medium mt-1.5 flex items-center gap-1 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md">
                                 <span>👉</span>
@@ -2113,7 +2113,7 @@ export default function ToursManagement() {
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
-                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                 <User className="w-3.5 h-3.5 text-blue-600" /> Tên cơ quan / Doanh nghiệp / Đoàn khách *
                               </label>
                               <div className="relative">
@@ -2121,19 +2121,19 @@ export default function ToursManagement() {
                                   type="text"
                                   required
                                   placeholder="Ví dụ: Công ty Techcombank - CN Sài Gòn"
-                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  className="w-full h-9 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                   value={privateCustomerName}
                                   onChange={e => {
                                     setPrivateCustomerName(e.target.value);
                                     setOrganizationName(e.target.value);
                                   }}
                                 />
-                                <User className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                               </div>
                             </div>
 
                             <div>
-                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                 <Phone className="w-3.5 h-3.5 text-blue-600" /> Đại diện liên hệ (SĐT) *
                               </label>
                               <div className="relative">
@@ -2141,7 +2141,7 @@ export default function ToursManagement() {
                                   type="text"
                                   required
                                   placeholder="Ví dụ: Chị Lan Anh - 0912345678"
-                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  className="w-full h-9 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                   value={privateCustomerPhone}
                                   onChange={e => {
                                     setPrivateCustomerPhone(e.target.value);
@@ -2153,28 +2153,28 @@ export default function ToursManagement() {
                             </div>
 
                             <div>
-                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                 <Mail className="w-3.5 h-3.5 text-blue-600" /> Email nhận thông tin hợp đồng
                               </label>
                               <div className="relative">
                                 <input
                                   type="email"
                                   placeholder="Ví dụ: lananh@techcombank.com.vn"
-                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  className="w-full h-9 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                   value={privateCustomerEmail}
                                   onChange={e => {
                                     setPrivateCustomerEmail(e.target.value);
                                     setCustomRequirements(e.target.value ? `Email: ${e.target.value}` : '');
                                   }}
                                 />
-                                <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                               </div>
                             </div>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div>
-                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                 <Users className="w-3.5 h-3.5 text-blue-600" /> Số lượng khách chốt (Pax) *
                               </label>
                               <div className="relative">
@@ -2183,11 +2183,11 @@ export default function ToursManagement() {
                                   required
                                   min="1"
                                   placeholder="Ví dụ: 35"
-                                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  className="w-full h-9 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-bold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                   value={privatePaxCount}
                                   onChange={e => setPrivatePaxCount(e.target.value !== '' ? Number(e.target.value) : '')}
                                 />
-                                <Users className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                                <Users className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                               </div>
                               <p className="text-[11px] text-gray-400 mt-1">Số lượng khách thực tế tham gia để tính toán giá bình quân.</p>
                             </div>
@@ -2199,8 +2199,8 @@ export default function ToursManagement() {
                                 value={privateTotalAmount}
                                 onChange={setPrivateTotalAmount}
                                 placeholder="Ví dụ: 250.000.000"
-                                labelClassName="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5"
-                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-extrabold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                labelClassName="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                                inputClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-extrabold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                               />
                               <p className="text-[11px] text-gray-400 mt-1">Tổng tiền ghi nhận trên hợp đồng ký kết với khách hàng.</p>
                             </div>
@@ -2211,8 +2211,8 @@ export default function ToursManagement() {
                                 value={commission}
                                 onChange={setCommission}
                                 placeholder="Ví dụ: 5.000.000"
-                                labelClassName="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5"
-                                inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-emerald-700"
+                                labelClassName="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                                inputClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-emerald-700 font-bold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                               />
                               <p className="text-[11px] text-gray-400 mt-1">Hoa hồng dành cho đại lý, Sale hoặc giới thiệu đoàn.</p>
                             </div>
@@ -2293,12 +2293,12 @@ export default function ToursManagement() {
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{tourType === 'visa' ? 'Thời gian xử lý *' : 'Thời gian hành trình *'}</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">{tourType === 'visa' ? 'Thời gian xử lý *' : 'Thời gian hành trình *'}</label>
                       <input 
                         type="text" 
                         required
                         placeholder="Ví dụ: 5 ngày 4 đêm"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={duration}
                         onChange={e => setDuration(e.target.value)}
                       />
@@ -2322,14 +2322,14 @@ export default function ToursManagement() {
                       />
                     )}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục sản phẩm *</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Danh mục sản phẩm *</label>
                       
                       {showInlineCatForm ? (
                         <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
                           <input
                             type="text"
                             placeholder="Nhập tên danh mục mới..."
-                            className="flex-1 px-3 py-2 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                            className="flex-1 h-9 px-3 py-1.5 border border-blue-400 rounded-lg text-xs font-semibold focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white"
                             value={inlineCatName}
                             onChange={e => setInlineCatName(e.target.value)}
                             onKeyDown={e => {
@@ -2343,7 +2343,7 @@ export default function ToursManagement() {
                           <button
                             type="button"
                             onClick={handleAddInlineCategory}
-                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
+                            className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
                           >
                             Thêm
                           </button>
@@ -2353,7 +2353,7 @@ export default function ToursManagement() {
                               setShowInlineCatForm(false);
                               setInlineCatName('');
                             }}
-                            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
+                            className="h-9 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
                           >
                             Hủy
                           </button>
@@ -2361,7 +2361,7 @@ export default function ToursManagement() {
                       ) : (
                         <select 
                           required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-medium"
+                          className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                           value={category}
                           onChange={e => {
                             if (e.target.value === '__ADD_NEW_CAT__') {
@@ -2392,27 +2392,27 @@ export default function ToursManagement() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Hãng hàng không</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Hãng hàng không</label>
                       <input 
                         type="text" 
                         placeholder="Vietnam Airlines, Vietjet..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={airline}
                         onChange={e => setAirline(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu chuẩn Khách sạn</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Tiêu chuẩn Khách sạn</label>
                       <input 
                         type="text" 
                         placeholder="Khách sạn 4 sao, Resort 5 sao..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={hotel}
                         onChange={e => setHotel(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1.5">
                         📂 Lịch trình chi tiết (File PDF)
                         <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
                       </label>
@@ -2572,32 +2572,32 @@ export default function ToursManagement() {
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tổng số chỗ mở bán *</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Tổng số chỗ mở bán *</label>
                       <input 
                         type="number" 
                         required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={totalSeats}
                         onChange={e => setTotalSeats(Number(e.target.value))}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Overbooking cho phép</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Overbooking cho phép</label>
                       <input 
                         type="number" 
                         min="0"
                         placeholder="Mặc định: 0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={overbookLimit}
                         onChange={e => setOverbookLimit(Number(e.target.value))}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Mặc định Hold (Giờ) *</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Mặc định Hold (Giờ) *</label>
                       <input 
                         type="number" 
                         required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={holdDuration}
                         onChange={e => setHoldDuration(Number(e.target.value))}
                       />
@@ -2615,9 +2615,9 @@ export default function ToursManagement() {
                       onChange={setTicketDeadline}
                     />
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái mở bán</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Trạng thái mở bán</label>
                       <select 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                         value={tourStatus}
                         onChange={e => setTourStatus(e.target.value as TourStatus)}
                       >
@@ -2646,7 +2646,7 @@ export default function ToursManagement() {
                         <input 
                           type="text" 
                           placeholder="VD: QR971 SGN - DOH 19:55 - 23:25"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                           value={flightOut}
                           onChange={e => setFlightOut(e.target.value)}
                         />
@@ -2656,7 +2656,7 @@ export default function ToursManagement() {
                         <input 
                           type="text" 
                           placeholder="VD: QR039 DOH - CDG 01:25 - 07:25"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                           value={flightOutTransit}
                           onChange={e => setFlightOutTransit(e.target.value)}
                         />
@@ -2668,7 +2668,7 @@ export default function ToursManagement() {
                         <input 
                           type="text" 
                           placeholder="VD: QR116 FCO - DOH 16:35 - 23:10"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                           value={flightIn}
                           onChange={e => setFlightIn(e.target.value)}
                         />
@@ -2678,7 +2678,7 @@ export default function ToursManagement() {
                         <input 
                           type="text" 
                           placeholder="VD: QR970 DOH - SGN 02:35 - 14:25"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                           value={flightInTransit}
                           onChange={e => setFlightInTransit(e.target.value)}
                         />
@@ -2691,7 +2691,7 @@ export default function ToursManagement() {
                       <input 
                         type="text" 
                         placeholder="VD: Quá cảnh tại Doha 3 tiếng"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={transitInfo}
                         onChange={e => setTransitInfo(e.target.value)}
                       />
@@ -2701,7 +2701,7 @@ export default function ToursManagement() {
                       <input 
                         type="text" 
                         placeholder="CHỜ XUẤT VÉ, ĐÃ CHỐT XUẤT VÉ..."
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 text-slate-500 cursor-not-allowed font-semibold"
                         value={ticketStatus}
                         readOnly
                         title="Tình trạng vé được cập nhật tự động dựa trên hạn xuất vé"
@@ -2714,7 +2714,7 @@ export default function ToursManagement() {
                       <input 
                         type="text" 
                         placeholder="Họ tên HDV"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={guideName}
                         onChange={e => setGuideName(e.target.value)}
                       />
@@ -2724,7 +2724,7 @@ export default function ToursManagement() {
                       <input 
                         type="text" 
                         placeholder="Số điện thoại"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                         value={guidePhone}
                         onChange={e => setGuidePhone(e.target.value)}
                       />
@@ -2773,7 +2773,7 @@ export default function ToursManagement() {
                           <input
                             type="text"
                             required
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm font-bold text-blue-800 bg-white"
+                            className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-blue-800 bg-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                             value={sec.title}
                             onChange={(e) => updateSectionTitle(secIdx, e.target.value)}
                           />
@@ -2789,7 +2789,7 @@ export default function ToursManagement() {
                                   type="text"
                                   required
                                   placeholder="Hành lý ký gửi..."
-                                  className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-semibold text-emerald-800 bg-gray-50"
+                                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-emerald-800 bg-slate-50 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                   value={row.key}
                                   onChange={(e) => updateSectionRow(secIdx, rowIdx, 'key', e.target.value)}
                                 />
@@ -2801,7 +2801,7 @@ export default function ToursManagement() {
                                     rows={2}
                                     required
                                     placeholder="Nội dung cụ thể quy định..."
-                                    className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs leading-relaxed text-gray-700 bg-white"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs leading-relaxed text-slate-800 bg-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                     value={row.value}
                                     onChange={(e) => updateSectionRow(secIdx, rowIdx, 'value', e.target.value)}
                                   />
@@ -2837,14 +2837,14 @@ export default function ToursManagement() {
                   <button 
                     type="button"
                     onClick={resetForm}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 bg-white"
+                    className="h-9 px-4 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 bg-white transition-all"
                   >
                     Hủy bỏ
                   </button>
                   <button 
                     type="submit"
                     disabled={isCodeDuplicate}
-                    className={`px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-sm ${isCodeDuplicate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`h-9 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all flex items-center justify-center ${isCodeDuplicate ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {editingTour ? 'Cập Nhật Tour' : (tourType === 'private' ? 'Lưu hợp đồng & Khởi tạo đoàn' : 'Lưu & Đăng Bán')}
                   </button>
@@ -2855,37 +2855,37 @@ export default function ToursManagement() {
 
           {/* SUMMARY DASHBOARD FOR OPERATOR */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500">Tổng số Tour hoạt động</span>
-                <div className="text-3xl font-extrabold text-gray-900 mt-1">{tours.filter(t => t.tour_type !== 'visa').length}</div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tổng số Tour hoạt động</span>
+                <div className="text-2xl font-black text-slate-900 mt-1">{tours.filter(t => t.tour_type !== 'visa').length}</div>
               </div>
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                <FolderOpen className="w-6 h-6 text-blue-600" />
+                <FolderOpen className="w-5 h-5 text-blue-600" />
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500">Chỗ đã bán (Sure)</span>
-                <div className="text-3xl font-extrabold text-emerald-600 mt-1">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chỗ đã bán (Sure)</span>
+                <div className="text-2xl font-black text-emerald-600 mt-1">
                   {tours.filter(t => t.tour_type !== 'visa').reduce((sum, t) => sum + t.sold_seats, 0)} chỗ
                 </div>
               </div>
               <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-                <Check className="w-6 h-6 text-emerald-600" />
+                <Check className="w-5 h-5 text-emerald-600" />
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500">Chỗ đang giữ tạm thời</span>
-                <div className="text-3xl font-extrabold text-amber-600 mt-1">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chỗ đang giữ tạm thời</span>
+                <div className="text-2xl font-black text-amber-600 mt-1">
                   {tours.filter(t => t.tour_type !== 'visa').reduce((sum, t) => sum + t.hold_seats, 0)} chỗ
                 </div>
               </div>
               <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
-                <Clock className="w-6 h-6 text-amber-600" />
+                <Clock className="w-5 h-5 text-amber-600" />
               </div>
             </div>
           </div>
@@ -2898,15 +2898,15 @@ export default function ToursManagement() {
                 <button
                   type="button"
                   onClick={() => setFilterTourType('all')}
-                  className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  className={`h-9 px-3.5 sm:px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer ${
                     filterTourType === 'all'
-                      ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900/10'
-                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                      ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/10'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200'
                   }`}
                 >
                   <span className="truncate">Tất cả loại tour</span>
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
-                    filterTourType === 'all' ? 'bg-slate-800 text-slate-200' : 'bg-slate-200/80 text-slate-700'
+                    filterTourType === 'all' ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'
                   }`}>
                     {tours.filter(t => t.tour_type !== 'visa').length}
                   </span>
@@ -2915,15 +2915,15 @@ export default function ToursManagement() {
                 <button
                   type="button"
                   onClick={() => setFilterTourType('internal')}
-                  className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  className={`h-9 px-3.5 sm:px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer ${
                     filterTourType === 'internal'
-                      ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-600/20'
-                      : 'bg-purple-50/70 text-purple-800 hover:bg-purple-100/80 border border-purple-200/70'
+                      ? 'bg-purple-600 text-white shadow-sm ring-2 ring-purple-600/20'
+                      : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
                   }`}
                 >
                   <span className="truncate">🏢 AD Tự vận hành</span>
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
-                    filterTourType === 'internal' ? 'bg-purple-800 text-purple-100' : 'bg-purple-200/80 text-purple-900'
+                    filterTourType === 'internal' ? 'bg-purple-800 text-purple-100' : 'bg-purple-200 text-purple-900'
                   }`}>
                     {tours.filter(t => t.tour_type === 'internal' || !t.tour_type).length}
                   </span>
@@ -2932,15 +2932,15 @@ export default function ToursManagement() {
                 <button
                   type="button"
                   onClick={() => setFilterTourType('outsourced')}
-                  className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  className={`h-9 px-3.5 sm:px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer ${
                     filterTourType === 'outsourced'
-                      ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-600/20'
-                      : 'bg-indigo-50/70 text-indigo-800 hover:bg-indigo-100/80 border border-indigo-200/70'
+                      ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-600/20'
+                      : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200'
                   }`}
                 >
                   <span className="truncate">🤝 Gửi khách đối tác-F2</span>
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
-                    filterTourType === 'outsourced' ? 'bg-indigo-800 text-indigo-100' : 'bg-indigo-200/80 text-indigo-900'
+                    filterTourType === 'outsourced' ? 'bg-indigo-800 text-indigo-100' : 'bg-indigo-200 text-indigo-900'
                   }`}>
                     {tours.filter(t => t.tour_type === 'outsourced' || t.tour_type === 'partner').length}
                   </span>
@@ -2948,13 +2948,13 @@ export default function ToursManagement() {
               </div>
 
               {/* Time Status Tabs: Upcoming vs Departed vs All */}
-              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0 self-start lg:self-auto">
+              <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 self-start lg:self-auto h-9 items-center">
                 <button
                   type="button"
                   onClick={() => setFilterTimeStatus('upcoming')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 h-7 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterTimeStatus === 'upcoming'
-                      ? 'bg-emerald-600 text-white shadow-xs'
+                      ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -2967,9 +2967,9 @@ export default function ToursManagement() {
                 <button
                   type="button"
                   onClick={() => setFilterTimeStatus('departed')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 h-7 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterTimeStatus === 'departed'
-                      ? 'bg-slate-800 text-white shadow-xs'
+                      ? 'bg-slate-800 text-white shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -2982,9 +2982,9 @@ export default function ToursManagement() {
                 <button
                   type="button"
                   onClick={() => setFilterTimeStatus('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 h-7 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterTimeStatus === 'all'
-                      ? 'bg-blue-600 text-white shadow-xs'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -2994,23 +2994,23 @@ export default function ToursManagement() {
             </div>
 
             {/* Secondary Filter Bar: Search, Month, Category */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
               {/* Search input */}
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Tìm mã tour, tên hành trình, điểm đến..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full h-9 pl-9 pr-8 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 />
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
                   >
-                    ✕
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -3020,7 +3020,7 @@ export default function ToursManagement() {
                 <select
                   value={filterMonth}
                   onChange={e => setFilterMonth(e.target.value)}
-                  className="w-full py-2 px-3 text-xs border border-gray-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700 transition-all appearance-none pr-8"
+                  className="w-full h-9 py-1.5 px-3 text-xs font-semibold border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                 >
                   <option value="all">📅 Tất cả tháng khởi hành</option>
                   {availableMonths.map(m => {
@@ -3032,7 +3032,6 @@ export default function ToursManagement() {
                     );
                   })}
                 </select>
-                <ChevronDown className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
 
               {/* Category filter dropdown */}
@@ -3040,7 +3039,7 @@ export default function ToursManagement() {
                 <select
                   value={filterCategory}
                   onChange={e => setFilterCategory(e.target.value)}
-                  className="w-full py-2 px-3 text-xs border border-gray-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700 transition-all appearance-none pr-8"
+                  className="w-full h-9 py-1.5 px-3 text-xs font-semibold border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                 >
                   <option value="all">🏷️ Tất cả danh mục thị trường</option>
                   {categories.map(c => (
@@ -3049,11 +3048,10 @@ export default function ToursManagement() {
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
 
               {/* Reset filters button or Active Filters Badge */}
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 h-9">
                 {(searchTerm || filterMonth !== 'all' || filterCategory !== 'all' || filterTimeStatus !== 'upcoming' || filterTourType !== 'all') ? (
                   <button
                     onClick={() => {
@@ -3063,7 +3061,7 @@ export default function ToursManagement() {
                       setFilterTimeStatus('upcoming');
                       setFilterTourType('all');
                     }}
-                    className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                    className="w-full h-full px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <span>↺ Xóa tất cả bộ lọc</span>
                   </button>
@@ -3078,29 +3076,29 @@ export default function ToursManagement() {
           </div>
 
           {/* LIST OF ACTIVE TOURS WITH FULL CRUD OPERATIONS */}
-          <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200/80 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   Danh sách điều phối chỗ & Lịch trình
                   <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                     {filterTourType === 'all' ? 'Tất cả' : filterTourType === 'internal' ? 'AD Tự vận hành' : 'Gửi khách đối tác-F2'}
                   </span>
                 </h3>
-                <span className="text-xs text-gray-500 mt-0.5 block">
+                <span className="text-xs text-slate-500 mt-0.5 block">
                   Quản lý ngày khởi hành, quỹ chỗ và điều phối tour thuộc phân loại {filterTourType === 'all' ? 'tất cả các loại tour' : filterTourType === 'internal' ? 'AD Tự vận hành' : 'Gửi khách đối tác-F2'}.
                 </span>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 shrink-0">
                 {/* View mode toggle switcher: Danh sách thẻ vs Danh sách bảng */}
-                <div className="flex bg-slate-200/70 p-1 rounded-xl border border-slate-300/60 shrink-0">
+                <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 h-9 items-center">
                   <button
                     type="button"
                     onClick={() => setViewMode('grouped')}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                    className={`px-3 h-7 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                       viewMode === 'grouped' 
-                        ? 'bg-white text-blue-700 shadow-2xs' 
+                        ? 'bg-white text-blue-700 shadow-sm' 
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
@@ -3109,9 +3107,9 @@ export default function ToursManagement() {
                   <button
                     type="button"
                     onClick={() => setViewMode('flat')}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                    className={`px-3 h-7 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                       viewMode === 'flat' 
-                        ? 'bg-white text-blue-700 shadow-2xs' 
+                        ? 'bg-white text-blue-700 shadow-sm' 
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
@@ -3133,7 +3131,7 @@ export default function ToursManagement() {
                         document.getElementById('tour-form-section')?.scrollIntoView({ behavior: 'smooth' });
                       }, 100);
                     }}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-extrabold rounded-xl text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-colors whitespace-nowrap shrink-0"
+                    className="inline-flex items-center h-9 px-4 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Plus className="w-4 h-4 mr-1.5" />
                     Thêm {filterTourType === 'outsourced' ? 'Tour Gửi Đối Tác' : 'Tour Mới'}
@@ -3145,7 +3143,7 @@ export default function ToursManagement() {
             {viewMode === 'grouped' ? (
               <div className="p-6 space-y-6">
                 {totalGroupItems === 0 ? (
-                  <div className="text-center py-12 text-sm text-gray-400 font-medium">Không tìm thấy tour du lịch nào phù hợp với bộ lọc hiện tại.</div>
+                  <div className="text-center py-12 text-xs text-slate-400 font-semibold">Không tìm thấy tour du lịch nào phù hợp với bộ lọc hiện tại.</div>
                 ) : (
                   paginatedGroupEntries.map(([groupName, groupToursList]) => {
                     const groupTours = groupToursList as Tour[];
@@ -3156,23 +3154,23 @@ export default function ToursManagement() {
                     const totalSeatsSum = groupTours.reduce((sum, t) => sum + t.total_seats, 0);
 
                     return (
-                      <div key={groupName} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white hover:border-gray-300 hover:shadow transition-all duration-200">
+                      <div key={groupName} className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white hover:border-slate-300 transition-all duration-200">
                         {/* Group Header (Accordion toggle) */}
                         <div 
                           onClick={() => toggleGroup(groupName)}
-                          className="bg-gray-50/80 hover:bg-gray-100/90 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none transition-colors border-b border-gray-200/80"
+                          className="bg-slate-50/80 hover:bg-slate-100/90 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none transition-colors border-b border-slate-200/80"
                         >
                           <div className="space-y-1.5 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-md uppercase tracking-wider">
                                 {firstTour.category || 'Chưa phân mục'}
                               </span>
-                              <span className="text-xs font-semibold text-gray-600 flex items-center">
-                                <Plane className="w-3.5 h-3.5 mr-1 text-gray-400" />
+                              <span className="text-xs font-semibold text-slate-600 flex items-center">
+                                <Plane className="w-3.5 h-3.5 mr-1 text-slate-400" />
                                 {firstTour.airline}
                               </span>
-                              <span className="text-xs font-semibold text-gray-600 flex items-center">
-                                <Building className="w-3.5 h-3.5 mr-1 text-gray-400" />
+                              <span className="text-xs font-semibold text-slate-600 flex items-center">
+                                <Building className="w-3.5 h-3.5 mr-1 text-slate-400" />
                                 {firstTour.hotel}
                               </span>
                               {firstTour.itinerary_pdf_url && (
@@ -3182,17 +3180,17 @@ export default function ToursManagement() {
                                 </span>
                               )}
                             </div>
-                            <h4 className="text-base font-bold text-gray-900 leading-snug uppercase tracking-wide">
+                            <h4 className="text-base font-bold text-slate-900 leading-snug uppercase tracking-wide">
                               {groupName}
                             </h4>
-                            <div className="text-xs text-gray-600 font-medium flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span>Thời lượng: <strong className="text-gray-900 font-semibold">{firstTour.duration}</strong></span>
-                              <span className="text-gray-300">|</span>
+                            <div className="text-xs text-slate-600 font-medium flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span>Thời lượng: <strong className="text-slate-900 font-semibold">{firstTour.duration}</strong></span>
+                              <span className="text-slate-300">|</span>
                               <span>Chuỗi gồm: <strong className="text-blue-700 font-bold">{groupTours.length} {firstTour.tour_type === 'visa' ? 'phiên bản' : 'đợt khởi hành'}</strong></span>
                               {firstTour.tour_type !== 'visa' && (
                                 <>
-                                  <span className="text-gray-300">|</span>
-                                  <span>Đã bán chuỗi: <strong className="text-emerald-700 font-bold">{totalSold}</strong> — Giữ chỗ: <strong className="text-amber-700 font-bold">{totalHold}</strong> — Trống: <strong className="text-gray-900 font-bold">{totalSeatsSum - totalSold - totalHold}</strong></span>
+                                  <span className="text-slate-300">|</span>
+                                  <span>Đã bán chuỗi: <strong className="text-emerald-700 font-bold">{totalSold}</strong> — Giữ chỗ: <strong className="text-amber-700 font-bold">{totalHold}</strong> — Trống: <strong className="text-slate-800 font-bold">{totalSeatsSum - totalSold - totalHold}</strong></span>
                                 </>
                               )}
                             </div>
@@ -3204,7 +3202,7 @@ export default function ToursManagement() {
                               <button
                                 type="button"
                                 onClick={() => handleAddDepartureQuick(firstTour)}
-                                className="inline-flex items-center px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
+                                className="inline-flex items-center h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                               >
                                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                                 Thêm ngày đi mới
@@ -3216,7 +3214,7 @@ export default function ToursManagement() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenBulkModal(firstTour)}
-                                className="inline-flex items-center px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
+                                className="inline-flex items-center h-9 px-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                               >
                                 <Grid className="w-3.5 h-3.5 mr-1.5" />
                                 Tạo hàng loạt (Series)
@@ -3227,7 +3225,7 @@ export default function ToursManagement() {
                             <button
                               type="button"
                               onClick={() => toggleGroup(groupName)}
-                              className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200/60 transition-colors"
+                              className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200/60 transition-colors"
                             >
                               {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -3236,9 +3234,9 @@ export default function ToursManagement() {
 
                         {/* Group Content: Departure Dates Table */}
                         {isExpanded && (
-                          <div className="overflow-x-auto border-t border-gray-200 bg-white">
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          <div className="overflow-x-auto border-t border-slate-200 bg-white">
+                            <table className="min-w-full divide-y divide-slate-200">
+                              <thead className="bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                                 <tr>
                                   <th className="px-6 py-3.5 text-left w-36">Mã Tour</th>
                                   <th className="px-6 py-3.5 text-left">Khởi hành & Hạn Visa</th>
@@ -3248,7 +3246,7 @@ export default function ToursManagement() {
                                   <th className="px-6 py-3.5 text-center w-28">Hành động</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
+                              <tbody className="divide-y divide-slate-200 text-xs text-slate-700">
                                 {groupTours.map(t => {
                                   const depDate = new Date(t.departure_time || t.start_date || '');
                                   const isDeparted = !isNaN(depDate.getTime()) && depDate < todayStart;
@@ -3774,7 +3772,7 @@ export default function ToursManagement() {
                   <button
                     type="button"
                     onClick={handleAddBulkDate}
-                    className="w-full inline-flex items-center justify-center px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
+                    className="w-full h-9 inline-flex items-center justify-center px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
                   >
                     <Plus className="w-4 h-4 mr-1.5" />
                     Thêm ngày này vào danh sách
@@ -3865,7 +3863,7 @@ export default function ToursManagement() {
               <button
                 type="button"
                 onClick={() => setShowBulkModal(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                className="h-9 px-4 text-xs font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
               >
                 Hủy bỏ
               </button>
@@ -3873,7 +3871,7 @@ export default function ToursManagement() {
                 type="button"
                 disabled={bulkDatesList.filter(d => d.selected).length === 0}
                 onClick={handleCreateBulkSeries}
-                className="px-5 py-2 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center"
+                className="h-9 px-5 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center"
               >
                 <Check className="w-4 h-4 mr-1.5" />
                 Xác nhận tạo {bulkDatesList.filter(d => d.selected).length} Tour khởi hành
@@ -3897,7 +3895,7 @@ export default function ToursManagement() {
               <button
                 type="button"
                 onClick={() => setCatToDelete(null)}
-                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                className="h-9 px-4 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 Hủy bỏ
               </button>
@@ -3907,7 +3905,7 @@ export default function ToursManagement() {
                   deleteCategory(catToDelete);
                   setCatToDelete(null);
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                className="h-9 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
               >
                 Đồng ý xóa
               </button>
@@ -3930,7 +3928,7 @@ export default function ToursManagement() {
               <button
                 type="button"
                 onClick={() => setCatAlertMessage(null)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                className="h-9 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
               >
                 Đã hiểu
               </button>
@@ -3942,22 +3940,22 @@ export default function ToursManagement() {
       {/* Modal Popup Xác Nhận Xóa Tour */}
       {deletingTour && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-scaleUp">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scaleUp">
             <div className="flex items-center gap-3.5 text-rose-600">
               <div className="w-12 h-12 rounded-2xl bg-rose-100/80 flex items-center justify-center shrink-0 border border-rose-200">
                 <Trash2 className="w-6 h-6 text-rose-600" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Xác nhận XÓA vĩnh viễn Tour</h3>
+                <h3 className="text-base font-bold text-slate-900">Xác nhận XÓA vĩnh viễn Tour</h3>
                 <p className="text-xs text-rose-600 font-semibold">Hành động này không thể hoàn tác!</p>
               </div>
             </div>
 
-            <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 space-y-2 text-xs text-gray-700">
-              <p className="font-semibold text-gray-900">
+            <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 space-y-2 text-xs text-slate-700">
+              <p className="font-semibold text-slate-900">
                 Mã tour: <span className="text-rose-700 font-extrabold">{deletingTour.code}</span>
               </p>
-              <p className="font-medium text-gray-800 line-clamp-2">
+              <p className="font-medium text-slate-800 line-clamp-2">
                 Tên tour: <span className="font-bold">{deletingTour.name}</span>
               </p>
               <p className="text-[11px] text-rose-800 pt-2 border-t border-rose-200/60 leading-relaxed">
@@ -3969,14 +3967,14 @@ export default function ToursManagement() {
               <button
                 type="button"
                 onClick={() => setDeletingTour(null)}
-                className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold text-xs hover:bg-gray-50 transition-all cursor-pointer"
+                className="h-9 px-4 rounded-lg border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-all cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDeleteTour}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer flex items-center gap-2"
+                className="h-9 px-5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <Trash2 className="w-4 h-4" />
                 Xác nhận Xóa Tour

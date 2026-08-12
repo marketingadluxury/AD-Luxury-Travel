@@ -671,11 +671,11 @@ export default function CustomersManagement() {
           {/* Right controls: Sort dropdown & View mode toggle */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500 font-semibold hidden sm:inline">Sắp xếp:</span>
+              <span className="text-xs text-slate-500 font-semibold hidden sm:inline">Sắp xếp:</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-1.5 border border-gray-300 rounded-xl text-xs font-semibold bg-white text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
               >
                 <option value="revenue">Doanh số cao nhất</option>
                 <option value="bookings">Số đơn booking nhiều nhất</option>
@@ -685,11 +685,11 @@ export default function CustomersManagement() {
               </select>
             </div>
 
-            <div className="flex items-center border border-gray-200 rounded-xl p-0.5 bg-gray-50 shrink-0">
+            <div className="flex items-center border border-slate-200 rounded-lg p-0.5 bg-slate-50 shrink-0">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  viewMode === 'grid' ? 'bg-white text-blue-600 shadow-2xs' : 'text-gray-400 hover:text-gray-600'
+                  viewMode === 'grid' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-400 hover:text-slate-600'
                 }`}
                 title="Hiển thị dạng thẻ Thẻ (Grid)"
               >
@@ -698,7 +698,7 @@ export default function CustomersManagement() {
               <button
                 onClick={() => setViewMode('table')}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  viewMode === 'table' ? 'bg-white text-blue-600 shadow-2xs' : 'text-gray-400 hover:text-gray-600'
+                  viewMode === 'table' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-400 hover:text-slate-600'
                 }`}
                 title="Hiển thị dạng Bảng (Table)"
               >
@@ -716,14 +716,14 @@ export default function CustomersManagement() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 placeholder:text-gray-400 font-medium"
+              className="w-full h-9 pl-9 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-900 placeholder:text-slate-400 font-medium transition-all"
               placeholder="Tìm theo tên đại lý, tên công ty, SĐT, email, STK ngân hàng..."
             />
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -735,7 +735,7 @@ export default function CustomersManagement() {
             <select
               value={filterLeaderId}
               onChange={(e) => setFilterLeaderId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+              className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
             >
               <option value="all">Tất cả Sale phụ trách</option>
               {leaderOptions.map(l => (
@@ -749,7 +749,7 @@ export default function CustomersManagement() {
             <select
               value={filterTier}
               onChange={(e) => setFilterTier(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 font-medium cursor-pointer"
+              className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
             >
               <option value="all">Tất cả Hạng đối tác</option>
               <option value="platinum">Platinum Partner</option>
@@ -1257,7 +1257,7 @@ export default function CustomersManagement() {
                   <select
                     value={formData.leader_id}
                     onChange={(e) => setFormData({ ...formData, leader_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                    className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
                   >
                     <option value="">-- Chọn Nhân viên Sale / Leader --</option>
                     {leaderOptions.map(l => (
@@ -1273,7 +1273,7 @@ export default function CustomersManagement() {
                   <select
                     value={formData.tier}
                     onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                    className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
                   >
                     <option value="Standard">Standard Partner (Mặc định)</option>
                     <option value="Silver Partner">Silver Partner (Hạng Bạc)</option>
@@ -1296,7 +1296,7 @@ export default function CustomersManagement() {
                     <select
                       value={formData.bank_name}
                       onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                      className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer"
+                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none cursor-pointer transition-all"
                     >
                       {VN_BANKS.map(b => (
                         <option key={b} value={b}>{b}</option>
@@ -1346,7 +1346,7 @@ export default function CustomersManagement() {
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                    className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
                   >
                     <option value="active">Đang hoạt động</option>
                     <option value="inactive">Tạm dừng kết nối</option>

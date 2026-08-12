@@ -39,15 +39,60 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom styles for native select elements to fix and align dropdown arrows */
+/* Custom styles for native select elements and dropdown popups */
 select {
+  font-family: var(--font-sans) !important;
   appearance: none !important;
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
   background-repeat: no-repeat !important;
   background-position: right 0.75rem center !important;
-  background-size: 1rem !important;
+  background-size: 0.9rem !important;
   padding-right: 2.25rem !important;
+  cursor: pointer;
+}
+
+/* Style select options popup across browsers */
+select option {
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  padding: 8px 12px !important;
+}
+
+select option:hover,
+select option:focus,
+select option:active,
+select option:checked {
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+/* Standardized input, select & textarea focus ring & borders */
+input, select, textarea {
+  font-family: var(--font-sans);
+}
+
+/* Base utilities for input & select alignment */
+.form-control-equal {
+  height: 36px !important;
+  font-size: 12px !important;
+  line-height: 1rem !important;
+  border-radius: 0.5rem !important;
+  border-width: 1px !important;
+  border-color: #cbd5e1 !important;
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  padding-left: 0.625rem !important;
+  padding-right: 0.625rem !important;
+}
+
+.form-control-equal:focus {
+  border-color: #3b82f6 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }
 

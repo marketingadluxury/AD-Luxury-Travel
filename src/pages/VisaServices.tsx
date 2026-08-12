@@ -1665,7 +1665,7 @@ export default function VisaServices() {
                           <div>
                             <label className="block text-xs font-semibold text-slate-700 mb-1">Độ khẩn *</label>
                             <select
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-950 font-medium"
+                              className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
                               value={visaSpeed}
                               onChange={e => setVisaSpeed(e.target.value as any)}
                             >
@@ -2084,7 +2084,7 @@ export default function VisaServices() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái mở bán</label>
                       <select 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
                         value={tourStatus}
                         onChange={e => setTourStatus(e.target.value as TourStatus)}
                       >
@@ -2409,7 +2409,7 @@ export default function VisaServices() {
               <select
                 value={filterCountry}
                 onChange={e => setFilterCountry(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
               >
                 <option value="all">Tất cả quốc gia</option>
                 {visaCountries.map(c => (
@@ -2421,7 +2421,7 @@ export default function VisaServices() {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
               >
                 <option value="newest">Sắp xếp: Mới nhất</option>
                 <option value="oldest">Sắp xếp: Cũ nhất</option>

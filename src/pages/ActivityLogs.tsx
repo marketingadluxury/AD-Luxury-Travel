@@ -456,7 +456,7 @@ export default function ActivityLogs() {
                 setSelectedModule(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white font-semibold text-gray-800 cursor-pointer"
+              className="w-full h-9 px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-semibold text-slate-800 outline-none transition-all cursor-pointer"
             >
               <option value="all">Tất cả phân loại (Module)</option>
               <option value="Tour">Tour du lịch</option>
@@ -478,7 +478,7 @@ export default function ActivityLogs() {
                 setSelectedRole(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white font-semibold text-gray-800 cursor-pointer"
+              className="w-full h-9 px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-semibold text-slate-800 outline-none transition-all cursor-pointer"
             >
               <option value="all">Tất cả vai trò người dùng</option>
               <option value="admin">Quản trị viên (Full)</option>
@@ -502,7 +502,7 @@ export default function ActivityLogs() {
                 setSelectedDateFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white font-semibold text-gray-800 cursor-pointer"
+              className="w-full h-9 px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-semibold text-slate-800 outline-none transition-all cursor-pointer"
             >
               <option value="all">Tất cả thời gian</option>
               <option value="today">Hôm nay</option>

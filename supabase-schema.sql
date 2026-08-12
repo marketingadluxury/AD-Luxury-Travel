@@ -694,17 +694,70 @@ CREATE POLICY "Allow authenticated access to teams" ON teams FOR ALL TO authenti
 DROP POLICY IF EXISTS "Allow public read access to teams" ON teams;
 CREATE POLICY "Allow public read access to teams" ON teams FOR SELECT TO anon USING (true);
 
--- Enable Realtime cho bảng teams, profiles và payment_proposals
+-- Enable Realtime cho bảng teams, profiles, payment_proposals và chat_messages
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE teams;
     ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
     ALTER PUBLICATION supabase_realtime ADD TABLE payment_proposals;
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
   ELSE
-    CREATE PUBLICATION supabase_realtime FOR TABLE teams, profiles, payment_proposals;
+    CREATE PUBLICATION supabase_realtime FOR TABLE teams, profiles, payment_proposals, chat_messages;
   END IF;
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
+
+-- ==============================================================================
+-- BẢNG QUẢN LÝ TRÒ CHUYỆN NỘI BỘ (CHAT MESSAGES)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  channel_id TEXT,
+  recipient_id TEXT,
+  sender_id TEXT NOT NULL,
+  sender_name TEXT NOT NULL,
+  sender_role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  attachments JSONB,
+  tour_code TEXT,
+  order_code TEXT,
+  proposal_code TEXT,
+  reactions JSONB,
+  reply_to JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public access to chat_messages" ON chat_messages;
+CREATE POLICY "Allow public access to chat_messages" ON chat_messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- BẢNG QUẢN LÝ NHÓM / KÊNH TRÒ CHUYỆN NỘI BỘ (CHAT CHANNELS)
+CREATE TABLE IF NOT EXISTS chat_channels (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT DEFAULT '💬',
+  role_access JSONB,
+  members JSONB,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE chat_channels ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public access to chat_channels" ON chat_channels;
+CREATE POLICY "Allow public access to chat_channels" ON chat_channels FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_channels;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
+
 

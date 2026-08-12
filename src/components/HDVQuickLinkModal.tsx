@@ -97,7 +97,7 @@ export const HDVQuickLinkModal: React.FC<HDVQuickLinkModalProps> = ({
                 <select
                   value={selectedTourId}
                   onChange={(e) => setSelectedTourId(e.target.value)}
-                  className="w-full max-w-full overflow-hidden text-ellipsis px-3.5 py-2 rounded-xl border border-gray-300 text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full max-w-full overflow-hidden text-ellipsis h-9 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 cursor-pointer transition-all"
                 >
                   {validTours.map(t => {
                     const shortName = t.name.length > 28 ? `${t.name.slice(0, 28)}...` : t.name;

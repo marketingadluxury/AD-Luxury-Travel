@@ -1526,7 +1526,7 @@ export default function Dashboard() {
                   <select
                     value={selectedTeamFilter}
                     onChange={e => setSelectedTeamFilter(e.target.value)}
-                    className="px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-white hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs transition-all"
+                    className="h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                   >
                     <option value="all">Tất cả các Team</option>
                     {activeTeams.map(t => (

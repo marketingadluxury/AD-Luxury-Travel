@@ -2849,22 +2849,6 @@ export default function AccountingInvoice() {
                         </button>
                       </div>
                     </div>
-
-                    {paymentFile.type.startsWith('image/') && (
-                      <div className="mt-2 pt-2 border-t border-emerald-200/80 flex items-center gap-2.5">
-                        <img
-                          src={URL.createObjectURL(paymentFile)}
-                          alt="Preview biên lai"
-                          className="w-12 h-12 object-cover rounded-md border border-emerald-300 shadow-xs shrink-0"
-                        />
-                        <div className="text-[10px] text-emerald-800">
-                          <p className="font-bold flex items-center gap-1">
-                            <ImageIcon className="w-3 h-3 text-emerald-600" /> Xem trước ảnh biên lai
-                          </p>
-                          <p className="text-emerald-600">File sẽ được lưu kèm vào phiếu chi</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -3090,22 +3074,6 @@ export default function AccountingInvoice() {
                         </button>
                       </div>
                     </div>
-
-                    {paymentFile.type.startsWith('image/') && (
-                      <div className="mt-2 pt-2 border-t border-emerald-200/80 flex items-center gap-2.5">
-                        <img
-                          src={URL.createObjectURL(paymentFile)}
-                          alt="Preview biên lai"
-                          className="w-12 h-12 object-cover rounded-md border border-emerald-300 shadow-xs shrink-0"
-                        />
-                        <div className="text-[10px] text-emerald-800">
-                          <p className="font-bold flex items-center gap-1">
-                            <ImageIcon className="w-3 h-3 text-emerald-600" /> Xem trước ảnh biên lai
-                          </p>
-                          <p className="text-emerald-600">Sẵn sàng tải lên hệ thống</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -3283,7 +3251,7 @@ export default function AccountingInvoice() {
                 <select
                   value={newPaymentData.payment_method}
                   onChange={(e) => setNewPaymentData({ ...newPaymentData, payment_method: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                  className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-white cursor-pointer"
                 >
                   <option value="Chuyển khoản">Chuyển khoản</option>
                   <option value="Tiền mặt">Tiền mặt</option>

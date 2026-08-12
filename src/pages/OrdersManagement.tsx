@@ -1753,7 +1753,7 @@ export default function OrdersManagement() {
                   <label className="block text-xs font-semibold text-gray-600">Thông tin ghép phòng (Lẻ nam / Lẻ nữ)</label>
                   <span className="text-[10px] text-gray-500 block">Lựa chọn ghép nhóm hoặc đi lẻ</span>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                    className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
                     value={roomShareInfo}
                     onChange={e => setRoomShareInfo(e.target.value)}
                   >

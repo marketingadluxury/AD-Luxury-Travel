@@ -16,6 +16,7 @@ Tài liệu này lưu trữ toàn bộ thông tin cốt lõi, quy tắc phát tr
 
 ## 2. Quy Tắc Hoạt Động & Giao Tiếp (Bắt Buộc)
 - **Ngôn ngữ giao tiếp:** Luôn luôn phản hồi bằng **Tiếng Việt**.
+- **Định dạng hiển thị phép tính & công thức:** Tuyệt đối **KHÔNG** sử dụng công thức KaTeX/LaTeX hay các ký tự khối hệ thống như `$$`, `\text`, `\math`. Tất cả số liệu, phép tính, chiết khấu và giải thích số tiền phải được trình bày dưới dạng văn bản Tiếng Việt thuần túy, rõ ràng, trực quan (dùng văn bản Markdown thông thường, gạch đầu dòng, dấu trừ `-`, dấu cộng `+`, dấu bằng `=`) để đảm bảo dễ đọc và thân thiện trên mọi giao diện.
 - **Định dạng Thời gian & Lịch:**
   - **Định dạng hiển thị thời gian:** Tất cả thời gian trên hệ thống phải luôn tuân thủ chuẩn **`hh:mm dd/mm/yyyy`** (hoặc `dd/mm/yyyy` đối với ngày thuần túy).
   - **Lịch chọn ngày (Calendar):** Luôn sử dụng bộ chọn ngày chuẩn hóa Tiếng Việt (Thứ 2 - CN, Tháng 1 - Tháng 12, Hôm nay, Xóa ngày...) thông qua component `DatePicker.tsx` để đảm bảo trải nghiệm thuần Việt trên mọi thiết bị và trình duyệt.

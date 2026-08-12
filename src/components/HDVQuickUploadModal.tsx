@@ -276,7 +276,7 @@ export const HDVQuickUploadModal: React.FC<HDVQuickUploadModalProps> = ({
                   <select
                     value={selectedTourId}
                     onChange={(e) => setSelectedTourId(e.target.value)}
-                    className="w-full max-w-full overflow-hidden text-ellipsis px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs sm:text-sm font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-teal-500 shadow-xs"
+                    className="w-full max-w-full overflow-hidden text-ellipsis h-9 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 cursor-pointer transition-all"
                   >
                     {availableTours.length === 0 ? (
                       <option value="">(Chưa có danh sách Tour nào)</option>
