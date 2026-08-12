@@ -144,7 +144,7 @@ const TourCard: React.FC<{
             </div>
           )}
           
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600">
             <div className="flex items-center text-blue-700 font-medium">
               <Tag className="w-4 h-4 mr-1.5" />
               {tour.code}
@@ -156,20 +156,20 @@ const TourCard: React.FC<{
               </div>
             )}
             {tour.tour_type !== 'visa' && (
-              <>
-                <div className="flex items-center font-medium text-gray-900">
-                  <CalendarIcon className="w-4 h-4 mr-1.5 text-gray-400" />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="flex items-center font-medium text-gray-900 whitespace-nowrap">
+                  <CalendarIcon className="w-4 h-4 mr-1.5 text-gray-400 shrink-0" />
                   Ngày đi: {formatDate(tour.departure_time || tour.start_date)}
                 </div>
-                <div className="flex items-center">
-                  <CalendarIcon className="w-4 h-4 mr-1.5 text-gray-400" />
+                <div className="flex items-center whitespace-nowrap">
+                  <CalendarIcon className="w-4 h-4 mr-1.5 text-gray-400 shrink-0" />
                   {tour.duration}
                 </div>
-                <div className="flex items-center font-medium">
-                  <Plane className="w-4 h-4 mr-1.5 text-gray-400" />
+                <div className="flex items-center font-medium whitespace-nowrap">
+                  <Plane className="w-4 h-4 mr-1.5 text-gray-400 shrink-0" />
                   {tour.airline}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>

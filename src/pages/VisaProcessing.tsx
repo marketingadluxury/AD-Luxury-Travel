@@ -678,8 +678,8 @@ export default function VisaProcessing() {
                       <div><span className="text-slate-500">Giới tính:</span> <strong>{p.gender === 'male' ? 'Nam' : 'Nữ'}</strong></div>
                       <div><span className="text-slate-500">Ngày sinh:</span> <strong>{p.dob ? format(new Date(p.dob), 'dd/MM/yyyy') : 'Chưa nhập'}</strong></div>
                       <div><span className="text-slate-500">Số Hộ Chiếu:</span> <strong className="font-mono text-blue-700">{p.passport_number || 'Chưa cập nhật'}</strong></div>
-                      {p.passport_expiry && (
-                        <div><span className="text-slate-500">Hạn Hộ Chiếu:</span> <strong>{format(new Date(p.passport_expiry), 'dd/MM/yyyy')}</strong></div>
+                      {p.passport_expiry_date && (
+                        <div><span className="text-slate-500">Hạn Hộ Chiếu:</span> <strong>{format(new Date(p.passport_expiry_date), 'dd/MM/yyyy')}</strong></div>
                       )}
                       {p.phone && <div><span className="text-slate-500">Số điện thoại:</span> <strong>{p.phone}</strong></div>}
                     </div>
@@ -691,7 +691,7 @@ export default function VisaProcessing() {
                     </h4>
                     <div className="text-xs space-y-1.5 text-slate-700">
                       <div><span className="text-slate-500">Loại dịch vụ:</span> <strong>{tour?.tour_type === 'visa' ? `Visa lẻ ${tour?.visa_country || ''}` : 'Visa đi Tour'}</strong></div>
-                      {tour && <div><span className="text-slate-500">Tên Tour/Dịch vụ:</span> <strong className="text-blue-700">{tour.code} - {tour.title}</strong></div>}
+                      {tour && <div><span className="text-slate-500">Tên Tour/Dịch vụ:</span> <strong className="text-blue-700">{tour.code}</strong></div>}
                       {tour?.visa_deadline && (
                         <div className="text-rose-600 font-bold flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5" /> Hạn nộp Visa: {format(new Date(tour.visa_deadline), 'dd/MM/yyyy')}
