@@ -2903,7 +2903,7 @@ export default function OrdersManagement() {
                                             </button>
                                           )}
                                           {passenger.visa_status === 'not_required' && (
-                                            <span className="px-2 py-0.5 font-semibold rounded-full bg-slate-100 text-slate-500 whitespace-nowrap inline-block">Miễn Visa</span>
+                                            <span className="px-2 py-0.5 font-semibold rounded-full bg-slate-100 text-slate-500 whitespace-nowrap inline-block">Có sẵn Visa</span>
                                           )}
                                         </td>
                                         <td className="py-2.5 pl-3 pr-1 text-right font-semibold whitespace-nowrap">

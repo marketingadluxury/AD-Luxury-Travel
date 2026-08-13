@@ -16,11 +16,13 @@ import {
   Copy,
   FileText,
   FolderOpen,
+  Folder,
   ExternalLink,
   Tag,
   Grid,
   Plane,
   Building,
+  Building2,
   DollarSign,
   ChevronDown,
   ChevronUp,
@@ -30,7 +32,21 @@ import {
   Filter,
   Phone,
   Mail,
-  Users
+  Users,
+  Handshake,
+  Crown,
+  AlertTriangle,
+  Lightbulb,
+  BarChart3,
+  Calendar,
+  LayoutGrid,
+  List,
+  ArrowRight,
+  CheckCircle2,
+  Zap,
+  Hotel,
+  Globe,
+  Coins
 } from 'lucide-react';
 import { format } from 'date-fns';
 import DashboardOperator from '@/components/DashboardOperator';
@@ -451,7 +467,7 @@ export default function ToursManagement() {
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
   // Filter state for tour operation type
-  const [filterTourType, setFilterTourType] = useState<'all' | 'internal' | 'outsourced'>('all');
+  const [filterTourType, setFilterTourType] = useState<'all' | 'internal' | 'outsourced' | 'private'>('all');
   // Filter state for time status: 'upcoming' (default) | 'departed' | 'all'
   const [filterTimeStatus, setFilterTimeStatus] = useState<'upcoming' | 'departed' | 'all'>('upcoming');
   // Filter state for departure month
@@ -499,6 +515,24 @@ export default function ToursManagement() {
     return d;
   }, []);
 
+  // Base tours matching current filterTourType for sub-tabs time status counts
+  const baseToursForTimeFilter = React.useMemo(() => {
+    return tours
+      .filter(t => t.tour_type !== 'visa')
+      .filter(t => {
+        if (filterTourType === 'internal') {
+          return !t.tour_type || t.tour_type === 'internal';
+        }
+        if (filterTourType === 'outsourced') {
+          return t.tour_type === 'outsourced' || t.tour_type === 'partner';
+        }
+        if (filterTourType === 'private') {
+          return t.tour_type === 'private';
+        }
+        return true;
+      });
+  }, [tours, filterTourType]);
+
   // Filtered tours based on selected filters
   const displayTours = React.useMemo(() => {
     return tours
@@ -509,6 +543,8 @@ export default function ToursManagement() {
           if (t.tour_type && t.tour_type !== 'internal') return false;
         } else if (filterTourType === 'outsourced') {
           if (t.tour_type !== 'outsourced' && t.tour_type !== 'partner') return false;
+        } else if (filterTourType === 'private') {
+          if (t.tour_type !== 'private') return false;
         }
 
         // 2. Time status (upcoming vs departed)
@@ -1988,9 +2024,9 @@ export default function ToursManagement() {
                         value={tourType}
                         onChange={e => setTourType(e.target.value as any)}
                       >
-                        {currentRole !== 'sale_leader' && <option value="internal">🏢 AD Tự vận hành</option>}
-                        <option value="outsourced">🤝 Gửi khách đối tác-F2</option>
-                        <option value="private">👑 Tour đoàn riêng</option>
+                        {currentRole !== 'sale_leader' && <option value="internal">AD Tự vận hành</option>}
+                        <option value="outsourced">Gửi khách đối tác-F2</option>
+                        <option value="private">Tour đoàn riêng</option>
                       </select>
                     </div>
                   </div>
@@ -2003,9 +2039,9 @@ export default function ToursManagement() {
                       'bg-purple-50/40 border-purple-200 text-purple-900'
                     }`}>
                       <h5 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        {(tourType === 'outsourced' || tourType === 'partner') && <>🤝 Thông tin Gửi khách đối tác-F2</>}
-                        {tourType === 'private' && <>👑 Thông tin Yêu cầu Tour đoàn riêng / Custom</>}
-                        {tourType === 'visa' && <>🛂 Thông tin Dịch vụ Visa lẻ đặc thù</>}
+                        {(tourType === 'outsourced' || tourType === 'partner') && <><Handshake className="w-4 h-4 text-indigo-600" /> Thông tin Gửi khách đối tác-F2</>}
+                        {tourType === 'private' && <><Crown className="w-4 h-4 text-amber-600" /> Thông tin Yêu cầu Tour đoàn riêng / Custom</>}
+                        {tourType === 'visa' && <><FileText className="w-4 h-4 text-purple-600" /> Thông tin Dịch vụ Visa lẻ đặc thù</>}
                       </h5>
 
                       {(tourType === 'outsourced' || tourType === 'partner') && (
@@ -2067,7 +2103,7 @@ export default function ToursManagement() {
                                 inputClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-bold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                               />
                               <p className="text-xs text-blue-700 font-medium mt-1.5 flex items-center gap-1 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md">
-                                <span>👉</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                                 <span>Giá net AD phải nộp cho đối tác: <strong className="font-extrabold text-blue-800">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(partnerNetCost) || 0)}</strong> / Khách</span>
                               </p>
                             </div>
@@ -2077,7 +2113,7 @@ export default function ToursManagement() {
                           <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 flex items-center justify-between text-xs shadow-2xs">
                             <div className="flex items-center gap-2">
                               <span className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-sm">
-                                💰
+                                <Coins className="w-4 h-4 text-white" />
                               </span>
                               <div>
                                 <span className="text-emerald-950 font-extrabold block text-xs">
@@ -2104,7 +2140,7 @@ export default function ToursManagement() {
                         <div className="space-y-6">
                           <div className="bg-amber-50/20 p-4 rounded-xl border border-amber-200/50 space-y-4">
                             <div className="flex items-center gap-2 text-amber-800">
-                              <span className="text-lg">💡</span>
+                              <Lightbulb className="w-4 h-4 text-amber-600 shrink-0" />
                               <p className="text-xs font-medium leading-relaxed">
                                 <strong>Bản chất nghiệp vụ:</strong> Tour đoàn riêng là 1 Booking trọn gói (1 Tour = 1 Đơn hàng duy nhất). Hệ thống sẽ <strong>TỰ ĐỘNG sinh 1 Đơn hàng (Booking) tương ứng</strong> trong database ngay khi bấm lưu để lược bỏ toàn bộ các bước đặt chỗ, giữ chỗ thủ công phức tạp.
                               </p>
@@ -2230,7 +2266,7 @@ export default function ToursManagement() {
                                       {isUploadingContract ? (
                                         <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                                       ) : privateContractFileUrl ? (
-                                        <span className="text-emerald-600 text-xs font-bold flex items-center gap-1">✅ Đã tải file</span>
+                                        <span className="text-emerald-600 text-xs font-bold flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Đã tải file</span>
                                       ) : (
                                         <span className="text-gray-500 text-xs font-medium">Chọn tệp đính kèm</span>
                                       )}
@@ -2255,7 +2291,7 @@ export default function ToursManagement() {
                                 )}
                               </div>
                               {contractUploadError && (
-                                <p className="text-[10px] font-semibold text-rose-600 mt-1">⚠️ {contractUploadError}</p>
+                                <p className="text-[10px] font-semibold text-rose-600 mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" /> {contractUploadError}</p>
                               )}
                               <p className="text-[11px] text-gray-400 mt-1">Lưu trữ file chương trình/hợp đồng trực tiếp trên server.</p>
                             </div>
@@ -2265,7 +2301,7 @@ export default function ToursManagement() {
                             <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border border-blue-100 flex items-center justify-between text-xs shadow-2xs">
                               <div className="flex items-center gap-2">
                                 <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-                                  📊
+                                  <BarChart3 className="w-4 h-4 text-white" />
                                 </span>
                                 <div>
                                   <span className="text-slate-900 font-extrabold block text-xs">
@@ -2413,7 +2449,7 @@ export default function ToursManagement() {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1.5">
-                        📂 Lịch trình chi tiết (File PDF)
+                        <Folder className="w-3.5 h-3.5 text-blue-600" /> Lịch trình chi tiết (File PDF)
                         <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-help" />
                       </label>
                       
@@ -2482,7 +2518,7 @@ export default function ToursManagement() {
                       
                       {itineraryUploadError && (
                         <p className="text-xs font-semibold text-rose-600 mt-1.5 flex items-center gap-1 bg-rose-50 border border-rose-100 p-2 rounded-lg">
-                          ⚠️ {itineraryUploadError}
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" /> {itineraryUploadError}
                         </p>
                       )}
                     </div>
@@ -2893,8 +2929,8 @@ export default function ToursManagement() {
           {/* TOP PRIMARY CATEGORY TABS (TO, RÕ RÀNG, TRỰC QUAN NẰM TRÊN CÙNG) */}
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 space-y-3">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-2 border-b border-slate-100">
-              {/* Filter Tour Type */}
-              <div className="grid grid-cols-3 sm:flex items-center gap-1.5 sm:gap-2 w-full lg:w-auto">
+              {/* Filter Tour Type (Level 1 Main Tabs) */}
+              <div className="grid grid-cols-2 sm:flex items-center gap-1.5 sm:gap-2 w-full lg:w-auto">
                 <button
                   type="button"
                   onClick={() => setFilterTourType('all')}
@@ -2921,11 +2957,11 @@ export default function ToursManagement() {
                       : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
                   }`}
                 >
-                  <span className="truncate">🏢 AD Tự vận hành</span>
+                  <span className="truncate flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> AD Tự vận hành</span>
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
                     filterTourType === 'internal' ? 'bg-purple-800 text-purple-100' : 'bg-purple-200 text-purple-900'
                   }`}>
-                    {tours.filter(t => t.tour_type === 'internal' || !t.tour_type).length}
+                    {tours.filter(t => (t.tour_type === 'internal' || !t.tour_type) && t.tour_type !== 'visa').length}
                   </span>
                 </button>
 
@@ -2938,17 +2974,49 @@ export default function ToursManagement() {
                       : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200'
                   }`}
                 >
-                  <span className="truncate">🤝 Gửi khách đối tác-F2</span>
+                  <span className="truncate flex items-center gap-1.5"><Handshake className="w-3.5 h-3.5" /> Gửi khách đối tác</span>
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
                     filterTourType === 'outsourced' ? 'bg-indigo-800 text-indigo-100' : 'bg-indigo-200 text-indigo-900'
                   }`}>
                     {tours.filter(t => t.tour_type === 'outsourced' || t.tour_type === 'partner').length}
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFilterTourType('private')}
+                  className={`h-9 px-3.5 sm:px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer ${
+                    filterTourType === 'private'
+                      ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-600/20'
+                      : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+                  }`}
+                >
+                  <span className="truncate flex items-center gap-1.5"><Crown className="w-3.5 h-3.5" /> Đoàn riêng</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
+                    filterTourType === 'private' ? 'bg-amber-800 text-amber-100' : 'bg-amber-200 text-amber-900'
+                  }`}>
+                    {tours.filter(t => t.tour_type === 'private').length}
+                  </span>
+                </button>
               </div>
 
-              {/* Time Status Tabs: Upcoming vs Departed vs All */}
+              {/* Time Status Sub-Tabs (Level 2: Tất cả thời gian, Đang mở bán, Đã khởi hành) */}
               <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 self-start lg:self-auto h-9 items-center">
+                <button
+                  type="button"
+                  onClick={() => setFilterTimeStatus('all')}
+                  className={`px-3 h-7 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    filterTimeStatus === 'all'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5 text-blue-500" /> Tất cả thời gian</span>
+                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterTimeStatus === 'all' ? 'bg-blue-700 text-blue-100' : 'bg-slate-200 text-slate-700'}`}>
+                    {baseToursForTimeFilter.length}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setFilterTimeStatus('upcoming')}
@@ -2958,9 +3026,9 @@ export default function ToursManagement() {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <span>🟢 Đang mở bán</span>
+                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Đang mở bán</span>
                   <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterTimeStatus === 'upcoming' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-700'}`}>
-                    {tours.filter(t => t.tour_type !== 'visa' && (!t.departure_time || new Date(t.departure_time) >= todayStart)).length}
+                    {baseToursForTimeFilter.filter(t => !t.departure_time || new Date(t.departure_time) >= todayStart).length}
                   </span>
                 </button>
 
@@ -2973,22 +3041,10 @@ export default function ToursManagement() {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <span>📁 Đã khởi hành</span>
+                  <span className="flex items-center gap-1.5"><Folder className="w-3.5 h-3.5 text-slate-400" /> Đã khởi hành</span>
                   <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterTimeStatus === 'departed' ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-700'}`}>
-                    {tours.filter(t => t.tour_type !== 'visa' && t.departure_time && new Date(t.departure_time) < todayStart).length}
+                    {baseToursForTimeFilter.filter(t => t.departure_time && new Date(t.departure_time) < todayStart).length}
                   </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFilterTimeStatus('all')}
-                  className={`px-3 h-7 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterTimeStatus === 'all'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <span>🌐 Tất cả thời gian</span>
                 </button>
               </div>
             </div>
@@ -3022,7 +3078,7 @@ export default function ToursManagement() {
                   onChange={e => setFilterMonth(e.target.value)}
                   className="w-full h-9 py-1.5 px-3 text-xs font-semibold border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                 >
-                  <option value="all">📅 Tất cả tháng khởi hành</option>
+                  <option value="all">Tất cả tháng khởi hành</option>
                   {availableMonths.map(m => {
                     const [year, month] = m.split('-');
                     return (
@@ -3041,7 +3097,7 @@ export default function ToursManagement() {
                   onChange={e => setFilterCategory(e.target.value)}
                   className="w-full h-9 py-1.5 px-3 text-xs font-semibold border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                 >
-                  <option value="all">🏷️ Tất cả danh mục thị trường</option>
+                  <option value="all">Tất cả danh mục thị trường</option>
                   {categories.map(c => (
                     <option key={c} value={c}>
                       {c}
@@ -3082,11 +3138,11 @@ export default function ToursManagement() {
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   Danh sách điều phối chỗ & Lịch trình
                   <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                    {filterTourType === 'all' ? 'Tất cả' : filterTourType === 'internal' ? 'AD Tự vận hành' : 'Gửi khách đối tác-F2'}
+                    {filterTourType === 'all' ? 'Tất cả' : filterTourType === 'internal' ? 'AD Tự vận hành' : filterTourType === 'outsourced' ? 'Gửi khách đối tác' : 'Đoàn riêng'}
                   </span>
                 </h3>
                 <span className="text-xs text-slate-500 mt-0.5 block">
-                  Quản lý ngày khởi hành, quỹ chỗ và điều phối tour thuộc phân loại {filterTourType === 'all' ? 'tất cả các loại tour' : filterTourType === 'internal' ? 'AD Tự vận hành' : 'Gửi khách đối tác-F2'}.
+                  Quản lý ngày khởi hành, quỹ chỗ và điều phối tour thuộc phân loại {filterTourType === 'all' ? 'tất cả các loại tour' : filterTourType === 'internal' ? 'AD Tự vận hành' : filterTourType === 'outsourced' ? 'Gửi khách đối tác' : 'Đoàn riêng'}.
                 </span>
               </div>
 
@@ -3102,7 +3158,7 @@ export default function ToursManagement() {
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    🎴 Danh sách thẻ
+                    <LayoutGrid className="w-3.5 h-3.5 text-blue-600" /> Danh sách thẻ
                   </button>
                   <button
                     type="button"
@@ -3113,7 +3169,7 @@ export default function ToursManagement() {
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    📋 Danh sách bảng
+                    <List className="w-3.5 h-3.5 text-purple-600" /> Danh sách bảng
                   </button>
                 </div>
 
@@ -3123,6 +3179,8 @@ export default function ToursManagement() {
                       resetForm();
                       if (filterTourType === 'outsourced') {
                         setTourType('outsourced');
+                      } else if (filterTourType === 'private') {
+                        setTourType('private');
                       } else {
                         setTourType('internal');
                       }
@@ -3134,7 +3192,7 @@ export default function ToursManagement() {
                     className="inline-flex items-center h-9 px-4 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Plus className="w-4 h-4 mr-1.5" />
-                    Thêm {filterTourType === 'outsourced' ? 'Tour Gửi Đối Tác' : 'Tour Mới'}
+                    Thêm {filterTourType === 'outsourced' ? 'Tour Gửi Đối Tác' : filterTourType === 'private' ? 'Tour Đoàn Riêng' : 'Tour Mới'}
                   </button>
                 )}
               </div>
@@ -3259,20 +3317,20 @@ export default function ToursManagement() {
                                         </span>
                                         {isDeparted && (
                                           <span className="text-[10px] font-extrabold text-slate-600 bg-slate-200/80 border border-slate-300 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                            📁 Đã khởi hành
+                                            <Folder className="w-3 h-3 text-slate-500" /> Đã khởi hành
                                           </span>
                                         )}
                                         {t.tour_type === 'outsourced' || t.tour_type === 'partner' ? (
                                           <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                            🤝 Đối tác: {t.partner_company_name || t.partner_name || 'Công ty đối tác'}
+                                            <Handshake className="w-3 h-3 text-indigo-600" /> Đối tác: {t.partner_company_name || t.partner_name || 'Công ty đối tác'}
                                           </span>
                                         ) : t.tour_type === 'private' ? (
                                           <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                            👑 Tour Đoàn Riêng
+                                            <Crown className="w-3 h-3 text-amber-600" /> Tour Đoàn Riêng
                                           </span>
                                         ) : (
                                           <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                            🏢 AD Vận Hành
+                                            <Building2 className="w-3 h-3 text-purple-600" /> AD Vận Hành
                                           </span>
                                         )}
                                       </div>
@@ -3302,8 +3360,8 @@ export default function ToursManagement() {
                                       {t.tour_type === 'visa' ? (
                                         <span className="text-xs text-gray-400 italic">Không áp dụng</span>
                                       ) : t.tour_type === 'private' ? (
-                                        <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-block">
-                                          👑 Theo Hợp đồng
+                                        <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-flex items-center gap-1">
+                                          <Crown className="w-3 h-3 text-amber-600" /> Theo Hợp đồng
                                         </span>
                                       ) : (
                                         <>
@@ -3321,21 +3379,21 @@ export default function ToursManagement() {
                                         <span className="text-xs text-gray-400 italic">Không giới hạn</span>
                                       ) : t.tour_type === 'private' ? (
                                         <div className="flex flex-col items-center gap-1.5">
-                                          <span className="text-xs font-extrabold text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md inline-block">
-                                            👑 Trọn đoàn ({t.total_seats || t.available_seats || 0} Khách)
+                                          <span className="text-xs font-extrabold text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md inline-flex items-center gap-1">
+                                            <Crown className="w-3 h-3 text-amber-600" /> Trọn đoàn ({t.total_seats || t.available_seats || 0} Khách)
                                           </span>
                                           {(() => {
                                             const linkedOrder = orders.find(o => o.tour_id === t.id);
                                             if (linkedOrder) {
                                               return (
                                                 <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1" title="Đã tự động khởi tạo đơn hàng Booking">
-                                                  ✓ Booking #{linkedOrder.id.substring(0, 8).toUpperCase()}
+                                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Booking #{linkedOrder.id.substring(0, 8).toUpperCase()}
                                                 </span>
                                               );
                                             }
                                             return (
                                               <span className="text-[11px] font-medium text-amber-700 bg-amber-50/80 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 animate-pulse">
-                                                ⏳ Đang tự động tạo Booking...
+                                                <Clock className="w-3 h-3 text-amber-600 animate-spin" /> Đang tự động tạo Booking...
                                               </span>
                                             );
                                           })()}
@@ -3436,7 +3494,7 @@ export default function ToursManagement() {
                               </div>
                               {isDeparted && (
                                 <span className="text-[10px] font-extrabold text-slate-600 bg-slate-200/80 border border-slate-300 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                  📁 Đã khởi hành
+                                  <Folder className="w-3 h-3 text-slate-500" /> Đã khởi hành
                                 </span>
                               )}
                               <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider truncate max-w-[160px]" title={t.category || 'Chưa phân mục'}>
@@ -3445,23 +3503,23 @@ export default function ToursManagement() {
                               {/* Tour Type Badge */}
                               <div className="flex">
                                 {(t.tour_type === 'partner' || t.tour_type === 'outsourced') && (
-                                  <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
-                                    🤝 Gửi khách đối tác-F2
+                                  <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-flex items-center gap-1">
+                                    <Handshake className="w-3 h-3 text-indigo-600" /> Gửi khách đối tác-F2
                                   </span>
                                 )}
                                 {t.tour_type === 'private' && (
-                                  <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
-                                    👑 Tour đoàn riêng
+                                  <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-flex items-center gap-1">
+                                    <Crown className="w-3 h-3 text-amber-600" /> Tour đoàn riêng
                                   </span>
                                 )}
                                 {t.tour_type === 'visa' && (
-                                  <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
-                                    🛂 Dịch vụ Visa lẻ
+                                  <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-flex items-center gap-1">
+                                    <FileText className="w-3 h-3 text-purple-600" /> Dịch vụ Visa lẻ
                                   </span>
                                 )}
                                 {(t.tour_type === 'internal' || !t.tour_type) && (
-                                  <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-block">
-                                    🏢 AD Tự vận hành
+                                  <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full font-semibold uppercase whitespace-nowrap inline-flex items-center gap-1">
+                                    <Building2 className="w-3 h-3 text-gray-500" /> AD Tự vận hành
                                   </span>
                                 )}
                               </div>
@@ -3473,23 +3531,23 @@ export default function ToursManagement() {
                               <div className="flex items-center gap-1.5 whitespace-nowrap overflow-hidden text-ellipsis">
                                 <span className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap inline-block">{t.duration}</span>
                                 <span className="text-gray-300">•</span>
-                                <span className="text-gray-600 truncate" title={`Khách sạn: ${t.hotel}`}>🏨 {t.hotel || 'Chưa cập nhật'}</span>
+                                <span className="text-gray-600 truncate flex items-center gap-1" title={`Khách sạn: ${t.hotel}`}><Hotel className="w-3 h-3 text-slate-400 shrink-0" /> {t.hotel || 'Chưa cập nhật'}</span>
                               </div>
                               
                               {/* Product-Specific Subtext */}
                               {(t.tour_type === 'partner' || t.tour_type === 'outsourced') && (
-                                <div className="text-[11px] text-indigo-700 font-medium bg-indigo-50/60 px-2.5 py-1 rounded border border-indigo-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px]" title={`Đối tác: ${t.partner_name || t.partner_company_name || 'Đối tác'} (${t.partner_contact || 'Chưa có thông tin'})`}>
-                                  🤝 <span className="font-semibold">{t.partner_company_name || t.partner_name || 'Đối tác'}</span> ({t.partner_contact || 'Liên hệ'})
+                                <div className="text-[11px] text-indigo-700 font-medium bg-indigo-50/60 px-2.5 py-1 rounded border border-indigo-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px] flex items-center gap-1" title={`Đối tác: ${t.partner_name || t.partner_company_name || 'Đối tác'} (${t.partner_contact || 'Chưa có thông tin'})`}>
+                                  <Handshake className="w-3 h-3 text-indigo-600 shrink-0" /> <span className="font-semibold">{t.partner_company_name || t.partner_name || 'Đối tác'}</span> ({t.partner_contact || 'Liên hệ'})
                                 </div>
                               )}
                               {t.tour_type === 'private' && (
-                                <div className="text-[11px] text-amber-800 font-medium bg-amber-50/60 px-2.5 py-1 rounded border border-amber-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px]" title={`Đoàn riêng: ${t.organization_name} | Y/C: ${t.custom_requirements || 'Không có'}`}>
-                                  👑 <span className="font-semibold">{t.organization_name}</span> | Y/C: {t.custom_requirements || 'N/A'}
+                                <div className="text-[11px] text-amber-800 font-medium bg-amber-50/60 px-2.5 py-1 rounded border border-amber-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px] flex items-center gap-1" title={`Đoàn riêng: ${t.organization_name} | Y/C: ${t.custom_requirements || 'Không có'}`}>
+                                  <Crown className="w-3 h-3 text-amber-600 shrink-0" /> <span className="font-semibold">{t.organization_name}</span> | Y/C: {t.custom_requirements || 'N/A'}
                                 </div>
                               )}
                               {t.tour_type === 'visa' && (
-                                <div className="text-[11px] text-purple-800 font-medium bg-purple-50/60 px-2.5 py-1 rounded border border-purple-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px]" title={`Quốc gia: ${t.visa_country} | ${t.visa_service_type} (${t.visa_speed === 'urgent' ? '⚡ Khẩn' : '⏳ Thường'})`}>
-                                  🛂 <span className="font-semibold">{t.visa_country}</span> | {t.visa_service_type}
+                                <div className="text-[11px] text-purple-800 font-medium bg-purple-50/60 px-2.5 py-1 rounded border border-purple-100 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[280px] flex items-center gap-1" title={`Quốc gia: ${t.visa_country} | ${t.visa_service_type} (${t.visa_speed === 'urgent' ? 'Khẩn' : 'Thường'})`}>
+                                  <FileText className="w-3 h-3 text-purple-600 shrink-0" /> <span className="font-semibold">{t.visa_country}</span> | {t.visa_service_type} ({t.visa_speed === 'urgent' ? 'Khẩn' : 'Thường'})
                                 </div>
                               )}
                             </div>
@@ -3522,8 +3580,8 @@ export default function ToursManagement() {
                           {t.tour_type === 'visa' ? (
                             <span className="text-xs text-gray-400 italic">Không áp dụng</span>
                           ) : t.tour_type === 'private' ? (
-                            <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-block">
-                              👑 Theo Hợp đồng
+                            <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-flex items-center gap-1">
+                              <Crown className="w-3 h-3 text-amber-600" /> Theo Hợp đồng
                             </span>
                           ) : (
                             <>
@@ -3541,21 +3599,21 @@ export default function ToursManagement() {
                             <span className="text-xs text-gray-400 italic">Không giới hạn</span>
                           ) : t.tour_type === 'private' ? (
                             <div className="flex flex-col items-center gap-1.5">
-                              <span className="text-xs font-extrabold text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md inline-block">
-                                👑 Trọn đoàn ({t.total_seats || t.available_seats || 0} Khách)
+                              <span className="text-xs font-extrabold text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-md inline-flex items-center gap-1">
+                                <Crown className="w-3 h-3 text-amber-600" /> Trọn đoàn ({t.total_seats || t.available_seats || 0} Khách)
                               </span>
                               {(() => {
                                 const linkedOrder = orders.find(o => o.tour_id === t.id);
                                 if (linkedOrder) {
                                   return (
                                     <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1" title="Đã tự động khởi tạo đơn hàng Booking">
-                                      ✓ Booking #{linkedOrder.id.substring(0, 8).toUpperCase()}
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Booking #{linkedOrder.id.substring(0, 8).toUpperCase()}
                                     </span>
                                   );
                                 }
                                 return (
                                   <span className="text-[11px] font-medium text-amber-700 bg-amber-50/80 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 animate-pulse">
-                                    ⏳ Đang tự động tạo Booking...
+                                    <Clock className="w-3 h-3 text-amber-600 animate-spin" /> Đang tự động tạo Booking...
                                   </span>
                                 );
                               })()}
@@ -3886,7 +3944,7 @@ export default function ToursManagement() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-xl border border-slate-100 max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-950 mb-2 flex items-center gap-2">
-              <span className="text-rose-500">⚠️</span> Xác nhận xóa danh mục
+              <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" /> Xác nhận xóa danh mục
             </h3>
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
               Bạn có chắc chắn muốn xóa danh mục <strong className="text-slate-900">"{catToDelete}"</strong> không? Hành động này không thể hoàn tác.
@@ -3919,7 +3977,7 @@ export default function ToursManagement() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-xl border border-slate-100 max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-950 mb-2 flex items-center gap-2">
-              <span className="text-amber-500">⚠️</span> Thông báo từ hệ thống
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" /> Thông báo từ hệ thống
             </h3>
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
               {catAlertMessage}
@@ -3958,8 +4016,8 @@ export default function ToursManagement() {
               <p className="font-medium text-slate-800 line-clamp-2">
                 Tên tour: <span className="font-bold">{deletingTour.name}</span>
               </p>
-              <p className="text-[11px] text-rose-800 pt-2 border-t border-rose-200/60 leading-relaxed">
-                ⚠️ <strong>Cảnh báo:</strong> Khi xóa tour, toàn bộ thông tin tour và các đơn đặt giữ chỗ (Booking) liên quan đến tour này có thể bị ảnh hưởng.
+              <p className="text-[11px] text-rose-800 pt-2 border-t border-rose-200/60 leading-relaxed flex items-start gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" /> <span><strong>Cảnh báo:</strong> Khi xóa tour, toàn bộ thông tin tour và các đơn đặt giữ chỗ (Booking) liên quan đến tour này có thể bị ảnh hưởng.</span>
               </p>
             </div>
 

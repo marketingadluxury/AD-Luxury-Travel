@@ -38,7 +38,9 @@ import {
   Image as ImageIcon,
   Compass,
   ChevronRight,
-  Plus
+  Plus,
+  Grid,
+  List
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -129,6 +131,7 @@ export default function AccountingInvoice() {
   const [activeTab, setActiveTab] = useState<'receipts' | 'vat' | 'payments' | 'tours'>(
     (currentRole === 'accounting' || currentRole === 'admin') ? 'receipts' : 'payments'
   );
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [filterInvoice, setFilterInvoice] = useState<string>('pending');
   const [filterReceiptStatus, setFilterReceiptStatus] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
@@ -160,6 +163,11 @@ export default function AccountingInvoice() {
   const [filterCreator, setFilterCreator] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+
+  // Modal hiển thị chi tiết khi bấm vào thẻ Kanban
+  const [selectedReceiptDetail, setSelectedReceiptDetail] = useState<Invoice | null>(null);
+  const [selectedVatDetail, setSelectedVatDetail] = useState<Order | null>(null);
+  const [selectedPaymentDetail, setSelectedPaymentDetail] = useState<Invoice | null>(null);
 
   const toggleCard = (id: string) => {
     setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
@@ -519,7 +527,7 @@ export default function AccountingInvoice() {
   const receiptInvoices = useMemo(() => {
     return searchFilteredReceipts
       .filter(inv => {
-        if (filterReceiptStatus === 'all') return true;
+        if (viewMode === 'kanban' || filterReceiptStatus === 'all') return true;
         return inv.status === filterReceiptStatus;
       })
       .sort((a, b) => {
@@ -527,7 +535,7 @@ export default function AccountingInvoice() {
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return dateB - dateA;
       });
-  }, [searchFilteredReceipts, filterReceiptStatus]);
+  }, [searchFilteredReceipts, filterReceiptStatus, viewMode]);
 
   // All payment invoices matching search term, filters, and role
   const searchFilteredPayments = useMemo(() => {
@@ -599,7 +607,7 @@ export default function AccountingInvoice() {
   const paymentInvoices = useMemo(() => {
     return searchFilteredPayments
       .filter(inv => {
-        if (filterPaymentStatus === 'all') return true;
+        if (viewMode === 'kanban' || filterPaymentStatus === 'all') return true;
         return inv.status === filterPaymentStatus;
       })
       .sort((a, b) => {
@@ -607,7 +615,7 @@ export default function AccountingInvoice() {
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return dateB - dateA;
       });
-  }, [searchFilteredPayments, filterPaymentStatus]);
+  }, [searchFilteredPayments, filterPaymentStatus, viewMode]);
 
   // Gom nhóm hóa đơn chuyển khoản theo mã đơn hàng
   const groupedReceipts = useMemo(() => {
@@ -696,7 +704,7 @@ export default function AccountingInvoice() {
   const invoiceOrders = useMemo(() => {
     return searchFilteredVatOrders
       .filter(o => {
-        if (filterInvoice === 'all') return true;
+        if (viewMode === 'kanban' || filterInvoice === 'all') return true;
         return o.invoice_status === filterInvoice;
       })
       .sort((a, b) => {
@@ -704,7 +712,7 @@ export default function AccountingInvoice() {
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return dateB - dateA;
       });
-  }, [searchFilteredVatOrders, filterInvoice]);
+  }, [searchFilteredVatOrders, filterInvoice, viewMode]);
 
   const getInvoiceBadge = (status: Order['invoice_status']) => {
     switch (status) {
@@ -821,79 +829,7 @@ export default function AccountingInvoice() {
         </div>
       </div>
 
-      {/* Advanced Filter Toolbar for Accountant */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
-        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
-          {/* Search box */}
-          <div className="relative flex-1 min-w-[260px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm mã phiếu, mã booking, tên khách, SĐT, MST, ghi chú..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-500 transition-all outline-none"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-200 transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Custom UI Dropdown Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Filter Tour */}
-            <CustomSelect
-              options={tourOptions}
-              value={filterTourId}
-              onChange={(val) => setFilterTourId(val)}
-              icon={<Compass className="w-3.5 h-3.5 text-blue-600" />}
-              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
-            />
-
-            {/* Filter Creator */}
-            <CustomSelect
-              options={creatorOptions}
-              value={filterCreator}
-              onChange={(val) => setFilterCreator(val)}
-              icon={<User className="w-3.5 h-3.5 text-blue-600" />}
-              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
-            />
-
-            {/* Filter Month */}
-            <CustomSelect
-              options={monthOptions}
-              value={filterMonth}
-              onChange={(val) => setFilterMonth(val)}
-              icon={<Calendar className="w-3.5 h-3.5 text-blue-600" />}
-              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
-            />
-
-            {/* Reset Filters button */}
-            {(filterTourId !== 'all' || filterCreator !== 'all' || filterMonth !== 'all' || searchTerm.trim() !== '') && (
-              <button
-                onClick={() => {
-                  setFilterTourId('all');
-                  setFilterCreator('all');
-                  setFilterMonth('all');
-                  setSearchTerm('');
-                }}
-                className="px-2.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-                title="Xóa tất cả bộ lọc"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>Xóa lọc</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats summary */}
+      {/* Stats summary (Hiển thị lên trên đầu) */}
       {isAccountantOrAdmin ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
@@ -978,6 +914,108 @@ export default function AccountingInvoice() {
         </div>
       )}
 
+      {/* Advanced Filter Toolbar for Accountant */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          {/* Search box */}
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm mã phiếu, mã booking, tên khách, SĐT, MST, ghi chú..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-500 transition-all outline-none"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-200 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Custom UI Dropdown Filters & View Mode Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Bộ chuyển đổi chế độ xem Dạng Danh sách / Bảng Kanban */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('kanban')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === 'kanban'
+                    ? 'bg-white text-blue-700 shadow-2xs border border-blue-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Chế độ Bảng Kanban"
+              >
+                <Grid className="w-3.5 h-3.5 text-blue-600" />
+                <span>Bảng Kanban</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-white text-blue-700 shadow-2xs border border-blue-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Chế độ Dạng Danh Sách"
+              >
+                <List className="w-3.5 h-3.5 text-blue-600" />
+                <span>Dạng Danh Sách</span>
+              </button>
+            </div>
+
+            {/* Filter Tour */}
+            <CustomSelect
+              options={tourOptions}
+              value={filterTourId}
+              onChange={(val) => setFilterTourId(val)}
+              icon={<Compass className="w-3.5 h-3.5 text-blue-600" />}
+              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
+            />
+
+            {/* Filter Creator */}
+            <CustomSelect
+              options={creatorOptions}
+              value={filterCreator}
+              onChange={(val) => setFilterCreator(val)}
+              icon={<User className="w-3.5 h-3.5 text-blue-600" />}
+              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
+            />
+
+            {/* Filter Month */}
+            <CustomSelect
+              options={monthOptions}
+              value={filterMonth}
+              onChange={(val) => setFilterMonth(val)}
+              icon={<Calendar className="w-3.5 h-3.5 text-blue-600" />}
+              buttonClassName="bg-gray-50 hover:bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 shadow-2xs h-[36px]"
+            />
+
+            {/* Reset Filters button */}
+            {(filterTourId !== 'all' || filterCreator !== 'all' || filterMonth !== 'all' || searchTerm.trim() !== '') && (
+              <button
+                onClick={() => {
+                  setFilterTourId('all');
+                  setFilterCreator('all');
+                  setFilterMonth('all');
+                  setSearchTerm('');
+                }}
+                className="px-2.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                title="Xóa tất cả bộ lọc"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Xóa lọc</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {activeTab === 'receipts' && (
         /* TAB 1: DUYỆT PHIẾU THU CHUYỂN KHOẢN */
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -987,139 +1025,263 @@ export default function AccountingInvoice() {
               <p className="text-xs text-gray-500 mt-0.5">Đối chiếu tài khoản công ty và bấm phê duyệt tương ứng</p>
             </div>
             
-            {/* Thanh chuyển đổi trạng thái (Sub-tabs) hiện đại & Nút mở rộng/thu gọn */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setFilterReceiptStatus('pending')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterReceiptStatus === 'pending'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Chờ phê duyệt</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterReceiptStatus === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {pendingReceiptsCount}
-                  </span>
-                </button>
+            {/* Thanh chuyển đổi trạng thái (Sub-tabs) - Chỉ hiển thị khi ở dạng Danh sách */}
+            {viewMode === 'list' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setFilterReceiptStatus('pending')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterReceiptStatus === 'pending'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Chờ phê duyệt</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterReceiptStatus === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {pendingReceiptsCount}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setFilterReceiptStatus('approved')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterReceiptStatus === 'approved'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Công ty đã nhận</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterReceiptStatus === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {approvedReceiptsCount}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterReceiptStatus('approved')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterReceiptStatus === 'approved'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Công ty đã nhận</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterReceiptStatus === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {approvedReceiptsCount}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setFilterReceiptStatus('rejected')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterReceiptStatus === 'rejected'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Bị từ chối</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterReceiptStatus === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {rejectedReceiptsCount}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterReceiptStatus('rejected')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterReceiptStatus === 'rejected'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Bị từ chối</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterReceiptStatus === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {rejectedReceiptsCount}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setFilterReceiptStatus('all')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterReceiptStatus === 'all'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Tất cả</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterReceiptStatus === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {totalReceiptsCount}
-                  </span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setFilterReceiptStatus('all')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterReceiptStatus === 'all'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Tất cả</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterReceiptStatus === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {totalReceiptsCount}
+                    </span>
+                  </button>
+                </div>
 
-              {/* Nút Mở rộng / Thu gọn tất cả thẻ */}
-              {receiptInvoices.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const allIds = receiptInvoices.map(i => i.id);
-                    const isAnyExpanded = allIds.some(id => expandedCards[id]);
-                    if (isAnyExpanded) {
-                      collapseAllCards(allIds);
-                    } else {
-                      expandAllCards(allIds);
-                    }
-                  }}
-                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-                >
-                  <Eye className="w-3.5 h-3.5 text-gray-500" />
-                  <span>{receiptInvoices.some(i => expandedCards[i.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Tab 1: Vertical cards grid for Phiếu thu */}
-          <div className="p-4 md:p-6 space-y-4">
-            {receiptInvoices.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
-                <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <h4 className="text-gray-900 font-bold text-sm">Không tìm thấy phiếu thu nào</h4>
-                <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
-                  {searchTerm.trim() 
-                    ? `Không tìm thấy phiếu thu nào phù hợp với từ khóa "${searchTerm}".` 
-                    : filterReceiptStatus !== 'all' 
-                      ? `Không tìm thấy phiếu thu nào ở trạng thái này.` 
-                      : 'Các phiếu thu do Sales tải lên sẽ hiển thị tại đây.'}
-                </p>
-                {(searchTerm.trim() || filterReceiptStatus !== 'all') && (
-                  <div className="mt-4 flex justify-center gap-2">
-                    {searchTerm.trim() && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchTerm('')}
-                        className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
-                      >
-                        Xóa từ khóa
-                      </button>
-                    )}
-                    {filterReceiptStatus !== 'all' && (
-                      <button
-                        type="button"
-                        onClick={() => setFilterReceiptStatus('all')}
-                        className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
-                      >
-                        Xem tất cả ({totalReceiptsCount})
-                      </button>
-                    )}
-                  </div>
+                {/* Nút Mở rộng / Thu gọn tất cả thẻ */}
+                {receiptInvoices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allIds = receiptInvoices.map(i => i.id);
+                      const isAnyExpanded = allIds.some(id => expandedCards[id]);
+                      if (isAnyExpanded) {
+                        collapseAllCards(allIds);
+                      } else {
+                        expandAllCards(allIds);
+                      }
+                    }}
+                    className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-gray-500" />
+                    <span>{receiptInvoices.some(i => expandedCards[i.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
+                  </button>
                 )}
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {receiptInvoices.map((inv) => {
+            )}
+          </div>
+
+          {/* Dạng xem Kanban hay Dạng xem Danh sách cho Phiếu thu */}
+          {viewMode === 'kanban' ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 p-4 md:p-6 bg-slate-50/50">
+              {[
+                { id: 'pending', title: '⏳ 1. CHỜ PHÊ DUYỆT', color: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
+                { id: 'approved', title: '✅ 2. CÔNG TY ĐÃ NHẬN', color: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
+                { id: 'rejected', title: '❌ 3. BỊ TỪ CHỐI', color: 'bg-rose-600 text-white', borderCol: 'border-rose-200 bg-rose-50/20' },
+              ].map((col) => {
+                const colInvoices = searchFilteredReceipts.filter(inv => {
+                  if (col.id === 'pending') return inv.status === 'pending' || !inv.status;
+                  return inv.status === col.id;
+                });
+
+                return (
+                  <div key={col.id} className={`flex flex-col rounded-2xl border ${col.borderCol} bg-white shadow-2xs overflow-hidden max-h-[80vh]`}>
+                    <div className={`p-3 font-bold text-xs flex items-center justify-between ${col.color}`}>
+                      <span className="font-black uppercase tracking-wider">{col.title}</span>
+                      <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full shrink-0">
+                        {colInvoices.length}
+                      </span>
+                    </div>
+                    <div className="p-3 space-y-3 overflow-y-auto flex-1 scrollbar-thin">
+                      {colInvoices.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 text-xs italic border border-dashed border-slate-200 rounded-xl bg-white/50">
+                          Không có phiếu thu nào
+                        </div>
+                      ) : (
+                        colInvoices.map((inv) => {
+                          const parsedInfo = parseRefundInfo(inv, orders, tours);
+                          const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+                          const tour = order ? tours.find(t => t.id === order.tour_id) : null;
+                          const tourCode = tour?.code || parsedInfo.tourCode;
+                          const orderPassengers = order ? passengers.filter(p => p.order_id === order.id) : [];
+                          const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
+                          const leadName = (order?.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
+                            ? order.booker_name
+                            : (leadPassenger?.full_name || 'Khách trưởng đoàn');
+                          const phone = order?.booker_phone || leadPassenger?.phone || '';
+                          const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
+
+                          return (
+                            <div
+                              key={inv.id}
+                              onClick={() => setSelectedReceiptDetail(inv)}
+                              className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all space-y-2 cursor-pointer group"
+                            >
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <span className="font-mono font-bold text-xs text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                  {inv.invoice_code || 'Chưa cấp'}
+                                </span>
+                                <span className="font-black text-emerald-700 text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  +{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ
+                                </span>
+                              </div>
+
+                              <div className="text-xs space-y-1">
+                                <div className="font-extrabold text-slate-900 flex items-center gap-1 group-hover:text-blue-700 transition-colors">
+                                  <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  <span className="truncate">{leadName}</span>
+                                  {phone && <span className="text-[10px] text-slate-400 font-normal">({phone})</span>}
+                                </div>
+
+                                {orderCode && (
+                                  <div className="text-[11px] text-blue-700 font-mono font-semibold flex items-center justify-between">
+                                    <span>Booking: #{orderCode}</span>
+                                    {tourCode && <span className="text-slate-500 font-normal truncate max-w-[100px]">Tour: {tourCode}</span>}
+                                  </div>
+                                )}
+
+                                {inv.description && (
+                                  <div className="text-[11px] text-slate-600 truncate bg-slate-50 p-1.5 rounded border border-slate-100">
+                                    {inv.description}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                                <span className="truncate max-w-[120px]">{resolveCreatorName(inv.created_by, inv.order_id)}</span>
+                                <span>{inv.created_at ? format(new Date(inv.created_at), 'dd/MM/yyyy') : '---'}</span>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="pt-1 flex items-center gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
+                                {inv.file_url && (
+                                  <a
+                                    href={inv.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors inline-flex items-center gap-1"
+                                    title="Xem ảnh xác nhận"
+                                  >
+                                    <FileText className="w-3 h-3 text-blue-600" /> Ảnh
+                                  </a>
+                                )}
+                                {inv.status === 'pending' && isAccountantOrAdmin && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => setApproveTarget({ id: inv.id, amount: inv.amount, orderCode: orderCode || 'N/A' })}
+                                      className="px-2 py-0.5 text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Check className="w-3 h-3" /> Duyệt
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setRejectTarget({ id: inv.id, orderCode: orderCode || 'N/A' })}
+                                      className="px-2 py-0.5 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <X className="w-3 h-3" /> Từ chối
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-4 md:p-6 space-y-4">
+              {receiptInvoices.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                  <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <h4 className="text-gray-900 font-bold text-sm">Không tìm thấy phiếu thu nào</h4>
+                  <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+                    {searchTerm.trim() 
+                      ? `Không tìm thấy phiếu thu nào phù hợp với từ khóa "${searchTerm}".` 
+                      : filterReceiptStatus !== 'all' 
+                        ? `Không tìm thấy phiếu thu nào ở trạng thái này.` 
+                        : 'Các phiếu thu do Sales tải lên sẽ hiển thị tại đây.'}
+                  </p>
+                  {(searchTerm.trim() || filterReceiptStatus !== 'all') && (
+                    <div className="mt-4 flex justify-center gap-2">
+                      {searchTerm.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm('')}
+                          className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                        >
+                          Xóa từ khóa
+                        </button>
+                      )}
+                      {filterReceiptStatus !== 'all' && (
+                        <button
+                          type="button"
+                          onClick={() => setFilterReceiptStatus('all')}
+                          className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                        >
+                          Xem tất cả ({totalReceiptsCount})
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {receiptInvoices.map((inv) => {
                   const isExpanded = !!expandedCards[inv.id];
                   const parsedInfo = parseRefundInfo(inv, orders, tours);
                   const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
@@ -1334,8 +1496,9 @@ export default function AccountingInvoice() {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    )}
       
       {activeTab === 'vat' && (
         /* TAB 2: YÊU CẦU XUẤT HÓA ĐƠN VAT */
@@ -1346,85 +1509,194 @@ export default function AccountingInvoice() {
               <p className="text-xs text-gray-500 mt-0.5">Xử lý các yêu cầu viết hóa đơn thuế giá trị gia tăng</p>
             </div>
             
-            {/* Thanh chuyển đổi trạng thái (Sub-tabs) hiện đại và trực quan cho VAT */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setFilterInvoice('pending')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterInvoice === 'pending'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Chờ xuất VAT</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterInvoice === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {pendingVatCount}
-                  </span>
-                </button>
+            {/* Thanh chuyển đổi trạng thái (Sub-tabs) - Chỉ hiển thị khi ở dạng Danh sách */}
+            {viewMode === 'list' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setFilterInvoice('pending')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterInvoice === 'pending'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Chờ xuất VAT</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterInvoice === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {pendingVatCount}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setFilterInvoice('issued')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterInvoice === 'issued'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Đã xuất VAT</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterInvoice === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {issuedVatCount}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterInvoice('issued')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterInvoice === 'issued'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Đã xuất VAT</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterInvoice === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {issuedVatCount}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setFilterInvoice('all')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterInvoice === 'all'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Tất cả</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterInvoice === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {totalVatCount}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterInvoice('all')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterInvoice === 'all'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Tất cả</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterInvoice === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {totalVatCount}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Nút Mở rộng / Thu gọn tất cả thẻ */}
+                {invoiceOrders.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allIds = invoiceOrders.map(o => o.id);
+                      const isAnyExpanded = allIds.some(id => expandedCards[id]);
+                      if (isAnyExpanded) {
+                        collapseAllCards(allIds);
+                      } else {
+                        expandAllCards(allIds);
+                      }
+                    }}
+                    className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-gray-500" />
+                    <span>{invoiceOrders.some(o => expandedCards[o.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
+                  </button>
+                )}
               </div>
-
-              {/* Nút Mở rộng / Thu gọn tất cả thẻ VAT */}
-              {invoiceOrders.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const allIds = invoiceOrders.map(o => o.id);
-                    const isAnyExpanded = allIds.some(id => expandedCards[id]);
-                    if (isAnyExpanded) {
-                      collapseAllCards(allIds);
-                    } else {
-                      expandAllCards(allIds);
-                    }
-                  }}
-                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-                >
-                  <Eye className="w-3.5 h-3.5 text-gray-500" />
-                  <span>{invoiceOrders.some(o => expandedCards[o.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
-                </button>
-              )}
-            </div>
+            )}
           </div>
 
-          {/* Tab 2: Vertical cards grid for Xuất VAT */}
-          <div className="p-4 md:p-6 space-y-4">
+          {/* Dạng xem Kanban hay Dạng xem Danh sách cho VAT */}
+          {viewMode === 'kanban' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 md:p-6 bg-slate-50/50">
+              {[
+                { id: 'pending', title: '⏳ 1. CHỜ XUẤT VAT', color: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
+                { id: 'issued', title: '✅ 2. ĐÃ XUẤT VAT', color: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
+              ].map((col) => {
+                const colOrders = searchFilteredVatOrders.filter(o => o.invoice_status === col.id);
+                return (
+                  <div key={col.id} className={`flex flex-col rounded-2xl border ${col.borderCol} bg-white shadow-2xs overflow-hidden max-h-[80vh]`}>
+                    <div className={`p-3 font-bold text-xs flex items-center justify-between ${col.color}`}>
+                      <span className="font-black uppercase tracking-wider">{col.title}</span>
+                      <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full shrink-0">
+                        {colOrders.length}
+                      </span>
+                    </div>
+                    <div className="p-3 space-y-3 overflow-y-auto flex-1 scrollbar-thin">
+                      {colOrders.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 text-xs italic border border-dashed border-slate-200 rounded-xl bg-white/50">
+                          Không có yêu cầu xuất VAT nào
+                        </div>
+                      ) : (
+                        colOrders.map((order) => {
+                          const orderCode = order.id.substring(0, 8).toUpperCase();
+                          const tour = tours.find(t => t.id === order.tour_id);
+
+                          return (
+                            <div
+                              key={order.id}
+                              onClick={() => setSelectedVatDetail(order)}
+                              className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all space-y-2 cursor-pointer group"
+                            >
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <span className="font-mono font-bold text-xs text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                  #{orderCode}
+                                </span>
+                                <span className="font-black text-slate-900 text-xs bg-slate-100 px-2 py-0.5 rounded">
+                                  {new Intl.NumberFormat('vi-VN').format(order.total_price)}đ
+                                </span>
+                              </div>
+
+                              <div className="text-xs space-y-1">
+                                <div className="font-extrabold text-slate-900 flex items-center gap-1 group-hover:text-blue-700 transition-colors">
+                                  <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  <span className="truncate">{order.booker_name || 'Khách lẻ'}</span>
+                                  {order.booker_phone && <span className="text-[10px] text-slate-500 font-normal">({order.booker_phone})</span>}
+                                </div>
+
+                                <div className="bg-blue-50/60 p-2 rounded-lg border border-blue-100 text-[11px] space-y-0.5">
+                                  <div className="font-bold text-blue-950 truncate">
+                                    🏢 {order.vat_company_name || 'Chưa nhập tên công ty'}
+                                  </div>
+                                  {order.vat_tax_code && (
+                                    <div className="font-mono text-blue-800">
+                                      MST: {order.vat_tax_code}
+                                    </div>
+                                  )}
+                                  {order.vat_email && (
+                                    <div className="text-slate-600 truncate">
+                                      ✉️ {order.vat_email}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {tour?.code && (
+                                  <div className="text-[11px] text-slate-600 truncate">
+                                    Tour: {tour.code}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                                <span className="truncate max-w-[120px]">{resolveCreatorName(order.created_by, order.id)}</span>
+                                <span>{order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy') : '---'}</span>
+                              </div>
+
+                              {/* Actions */}
+                              {isAccountantOrAdmin && (
+                                <div className="pt-1 flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                                  {order.invoice_status === 'pending' ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setVatTarget({ orderId: order.id, orderCode, targetStatus: 'issued' })}
+                                      className="px-2 py-0.5 text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Check className="w-3 h-3" /> Xác nhận đã xuất VAT
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setVatTarget({ orderId: order.id, orderCode, targetStatus: 'pending' })}
+                                      className="px-2.5 py-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Clock className="w-3 h-3" /> Đổi về Chờ xuất
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-4 md:p-6 space-y-4">
             {invoiceOrders.length === 0 ? (
               <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
                 <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -1653,8 +1925,9 @@ export default function AccountingInvoice() {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    )}
 
       {activeTab === 'payments' && (
         /* TAB 3: PHIẾU CHI */
@@ -1677,98 +1950,208 @@ export default function AccountingInvoice() {
               </button>
             </div>
 
-            {/* Row 2: Sub-tabs & Expand/Collapse button */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200/60">
-              <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setFilterPaymentStatus('pending')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterPaymentStatus === 'pending'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Chờ duyệt</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterPaymentStatus === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {pendingPaymentsCount}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterPaymentStatus('approved')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterPaymentStatus === 'approved'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Đã duyệt chi</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterPaymentStatus === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {approvedPaymentsCount}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterPaymentStatus('rejected')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterPaymentStatus === 'rejected'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Bị từ chối</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterPaymentStatus === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {rejectedPaymentsCount}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterPaymentStatus('all')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    filterPaymentStatus === 'all'
-                      ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-                  }`}
-                >
-                  <span>Tất cả</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    filterPaymentStatus === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {totalPaymentsCount}
-                  </span>
-                </button>
-              </div>
+            {/* Row 2: Sub-tabs & Expand/Collapse button - Chỉ hiển thị khi ở dạng Danh sách */}
+            {viewMode === 'list' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200/60">
+                <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setFilterPaymentStatus('pending')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterPaymentStatus === 'pending'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Chờ duyệt</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterPaymentStatus === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {pendingPaymentsCount}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterPaymentStatus('approved')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterPaymentStatus === 'approved'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Đã duyệt chi</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterPaymentStatus === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {approvedPaymentsCount}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterPaymentStatus('rejected')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterPaymentStatus === 'rejected'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Bị từ chối</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterPaymentStatus === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {rejectedPaymentsCount}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterPaymentStatus('all')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      filterPaymentStatus === 'all'
+                        ? 'bg-white text-blue-700 border border-blue-600 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    <span>Tất cả</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      filterPaymentStatus === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {totalPaymentsCount}
+                    </span>
+                  </button>
+                </div>
 
-              {/* Nút Mở rộng / Thu gọn tất cả thẻ Phiếu Chi */}
-              {paymentInvoices.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const allIds = paymentInvoices.map(p => p.id);
-                    const isAnyExpanded = allIds.some(id => expandedCards[id]);
-                    if (isAnyExpanded) {
-                      collapseAllCards(allIds);
-                    } else {
-                      expandAllCards(allIds);
-                    }
-                  }}
-                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
-                >
-                  <Eye className="w-3.5 h-3.5 text-gray-500" />
-                  <span>{paymentInvoices.some(p => expandedCards[p.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
-                </button>
-              )}
-            </div>
+                {/* Nút Mở rộng / Thu gọn tất cả thẻ Phiếu Chi */}
+                {paymentInvoices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allIds = paymentInvoices.map(p => p.id);
+                      const isAnyExpanded = allIds.some(id => expandedCards[id]);
+                      if (isAnyExpanded) {
+                        collapseAllCards(allIds);
+                      } else {
+                        expandAllCards(allIds);
+                      }
+                    }}
+                    className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-gray-500" />
+                    <span>{paymentInvoices.some(p => expandedCards[p.id]) ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="p-4 md:p-6 space-y-4">
+          {/* Dạng xem Kanban hay Dạng xem Danh sách cho Phiếu Chi */}
+          {viewMode === 'kanban' ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 p-4 md:p-6 bg-slate-50/50">
+              {[
+                { id: 'pending', title: '⏳ 1. CHỜ DUYỆT CHI', color: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
+                { id: 'approved', title: '✅ 2. ĐÃ DUYỆT CHI', color: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
+                { id: 'rejected', title: '❌ 3. BỊ TỪ CHỐI', color: 'bg-rose-600 text-white', borderCol: 'border-rose-200 bg-rose-50/20' },
+              ].map((col) => {
+                const colInvoices = searchFilteredPayments.filter(inv => inv.status === col.id);
+                return (
+                  <div key={col.id} className={`flex flex-col rounded-2xl border ${col.borderCol} bg-white shadow-2xs overflow-hidden max-h-[80vh]`}>
+                    <div className={`p-3 font-bold text-xs flex items-center justify-between ${col.color}`}>
+                      <span className="font-black uppercase tracking-wider">{col.title}</span>
+                      <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full shrink-0">
+                        {colInvoices.length}
+                      </span>
+                    </div>
+                    <div className="p-3 space-y-3 overflow-y-auto flex-1 scrollbar-thin">
+                      {colInvoices.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 text-xs italic border border-dashed border-slate-200 rounded-xl bg-white/50">
+                          Không có phiếu chi nào
+                        </div>
+                      ) : (
+                        colInvoices.map((inv) => {
+                          const parsedInfo = parseRefundInfo(inv, orders, tours);
+                          const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+                          const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
+
+                          return (
+                            <div
+                              key={inv.id}
+                              onClick={() => setSelectedPaymentDetail(inv)}
+                              className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all space-y-2 cursor-pointer group"
+                            >
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <span className="font-mono font-bold text-xs text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                  {inv.invoice_code || 'Chưa cấp'}
+                                </span>
+                                <span className="font-black text-rose-700 text-xs bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                  -{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ
+                                </span>
+                              </div>
+
+                              <div className="text-xs space-y-1">
+                                {orderCode && (
+                                  <div className="text-[11px] text-blue-700 font-mono font-semibold">
+                                    Booking: #{orderCode}
+                                  </div>
+                                )}
+                                {inv.description && (
+                                  <div className="text-[11px] text-slate-700 font-medium line-clamp-2 bg-slate-50 p-1.5 rounded border border-slate-100">
+                                    {inv.description}
+                                  </div>
+                                )}
+                                {parsedInfo.bankName && (
+                                  <div className="text-[10px] text-slate-600 bg-amber-50/60 p-1.5 rounded border border-amber-100 font-mono truncate">
+                                    🏦 {parsedInfo.bankName} - {parsedInfo.accountNumber} ({parsedInfo.accountName})
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                                <span className="truncate max-w-[120px]">{resolveCreatorName(inv.created_by, inv.order_id)}</span>
+                                <span>{inv.created_at ? format(new Date(inv.created_at), 'dd/MM/yyyy') : '---'}</span>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="pt-1 flex items-center gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
+                                {inv.file_url && (
+                                  <a
+                                    href={inv.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors inline-flex items-center gap-1"
+                                    title="Xem ảnh minh chứng"
+                                  >
+                                    <FileText className="w-3 h-3 text-blue-600" /> Ảnh
+                                  </a>
+                                )}
+                                {inv.status === 'pending' && isAccountantOrAdmin && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => setApprovePaymentTarget(inv)}
+                                      className="px-2 py-0.5 text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Check className="w-3 h-3" /> Duyệt chi
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setRejectPaymentTarget(inv)}
+                                      className="px-2 py-0.5 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <X className="w-3 h-3" /> Từ chối
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-4 md:p-6 space-y-4">
             {paymentInvoices.length === 0 ? (
               <div className="text-center py-12 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
                 <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -2057,8 +2440,9 @@ export default function AccountingInvoice() {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    )}
 
       {activeTab === 'tours' && (
         /* TAB 4: HỒ SƠ & THẺ TOUR (BÁO CÁO CHI TIẾT) */
@@ -3358,6 +3742,426 @@ export default function AccountingInvoice() {
               >
                 Tạo Phiếu Chi
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CHI TIẾT PHIẾU THU */}
+      {selectedReceiptDetail && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden animate-fadeIn border border-slate-100">
+            <div className="bg-emerald-700 px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-emerald-200" />
+                <h3 className="font-extrabold text-base">Chi tiết Phiếu Thu Chuyển Khoản</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptDetail(null)}
+                className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              {(() => {
+                const inv = selectedReceiptDetail;
+                const parsedInfo = parseRefundInfo(inv, orders, tours);
+                const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+                const tour = order ? tours.find(t => t.id === order.tour_id) : null;
+                const tourCode = tour?.code || parsedInfo.tourCode;
+                const tourName = tour?.name || parsedInfo.tourName;
+                const orderPassengers = order ? passengers.filter(p => p.order_id === order.id) : [];
+                const leadPassenger = orderPassengers.find(p => p.is_payer) || orderPassengers[0];
+                const leadName = (order?.booker_name && !order.booker_name.includes('Giữ chỗ tạm'))
+                  ? order.booker_name
+                  : (leadPassenger?.full_name || 'Khách trưởng đoàn');
+                const phone = order?.booker_phone || leadPassenger?.phone || '';
+                const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
+
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-emerald-50 p-3.5 rounded-xl border border-emerald-200">
+                      <div>
+                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Số tiền thu</span>
+                        <span className="text-xl font-black text-emerald-800">+{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Trạng thái</span>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          inv.status === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                          inv.status === 'rejected' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                          'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}>
+                          {inv.status === 'approved' ? 'Công ty đã nhận' : inv.status === 'rejected' ? 'Bị từ chối' : 'Chờ phê duyệt'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Mã phiếu thu:</span>
+                        <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">{inv.invoice_code || 'Chưa cấp'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Khách đặt / Đại lý:</span>
+                        <span className="font-bold text-slate-900">{leadName} {phone && `(${phone})`}</span>
+                      </div>
+                      {orderCode && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-bold">Mã Booking:</span>
+                          <span className="font-mono font-bold text-blue-700">#{orderCode}</span>
+                        </div>
+                      )}
+                      {(tourCode || tourName) && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-bold">Tour:</span>
+                          <span className="font-bold text-slate-800 truncate max-w-[200px]">{tourCode ? `${tourCode} - ${tourName || ''}` : tourName}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Phương thức:</span>
+                        <span className="font-semibold text-slate-800">{inv.payment_method || 'Chuyển khoản'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Người tạo:</span>
+                        <span className="font-semibold text-slate-800">{resolveCreatorName(inv.created_by, inv.order_id)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Ngày tạo:</span>
+                        <span className="font-medium text-slate-700">{inv.created_at ? format(new Date(inv.created_at), 'HH:mm dd/MM/yyyy') : '---'}</span>
+                      </div>
+                    </div>
+
+                    {inv.description && (
+                      <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-150 text-xs">
+                        <span className="font-bold text-blue-900 block mb-1">Ghi chú & Đợt nộp:</span>
+                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{inv.description}</p>
+                      </div>
+                    )}
+
+                    {inv.file_url && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-bold text-slate-700 block">Hình ảnh xác nhận chuyển khoản:</span>
+                        <a
+                          href={inv.file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold border border-blue-200 transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-blue-600" /> Xem ảnh chuyển khoản chi tiết
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="bg-slate-50 px-6 py-4 flex items-center justify-between border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptDetail(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Đóng
+              </button>
+
+              {selectedReceiptDetail?.status === 'pending' && isAccountantOrAdmin && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inv = selectedReceiptDetail;
+                      const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+                      const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
+                      setSelectedReceiptDetail(null);
+                      setRejectTarget({ id: inv.id, orderCode: orderCode || 'N/A' });
+                    }}
+                    className="px-3 py-2 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer"
+                  >
+                    Từ chối
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inv = selectedReceiptDetail;
+                      const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+                      const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
+                      setSelectedReceiptDetail(null);
+                      setApproveTarget({ id: inv.id, amount: inv.amount, orderCode: orderCode || 'N/A' });
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+                  >
+                    Phê duyệt thu
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CHI TIẾT YÊU CẦU VAT */}
+      {selectedVatDetail && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden animate-fadeIn border border-slate-100">
+            <div className="bg-blue-900 px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-300" />
+                <h3 className="font-extrabold text-base">Chi tiết Yêu cầu Xuất Hóa Đơn VAT</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedVatDetail(null)}
+                className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+              {(() => {
+                const order = selectedVatDetail;
+                const orderCode = order.id.substring(0, 8).toUpperCase();
+                const tour = tours.find(t => t.id === order.tour_id);
+
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-blue-50 p-3.5 rounded-xl border border-blue-200">
+                      <div>
+                        <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Mã Đơn Hàng</span>
+                        <span className="text-lg font-black text-blue-950 font-mono">#{orderCode}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tổng giá trị đơn</span>
+                        <span className="text-base font-black text-slate-900">{new Intl.NumberFormat('vi-VN').format(order.total_price)}đ</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Người đặt tour:</span>
+                        <span className="font-bold text-slate-900">{order.booker_name || 'Khách lẻ'} {order.booker_phone && `(${order.booker_phone})`}</span>
+                      </div>
+                      {tour?.code && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-bold">Tour:</span>
+                          <span className="font-bold text-slate-800">{tour.code} - {tour.name}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Trạng thái VAT:</span>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          order.invoice_status === 'issued' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}>
+                          {order.invoice_status === 'issued' ? 'Đã xuất VAT' : 'Chờ xuất VAT'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Người tạo:</span>
+                        <span className="font-semibold text-slate-800">{resolveCreatorName(order.created_by, order.id)}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4 space-y-2.5">
+                      <div className="text-xs font-black text-blue-950 uppercase tracking-wider border-b border-blue-200 pb-1.5 flex items-center gap-1.5">
+                        🏢 Thông tin xuất hóa đơn doanh nghiệp
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-slate-500 font-bold uppercase">Tên Công ty / Đơn vị:</span>
+                        <span className="font-extrabold text-slate-900 text-sm select-all">{order.vat_company_name || 'Chưa nhập'}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-slate-500 font-bold uppercase">Mã số thuế (MST):</span>
+                        <span className="font-mono font-black text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-200 inline-block text-xs select-all">{order.vat_tax_code || 'Chưa nhập'}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-slate-500 font-bold uppercase">Địa chỉ công ty:</span>
+                        <span className="font-medium text-slate-800 select-all">{order.vat_address || 'Chưa nhập'}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-slate-500 font-bold uppercase">Email nhận hóa đơn:</span>
+                        <span className="font-mono font-bold text-slate-800 select-all">{order.vat_email || 'Chưa nhập'}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="bg-slate-50 px-6 py-4 flex items-center justify-between border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setSelectedVatDetail(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Đóng
+              </button>
+
+              {isAccountantOrAdmin && selectedVatDetail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const order = selectedVatDetail;
+                    const orderCode = order.id.substring(0, 8).toUpperCase();
+                    const targetStatus = order.invoice_status === 'pending' ? 'issued' : 'pending';
+                    setSelectedVatDetail(null);
+                    setVatTarget({ orderId: order.id, orderCode, targetStatus });
+                  }}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors cursor-pointer ${
+                    selectedVatDetail.invoice_status === 'pending'
+                      ? 'text-white bg-emerald-600 hover:bg-emerald-700'
+                      : 'text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300'
+                  }`}
+                >
+                  {selectedVatDetail.invoice_status === 'pending' ? 'Xác nhận đã xuất VAT' : 'Đánh dấu chưa xuất VAT'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CHI TIẾT PHIẾU CHI */}
+      {selectedPaymentDetail && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden animate-fadeIn border border-slate-100">
+            <div className="bg-rose-700 px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-rose-200" />
+                <h3 className="font-extrabold text-base">Chi tiết Phiếu Chi & Hoàn Tiền</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPaymentDetail(null)}
+                className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              {(() => {
+                const inv = selectedPaymentDetail;
+                const parsedInfo = parseRefundInfo(inv, orders, tours);
+                const order = inv.order_id ? orders.find(o => o.id === inv.order_id) : null;
+                const orderCode = order ? order.id.substring(0, 8).toUpperCase() : (inv.order_id ? inv.order_id.substring(0, 8).toUpperCase() : '');
+
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-rose-50 p-3.5 rounded-xl border border-rose-200">
+                      <div>
+                        <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Số tiền chi</span>
+                        <span className="text-xl font-black text-rose-800">-{new Intl.NumberFormat('vi-VN').format(inv.amount)}đ</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Trạng thái</span>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          inv.status === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                          inv.status === 'rejected' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                          'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}>
+                          {inv.status === 'approved' ? 'Đã duyệt chi' : inv.status === 'rejected' ? 'Bị từ chối' : 'Chờ duyệt chi'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Mã phiếu chi:</span>
+                        <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">{inv.invoice_code || 'Chưa cấp'}</span>
+                      </div>
+                      {orderCode && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-bold">Mã Booking:</span>
+                          <span className="font-mono font-bold text-blue-700">#{orderCode}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Phương thức chi:</span>
+                        <span className="font-semibold text-slate-800">{inv.payment_method || 'Chuyển khoản'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Người tạo đề xuất:</span>
+                        <span className="font-semibold text-slate-800">{resolveCreatorName(inv.created_by, inv.order_id)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-bold">Ngày tạo:</span>
+                        <span className="font-medium text-slate-700">{inv.created_at ? format(new Date(inv.created_at), 'HH:mm dd/MM/yyyy') : '---'}</span>
+                      </div>
+                    </div>
+
+                    {inv.description && (
+                      <div className="bg-rose-50/60 p-3 rounded-xl border border-rose-150 text-xs">
+                        <span className="font-bold text-rose-900 block mb-1">Nội dung / Lý do chi:</span>
+                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{inv.description}</p>
+                      </div>
+                    )}
+
+                    {parsedInfo.bankName && (
+                      <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-200 text-xs space-y-1">
+                        <span className="font-black text-amber-950 block uppercase tracking-wider text-[10px]">🏦 Tài khoản nhận tiền</span>
+                        <div className="font-mono font-bold text-slate-900">{parsedInfo.bankName} - {parsedInfo.accountNumber}</div>
+                        <div className="font-bold text-slate-800 uppercase">{parsedInfo.accountName}</div>
+                      </div>
+                    )}
+
+                    {inv.file_url && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-bold text-slate-700 block">Hình ảnh minh chứng chi:</span>
+                        <a
+                          href={inv.file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold border border-blue-200 transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-blue-600" /> Xem ảnh minh chứng chi
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="bg-slate-50 px-6 py-4 flex items-center justify-between border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setSelectedPaymentDetail(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Đóng
+              </button>
+
+              {selectedPaymentDetail?.status === 'pending' && isAccountantOrAdmin && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inv = selectedPaymentDetail;
+                      setSelectedPaymentDetail(null);
+                      setRejectPaymentTarget(inv);
+                    }}
+                    className="px-3 py-2 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer"
+                  >
+                    Từ chối
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inv = selectedPaymentDetail;
+                      setSelectedPaymentDetail(null);
+                      setApprovePaymentTarget(inv);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+                  >
+                    Phê duyệt chi
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

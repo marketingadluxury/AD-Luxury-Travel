@@ -25,7 +25,8 @@ import {
   Phone,
   Sparkles,
   Globe,
-  Copy
+  Copy,
+  X
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
@@ -364,7 +365,7 @@ export default function PassengersManagement() {
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs whitespace-nowrap">
             <Globe className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            Miễn Visa
+            Có sẵn Visa
           </span>
         );
       default:
@@ -516,7 +517,7 @@ export default function PassengersManagement() {
         {/* Exempt Visa */}
         <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/40 to-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600">Miễn Visa</span>
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600">Có sẵn Visa</span>
             <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
               <Globe className="w-4 h-4" />
             </div>
@@ -529,94 +530,93 @@ export default function PassengersManagement() {
       </div>
 
       {/* Control Panel: Filter and Search Bar */}
-      <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-sm space-y-4">
-        <div className="flex flex-col lg:flex-row items-center gap-3.5">
-          
-          {/* Search Box */}
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Tìm kiếm theo Tên khách, Số điện thoại, Số hộ chiếu hoặc Mã booking..."
-              className="w-full pl-11 pr-4 py-2.5 border border-slate-300/90 rounded-xl text-xs font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-slate-900 placeholder:text-slate-400 bg-slate-50/30"
+      <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3.5">
+        
+        {/* Search Box - Full Width Top Row */}
+        <div className="relative w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input 
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Tìm kiếm theo Tên khách, Số điện thoại, Số hộ chiếu hoặc Mã booking..."
+            className="w-full h-10 pl-10 pr-10 border border-slate-200/90 rounded-xl text-xs font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-slate-900 placeholder:text-slate-400 bg-slate-50/50 focus:bg-white transition-all shadow-2xs"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1 rounded-md flex items-center justify-center cursor-pointer transition-colors"
+              title="Xóa tìm kiếm"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filters Grid - 4 Equal Columns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full">
+          {/* Time Range Filter */}
+          <div className="w-full">
+            <TimeRangeFilter
+              value={selectedTimeRange}
+              onChange={setSelectedTimeRange}
+              startDate={selectedStartDate}
+              onChangeStartDate={setSelectedStartDate}
+              endDate={selectedEndDate}
+              onChangeEndDate={setSelectedEndDate}
+              prefixText="Đăng ký"
+              className="w-full"
+              selectClassName="w-full h-10 px-3 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
             />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold px-1.5 py-0.5 rounded"
-              >
-                ✕
-              </button>
-            )}
           </div>
 
-          {/* Filters Container */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full lg:w-auto shrink-0">
-            {/* Time Range Filter */}
-            <div className="w-full">
-              <TimeRangeFilter
-                value={selectedTimeRange}
-                onChange={setSelectedTimeRange}
-                startDate={selectedStartDate}
-                onChangeStartDate={setSelectedStartDate}
-                endDate={selectedEndDate}
-                onChangeEndDate={setSelectedEndDate}
-                prefixText="Đăng ký"
-                selectClassName="w-full pl-3 pr-8 py-2.5 border border-slate-300/90 rounded-xl text-xs font-bold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            {/* Membership Tier Filter */}
-            <div className="w-full">
-              <select
-                value={selectedTier}
-                onChange={e => setSelectedTier(e.target.value)}
-                className="w-full h-9 pl-3 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              >
-                <option value="all">👑 Mọi Hạng thành viên</option>
-                <option value="Hạng Đồng">🟤 Hạng Đồng</option>
-                <option value="Hạng Bạc">⚪ Hạng Bạc</option>
-                <option value="Hạng Vàng">🟡 Hạng Vàng</option>
-                <option value="Hạng Kim Cương">🟣 Hạng Kim Cương</option>
-              </select>
-            </div>
-
-            {/* Visa Status Filter */}
-            <div className="w-full">
-              <select
-                value={selectedVisaStatus}
-                onChange={e => setSelectedVisaStatus(e.target.value)}
-                className="w-full h-9 pl-3 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              >
-                <option value="all">🛂 Mọi Visa status (Mới nhất)</option>
-                <option value="pending">⏳ Chờ nộp hồ sơ</option>
-                <option value="processing">⚙️ Đang xử lý</option>
-                <option value="approved">✅ Đã có Visa</option>
-                <option value="rejected">❌ Bị từ chối</option>
-                <option value="not_required">⚪ Miễn Visa</option>
-              </select>
-            </div>
-
-            {/* Tour Selection Filter */}
-            <div className="w-full">
-              <select
-                value={selectedTourId}
-                onChange={e => setSelectedTourId(e.target.value)}
-                className="w-full h-9 pl-3 pr-8 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 truncate"
-              >
-                <option value="all">🗺️ Khách từng đi bất kỳ Tour nào</option>
-                {tours.map(t => (
-                  <option key={t.id} value={t.id}>
-                    [{t.code}] {t.name.length > 22 ? t.name.substring(0, 22) + '...' : t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Membership Tier Filter */}
+          <div className="w-full">
+            <select
+              value={selectedTier}
+              onChange={e => setSelectedTier(e.target.value)}
+              className="w-full h-10 pl-3 pr-8 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+            >
+              <option value="all">Mọi Hạng thành viên</option>
+              <option value="Hạng Đồng">Hạng Đồng</option>
+              <option value="Hạng Bạc">Hạng Bạc</option>
+              <option value="Hạng Vàng">Hạng Vàng</option>
+              <option value="Hạng Kim Cương">Hạng Kim Cương</option>
+            </select>
           </div>
 
+          {/* Visa Status Filter */}
+          <div className="w-full">
+            <select
+              value={selectedVisaStatus}
+              onChange={e => setSelectedVisaStatus(e.target.value)}
+              className="w-full h-10 pl-3 pr-8 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+            >
+              <option value="all">Mọi trạng thái Visa (Mới nhất)</option>
+              <option value="pending">Chờ nộp hồ sơ</option>
+              <option value="processing">Đang xử lý</option>
+              <option value="approved">Đã có Visa</option>
+              <option value="rejected">Bị từ chối</option>
+              <option value="not_required">Có sẵn Visa</option>
+            </select>
+          </div>
+
+          {/* Tour Selection Filter */}
+          <div className="w-full">
+            <select
+              value={selectedTourId}
+              onChange={e => setSelectedTourId(e.target.value)}
+              className="w-full h-10 pl-3 pr-8 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs truncate"
+            >
+              <option value="all">Khách từng đi bất kỳ Tour nào</option>
+              {tours.map(t => (
+                <option key={t.id} value={t.id}>
+                  [{t.code}] {t.name.length > 22 ? t.name.substring(0, 22) + '...' : t.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Filter result counter bar */}
@@ -1136,9 +1136,10 @@ export default function PassengersManagement() {
               <button
                 type="button"
                 onClick={() => setDisqualifiedReasonModal(null)}
-                className="text-rose-400 hover:text-rose-600 transition-colors text-lg font-bold p-1 rounded-lg cursor-pointer"
+                className="text-rose-400 hover:text-rose-600 transition-colors p-1 rounded-lg cursor-pointer flex items-center justify-center"
+                title="Đóng"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-6 space-y-4">

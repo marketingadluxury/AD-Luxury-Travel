@@ -32,7 +32,9 @@ import {
   Info,
   ShieldCheck,
   ChevronRight,
-  FileText
+  FileText,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -79,6 +81,8 @@ export default function PaymentProposals() {
   const isAccountingOrAdmin = ['accounting', 'admin', 'bod'].includes(currentRole);
 
   const location = useLocation();
+
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -391,6 +395,13 @@ export default function PaymentProposals() {
     };
   }, [paymentProposals]);
 
+  const kanbanColumns = [
+    { id: 'pending_leader', title: '⏳ 1. Chờ Leader duyệt', bgHeader: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
+    { id: 'approved_leader', title: '🏦 2. Chờ Kế toán chi', bgHeader: 'bg-blue-600 text-white', borderCol: 'border-blue-200 bg-blue-50/20' },
+    { id: 'approved_accounting', title: '✅ 3. Đã chi tiền', bgHeader: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
+    { id: 'rejected', title: '❌ 4. Bị từ chối', bgHeader: 'bg-rose-600 text-white', borderCol: 'border-rose-200 bg-rose-50/20' },
+  ];
+
   // If Agent attempts access
   if (isAgent) {
     return (
@@ -566,35 +577,140 @@ export default function PaymentProposals() {
               alignPopover="right"
               selectClassName="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 cursor-pointer"
             />
+            
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('kanban')}
+                className={`h-8 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'kanban'
+                    ? 'bg-white text-blue-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden sm:inline">Kanban</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`h-8 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-white text-blue-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <List className="w-3.5 h-3.5 text-purple-600" />
+                <span className="hidden sm:inline">Danh Sách</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Table / Proposals List */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+      <>
         {filteredProposals.length === 0 ? (
-          <div className="py-16 text-center px-4">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 mx-auto mb-3">
-              <FileCheck className="w-8 h-8" />
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="py-16 text-center px-4">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 mx-auto mb-3">
+                <FileCheck className="w-8 h-8" />
+              </div>
+              <h3 className="text-base font-bold text-gray-800">Chưa tìm thấy đề nghị thanh toán nào</h3>
+              <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                {paymentProposals.length === 0
+                  ? 'Hệ thống chưa có đề nghị thanh toán nào được tạo. Hãy bấm nút "Tạo Đề Nghị Mới" để gửi đề nghị đầu tiên.'
+                  : 'Không có dữ liệu phù hợp với bộ lọc hiện tại. Thử thay đổi từ khóa hoặc bộ lọc.'}
+              </p>
+              {paymentProposals.length === 0 && (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="mt-4 px-4 py-2 bg-[#0038A8] text-white font-bold text-xs rounded-xl shadow-xs hover:bg-blue-900 transition-colors"
+                >
+                  + Tạo đề nghị ngay
+                </button>
+              )}
             </div>
-            <h3 className="text-base font-bold text-gray-800">Chưa tìm thấy đề nghị thanh toán nào</h3>
-            <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-              {paymentProposals.length === 0
-                ? 'Hệ thống chưa có đề nghị thanh toán nào được tạo. Hãy bấm nút "Tạo Đề Nghị Mới" để gửi đề nghị đầu tiên.'
-                : 'Không có dữ liệu phù hợp với bộ lọc hiện tại. Thử thay đổi từ khóa hoặc bộ lọc.'}
-            </p>
-            {paymentProposals.length === 0 && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="mt-4 px-4 py-2 bg-[#0038A8] text-white font-bold text-xs rounded-xl shadow-xs hover:bg-blue-900 transition-colors"
-              >
-                + Tạo đề nghị ngay
-              </button>
-            )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <>
+            {/* VIEW MODE 1: COMPACT KANBAN BOARD */}
+            {viewMode === 'kanban' && (
+              <div className="w-full pb-6">
+                <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+                  {kanbanColumns.map(col => {
+                    const colProposals = filteredProposals.filter(p => {
+                      if (col.id === 'rejected') return p.status === 'rejected_leader' || p.status === 'rejected_accounting';
+                      return p.status === col.id;
+                    });
+
+                    return (
+                      <div key={col.id} className={`rounded-2xl border ${col.borderCol} p-3 flex flex-col space-y-3 h-full max-h-[80vh] min-w-0`}>
+                        {/* COLUMN HEADER */}
+                        <div className={`p-2.5 rounded-xl shadow-2xs flex items-center justify-between ${col.bgHeader}`}>
+                          <h4 className="text-xs font-black uppercase tracking-wider line-clamp-1">{col.title}</h4>
+                          <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full shrink-0">
+                            {colProposals.length}
+                          </span>
+                        </div>
+
+                        {/* COMPACT PROPOSAL CARDS IN COLUMN */}
+                        <div className="space-y-3 flex-1 overflow-y-auto pr-1 pb-1 scrollbar-thin">
+                          {colProposals.length === 0 ? (
+                            <div className="p-6 text-center text-slate-400 font-medium text-xs border border-dashed border-slate-300 rounded-xl bg-white/50">
+                              Không có đề nghị nào
+                            </div>
+                          ) : (
+                            colProposals.map(proposal => (
+                              <div 
+                                key={proposal.id} 
+                                onClick={() => {
+                                  setSelectedProposal(proposal);
+                                  setShowDetailModal(true);
+                                }}
+                                className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all space-y-2 cursor-pointer group flex flex-col"
+                              >
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shrink-0">
+                                    {proposal.code}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 whitespace-nowrap">{formatDateVi(proposal.created_at)}</span>
+                                </div>
+                                <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug" title={proposal.title}>{proposal.title}</h4>
+                                
+                                <div className="pt-1 mt-auto">
+                                  <div className="text-sm font-black text-rose-600 mb-1.5">
+                                    {proposal.amount.toLocaleString('vi-VN')} đ
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-[10px] font-medium text-slate-600 flex items-center gap-1 max-w-[70%]">
+                                      <UserCheck className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span className="truncate" title={proposal.created_by_name}>{proposal.created_by_name}</span>
+                                    </div>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase border ${
+                                      proposal.proposal_type === 'individual' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                      proposal.proposal_type === 'tour' ? 'bg-teal-50 text-teal-700 border-teal-200' : 'bg-slate-100 text-slate-700 border-slate-200'
+                                    }`}>
+                                      {proposal.proposal_type === 'tour' ? 'Tour' : proposal.proposal_type === 'general' ? 'Chung' : 'Lẻ'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* VIEW MODE 2: LIST VIEW */}
+            {viewMode === 'list' && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                   <th className="py-3 px-4">Mã & Ngày tạo</th>
@@ -815,9 +931,12 @@ export default function PaymentProposals() {
                 })}
               </tbody>
             </table>
-          </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
-      </div>
+      </>
 
       {/* CREATE PROPOSAL MODAL */}
       <AnimatePresence>

@@ -373,12 +373,15 @@ export default function EditPassengerModal({
             </div>
             
             {!canEditVisaOption && (
-              <div className="text-[11px] text-amber-900 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200/60 leading-relaxed">
-                {isOrderExplicitlyLocked ? (
-                  <>🔒 Booking đã bị khóa bởi Quản trị viên. Tùy chọn làm Visa qua Tour bị khóa đối với tài khoản Sale/Đại lý. Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần mở khóa hoặc thay đổi.</>
-                ) : (
-                  <>🔒 Lựa chọn làm Visa qua Tour đã được xác nhận cho hành khách này. Do thay đổi dịch vụ Visa sẽ trực tiếp ảnh hưởng đến tổng giá trị booking, tùy chọn này đã bị khóa đối với tài khoản Sale/Đại lý. Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần điều chỉnh.</>
-                )}
+              <div className="text-[11px] text-amber-900 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200/60 leading-relaxed flex items-start gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  {isOrderExplicitlyLocked ? (
+                    <>Booking đã bị khóa bởi Quản trị viên. Tùy chọn làm Visa qua Tour bị khóa đối với tài khoản Sale/Đại lý. Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần mở khóa hoặc thay đổi.</>
+                  ) : (
+                    <>Lựa chọn làm Visa qua Tour đã được xác nhận cho hành khách này. Do thay đổi dịch vụ Visa sẽ trực tiếp ảnh hưởng đến tổng giá trị booking, tùy chọn này đã bị khóa đối với tài khoản Sale/Đại lý. Vui lòng liên hệ <strong className="font-bold">Quản trị viên (Admin)</strong> hoặc <strong className="font-bold">Sale Leader</strong> nếu cần điều chỉnh.</>
+                  )}
+                </div>
               </div>
             )}
 

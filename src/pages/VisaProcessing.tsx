@@ -155,8 +155,8 @@ export default function VisaProcessing() {
       const hasDocs = p.passport_url || p.labor_contract_url;
       if (!hasDocs) return false;
       
-      // 1. Status Filter
-      if (filterStatus !== 'all' && p.visa_status !== filterStatus) return false;
+      // 1. Status Filter (chỉ áp dụng ở Dạng Danh Sách)
+      if (viewMode !== 'kanban' && filterStatus !== 'all' && p.visa_status !== filterStatus) return false;
 
       // 2. Search Term Filter
       if (searchTerm.trim() !== '') {
@@ -248,7 +248,7 @@ export default function VisaProcessing() {
   const kanbanColumns = [
     { id: 'pending', title: '⏳ 1. Chờ tiếp nhận', color: 'amber', bgHeader: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
     { id: 'processing', title: '🔄 2. Đang làm / Nộp LSQ', color: 'blue', bgHeader: 'bg-blue-600 text-white', borderCol: 'border-blue-200 bg-blue-50/20' },
-    { id: 'approved', title: '✅ 3. Đã có Visa', color: 'emerald', bgHeader: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
+    { id: 'approved', title: '✅ 3. Đã duyệt Visa', color: 'emerald', bgHeader: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
     { id: 'disqualified', title: '⚠️ 3. Hồ sơ chưa đạt', color: 'orange', bgHeader: 'bg-amber-600 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
     { id: 'rejected', title: '❌ 3. Bị từ chối', color: 'rose', bgHeader: 'bg-rose-600 text-white', borderCol: 'border-rose-200 bg-rose-50/20' },
   ];
@@ -295,39 +295,41 @@ export default function VisaProcessing() {
 
       {/* Filter and Overview tabs */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-0 relative z-20">
-        {/* Hàng 1: Bộ lọc trạng thái */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-slate-100 bg-white rounded-t-2xl">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Trạng thái Visa:</span>
-            <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-              {['all', 'pending', 'processing', 'approved', 'rejected', 'disqualified'].map(status => {
-                const label = status === 'all' ? 'Tất cả' :
-                              status === 'pending' ? 'Chờ duyệt' :
-                              status === 'processing' ? 'Đang làm' :
-                              status === 'approved' ? 'Đã có Visa' : 
-                              status === 'disqualified' ? 'Chưa đạt' : 'Từ chối';
-                return (
-                  <button
-                    key={status}
-                    onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      filterStatus === status ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+        {/* Hàng 1: Bộ lọc trạng thái (chỉ hiển thị ở Dạng Danh Sách) */}
+        {viewMode !== 'kanban' && (
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-slate-100 bg-white rounded-t-2xl">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Trạng thái Visa:</span>
+              <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+                {['all', 'pending', 'processing', 'approved', 'rejected', 'disqualified'].map(status => {
+                  const label = status === 'all' ? 'Tất cả' :
+                                status === 'pending' ? 'Chờ duyệt' :
+                                status === 'processing' ? 'Đang làm' :
+                                status === 'approved' ? 'Đã có Visa' : 
+                                status === 'disqualified' ? 'Chưa đạt' : 'Từ chối';
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => setFilterStatus(status)}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        filterStatus === status ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500 font-medium shrink-0">
+              Hiển thị <span className="font-extrabold text-slate-900">{visaPassengers.length}</span> hồ sơ khách hàng.
             </div>
           </div>
-
-          <div className="text-xs text-slate-500 font-medium shrink-0">
-            Hiển thị <span className="font-extrabold text-slate-900">{visaPassengers.length}</span> hồ sơ khách hàng.
-          </div>
-        </div>
+        )}
 
         {/* Hàng 2: Tìm kiếm, lọc thời gian và sắp xếp */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3 rounded-b-2xl">
+        <div className={`p-4 bg-slate-50 grid grid-cols-1 md:grid-cols-3 gap-3 ${viewMode === 'kanban' ? 'rounded-2xl' : 'rounded-b-2xl border-t border-slate-100'}`}>
           {/* Ô tìm kiếm */}
           <div className="relative">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
