@@ -1,15 +1,16 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
-import { Tour } from '@/types';
-import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle, Coins } from 'lucide-react';
+import { Tour, MetaLead } from '@/types';
+import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle, Coins, Sparkles, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '../components/DatePicker';
 import { TimeRangeFilter } from '../components/TimeRangeFilter';
 import { CustomSelect } from '../components/CustomSelect';
 import { isDateInTimeRange } from '../lib/dateUtils';
+import { fetchMetaLeads } from '../lib/metaCapiService';
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('vi-VN').format(amount);
@@ -486,10 +487,35 @@ const TourCard: React.FC<{
 
 export default function DepartureCalendar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { tours, orders: allOrders = [], createOrder, currentRole, passengers = [], categories = [] } = useCRM();
   const { profile, user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [noticeTour, setNoticeTour] = useState<Tour | null>(null);
+  
+  // Meta Leads state for Booking flow
+  const [metaLeads, setMetaLeads] = useState<MetaLead[]>([]);
+  const [selectedMetaLeadId, setSelectedMetaLeadId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMetaLeads()
+      .then(leads => {
+        if (Array.isArray(leads)) setMetaLeads(leads);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Handle incoming lead from navigation state
+  useEffect(() => {
+    if (location.state && (location.state as any).selectedLead) {
+      const lead = (location.state as any).selectedLead;
+      if (lead.name) setBookerName(lead.name.toUpperCase());
+      if (lead.phone) setBookerPhone(lead.phone);
+      if (lead.notes) setSpecialRequests(`[Nhu cầu từ Lead Meta]: ${lead.notes}`);
+      if (lead.meta_lead_id) setSelectedMetaLeadId(lead.meta_lead_id);
+      toast.success(`Đã tự động điền thông tin Lead: ${lead.name} (${lead.phone || ''})! Hãy chọn tour để tạo giữ chỗ.`);
+    }
+  }, [location.state]);
   
   // Dynamic filter states
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -558,12 +584,34 @@ export default function DepartureCalendar() {
       if (p.full_name && userOrderIds.has(p.order_id)) {
         const key = `${p.full_name.trim().toUpperCase()}|${p.phone ? normalizePhone(p.phone) : ''}`;
         if (!map.has(key)) {
-          map.set(key, p);
+          map.set(key, {
+            ...p,
+            source_type: 'passenger'
+          });
         }
       }
     });
+
+    // Also include potential leads from Meta Messenger
+    metaLeads.forEach(lead => {
+      if (lead.customer_name) {
+        const key = `${lead.customer_name.trim().toUpperCase()}|${lead.customer_phone ? normalizePhone(lead.customer_phone) : ''}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: lead.id,
+            full_name: lead.customer_name,
+            phone: lead.customer_phone,
+            notes: lead.notes,
+            meta_lead_id: lead.meta_lead_id || lead.id,
+            source_type: 'meta_lead',
+            source_channel: lead.source_channel || 'Facebook Messenger'
+          });
+        }
+      }
+    });
+
     return Array.from(map.values());
-  }, [passengers, allOrders, currentRole, profile]);
+  }, [passengers, allOrders, currentRole, profile, metaLeads]);
 
   useEffect(() => {
     if (focusedInput === 'phone') {
@@ -590,6 +638,12 @@ export default function DepartureCalendar() {
   const selectSuggestion = (p: any) => {
     setBookerName(p.full_name.toUpperCase());
     setBookerPhone(p.phone || '');
+    if (p.meta_lead_id || p.source_type === 'meta_lead') {
+      setSelectedMetaLeadId(p.meta_lead_id || p.id);
+      if (p.notes && !specialRequests) {
+        setSpecialRequests(`[Nhu cầu từ Lead Meta]: ${p.notes}`);
+      }
+    }
     setSuggestions([]);
     setFocusedInput(null);
   };
@@ -739,6 +793,7 @@ export default function DepartureCalendar() {
     // Reset fields
     setBookerName('');
     setBookerPhone('');
+    setSelectedMetaLeadId(null);
     setAdultCount(1);
     setChildCount(0);
     setInfantCount(0);
@@ -748,10 +803,6 @@ export default function DepartureCalendar() {
     setCtvInfo('');
     setIsCreatingForCTV(false);
     setVatOption('Không xuất VAT');
-    setVatCompanyName('');
-    setVatTaxCode('');
-    setVatAddress('');
-    setVatEmail('');
     setVatCompanyName('');
     setVatTaxCode('');
     setVatAddress('');
@@ -1034,10 +1085,10 @@ export default function DepartureCalendar() {
                     <button
                       type="button"
                       onClick={() => setShowCustomerSelector(!showCustomerSelector)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg border border-blue-150 transition-all shadow-sm"
+                      className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg border border-blue-200 transition-all shadow-2xs"
                     >
                       <Users className="w-3.5 h-3.5" />
-                      {showCustomerSelector ? 'Đóng tìm kiếm' : 'Chọn từ khách hàng cũ'}
+                      {showCustomerSelector ? 'Đóng danh sách' : 'Chọn từ Khách cũ / Lead Meta'}
                     </button>
                   )}
                 </div>
@@ -1078,14 +1129,31 @@ export default function DepartureCalendar() {
                             onClick={() => {
                               setBookerName(c.full_name.toUpperCase());
                               setBookerPhone(c.phone || '');
+                              if (c.source_type === 'meta_lead' || c.meta_lead_id) {
+                                setSelectedMetaLeadId(c.meta_lead_id || c.id);
+                                if (c.notes && !specialRequests) {
+                                  setSpecialRequests(`[Nhu cầu từ Lead Meta]: ${c.notes}`);
+                                }
+                              }
                               setShowCustomerSelector(false);
                             }}
                             className="px-3 py-2.5 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs transition-colors"
                           >
                             <div>
-                              <div className="font-bold text-slate-800">{c.full_name}</div>
+                              <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                {c.full_name}
+                                {c.source_type === 'meta_lead' && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700">
+                                    <Sparkles className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                                    Lead Messenger
+                                  </span>
+                                )}
+                              </div>
                               {c.passport_number && (
                                 <div className="text-[10px] text-gray-500 font-mono mt-0.5">Hộ chiếu: {c.passport_number}</div>
+                              )}
+                              {c.notes && c.source_type === 'meta_lead' && (
+                                <div className="text-[10px] text-slate-500 truncate max-w-xs mt-0.5 italic">Nhu cầu: {c.notes}</div>
                               )}
                             </div>
                             <div className="text-right">
@@ -1136,9 +1204,20 @@ export default function DepartureCalendar() {
                               onMouseDown={() => selectSuggestion(p)}
                             >
                               <div>
-                                <div className="font-bold text-slate-800">{p.full_name}</div>
+                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  {p.full_name}
+                                  {p.source_type === 'meta_lead' && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700">
+                                      <Sparkles className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                                      Lead Meta
+                                    </span>
+                                  )}
+                                </div>
                                 {p.passport_number && (
                                   <span className="text-[10px] text-slate-400 font-mono">HC: {p.passport_number}</span>
+                                )}
+                                {p.notes && p.source_type === 'meta_lead' && (
+                                  <div className="text-[10px] text-slate-500 italic mt-0.5 truncate max-w-[200px]">{p.notes}</div>
                                 )}
                               </div>
                               <div className="text-right">
@@ -1175,9 +1254,20 @@ export default function DepartureCalendar() {
                               onMouseDown={() => selectSuggestion(p)}
                             >
                               <div>
-                                <div className="font-bold text-slate-800">{p.full_name}</div>
+                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  {p.full_name}
+                                  {p.source_type === 'meta_lead' && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700">
+                                      <Sparkles className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                                      Lead Meta
+                                    </span>
+                                  )}
+                                </div>
                                 {p.passport_number && (
                                   <span className="text-[10px] text-slate-400 font-mono">HC: {p.passport_number}</span>
+                                )}
+                                {p.notes && p.source_type === 'meta_lead' && (
+                                  <div className="text-[10px] text-slate-500 italic mt-0.5 truncate max-w-[200px]">{p.notes}</div>
                                 )}
                               </div>
                               <div className="text-right">
@@ -1192,6 +1282,22 @@ export default function DepartureCalendar() {
                       )}
                     </div>
                   </div>
+
+                  {selectedMetaLeadId && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs animate-in fade-in duration-200">
+                      <div className="flex items-center gap-2 text-blue-900 font-semibold">
+                        <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
+                        <span>Đang liên kết với <strong>Khách hàng tiềm năng từ Messenger</strong></span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMetaLeadId(null)}
+                        className="text-blue-600 hover:text-blue-800 text-[11px] font-bold underline cursor-pointer"
+                      >
+                        Bỏ liên kết
+                      </button>
+                    </div>
+                  )}
               </div>
 
               {/* Section 2: Classified guest counts */}

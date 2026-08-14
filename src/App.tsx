@@ -18,6 +18,7 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import TourMediaManagement from './pages/TourMediaManagement';
 import { GuestPhotoUploadPage } from './pages/GuestPhotoUploadPage';
+import MetaAdsAnalytics from './pages/MetaAdsAnalytics';
 import { CRMProvider } from './context/CRMContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -69,6 +70,7 @@ function AppContent() {
             <Route path="/customers" element={<CustomersManagement />} />
             <Route path="/passengers" element={<PassengersManagement />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/meta-ads" element={<MetaAdsAnalytics />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
           </Routes>

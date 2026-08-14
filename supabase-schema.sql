@@ -751,13 +751,218 @@ ALTER TABLE chat_channels ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public access to chat_channels" ON chat_channels;
 CREATE POLICY "Allow public access to chat_channels" ON chat_channels FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-DO $$
+DO $
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE chat_channels;
   END IF;
 EXCEPTION
   WHEN OTHERS THEN NULL;
+END $;
+
+-- ============================================================================
+-- 10. PHÂN HỆ ĐO LƯỜNG META ADS CONVERSIONS API (CAPI) & TRACKING SCHEMA
+-- ============================================================================
+
+-- Bổ sung các cột lưu trữ nguồn chiến dịch & Meta tracking vào bảng bookings
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meta_lead_id TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_email TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS utm_source TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS utm_medium TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS utm_campaign TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS utm_content TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS utm_term TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS conversion_event_id TEXT;
+
+-- Bảng Cấu hình Meta Pixel & CAPI (Meta CAPI Settings)
+CREATE TABLE IF NOT EXISTS meta_capi_settings (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  pixel_id TEXT,
+  access_token TEXT,
+  test_event_code TEXT,
+  is_enabled BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+ALTER TABLE meta_capi_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public access to meta_capi_settings" ON meta_capi_settings;
+CREATE POLICY "Allow public access to meta_capi_settings" ON meta_capi_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Bảng Nhật ký Sự kiện Chuyển đổi Meta (Meta Conversion Logs)
+CREATE TABLE IF NOT EXISTS meta_conversion_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  tour_id UUID,
+  tour_code TEXT,
+  event_name TEXT NOT NULL,
+  tracking_type TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  meta_lead_id TEXT,
+  customer_phone TEXT,
+  customer_email TEXT,
+  hashed_phone TEXT,
+  hashed_email TEXT,
+  revenue_value NUMERIC DEFAULT 0,
+  currency TEXT DEFAULT 'VND',
+  payload JSONB,
+  response_data JSONB,
+  status TEXT NOT NULL DEFAULT 'success',
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+CREATE INDEX IF NOT EXISTS idx_meta_conversion_logs_order_id ON meta_conversion_logs(order_id);
+CREATE INDEX IF NOT EXISTS idx_meta_conversion_logs_event_name ON meta_conversion_logs(event_name);
+CREATE INDEX IF NOT EXISTS idx_meta_conversion_logs_created_at ON meta_conversion_logs(created_at DESC);
+
+ALTER TABLE meta_conversion_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public access to meta_conversion_logs" ON meta_conversion_logs;
+CREATE POLICY "Allow public access to meta_conversion_logs" ON meta_conversion_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Kích hoạt Realtime cho Meta Conversion Logs
+DO $
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE meta_conversion_logs;
+    ALTER PUBLICATION supabase_realtime ADD TABLE meta_capi_settings;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $;
+
+-- ==========================================
+-- TÍCH HỢP META MESSENGER (CHAT & LEAD SYNC)
+-- ==========================================
+
+-- 1. Bảng Fanpage kết nối (facebook_pages)
+CREATE TABLE IF NOT EXISTS facebook_pages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  page_id TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  avatar_url TEXT,
+  is_active BOOLEAN DEFAULT true,
+  webhook_subscribed BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+ALTER TABLE facebook_pages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to facebook_pages" ON facebook_pages;
+CREATE POLICY "Allow access to facebook_pages" ON facebook_pages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 2. Bảng Cuộc hội thoại Meta Messenger (meta_chat_conversations)
+CREATE TABLE IF NOT EXISTS meta_chat_conversations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  page_id TEXT NOT NULL,
+  psid TEXT NOT NULL,
+  customer_name TEXT,
+  customer_avatar TEXT,
+  customer_phone TEXT,
+  customer_email TEXT,
+  ad_id TEXT,
+  meta_lead_id TEXT,
+  utm_source TEXT DEFAULT 'facebook_messenger',
+  utm_campaign TEXT,
+  unread_count INTEGER DEFAULT 0,
+  last_message TEXT,
+  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  last_sender TEXT DEFAULT 'customer',
+  assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  notes TEXT,
+  status TEXT DEFAULT 'active', -- 'active' | 'lead_captured' | 'lead_converted' | 'archived'
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  CONSTRAINT unique_page_psid UNIQUE (page_id, psid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_meta_conv_page_psid ON meta_chat_conversations(page_id, psid);
+CREATE INDEX IF NOT EXISTS idx_meta_conv_last_message_at ON meta_chat_conversations(last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_meta_conv_phone ON meta_chat_conversations(customer_phone);
+
+ALTER TABLE meta_chat_conversations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to meta_chat_conversations" ON meta_chat_conversations;
+CREATE POLICY "Allow access to meta_chat_conversations" ON meta_chat_conversations FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 3. Bảng Chi tiết Tin nhắn Meta Messenger (meta_chat_messages)
+CREATE TABLE IF NOT EXISTS meta_chat_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  conversation_id UUID REFERENCES meta_chat_conversations(id) ON DELETE CASCADE,
+  mid TEXT,
+  sender_type TEXT NOT NULL, -- 'customer' | 'page' | 'agent'
+  sender_id TEXT,
+  sender_name TEXT,
+  message_text TEXT,
+  attachments JSONB DEFAULT '[]'::jsonb,
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+CREATE INDEX IF NOT EXISTS idx_meta_msg_conv_id ON meta_chat_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_meta_msg_created_at ON meta_chat_messages(created_at ASC);
+
+ALTER TABLE meta_chat_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to meta_chat_messages" ON meta_chat_messages;
+CREATE POLICY "Allow access to meta_chat_messages" ON meta_chat_messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- ============================================================
+-- 4. Bảng Khách hàng tiềm năng (leads) từ Meta Messenger & Lead Forms
+-- ============================================================
+CREATE TABLE IF NOT EXISTS leads (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT,
+  customer_email TEXT,
+  customer_avatar TEXT,
+  source_channel TEXT DEFAULT 'facebook_messenger', -- 'facebook_messenger' | 'meta_lead_form' | 'website' | 'manual'
+  page_id TEXT,
+  psid TEXT,
+  ad_id TEXT,
+  form_id TEXT,
+  leadgen_id TEXT UNIQUE,
+  utm_source TEXT DEFAULT 'facebook',
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  utm_content TEXT,
+  message_text TEXT,
+  form_data JSONB DEFAULT '{}'::jsonb,
+  status TEXT DEFAULT 'lead_captured', -- 'lead_captured' | 'contacted' | 'lead_converted' | 'unqualified'
+  assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  notes TEXT,
+  tour_interest TEXT,
+  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(customer_phone);
+CREATE INDEX IF NOT EXISTS idx_leads_psid ON leads(psid);
+CREATE INDEX IF NOT EXISTS idx_leads_page_id ON leads(page_id);
+CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC);
+
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to leads" ON leads;
+CREATE POLICY "Allow access to leads" ON leads FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 5. Kích hoạt Realtime cho Meta Messenger & Leads
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE facebook_pages;
+    ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_conversations;
+    ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_messages;
+    ALTER PUBLICATION supabase_realtime ADD TABLE leads;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
 END $$;
+
+
+
 
 

@@ -1,8 +1,9 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem, ChatMessage, ChatChannel } from '../types';
+import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem, ChatMessage, ChatChannel, MetaConversionLog } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
+import { triggerMetaCapiEvent, fetchMetaConversionLogs, fetchMetaCapiConfig } from '../lib/metaCapiService';
 
 const idMap: { [key: string]: string } = {
   '1': 'a809b4db-9ee7-4c07-b352-09419106093d',
@@ -106,9 +107,25 @@ interface CRMContextType {
     discount_value?: number;
     surcharge_name?: string;
     surcharge_amount?: number;
+    surcharges?: SurchargeItem[];
+    price_markup?: number;
+    markup_tax_percent?: number;
+    markup_fee_amount?: number;
     is_locked?: boolean;
     seller_type?: 'direct' | 'agent';
+    partner_id?: string;
+    original_price?: number;
+    selling_price?: number;
     tour_fallback?: Tour;
+    meta_lead_id?: string;
+    customer_phone?: string;
+    customer_email?: string;
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+    utm_content?: string;
+    utm_term?: string;
+    conversion_event_id?: string;
   }) => Promise<Order | undefined>;
   confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
   cancelOrder: (orderId: string, reason?: string) => void;
@@ -154,6 +171,11 @@ interface CRMContextType {
   createChatChannel: (channelData: { name: string; description: string; icon?: string; members?: string[]; role_access?: string[] }) => Promise<ChatChannel>;
   updateChatChannel: (id: string, channelData: Partial<ChatChannel>) => Promise<void>;
   deleteChatChannel: (id: string) => Promise<void>;
+  // Meta CAPI
+  metaConversionLogs: MetaConversionLog[];
+  fetchMetaLogs: (limit?: number, eventName?: string) => Promise<void>;
+  metaCapiConfig: any;
+  reloadMetaConfig: () => Promise<void>;
 }
 
 export const DEFAULT_CHAT_CHANNELS: ChatChannel[] = [
@@ -758,6 +780,32 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     ];
   });
 
+  const [metaConversionLogs, setMetaConversionLogs] = useState<MetaConversionLog[]>([]);
+  const [metaCapiConfig, setMetaCapiConfig] = useState<any>(null);
+
+  const fetchMetaLogs = async (limit: number = 100, eventName?: string) => {
+    try {
+      const logs = await fetchMetaConversionLogs(limit, eventName);
+      setMetaConversionLogs(logs);
+    } catch (e) {
+      console.warn('Lỗi khi nạp Meta Conversion Logs:', e);
+    }
+  };
+
+  const reloadMetaConfig = async () => {
+    try {
+      const cfg = await fetchMetaCapiConfig();
+      setMetaCapiConfig(cfg);
+    } catch (e) {
+      console.warn('Lỗi khi nạp Meta CAPI config:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchMetaLogs();
+    reloadMetaConfig();
+  }, []);
+
   const logActivity = async (logData: {
     action: string;
     module: ActivityLog['module'];
@@ -1037,7 +1085,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               markup_fee_amount: b.markup_fee_amount !== undefined && b.markup_fee_amount !== null ? Number(b.markup_fee_amount) : undefined,
               net_commission_amount: b.net_commission_amount !== undefined && b.net_commission_amount !== null ? Number(b.net_commission_amount) : undefined,
               net_payable_amount: b.net_payable_amount !== undefined && b.net_payable_amount !== null ? Number(b.net_payable_amount) : undefined,
-              agent_commission_amount: b.agent_commission_amount !== undefined && b.agent_commission_amount !== null ? Number(b.agent_commission_amount) : undefined
+              agent_commission_amount: b.agent_commission_amount !== undefined && b.agent_commission_amount !== null ? Number(b.agent_commission_amount) : undefined,
+              meta_lead_id: b.meta_lead_id || undefined,
+              customer_phone: b.customer_phone || b.booker_phone || undefined,
+              customer_email: b.customer_email || b.vat_email || undefined,
+              utm_source: b.utm_source || undefined,
+              utm_medium: b.utm_medium || undefined,
+              utm_campaign: b.utm_campaign || undefined,
+              utm_content: b.utm_content || undefined,
+              utm_term: b.utm_term || undefined,
+              conversion_event_id: b.conversion_event_id || undefined
             }));
             // Tự động dọn dẹp các booking trùng lặp của cùng 1 tour đoàn riêng
             const privateTourIds = new Set((fetchedTours.length > 0 ? fetchedTours : tours).filter(t => t.tour_type === 'private').map(t => t.id));
@@ -2856,6 +2913,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       partner_id: (orderData as any).partner_id,
       original_price: (orderData as any).original_price,
       selling_price: (orderData as any).selling_price,
+      meta_lead_id: (orderData as any).meta_lead_id || undefined,
+      customer_phone: (orderData as any).customer_phone || orderData.booker_phone || undefined,
+      customer_email: (orderData as any).customer_email || orderData.vat_email || undefined,
+      utm_source: (orderData as any).utm_source || undefined,
+      utm_medium: (orderData as any).utm_medium || undefined,
+      utm_campaign: (orderData as any).utm_campaign || undefined,
+      utm_content: (orderData as any).utm_content || undefined,
+      utm_term: (orderData as any).utm_term || undefined,
+      conversion_event_id: (orderData as any).conversion_event_id || generateSafeUUID(),
     } as any;
 
     const newPassengers: Passenger[] = (orderData.passengers || []).map((p, index) => ({
@@ -3010,7 +3076,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           markup_fee_amount: (orderData as any).markup_fee_amount !== undefined && (orderData as any).markup_fee_amount !== null ? Number((orderData as any).markup_fee_amount) : null,
           net_commission_amount: (orderData as any).net_commission_amount !== undefined && (orderData as any).net_commission_amount !== null ? Number((orderData as any).net_commission_amount) : null,
           net_payable_amount: (orderData as any).net_payable_amount !== undefined && (orderData as any).net_payable_amount !== null ? Number((orderData as any).net_payable_amount) : null,
-          agent_commission_amount: (orderData as any).agent_commission_amount !== undefined && (orderData as any).agent_commission_amount !== null ? Number((orderData as any).agent_commission_amount) : null
+          agent_commission_amount: (orderData as any).agent_commission_amount !== undefined && (orderData as any).agent_commission_amount !== null ? Number((orderData as any).agent_commission_amount) : null,
+          meta_lead_id: (orderData as any).meta_lead_id || null,
+          customer_phone: (orderData as any).customer_phone || orderData.booker_phone || null,
+          customer_email: (orderData as any).customer_email || orderData.vat_email || null,
+          utm_source: (orderData as any).utm_source || null,
+          utm_medium: (orderData as any).utm_medium || null,
+          utm_campaign: (orderData as any).utm_campaign || null,
+          utm_content: (orderData as any).utm_content || null,
+          utm_term: (orderData as any).utm_term || null,
+          conversion_event_id: (newOrder as any).conversion_event_id || null
         };
 
         let { error: bookingError } = await supabase.from('bookings').insert(fullBookingPayload);
@@ -3019,7 +3094,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           const {
             seller_type, partner_id, original_price, selling_price, price_markup,
             markup_tax_percent, markup_fee_amount, surcharges,
-            net_commission_amount, net_payable_amount, agent_commission_amount, ...fallbackPayload
+            net_commission_amount, net_payable_amount, agent_commission_amount,
+            meta_lead_id, customer_phone, customer_email, utm_source, utm_medium,
+            utm_campaign, utm_content, utm_term, conversion_event_id,
+            ...fallbackPayload
           } = fullBookingPayload;
           const { error: fallbackError } = await supabase.from('bookings').insert(fallbackPayload);
           if (fallbackError) {
@@ -3136,6 +3214,34 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     if (isPrivateTour) {
       creatingPrivateTourOrderSetRef.current.delete(tour.id);
     }
+
+    // Trigger Meta Conversions API (Lead / Phone Lead / Order Created)
+    const custPhone = (orderData as any).customer_phone || orderData.booker_phone || (newPassengers[0]?.phone);
+    if (custPhone || (orderData as any).meta_lead_id || (orderData as any).utm_source) {
+      triggerMetaCapiEvent({
+        event_name: 'Lead',
+        tracking_type: (orderData as any).meta_lead_id ? 'PHONE_LEAD' : 'ORDER_CREATED',
+        event_id: (newOrder as any).conversion_event_id || orderId,
+        order_id: orderId,
+        tour_id: orderData.tour_id,
+        tour_code: tour?.code,
+        tour_name: tour?.name,
+        customer_name: orderData.booker_name || newPassengers[0]?.full_name || 'Khách Đặt Tour',
+        customer_phone: custPhone,
+        customer_email: (orderData as any).customer_email || orderData.vat_email,
+        meta_lead_id: (orderData as any).meta_lead_id,
+        revenue_value: Number(totalPrice) || 0,
+        currency: 'VND',
+        pax_count: Number(seatsToLock) || 1,
+        utm_source: (orderData as any).utm_source,
+        utm_campaign: (orderData as any).utm_campaign
+      }).then(() => {
+        fetchMetaLogs();
+      }).catch(err => {
+        console.warn('[Meta CAPI Lead] Bỏ qua lỗi gửi lead:', err);
+      });
+    }
+
     return newOrder;
   };
 
@@ -4489,6 +4595,37 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         console.warn('Lỗi lưu thông báo duyệt thanh toán vào Supabase:', err);
       }
     }
+
+    // Trigger Meta Conversions API (Purchase / Revenue Tracking)
+    if (targetInvoice && (targetInvoice.type === 'receipt' || (targetInvoice.type as string) === 'thu')) {
+      const matchedOrder = bookingId ? orders.find(o => o.id === bookingId || o.id.toLowerCase().includes(bookingId.toLowerCase())) : null;
+      const matchedTour = tours.find(t => t.id === matchedOrder?.tour_id || t.id === targetInvoice.tour_id);
+      const matchedPassengers = matchedOrder ? passengers.filter(p => p.order_id === matchedOrder.id) : [];
+      const leadP = matchedPassengers.find(p => p.is_payer) || matchedPassengers[0];
+
+      triggerMetaCapiEvent({
+        event_name: 'Purchase',
+        tracking_type: 'PURCHASE_REVENUE',
+        event_id: generateSafeUUID(),
+        order_id: matchedOrder?.id || targetInvoice.order_id || null,
+        tour_id: matchedTour?.id || targetInvoice.tour_id || null,
+        tour_code: matchedTour?.code,
+        tour_name: matchedTour?.name || targetInvoice.tour_name,
+        customer_name: matchedOrder?.booker_name || leadP?.full_name || (targetInvoice as any).customer_name || 'Khách Mua Tour',
+        customer_phone: matchedOrder?.customer_phone || matchedOrder?.booker_phone || leadP?.phone || (targetInvoice as any).customer_phone,
+        customer_email: matchedOrder?.customer_email || matchedOrder?.vat_email,
+        meta_lead_id: matchedOrder?.meta_lead_id,
+        revenue_value: Number(targetInvoice.amount) || 0,
+        currency: 'VND',
+        pax_count: matchedOrder ? ((matchedOrder.adult_count || 1) + (matchedOrder.child_count || 0)) : 1,
+        utm_source: matchedOrder?.utm_source,
+        utm_campaign: matchedOrder?.utm_campaign
+      }).then(() => {
+        fetchMetaLogs();
+      }).catch(err => {
+        console.warn('[Meta CAPI Purchase] Bỏ qua lỗi gửi purchase event:', err);
+      });
+    }
   };
 
   const rejectInvoiceReceipt = async (invoiceId: string, verifierName: string) => {
@@ -5570,7 +5707,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       chatChannels,
       createChatChannel,
       updateChatChannel,
-      deleteChatChannel
+      deleteChatChannel,
+      metaConversionLogs,
+      fetchMetaLogs,
+      metaCapiConfig,
+      reloadMetaConfig
     }}>
       {children}
     </CRMContext.Provider>

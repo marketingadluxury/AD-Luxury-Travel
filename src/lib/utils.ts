@@ -10,6 +10,10 @@ export const formatNumber = (num: number | string) => {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
+export const formatCurrency = (amount: number | string) => {
+  return `${formatNumber(amount)} đ`;
+};
+
 export const parseNumber = (str: string) => {
   return parseInt(str.replace(/\./g, ''), 10) || 0;
 };

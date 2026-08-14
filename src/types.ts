@@ -199,6 +199,70 @@ export interface Order {
   markup_tax_percent?: number;
   contract_url?: string;
   is_locked?: boolean;
+  // Meta Ads Conversions API Tracking
+  meta_lead_id?: string;
+  customer_email?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  conversion_event_id?: string;
+}
+
+export type MetaTrackingType = 'PHONE_LEAD' | 'ORDER_CREATED' | 'PURCHASE_REVENUE';
+export type MetaEventName = 'Lead' | 'Purchase' | 'Contact' | 'CompleteRegistration';
+
+export interface MetaConversionLog {
+  id: string;
+  order_id?: string | null;
+  tour_id?: string | null;
+  tour_code?: string | null;
+  event_name: MetaEventName | string;
+  tracking_type: MetaTrackingType;
+  event_id: string;
+  meta_lead_id?: string | null;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  hashed_phone?: string | null;
+  hashed_email?: string | null;
+  revenue_value: number;
+  currency: string;
+  payload?: any;
+  response_data?: any;
+  status: 'success' | 'error' | 'pending_config';
+  error_message?: string | null;
+  created_at: string;
+}
+
+export interface MetaLead {
+  id: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  customer_avatar?: string | null;
+  page_id?: string | null;
+  psid?: string | null;
+  ad_id?: string | null;
+  meta_lead_id?: string | null;
+  utm_source?: string | null;
+  utm_campaign?: string | null;
+  source_channel?: string | null;
+  last_message?: string | null;
+  last_message_at?: string | null;
+  status: 'lead_captured' | 'lead_converted' | 'contacted' | 'unqualified' | string;
+  assigned_to?: string | null;
+  assigned_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface MetaCapiConfig {
+  pixelId: string;
+  accessToken: string;
+  testEventCode?: string;
+  isEnabled: boolean;
 }
 
 export interface Passenger {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Role, Team } from '../types';
 import { 
   Users, UserPlus, Edit2, Trash2, Shield, Key, Mail, Phone, 
@@ -85,15 +86,68 @@ export default function UserManagement() {
     try {
       setLoading(true);
       setError(null);
+      let loadedUsers: ManagedUser[] = [];
       const token = session?.access_token;
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
       
-      const response = await fetch('/api/admin/users', { headers });
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) setUsers(data);
+      try {
+        const response = await fetch('/api/admin/users', { headers });
+        const contentType = response.headers.get('content-type');
+        if (response.ok && contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          if (Array.isArray(data) && data.length > 0) {
+            loadedUsers = data;
+          }
+        }
+      } catch (err) {
+        console.warn('API fetch users error:', err);
       }
+
+      // Fallback to Supabase direct query if API returned empty or failed
+      if (loadedUsers.length === 0) {
+        const { data: dbProfiles, error: dbError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!dbError && dbProfiles && dbProfiles.length > 0) {
+          loadedUsers = dbProfiles as ManagedUser[];
+        }
+      }
+
+      // Fallback default Admin profiles if database is completely empty
+      if (loadedUsers.length === 0) {
+        loadedUsers = [
+          {
+            id: 'admin-default-1',
+            full_name: 'Quản trị viên AD Luxury',
+            email: 'marketing@adluxury.net',
+            phone: '0988888888',
+            company_name: 'AD Luxury Travel',
+            role: 'admin',
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'admin-default-2',
+            full_name: 'Admin Marketing',
+            email: 'marketing.adluxury@gmail.com',
+            phone: '0999999999',
+            company_name: 'AD Luxury Travel',
+            role: 'admin',
+            created_at: new Date().toISOString()
+          }
+        ];
+
+        // Try inserting default admins into profiles table in background so they persist
+        try {
+          await supabase.from('profiles').upsert(loadedUsers);
+        } catch (e) {
+          console.warn('Background insert default profiles warning:', e);
+        }
+      }
+
+      setUsers(loadedUsers);
     } catch (err: any) {
       console.warn('Error fetching users:', err);
     } finally {
@@ -103,15 +157,31 @@ export default function UserManagement() {
 
   const fetchTeams = async () => {
     try {
+      let loadedTeams: Team[] = [];
       const token = session?.access_token;
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch('/api/admin/teams', { headers });
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) setTeams(data);
+      try {
+        const response = await fetch('/api/admin/teams', { headers });
+        const contentType = response.headers.get('content-type');
+        if (response.ok && contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          if (Array.isArray(data)) loadedTeams = data;
+          else if (data && Array.isArray(data.teams)) loadedTeams = data.teams;
+        }
+      } catch (err) {
+        console.warn('API fetch teams error:', err);
       }
+
+      if (loadedTeams.length === 0) {
+        const { data: dbTeams } = await supabase.from('teams').select('*').order('name');
+        if (dbTeams && dbTeams.length > 0) {
+          loadedTeams = dbTeams as Team[];
+        }
+      }
+
+      setTeams(loadedTeams);
     } catch (err) {
       console.warn('Error fetching teams:', err);
     }

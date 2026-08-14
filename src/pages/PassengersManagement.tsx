@@ -34,6 +34,8 @@ import { Passenger, Order } from '../types';
 import EditPassengerModal from '../components/EditPassengerModal';
 import { PassengerDocumentList } from '../components/PassengerDocumentList';
 import ActionModal from '../components/ActionModal';
+import { PotentialLeadsTab } from '../components/PotentialLeadsTab';
+import { useNavigate } from 'react-router-dom';
 
 interface BookingInfo {
   passenger_id: string;
@@ -73,12 +75,15 @@ export default function PassengersManagement() {
   
   const { profile } = useAuth();
 
+  const navigate = useNavigate();
+
   // Guard access
   const isDenied = useMemo(() => {
     return ['CTV', 'accounting'].includes(currentRole);
   }, [currentRole]);
 
   // Filters state
+  const [activeTab, setActiveTab] = useState<'passengers' | 'leads'>('passengers');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTourId, setSelectedTourId] = useState('all');
   const [selectedVisaStatus, setSelectedVisaStatus] = useState('all');
@@ -440,7 +445,56 @@ export default function PassengersManagement() {
             </div>
           </div>
         </div>
+
+        {/* Tab Navigation Switcher */}
+        <div className="flex items-center gap-2 mt-6 pt-5 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => setActiveTab('passengers')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'passengers'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Khách hàng đi Tour ({stats.totalCustomers})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('leads')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'leads'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+            <span>Khách hàng tiềm năng (Leads Meta)</span>
+          </button>
+        </div>
       </div>
+
+      {activeTab === 'leads' ? (
+        <PotentialLeadsTab 
+          onSelectLeadForBooking={(lead) => {
+            navigate('/departures', { 
+              state: { 
+                selectedLead: {
+                  name: lead.customer_name,
+                  phone: lead.customer_phone,
+                  email: lead.customer_email,
+                  notes: lead.notes,
+                  utm_campaign: lead.utm_campaign,
+                  meta_lead_id: lead.meta_lead_id || lead.id
+                } 
+              } 
+            });
+          }} 
+        />
+      ) : (
+        <>
 
       {/* KPI Stats Cards Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 md:gap-4">
@@ -1091,6 +1145,8 @@ export default function PassengersManagement() {
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Delete Confirmation Modal */}
       <ActionModal

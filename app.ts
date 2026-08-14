@@ -8,6 +8,8 @@ import adminRoutes from './server/routes/adminRoutes.js';
 import feedbackRoutes from './server/routes/feedbackRoutes.js';
 import aiRoutes from './server/routes/aiRoutes.js';
 import googleChatRoutes from './server/routes/googleChatRoutes.js';
+import metaCapiRoutes from './server/routes/metaCapiRoutes.js';
+import metaMessengerRoutes from './server/routes/metaMessengerRoutes.js';
 import { errorHandler } from './server/middleware/errorHandler.js';
 
 const app = express();
@@ -32,6 +34,8 @@ app.use('/', adminRoutes);
 app.use('/', feedbackRoutes);
 app.use('/', aiRoutes);
 app.use('/', googleChatRoutes);
+app.use('/', metaCapiRoutes);
+app.use('/', metaMessengerRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

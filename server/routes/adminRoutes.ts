@@ -3,6 +3,185 @@ import { getAdminSupabaseClient } from '../services/supabaseService.js';
 
 const router = express.Router();
 
+// Admin API: Get all user profiles
+router.get(['/admin/users', '/api/admin/users'], async (req, res) => {
+  try {
+    const supabaseAdmin = getAdminSupabaseClient(req);
+    const { data: profiles, error } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[Admin API] Lỗi lấy danh sách profiles:', error);
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json(profiles || []);
+  } catch (error: any) {
+    console.error('Lỗi API GET /api/admin/users:', error);
+    res.status(500).json({ error: error.message || 'Lỗi hệ thống khi lấy danh sách người dùng' });
+  }
+});
+
+// Admin API: Create user profile
+router.post(['/admin/users', '/api/admin/users'], async (req, res) => {
+  try {
+    const { email, password, full_name, phone, company_name, role, leader_id, team_id, team_name } = req.body;
+    if (!email || !full_name) {
+      res.status(400).json({ error: 'Email và Họ tên không được để trống' });
+      return;
+    }
+
+    const supabaseAdmin = getAdminSupabaseClient(req);
+
+    let createdUserId = '';
+
+    // Create auth user if service role key available
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY && password) {
+      try {
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name }
+        });
+        if (authError) {
+          console.warn('[Admin API] Không thể tạo auth user tự động:', authError.message);
+        } else if (authData?.user?.id) {
+          createdUserId = authData.user.id;
+        }
+      } catch (authErr: any) {
+        console.warn('[Admin API] Lỗi khi tạo Auth User:', authErr.message || authErr);
+      }
+    }
+
+    if (!createdUserId) {
+      createdUserId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    }
+
+    const profileData = {
+      id: createdUserId,
+      email,
+      full_name,
+      phone: phone || '',
+      company_name: company_name || 'AD Luxury Travel',
+      role: role || 'agent',
+      leader_id: leader_id || null,
+      team_id: team_id || null,
+      team_name: team_name || null,
+      created_at: new Date().toISOString()
+    };
+
+    const { data: newProfile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert(profileData)
+      .select()
+      .single();
+
+    if (profileError) {
+      console.error('[Admin API] Lỗi khi tạo/lưu profile:', profileError);
+      res.status(500).json({ error: 'Lỗi khi lưu thông tin người dùng: ' + profileError.message });
+      return;
+    }
+
+    res.json({ success: true, user: newProfile });
+  } catch (error: any) {
+    console.error('Lỗi API POST /api/admin/users:', error);
+    res.status(500).json({ error: error.message || 'Lỗi hệ thống khi tạo người dùng' });
+  }
+});
+
+// Admin API: Update user profile
+router.put(['/admin/users/:id', '/api/admin/users/:id'], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, full_name, phone, company_name, role, leader_id, team_id, team_name, password } = req.body;
+
+    if (!id) {
+      res.status(400).json({ error: 'Thiếu ID người dùng' });
+      return;
+    }
+
+    const supabaseAdmin = getAdminSupabaseClient(req);
+
+    const updateData: any = {};
+    if (email !== undefined) updateData.email = email;
+    if (full_name !== undefined) updateData.full_name = full_name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (company_name !== undefined) updateData.company_name = company_name;
+    if (role !== undefined) updateData.role = role;
+    if (leader_id !== undefined) updateData.leader_id = leader_id || null;
+    if (team_id !== undefined) updateData.team_id = team_id || null;
+    if (team_name !== undefined) updateData.team_name = team_name || null;
+
+    const { data: updatedProfile, error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('[Admin API] Lỗi khi cập nhật profile:', updateError);
+      res.status(500).json({ error: updateError.message });
+      return;
+    }
+
+    // Update password if provided & service role key is available
+    if (password && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(id, { password });
+      } catch (pwErr: any) {
+        console.warn('[Admin API] Không thể đổi mật khẩu Auth:', pwErr.message || pwErr);
+      }
+    }
+
+    res.json({ success: true, user: updatedProfile });
+  } catch (error: any) {
+    console.error('Lỗi API PUT /api/admin/users/:id:', error);
+    res.status(500).json({ error: error.message || 'Lỗi hệ thống khi cập nhật người dùng' });
+  }
+});
+
+// Admin API: Delete user profile by ID param
+router.delete(['/admin/users/:id', '/api/admin/users/:id'], async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Thiếu ID người dùng cần xóa' });
+      return;
+    }
+
+    const supabaseAdmin = getAdminSupabaseClient(req);
+
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', id);
+
+    if (profileError) {
+      console.error('[Admin API] Lỗi khi xóa profile:', profileError);
+      res.status(500).json({ error: profileError.message });
+      return;
+    }
+
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(id);
+      } catch (authErr: any) {
+        console.warn('[Admin API] Cảnh báo khi xóa Auth User:', authErr.message || authErr);
+      }
+    }
+
+    res.json({ success: true, message: 'Đã xóa người dùng thành công' });
+  } catch (error: any) {
+    console.error('Lỗi API DELETE /api/admin/users/:id:', error);
+    res.status(500).json({ error: error.message || 'Lỗi hệ thống khi xóa người dùng' });
+  }
+});
+
 // Admin API: Delete user profile
 router.delete(['/admin/delete-user', '/api/admin/delete-user'], async (req, res) => {
   try {
@@ -75,7 +254,7 @@ router.post(['/admin/toggle-active', '/api/admin/toggle-active'], async (req, re
 });
 
 // Teams API
-router.get(['/teams', '/api/teams'], async (req, res) => {
+router.get(['/teams', '/api/teams', '/admin/teams', '/api/admin/teams'], async (req, res) => {
   try {
     const supabaseAdmin = getAdminSupabaseClient(req);
     const { data: teams, error: teamsError } = await supabaseAdmin
@@ -96,7 +275,7 @@ router.get(['/teams', '/api/teams'], async (req, res) => {
   }
 });
 
-router.post(['/teams', '/api/teams'], async (req, res) => {
+router.post(['/teams', '/api/teams', '/admin/teams', '/api/admin/teams'], async (req, res) => {
   try {
     const { name, leader_id, description, member_ids } = req.body;
     if (!name || !name.trim()) {
@@ -140,7 +319,7 @@ router.post(['/teams', '/api/teams'], async (req, res) => {
   }
 });
 
-router.put(['/teams/:id', '/api/teams/:id'], async (req, res) => {
+router.put(['/teams/:id', '/api/teams/:id', '/admin/teams/:id', '/api/admin/teams/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     const { name, leader_id, description, member_ids } = req.body;
@@ -191,7 +370,7 @@ router.put(['/teams/:id', '/api/teams/:id'], async (req, res) => {
   }
 });
 
-router.delete(['/teams/:id', '/api/teams/:id'], async (req, res) => {
+router.delete(['/teams/:id', '/api/teams/:id', '/admin/teams/:id', '/api/admin/teams/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
