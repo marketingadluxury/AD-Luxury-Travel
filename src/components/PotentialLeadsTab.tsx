@@ -55,6 +55,17 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   const [editAssignedTo, setEditAssignedTo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Simulation State
+  const [isSimModalOpen, setIsSimModalOpen] = useState(false);
+  const [simType, setSimType] = useState<'messenger' | 'lead_form'>('messenger');
+  const [simName, setSimName] = useState('Nguyễn Văn Khách Test');
+  const [simPhone, setSimPhone] = useState('0988123456');
+  const [simEmail, setSimEmail] = useState('khachhang.test@gmail.com');
+  const [simMessage, setSimMessage] = useState('Chào công ty, mình muốn tư vấn tour Dubai 5N4Đ cho 2 người lớn, sđt mình là 0988123456.');
+  const [simTourInterest, setSimTourInterest] = useState('Tour Dubai 5N4Đ');
+  const [simCampaign, setSimCampaign] = useState('Chiến dịch Quảng cáo Tour Mùa Thu 2026');
+  const [isSimulating, setIsSimulating] = useState(false);
+
   // Load leads
   const loadLeads = async () => {
     setIsLoading(true);
@@ -139,6 +150,85 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
     }
   };
 
+  // Run Simulation Test
+  const handleSimulateWebhook = async () => {
+    if (!simName.trim() || !simPhone.trim()) {
+      toast.error('Vui lòng nhập Tên khách hàng và Số điện thoại');
+      return;
+    }
+
+    setIsSimulating(true);
+    try {
+      if (simType === 'messenger') {
+        // Gửi Webhook giả lập Messenger y hệt Meta
+        const fakePayload = {
+          object: 'page',
+          entry: [
+            {
+              id: '103836966010338',
+              time: Date.now(),
+              messaging: [
+                {
+                  sender: { id: `sim_psid_${Date.now()}` },
+                  recipient: { id: '103836966010338' },
+                  timestamp: Date.now(),
+                  message: {
+                    mid: `m_sim_${Date.now()}`,
+                    text: simMessage
+                  }
+                }
+              ]
+            }
+          ]
+        };
+
+        const res = await fetch('/api/meta-messenger/webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fakePayload)
+        });
+
+        if (res.ok) {
+          toast.success('✅ Đã gửi Webhook Messenger giả lập thành công!');
+        } else {
+          throw new Error('Lỗi gửi Webhook');
+        }
+      } else {
+        // Gửi tạo Lead Form trực tiếp
+        const res = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_name: simName,
+            customer_phone: simPhone,
+            customer_email: simEmail,
+            source_channel: 'meta_lead_form',
+            utm_campaign: simCampaign,
+            tour_interest: simTourInterest,
+            message_text: `Biểu mẫu đăng ký: Nhu cầu ${simTourInterest} (${simCampaign})`,
+            status: 'lead_captured'
+          })
+        });
+
+        if (res.ok) {
+          toast.success('✅ Đã tạo Lead Form quảng cáo thành công!');
+        } else {
+          throw new Error('Lỗi tạo Lead Form');
+        }
+      }
+
+      setIsSimModalOpen(false);
+      // Đợi 500ms rồi reload danh sách
+      setTimeout(() => {
+        loadLeads();
+      }, 500);
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi khi chạy giả lập');
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
   // KPI Statistics
   const stats = useMemo(() => {
     const total = leads.length;
@@ -155,35 +245,35 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
       case 'lead_captured':
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
             Mới để lại SĐT
           </span>
         );
       case 'contacted':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
             <Clock className="w-3 h-3 text-amber-600" />
             Đã liên hệ tư vấn
           </span>
         );
       case 'lead_converted':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
             Đã chốt Booking
           </span>
         );
       case 'unqualified':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-slate-100 text-slate-600 border border-slate-200">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
             <XCircle className="w-3 h-3 text-slate-400" />
             Chưa phù hợp
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
             {status}
           </span>
         );
@@ -293,6 +383,16 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue-600' : ''}`} />
           </button>
+
+          <button
+            type="button"
+            onClick={() => setIsSimModalOpen(true)}
+            className="h-10 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            title="Mở công cụ giả lập test Webhook & Lead Ads"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>Giả lập Tin nhắn / Lead Ads</span>
+          </button>
         </div>
       </div>
 
@@ -331,23 +431,18 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                 {leads.map(lead => (
                   <tr key={lead.id} className="hover:bg-blue-50/40 transition-colors">
                     
-                    {/* Tên & Avatar */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
-                          {lead.customer_name ? lead.customer_name.charAt(0).toUpperCase() : 'K'}
+                    {/* Tên khách hàng - Chỉ hiển thị Họ và tên */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div>
+                        <div className="font-bold text-slate-900 text-xs">
+                          {lead.customer_name || 'Khách Meta'}
                         </div>
-                        <div>
-                          <div className="font-bold text-slate-900 text-xs">
-                            {lead.customer_name || 'Khách Facebook'}
-                          </div>
-                          {lead.assigned_name && (
-                            <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1 mt-0.5">
-                              <User className="w-3 h-3" />
-                              Sale: {lead.assigned_name}
-                            </span>
-                          )}
-                        </div>
+                        {lead.assigned_name && (
+                          <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1 mt-0.5">
+                            <User className="w-3 h-3" />
+                            Sale: {lead.assigned_name}
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -554,6 +649,158 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
               >
                 {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
                 Lưu Thay Đổi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Giả Lập Test Webhook & Lead Ads */}
+      {isSimModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" />
+                Công Cụ Giả Lập Test Webhook & Lead Ads
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSimModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200/80 text-slate-700 space-y-1">
+                <p className="font-bold text-amber-900 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-600" />
+                  Mô phỏng sự kiện thực tế từ Meta:
+                </p>
+                <p className="text-[11px] text-amber-800">
+                  Hệ thống sẽ gửi gói tin Webhook giả lập tới Backend, tự động lọc SĐT, bóc tách nhu cầu tour và lưu ngay vào database Supabase theo thời gian thực.
+                </p>
+              </div>
+
+              {/* Loại giả lập */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5">Loại sự kiện muốn thử nghiệm:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSimType('messenger');
+                      setSimMessage('Chào AD Luxury Travel, mình muốn tư vấn tour Dubai 5N4Đ, sđt mình 0988123456');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                      simType === 'messenger'
+                        ? 'border-blue-600 bg-blue-50/60 text-blue-900 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs">Tin nhắn Messenger</div>
+                      <div className="text-[10px] text-slate-400 font-normal">Khách chat để lại SĐT</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSimType('lead_form');
+                      setSimCampaign('Quảng cáo Chuyển đổi Lead Form - Tour Úc 2026');
+                      setSimTourInterest('Tour Úc Sydney - Melbourne 7N6Đ');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                      simType === 'lead_form'
+                        ? 'border-blue-600 bg-blue-50/60 text-blue-900 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs">Biểu Mẫu Lead Ads</div>
+                      <div className="text-[10px] text-slate-400 font-normal">Instant Form trên Facebook</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Tên khách & SĐT */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Tên khách hàng test:</label>
+                  <input
+                    type="text"
+                    value={simName}
+                    onChange={e => setSimName(e.target.value)}
+                    className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Số điện thoại:</label>
+                  <input
+                    type="text"
+                    value={simPhone}
+                    onChange={e => setSimPhone(e.target.value)}
+                    className="w-full h-9 px-3 border border-slate-300 rounded-lg font-bold text-blue-700 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </div>
+
+              {simType === 'messenger' ? (
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Nội dung tin nhắn khách gửi:</label>
+                  <textarea
+                    rows={3}
+                    value={simMessage}
+                    onChange={e => setSimMessage(e.target.value)}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg font-medium bg-white text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">Tuyến Tour quan tâm:</label>
+                    <input
+                      type="text"
+                      value={simTourInterest}
+                      onChange={e => setSimTourInterest(e.target.value)}
+                      className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">Tên Chiến Dịch Quảng Cáo:</label>
+                    <input
+                      type="text"
+                      value={simCampaign}
+                      onChange={e => setSimCampaign(e.target.value)}
+                      className="w-full h-9 px-3 border border-slate-300 rounded-lg font-medium bg-white text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsSimModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSimulateWebhook}
+                disabled={isSimulating}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {isSimulating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 text-amber-300" />}
+                Bắn Webhook Thử Nghiệm
               </button>
             </div>
           </div>
