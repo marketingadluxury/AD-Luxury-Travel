@@ -34,6 +34,7 @@ import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { MetaLead, Tour } from '@/types';
 import { fetchMetaLeads, updateMetaLead, deleteMetaLead } from '@/lib/metaCapiService';
+import { MetaAdsPerformanceDashboard } from './MetaAdsPerformanceDashboard';
 import { format } from 'date-fns';
 
 interface PotentialLeadsTabProps {
@@ -41,7 +42,7 @@ interface PotentialLeadsTabProps {
 }
 
 export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLeadForBooking }) => {
-  const { tours = [], profilesList = [], currentRole } = useCRM();
+  const { tours = [], profilesList = [], orders = [], currentRole } = useCRM();
   const { profile } = useAuth();
 
   const [leads, setLeads] = useState<MetaLead[]>([]);
@@ -54,6 +55,7 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   const [editStatus, setEditStatus] = useState('lead_captured');
   const [editAssignedTo, setEditAssignedTo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
 
   // Simulation State
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
@@ -281,113 +283,43 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-200">
+    <div className="space-y-6 animate-in fade-in duration-200">
       
-      {/* 4 Thẻ KPI Chỉ Số Nổi Bật */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Tổng Leads Messenger</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              <MessageSquare className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-2xl md:text-3xl font-black text-slate-900">{stats.total}</span>
-            <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-              {stats.withPhone} có SĐT
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-blue-200 bg-gradient-to-b from-blue-50/30 to-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-700">Mới Nhận (Cần gọi)</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-              <Flame className="w-4 h-4 text-blue-600" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl md:text-3xl font-black text-blue-700">{stats.newLeads}</span>
-            <span className="text-[11px] text-blue-800/70 block mt-0.5 font-medium">Khách vừa để lại SĐT</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/30 to-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-700">Đang chăm sóc</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl md:text-3xl font-black text-amber-600">{stats.contacted}</span>
-            <span className="text-[11px] text-amber-800/70 block mt-0.5 font-medium">Đã gọi điện tư vấn</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-emerald-200 bg-gradient-to-b from-emerald-50/30 to-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700">Đã chốt Booking</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-2xl md:text-3xl font-black text-emerald-700">{stats.converted}</span>
-            <span className="text-[11px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-              Tỷ lệ: {stats.convRate}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Bộ Lọc & Tìm Kiếm */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <form onSubmit={handleSearch} className="relative flex-1 w-full">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Tìm theo Tên khách, Số điện thoại, Email hoặc Chiến dịch quảng cáo..."
-            className="w-full h-10 pl-10 pr-24 border border-slate-200 rounded-xl text-xs font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-slate-900 placeholder:text-slate-400 bg-slate-50/60 focus:bg-white transition-all shadow-2xs"
-          />
+      {/* Tab Switcher: Báo Cáo Hiệu Suất Recharts vs Danh Sách Khách Hàng */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-2">
           <button
-            type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+            type="button"
+            onClick={() => setViewMode('dashboard')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              viewMode === 'dashboard'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
+            }`}
           >
-            Tìm
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>📊 Báo Cáo & Hiệu Suất Quảng Cáo</span>
           </button>
-        </form>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="h-10 px-3 border border-slate-200 rounded-xl text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
-          >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="lead_captured">Mới để lại SĐT</option>
-            <option value="contacted">Đã liên hệ tư vấn</option>
-            <option value="lead_converted">Đã chốt Booking</option>
-            <option value="unqualified">Chưa phù hợp</option>
-          </select>
 
           <button
             type="button"
-            onClick={loadLeads}
-            disabled={isLoading}
-            className="h-10 w-10 shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 transition-colors cursor-pointer"
-            title="Làm mới danh sách"
+            onClick={() => setViewMode('list')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              viewMode === 'list'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
+            }`}
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue-600' : ''}`} />
+            <Users className="w-3.5 h-3.5" />
+            <span>📋 Danh Sách Khách Hàng ({leads.length})</span>
           </button>
+        </div>
 
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setIsSimModalOpen(true)}
-            className="h-10 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            className="h-9 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             title="Mở công cụ giả lập test Webhook & Lead Ads"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -396,171 +328,290 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
         </div>
       </div>
 
-      {/* Danh Sách Khách Hàng Tiềm Năng (Bảng dữ liệu chuẩn Enterprise) */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-        {isLoading ? (
-          <div className="py-16 text-center text-slate-400 space-y-3">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600" />
-            <p className="text-xs font-semibold">Đang tải danh sách khách hàng tiềm năng từ Meta...</p>
-          </div>
-        ) : leads.length === 0 ? (
-          <div className="py-16 text-center text-slate-500 space-y-3">
-            <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
-              <Users className="w-6 h-6" />
+      {/* Hiển thị Dashboard nếu ở chế độ dashboard */}
+      {viewMode === 'dashboard' && (
+        <MetaAdsPerformanceDashboard
+          leads={leads}
+          orders={orders}
+          conversionLogs={[]}
+          onRefresh={loadLeads}
+          isLoading={isLoading}
+        />
+      )}
+
+      {/* Danh Sách Khách Hàng Tiềm Năng & Bộ Lọc */}
+      {viewMode === 'list' && (
+        <>
+          {/* 4 Thẻ KPI Chỉ Số Nổi Bật */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Tổng Leads Messenger</span>
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-baseline justify-between">
+                <span className="text-2xl md:text-3xl font-black text-slate-900">{stats.total}</span>
+                <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                  {stats.withPhone} có SĐT
+                </span>
+              </div>
             </div>
-            <h4 className="text-sm font-bold text-slate-800">Chưa có khách hàng tiềm năng nào</h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Khi khách hàng nhắn tin để lại số điện thoại trên Facebook Messenger, hệ thống sẽ tự động đồng bộ và lưu trữ ngay tại đây.
-            </p>
+
+            <div className="bg-white p-4 rounded-2xl border border-blue-200 bg-gradient-to-b from-blue-50/30 to-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-700">Mới Nhận (Cần gọi)</span>
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <Flame className="w-4 h-4 text-blue-600" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <span className="text-2xl md:text-3xl font-black text-blue-700">{stats.newLeads}</span>
+                <span className="text-[11px] text-blue-800/70 block mt-0.5 font-medium">Khách vừa để lại SĐT</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/30 to-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-700">Đang chăm sóc</span>
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <span className="text-2xl md:text-3xl font-black text-amber-600">{stats.contacted}</span>
+                <span className="text-[11px] text-amber-800/70 block mt-0.5 font-medium">Đã gọi điện tư vấn</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-emerald-200 bg-gradient-to-b from-emerald-50/30 to-white shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700">Đã chốt Booking</span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-baseline justify-between">
+                <span className="text-2xl md:text-3xl font-black text-emerald-700">{stats.converted}</span>
+                <span className="text-[11px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                  Tỷ lệ: {stats.convRate}%
+                </span>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] font-extrabold uppercase tracking-wider">
-                  <th className="py-3.5 px-4">Khách hàng</th>
-                  <th className="py-3.5 px-4">Số điện thoại & Email</th>
-                  <th className="py-3.5 px-4">Nội dung tin nhắn & Nhu cầu</th>
-                  <th className="py-3.5 px-4">Chiến dịch / Nguồn</th>
-                  <th className="py-3.5 px-4">Trạng thái</th>
-                  <th className="py-3.5 px-4">Thời gian</th>
-                  <th className="py-3.5 px-4 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-150">
-                {leads.map(lead => (
-                  <tr key={lead.id} className="hover:bg-blue-50/40 transition-colors">
-                    
-                    {/* Tên khách hàng - Chỉ hiển thị Họ và tên */}
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <div>
-                        <div className="font-bold text-slate-900 text-xs">
-                          {lead.customer_name || 'Khách Meta'}
-                        </div>
-                        {lead.assigned_name && (
-                          <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1 mt-0.5">
-                            <User className="w-3 h-3" />
-                            Sale: {lead.assigned_name}
-                          </span>
-                        )}
-                      </div>
-                    </td>
 
-                    {/* SĐT & Email */}
-                    <td className="py-3.5 px-4">
-                      <div className="space-y-1">
-                        {lead.customer_phone ? (
-                          <a
-                            href={`tel:${lead.customer_phone}`}
-                            className="inline-flex items-center gap-1.5 font-bold text-blue-600 hover:text-blue-800 hover:underline text-xs bg-blue-50/80 px-2 py-0.5 rounded-md border border-blue-200/60"
-                          >
-                            <Phone className="w-3 h-3 text-blue-500" />
-                            {lead.customer_phone}
-                          </a>
-                        ) : (
-                          <span className="text-slate-400 italic text-[11px]">Chưa có SĐT</span>
-                        )}
-                        {lead.customer_email && (
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                            <Mail className="w-3 h-3 text-slate-400" />
-                            {lead.customer_email}
-                          </div>
-                        )}
-                      </div>
-                    </td>
+          {/* Bộ Lọc & Tìm Kiếm */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <form onSubmit={handleSearch} className="relative flex-1 w-full">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Tìm theo Tên khách, Số điện thoại, Email hoặc Chiến dịch quảng cáo..."
+                className="w-full h-10 pl-10 pr-24 border border-slate-200 rounded-xl text-xs font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-slate-900 placeholder:text-slate-400 bg-slate-50/60 focus:bg-white transition-all shadow-2xs"
+              />
+              <button
+                type="submit"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+              >
+                Tìm
+              </button>
+            </form>
 
-                    {/* Nội dung tin nhắn & Ghi chú */}
-                    <td className="py-3.5 px-4 max-w-[280px]">
-                      <div className="space-y-1">
-                        <p className="text-xs text-slate-700 font-medium line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-200/60" title={lead.last_message || ''}>
-                          {lead.last_message || 'Khách hàng để lại thông tin quan tâm qua Messenger'}
-                        </p>
-                        {lead.notes && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-semibold block truncate">
-                            📝 Note: {lead.notes}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="h-10 px-3 border border-slate-200 rounded-xl text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="lead_captured">Mới để lại SĐT</option>
+                <option value="contacted">Đã liên hệ tư vấn</option>
+                <option value="lead_converted">Đã chốt Booking</option>
+                <option value="unqualified">Chưa phù hợp</option>
+              </select>
 
-                    {/* Campaign & UTM */}
-                    <td className="py-3.5 px-4">
-                      <div className="space-y-1">
-                        {lead.utm_campaign ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                            <Tag className="w-3 h-3 text-purple-500" />
-                            {lead.utm_campaign}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-slate-500">Tin nhắn tự nhiên</span>
-                        )}
-                        {lead.ad_id && (
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            Ad ID: {lead.ad_id}
-                          </div>
-                        )}
-                      </div>
-                    </td>
+              <button
+                type="button"
+                onClick={loadLeads}
+                disabled={isLoading}
+                className="h-10 w-10 shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 transition-colors cursor-pointer"
+                title="Làm mới danh sách"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue-600' : ''}`} />
+              </button>
+            </div>
+          </div>
 
-                    {/* Trạng thái */}
-                    <td className="py-3.5 px-4">
-                      {getStatusBadge(lead.status)}
-                    </td>
-
-                    {/* Ngày tạo */}
-                    <td className="py-3.5 px-4 text-slate-500 text-[11px] font-medium whitespace-nowrap">
-                      {lead.created_at ? format(new Date(lead.created_at), 'HH:mm dd/MM/yyyy') : '-'}
-                    </td>
-
-                    {/* Action buttons */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+          {/* Danh Sách Khách Hàng Tiềm Năng (Bảng dữ liệu chuẩn Enterprise) */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            {isLoading ? (
+              <div className="py-16 text-center text-slate-400 space-y-3">
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+                <p className="text-xs font-semibold">Đang tải danh sách khách hàng tiềm năng từ Meta...</p>
+              </div>
+            ) : leads.length === 0 ? (
+              <div className="py-16 text-center text-slate-500 space-y-3">
+                <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                  <Users className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-800">Chưa có khách hàng tiềm năng nào</h4>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  Khi khách hàng nhắn tin để lại số điện thoại trên Facebook Messenger, hệ thống sẽ tự động đồng bộ và lưu trữ ngay tại đây.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] font-extrabold uppercase tracking-wider">
+                      <th className="py-3.5 px-4">Khách hàng</th>
+                      <th className="py-3.5 px-4">Số điện thoại & Email</th>
+                      <th className="py-3.5 px-4">Nội dung tin nhắn & Nhu cầu</th>
+                      <th className="py-3.5 px-4">Chiến dịch / Nguồn</th>
+                      <th className="py-3.5 px-4">Trạng thái</th>
+                      <th className="py-3.5 px-4">Thời gian</th>
+                      <th className="py-3.5 px-4 text-right">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-150">
+                    {leads.map(lead => (
+                      <tr key={lead.id} className="hover:bg-blue-50/40 transition-colors">
                         
-                        {/* Nút Tạo Booking Ngay */}
-                        {onSelectLeadForBooking && (
-                          <button
-                            type="button"
-                            onClick={() => onSelectLeadForBooking(lead)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer"
-                            title="Tạo Booking từ Lead này"
-                          >
-                            <Zap className="w-3.5 h-3.5 fill-current" />
-                            <span>Tạo Booking</span>
-                          </button>
-                        )}
+                        {/* Tên khách hàng - Chỉ hiển thị Họ và tên */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div>
+                            <div className="font-bold text-slate-900 text-xs">
+                              {lead.customer_name || 'Khách Meta'}
+                            </div>
+                            {lead.assigned_name && (
+                              <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1 mt-0.5">
+                                <User className="w-3 h-3" />
+                                Sale: {lead.assigned_name}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                        {/* Nút Chi tiết & Note */}
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(lead)}
-                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
-                          title="Cập nhật ghi chú & trạng thái"
-                        >
-                          <Sliders className="w-3.5 h-3.5" />
-                        </button>
+                        {/* SĐT & Email */}
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-1">
+                            {lead.customer_phone ? (
+                              <a
+                                href={`tel:${lead.customer_phone}`}
+                                className="inline-flex items-center gap-1.5 font-bold text-blue-600 hover:text-blue-800 hover:underline text-xs bg-blue-50/80 px-2 py-0.5 rounded-md border border-blue-200/60"
+                              >
+                                <Phone className="w-3 h-3 text-blue-500" />
+                                {lead.customer_phone}
+                              </a>
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">Chưa có SĐT</span>
+                            )}
+                            {lead.customer_email && (
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                <Mail className="w-3 h-3 text-slate-400" />
+                                {lead.customer_email}
+                              </div>
+                            )}
+                          </div>
+                        </td>
 
-                        {/* Xóa Lead */}
-                        {['admin', 'sale_leader'].includes(currentRole) && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLead(lead.id, lead.customer_name)}
-                            className="p-1.5 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                            title="Xóa Lead"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        {/* Nội dung tin nhắn & Ghi chú */}
+                        <td className="py-3.5 px-4 max-w-[280px]">
+                          <div className="space-y-1">
+                            <p className="text-xs text-slate-700 font-medium line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-200/60" title={lead.last_message || ''}>
+                              {lead.last_message || 'Khách hàng để lại thông tin quan tâm qua Messenger'}
+                            </p>
+                            {lead.notes && (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-semibold block truncate">
+                                📝 Note: {lead.notes}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                      </div>
-                    </td>
+                        {/* Campaign & UTM */}
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-1">
+                            {lead.utm_campaign ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                <Tag className="w-3 h-3 text-purple-500" />
+                                {lead.utm_campaign}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">Tin nhắn tự nhiên</span>
+                            )}
+                            {lead.ad_id && (
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                Ad ID: {lead.ad_id}
+                              </div>
+                            )}
+                          </div>
+                        </td>
 
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        {/* Trạng thái */}
+                        <td className="py-3.5 px-4">
+                          {getStatusBadge(lead.status)}
+                        </td>
+
+                        {/* Ngày tạo */}
+                        <td className="py-3.5 px-4 text-slate-500 text-[11px] font-medium whitespace-nowrap">
+                          {lead.created_at ? format(new Date(lead.created_at), 'HH:mm dd/MM/yyyy') : '-'}
+                        </td>
+
+                        {/* Action buttons */}
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            
+                            {/* Nút Tạo Booking Ngay */}
+                            {onSelectLeadForBooking && (
+                              <button
+                                type="button"
+                                onClick={() => onSelectLeadForBooking(lead)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer"
+                                title="Tạo Booking từ Lead này"
+                              >
+                                <Zap className="w-3.5 h-3.5 fill-current" />
+                                <span>Tạo Booking</span>
+                              </button>
+                            )}
+
+                            {/* Nút Chi tiết & Note */}
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(lead)}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                              title="Cập nhật ghi chú & trạng thái"
+                            >
+                              <Sliders className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Xóa Lead */}
+                            {['admin', 'sale_leader'].includes(currentRole) && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLead(lead.id, lead.customer_name)}
+                                className="p-1.5 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                title="Xóa Lead"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Modal Chỉnh Sửa Ghi Chú & Trạng Thái Lead */}
       {isEditingModalOpen && selectedLead && (

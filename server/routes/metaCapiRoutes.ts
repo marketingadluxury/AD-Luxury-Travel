@@ -280,4 +280,199 @@ router.post('/api/meta-capi/test-connection', async (req, res) => {
   }
 });
 
+/**
+ * Chẩn đoán chi tiết Token, Quyền hạn & Kết nối Webhook/Ad Account
+ */
+router.post('/api/meta-capi/diagnose-token', async (req, res) => {
+  try {
+    const { accessToken, pageId, pixelId, adAccountId } = req.body;
+
+    let token = accessToken ? String(accessToken).trim() : '';
+    // Nếu token bị masked hoặc trống, lấy token đã lưu trong cấu hình / env
+    if (!token || token.includes('...')) {
+      const storedConfig = await getMetaCapiConfig();
+      token = storedConfig.access_token || process.env.META_PAGE_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || '';
+    }
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Chưa cung cấp Access Token để kiểm tra.',
+      });
+    }
+
+    const diagnosis: {
+      tokenValid: boolean;
+      tokenOwner?: { id: string; name: string; type?: string; link?: string };
+      permissions?: { name: string; status: string }[];
+      pageStatus?: { id: string; name: string; isSubscribedToWebhook?: boolean; webhookApps?: any[]; error?: string };
+      pixelStatus?: { id: string; name?: string; canAccess: boolean; error?: string };
+      adAccountStatus?: { id: string; name?: string; currency?: string; status?: number; error?: string };
+      recommendations: string[];
+      rawErrors: string[];
+    } = {
+      tokenValid: false,
+      recommendations: [],
+      rawErrors: [],
+    };
+
+    // 1. Kiểm tra Token validity với /me
+    try {
+      const meRes = await fetch(`https://graph.facebook.com/v22.0/me?fields=id,name,link,category&access_token=${encodeURIComponent(token)}`);
+      const meData: any = await meRes.json();
+
+      if (meData.error) {
+        diagnosis.tokenValid = false;
+        diagnosis.rawErrors.push(`Lỗi Token /me: ${meData.error.message} (Code: ${meData.error.code})`);
+        diagnosis.recommendations.push('Access Token đã hết hạn hoặc không hợp lệ. Vui lòng tạo lại mã truy cập mới từ Meta for Developers.');
+        return res.json({ success: true, diagnosis });
+      }
+
+      diagnosis.tokenValid = true;
+      diagnosis.tokenOwner = {
+        id: meData.id,
+        name: meData.name,
+        type: meData.category ? `Fanpage (${meData.category})` : 'User / System User',
+        link: meData.link,
+      };
+    } catch (e: any) {
+      diagnosis.rawErrors.push(`Lỗi kết nối /me: ${e.message}`);
+    }
+
+    // 2. Kiểm tra Permissions với /me/permissions
+    try {
+      const permRes = await fetch(`https://graph.facebook.com/v22.0/me/permissions?access_token=${encodeURIComponent(token)}`);
+      const permData: any = await permRes.json();
+
+      if (permData.data && Array.isArray(permData.data)) {
+        diagnosis.permissions = permData.data.map((p: any) => ({
+          name: p.permission,
+          status: p.status,
+        }));
+
+        const granted = new Set(permData.data.filter((p: any) => p.status === 'granted').map((p: any) => p.permission));
+        if (!granted.has('pages_messaging')) {
+          diagnosis.recommendations.push('Thiếu quyền "pages_messaging": Fanpage sẽ không thể nhận hoặc phản hồi tin nhắn tự động từ khách.');
+        }
+        if (!granted.has('leads_retrieval')) {
+          diagnosis.recommendations.push('Thiếu quyền "leads_retrieval": Hệ thống sẽ không thể đọc thông tin chi tiết khách hàng từ biểu mẫu Meta Lead Ads.');
+        }
+        if (!granted.has('pages_read_engagement') && !granted.has('pages_manage_metadata')) {
+          diagnosis.recommendations.push('Thiếu quyền "pages_read_engagement" / "pages_manage_metadata" để quản lý tương tác và webhook.');
+        }
+      }
+    } catch (e: any) {
+      // Bỏ qua nếu là token Page thuần
+    }
+
+    // 3. Kiểm tra Fanpage & Webhook Subscriptions
+    const targetPageId = pageId || diagnosis.tokenOwner?.id || process.env.META_PAGE_ID || '103836966010338';
+    if (targetPageId) {
+      try {
+        const pageRes = await fetch(`https://graph.facebook.com/v22.0/${targetPageId}?fields=id,name,category,link&access_token=${encodeURIComponent(token)}`);
+        const pageData: any = await pageRes.json();
+
+        if (pageData.error) {
+          diagnosis.pageStatus = {
+            id: targetPageId,
+            name: 'Không thể truy cập',
+            error: pageData.error.message,
+          };
+          diagnosis.recommendations.push(`Không thể truy cập Page ID ${targetPageId}: ${pageData.error.message}. Đảm bảo token có quyền quản lý Trang này.`);
+        } else {
+          // Check subscribed apps
+          let isSubscribed = false;
+          let webhookApps = [];
+          try {
+            const subRes = await fetch(`https://graph.facebook.com/v22.0/${targetPageId}/subscribed_apps?access_token=${encodeURIComponent(token)}`);
+            const subData: any = await subRes.json();
+            if (subData.data && Array.isArray(subData.data) && subData.data.length > 0) {
+              isSubscribed = true;
+              webhookApps = subData.data;
+            }
+          } catch (err) {
+            // Ignore sub-call error
+          }
+
+          diagnosis.pageStatus = {
+            id: pageData.id,
+            name: pageData.name,
+            isSubscribedToWebhook: isSubscribed,
+            webhookApps,
+          };
+
+          if (!isSubscribed) {
+            diagnosis.recommendations.push(`Fanpage "${pageData.name}" chưa kích hoạt đăng ký nhận Webhook (subscribed_apps). Hãy kiểm tra lại bước Subscriptions trên Meta Developers.`);
+          }
+        }
+      } catch (e: any) {
+        diagnosis.rawErrors.push(`Lỗi kiểm tra Trang: ${e.message}`);
+      }
+    }
+
+    // 4. Kiểm tra Pixel / CAPI Dataset
+    const targetPixelId = pixelId || process.env.META_PIXEL_ID;
+    if (targetPixelId) {
+      try {
+        const pixelRes = await fetch(`https://graph.facebook.com/v22.0/${targetPixelId}?fields=id,name&access_token=${encodeURIComponent(token)}`);
+        const pixelData: any = await pixelRes.json();
+
+        if (pixelData.error) {
+          diagnosis.pixelStatus = {
+            id: targetPixelId,
+            canAccess: false,
+            error: pixelData.error.message,
+          };
+          diagnosis.recommendations.push(`Không thể truy cập Pixel ID ${targetPixelId}: ${pixelData.error.message}.`);
+        } else {
+          diagnosis.pixelStatus = {
+            id: pixelData.id,
+            name: pixelData.name,
+            canAccess: true,
+          };
+        }
+      } catch (e: any) {
+        diagnosis.rawErrors.push(`Lỗi kiểm tra Pixel: ${e.message}`);
+      }
+    }
+
+    // 5. Kiểm tra Ad Account nếu có
+    const targetAdAccountId = adAccountId || process.env.META_AD_ACCOUNT_ID;
+    if (targetAdAccountId) {
+      const cleanAdAccountId = targetAdAccountId.startsWith('act_') ? targetAdAccountId : `act_${targetAdAccountId}`;
+      try {
+        const adAccRes = await fetch(`https://graph.facebook.com/v22.0/${cleanAdAccountId}?fields=id,name,account_status,currency&access_token=${encodeURIComponent(token)}`);
+        const adAccData: any = await adAccRes.json();
+
+        if (adAccData.error) {
+          diagnosis.adAccountStatus = {
+            id: cleanAdAccountId,
+            error: adAccData.error.message,
+          };
+        } else {
+          diagnosis.adAccountStatus = {
+            id: adAccData.id,
+            name: adAccData.name,
+            currency: adAccData.currency,
+            status: adAccData.account_status,
+          };
+        }
+      } catch (e: any) {
+        diagnosis.rawErrors.push(`Lỗi kiểm tra Ad Account: ${e.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      diagnosis,
+    });
+  } catch (error: any) {
+    console.error('[Meta CAPI Diagnose Token] Lỗi:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi chẩn đoán Access Token: ' + (error.message || 'Lỗi không xác định'),
+    });
+  }
+});
+
 export default router;

@@ -23,19 +23,34 @@ import {
   ExternalLink,
   Code2,
   Info,
-  Sliders
+  Sliders,
+  Check,
+  X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCRM } from '@/context/CRMContext';
-import { MetaConversionLog, MetaEventName } from '@/types';
+import { MetaConversionLog, MetaEventName, MetaLead } from '@/types';
 import { 
   fetchMetaCapiConfig, 
   saveMetaCapiConfig, 
   fetchMetaConversionLogs, 
+  fetchMetaLeads,
   testMetaConnection,
   triggerMetaCapiEvent
 } from '@/lib/metaCapiService';
+import { MetaAdsPerformanceDashboard } from '@/components/MetaAdsPerformanceDashboard';
 import { formatCurrency } from '@/lib/utils';
+
+interface DiagnosisResult {
+  tokenValid: boolean;
+  tokenOwner?: { id: string; name: string; type?: string; link?: string };
+  permissions?: { name: string; status: string }[];
+  pageStatus?: { id: string; name: string; isSubscribedToWebhook?: boolean; webhookApps?: any[]; error?: string };
+  pixelStatus?: { id: string; name?: string; canAccess: boolean; error?: string };
+  adAccountStatus?: { id: string; name?: string; currency?: string; status?: number; error?: string };
+  recommendations: string[];
+  rawErrors: string[];
+}
 
 export default function MetaAdsAnalytics() {
   const { orders = [], tours = [] } = useCRM();
@@ -44,13 +59,18 @@ export default function MetaAdsAnalytics() {
   const [pixelId, setPixelId] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [testEventCode, setTestEventCode] = useState('');
+  const [pageId, setPageId] = useState('103836966010338');
+  const [adAccountId, setAdAccountId] = useState('');
   const [isEnabled, setIsEnabled] = useState(true);
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
 
-  // State Logs & Filter
+  // State Logs & Filter & Leads
   const [logs, setLogs] = useState<MetaConversionLog[]>([]);
+  const [leads, setLeads] = useState<MetaLead[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [selectedEventFilter, setSelectedEventFilter] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
@@ -60,13 +80,14 @@ export default function MetaAdsAnalytics() {
   // Active Tab
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'logs' | 'settings'>('overview');
 
-  // Load config & logs khi vào trang
+  // Load config, logs & leads khi vào trang
   const loadData = async () => {
     setIsLoadingLogs(true);
     try {
-      const [configData, logsData] = await Promise.all([
+      const [configData, logsData, leadsData] = await Promise.all([
         fetchMetaCapiConfig(),
-        fetchMetaConversionLogs(200)
+        fetchMetaConversionLogs(200),
+        fetchMetaLeads()
       ]);
 
       if (configData) {
@@ -77,8 +98,9 @@ export default function MetaAdsAnalytics() {
       }
 
       setLogs(logsData || []);
+      setLeads(leadsData || []);
     } catch (err) {
-      console.error('Lỗi nạp dữ liệu Meta CAPI:', err);
+      console.error('Lỗi nạp dữ liệu Meta CAPI & Leads:', err);
       toast.error('Không thể tải dữ liệu Meta CAPI');
     } finally {
       setIsLoadingLogs(false);
@@ -139,6 +161,42 @@ export default function MetaAdsAnalytics() {
       toast.error(err.message || 'Lỗi khi kiểm tra kết nối Meta CAPI');
     } finally {
       setIsTestingConnection(false);
+    }
+  };
+
+  // Chẩn đoán Token & Quyền Meta
+  const handleDiagnoseToken = async () => {
+    const tokenToTest = accessToken.trim();
+
+    setIsDiagnosing(true);
+    setDiagnosisResult(null);
+    try {
+      const res = await fetch('/api/meta-capi/diagnose-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: tokenToTest || undefined,
+          pageId: pageId.trim() || undefined,
+          pixelId: pixelId.trim() || undefined,
+          adAccountId: adAccountId.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.diagnosis) {
+        setDiagnosisResult(data.diagnosis);
+        if (data.diagnosis.tokenValid) {
+          toast.success('Đã hoàn tất chẩn đoán kết nối Meta API!');
+        } else {
+          toast.error('Token không hợp lệ hoặc đã hết hạn.');
+        }
+      } else {
+        toast.error(data.message || 'Lỗi khi chẩn đoán kết nối.');
+      }
+    } catch (err: any) {
+      toast.error('Lỗi gọi API chẩn đoán: ' + err.message);
+    } finally {
+      setIsDiagnosing(false);
     }
   };
 
@@ -404,6 +462,15 @@ export default function MetaAdsAnalytics() {
       {/* TAB 1: TỔNG QUAN HIỆU QUẢ */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Dashboard Recharts Báo Cáo Hiệu Suất Quảng Cáo Meta */}
+          <MetaAdsPerformanceDashboard
+            leads={leads}
+            orders={orders}
+            conversionLogs={logs}
+            onRefresh={loadData}
+            isLoading={isLoadingLogs}
+          />
+
           {/* Hướng dẫn luồng dữ liệu CAPI */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
             <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -441,63 +508,6 @@ export default function MetaAdsAnalytics() {
                   Khi Kế toán duyệt Phiếu thu hoặc xác nhận thanh toán cọc/toàn phần, sự kiện <strong>Purchase</strong> kèm giá trị tiền thật (VND) được gửi về Meta để tối ưu máy học phân phối quảng cáo chính xác khách có tiền.
                 </p>
               </div>
-            </div>
-          </div>
-
-          {/* Top Chiến Dịch Nổi Bật */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-800">Top Chiến Dịch Meta Mang Lại Doanh Thu Cao Nhất</h3>
-                <p className="text-xs text-slate-500">Thống kê tự động từ dữ liệu UTM và đơn hàng trên hệ thống CRM</p>
-              </div>
-              <button
-                onClick={() => setActiveTab('campaigns')}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-              >
-                Xem chi tiết <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200">
-                    <th className="py-3 px-4">Tên Chiến Dịch (UTM Campaign)</th>
-                    <th className="py-3 px-4">Kênh (Source)</th>
-                    <th className="py-3 px-4 text-center">Số Lượng Đơn</th>
-                    <th className="py-3 px-4 text-right">Tổng Doanh Thu</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {campaignStats.slice(0, 5).map((camp, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-slate-800 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-xs flex items-center justify-center font-bold">{idx + 1}</span>
-                        {camp.campaign}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
-                          {camp.source}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center font-bold text-slate-700">
-                        {camp.orderCount.toLocaleString('vi-VN')}
-                      </td>
-                      <td className="py-3 px-4 text-right font-black text-indigo-700">
-                        {formatCurrency(camp.totalRevenue)}
-                      </td>
-                    </tr>
-                  ))}
-                  {campaignStats.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="text-center py-6 text-slate-400">
-                        Chưa có dữ liệu chiến dịch quảng cáo. Các đơn hàng mới có gắn UTM Campaign sẽ hiển thị tại đây.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
@@ -707,130 +717,304 @@ export default function MetaAdsAnalytics() {
 
       {/* TAB 4: CÀI ĐẶT CẤU HÌNH META PIXEL & CAPI */}
       {activeTab === 'settings' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
-              <Sliders className="w-5 h-5 text-blue-600" />
-              Cấu Hình Kết Nối Meta Conversions API
-            </h2>
-            <p className="text-xs text-slate-500 mb-6">
-              Điền thông tin Meta Pixel ID và Access Token từ Facebook Business Manager / Meta Events Manager
-            </p>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+              <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-blue-600" />
+                Cấu Hình Kết Nối Meta API, CAPI & Webhook
+              </h2>
+              <p className="text-xs text-slate-500 mb-6">
+                Điền thông tin Meta Pixel ID, Fanpage ID và Access Token để đồng bộ dữ liệu và kiểm tra quyền truy cập.
+              </p>
 
-            <form onSubmit={handleSaveConfig} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Meta Pixel ID / Dataset ID <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: 123456789012345"
-                  value={pixelId}
-                  onChange={(e) => setPixelId(e.target.value)}
-                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  required
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Lấy trong Meta Events Manager &gt; Chọn Pixel của bạn &gt; Cài đặt &gt; ID tập dữ liệu / ID Pixel.
-                </p>
-              </div>
+              <form onSubmit={handleSaveConfig} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Meta Pixel ID / Dataset ID <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: 123456789012345"
+                      value={pixelId}
+                      onChange={(e) => setPixelId(e.target.value)}
+                      className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      required
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Mã Truy Cập Hệ Thống (System Access Token) <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showAccessToken ? 'text' : 'password'}
-                    placeholder="EAA..."
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    className="w-full text-sm px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAccessToken(!showAccessToken)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showAccessToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      ID Fanpage Facebook (Page ID)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: 103836966010338"
+                      value={pageId}
+                      onChange={(e) => setPageId(e.target.value)}
+                      className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Tạo mã truy cập vĩnh viễn (System User Token) có quyền <code>ads_management</code> trong Cài đặt Trình quản lý sự kiện.
-                </p>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Mã Thử Nghiệm Sự Kiện (Test Event Code - Không bắt buộc)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: TEST12345"
-                  value={testEventCode}
-                  onChange={(e) => setTestEventCode(e.target.value)}
-                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Dùng khi kiểm tra trong tab <strong>Thử nghiệm sự kiện (Test Events)</strong> trên Meta Events Manager. Để trống khi chạy thực tế.
-                </p>
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      ID Tài Khoản Quảng Cáo (Ad Account ID)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: act_1234567890"
+                      value={adAccountId}
+                      onChange={(e) => setAdAccountId(e.target.value)}
+                      className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
 
-              <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isEnabled}
-                    onChange={(e) => setIsEnabled(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                  />
-                  <span className="text-xs font-bold text-slate-700">Kích hoạt tự động bắn sự kiện Meta CAPI</span>
-                </label>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleTestConnection}
-                    disabled={isTestingConnection}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all disabled:opacity-50"
-                  >
-                    <Send className={`w-3.5 h-3.5 ${isTestingConnection ? 'animate-spin' : ''}`} />
-                    {isTestingConnection ? 'Đang test...' : 'Bắn Test Event'}
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isSavingConfig}
-                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    {isSavingConfig ? 'Đang lưu...' : 'Lưu Cấu Hình'}
-                  </button>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Mã Thử Nghiệm Sự Kiện (Test Event Code - CAPI)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: TEST12345"
+                      value={testEventCode}
+                      onChange={(e) => setTestEventCode(e.target.value)}
+                      className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Mã Truy Cập Hệ Thống / Page Token (Access Token) <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showAccessToken ? 'text' : 'password'}
+                      placeholder="Dán mã bắt đầu bằng EAATD... hoặc EAA..."
+                      value={accessToken}
+                      onChange={(e) => setAccessToken(e.target.value)}
+                      className="w-full text-sm px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAccessToken(!showAccessToken)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showAccessToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Dán Page Access Token hoặc System User Token để hệ thống gọi Meta Graph API và Webhooks.
+                  </p>
+                </div>
+
+                <div className="pt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isEnabled}
+                      onChange={(e) => setIsEnabled(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                    />
+                    <span className="text-xs font-bold text-slate-700">Kích hoạt tự động bắn sự kiện CAPI</span>
+                  </label>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleDiagnoseToken}
+                      disabled={isDiagnosing}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50"
+                    >
+                      <ShieldCheck className={`w-4 h-4 ${isDiagnosing ? 'animate-spin' : ''}`} />
+                      {isDiagnosing ? 'Đang kiểm tra...' : '🔍 Chẩn Đoán & Kiểm Tra Quyền Token'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestConnection}
+                      disabled={isTestingConnection}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all disabled:opacity-50"
+                    >
+                      <Send className={`w-3.5 h-3.5 ${isTestingConnection ? 'animate-spin' : ''}`} />
+                      {isTestingConnection ? 'Đang test...' : 'Bắn Test Event'}
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingConfig}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {isSavingConfig ? 'Đang lưu...' : 'Lưu Cấu Hình'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            {/* Cột hướng dẫn */}
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 space-y-4">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Info className="w-4 h-4 text-blue-600" />
+                Hướng dẫn kiểm tra & kết nối
+              </h3>
+
+              <ol className="text-xs text-slate-600 space-y-2.5 list-decimal pl-4">
+                <li>Dán mã <strong>Access Token</strong> của bạn vào ô bên cạnh.</li>
+                <li>Bấm nút xanh lá <strong>"🔍 Chẩn Đoán & Kiểm Tra Quyền Token"</strong> để hệ thống quét toàn bộ quyền và trạng thái Webhook.</li>
+                <li>Xem bảng kết quả chẩn đoán bên dưới để biết token hợp lệ hay thiếu quyền nào.</li>
+                <li>Bấm <strong>Lưu Cấu Hình</strong> để hoàn tất.</li>
+              </ol>
+
+              <div className="pt-3 border-t border-slate-200 text-xs text-slate-500">
+                Khi token có đủ quyền <code>pages_messaging</code> và <code>leads_retrieval</code>, hệ thống sẽ bắt trọn vẹn 100% tin nhắn và Lead Form từ Facebook.
               </div>
-            </form>
-          </div>
-
-          {/* Cột hướng dẫn */}
-          <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-              <Info className="w-4 h-4 text-blue-600" />
-              Các bước lấy Access Token từ Meta
-            </h3>
-
-            <ol className="text-xs text-slate-600 space-y-2.5 list-decimal pl-4">
-              <li>Truy cập <strong>Meta Business Suite / Trình quản lý sự kiện (Events Manager)</strong>.</li>
-              <li>Chọn đúng <strong>Tập dữ liệu (Pixel)</strong> của công ty bạn.</li>
-              <li>Vào tab <strong>Cài đặt (Settings)</strong> &gt; cuộn xuống mục <strong>API Chuyển đổi (Conversions API)</strong>.</li>
-              <li>Bấm nút <strong>Tạo mã truy cập (Generate Access Token)</strong> dưới phần "Thiết lập thủ công".</li>
-              <li>Copy mã và dán vào ô bên cạnh, sau đó bấm <strong>Lưu Cấu Hình</strong>.</li>
-              <li>Nhập mã thử nghiệm từ tab <em>Thử nghiệm sự kiện</em> để test kết nối!</li>
-            </ol>
-
-            <div className="pt-3 border-t border-slate-200 text-xs text-slate-500">
-              Mọi sự kiện sau khi gửi sẽ xuất hiện tức thì trong Meta Events Manager giúp tối ưu hoá giá thầu quảng cáo tự động.
             </div>
           </div>
+
+          {/* BẢNG KẾT QUẢ CHẨN ĐOÁN CHI TIẾT (NẾU ĐÃ BẤM CHẨN ĐOÁN) */}
+          {diagnosisResult && (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    diagnosisResult.tokenValid ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                  }`}>
+                    {diagnosisResult.tokenValid ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-base">
+                      Kết Quả Chẩn Đoán Kết Nối Meta API
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {diagnosisResult.tokenValid 
+                        ? `Mã Token Hợp Lệ • Chủ sở hữu: ${diagnosisResult.tokenOwner?.name || 'N/A'} (ID: ${diagnosisResult.tokenOwner?.id || 'N/A'})` 
+                        : 'Mã Token Không Hợp Lệ Hoặc Đã Hết Hạn'}
+                    </p>
+                  </div>
+                </div>
+
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                  diagnosisResult.tokenValid ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}>
+                  {diagnosisResult.tokenValid ? '● ĐÃ XÁC THỰC' : '✕ LỖI KẾT NỐI'}
+                </span>
+              </div>
+
+              {/* Lưới kiểm tra các thành phần */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Fanpage & Webhook Subscriptions */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 uppercase">1. Fanpage & Webhook</span>
+                    {diagnosisResult.pageStatus?.isSubscribedToWebhook ? (
+                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Đã kết nối Webhook
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-amber-600 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Chưa Subscribed
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    <div><strong>Tên Trang:</strong> {diagnosisResult.pageStatus?.name || diagnosisResult.tokenOwner?.name || 'Chưa nhận diện'}</div>
+                    <div><strong>Page ID:</strong> {diagnosisResult.pageStatus?.id || pageId || 'N/A'}</div>
+                  </div>
+                </div>
+
+                {/* 2. Pixel / CAPI Dataset */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 uppercase">2. Pixel / Dataset CAPI</span>
+                    {diagnosisResult.pixelStatus?.canAccess ? (
+                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Quyền hợp lệ
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-slate-500">
+                        {pixelId ? '✕ Không truy cập được' : '○ Chưa nhập Pixel ID'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    <div><strong>Tên Pixel:</strong> {diagnosisResult.pixelStatus?.name || 'Dataset'}</div>
+                    <div><strong>Pixel ID:</strong> {pixelId || 'Chưa điền'}</div>
+                  </div>
+                </div>
+
+                {/* 3. Ad Account */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 uppercase">3. Tài Khoản Ads</span>
+                    {diagnosisResult.adAccountStatus?.name ? (
+                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Hoạt động
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-slate-500">
+                        {adAccountId ? '✕ Không tìm thấy' : '○ Tùy chọn'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    <div><strong>Tên TK:</strong> {diagnosisResult.adAccountStatus?.name || 'Tài khoản Ads'}</div>
+                    <div><strong>Tiền tệ:</strong> {diagnosisResult.adAccountStatus?.currency || 'VND'}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Danh sách Quyền hạn (Permissions) */}
+              {diagnosisResult.permissions && diagnosisResult.permissions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Danh Sách Quyền Đã Cấp (Permissions):
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {diagnosisResult.permissions.map((p) => (
+                      <span
+                        key={p.name}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${
+                          p.status === 'granted'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}
+                      >
+                        {p.status === 'granted' ? <Check className="w-3 h-3 text-emerald-600" /> : <X className="w-3 h-3 text-slate-400" />}
+                        {p.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Gợi ý khắc phục (Recommendations) */}
+              {diagnosisResult.recommendations.length > 0 && (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    Khuyến Nghị Khắc Phục Để Dữ Liệu Tự Động Đổ Về:
+                  </div>
+                  <ul className="text-xs text-amber-900 space-y-1 list-disc pl-5">
+                    {diagnosisResult.recommendations.map((rec, idx) => (
+                      <li key={idx}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Lỗi thô nếu có */}
+              {diagnosisResult.rawErrors.length > 0 && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-mono">
+                  {diagnosisResult.rawErrors.join(' | ')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
