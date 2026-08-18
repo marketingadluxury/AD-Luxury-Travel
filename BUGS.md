@@ -672,6 +672,37 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   3. Mở rộng điều kiện kiểm tra `body.object` ở phương thức `POST` chấp nhận cả `page`, `user`, `instagram` để không bao giờ bị lỗi HTTP 404/403 khi Meta gửi request kiểm tra.
 - **Trạng thái:** Đã xử lý xong, restart server và xác thực thành công.
 
+### 1.72 Thêm Ô Nhập & Hướng Dẫn Lưu Mã Truy Cập Trang (Page Access Token) Từ Meta Developers
+- **Mô tả yêu cầu:**
+  - Người dùng thắc mắc mã thu được từ nút **"Tạo"** (bên cạnh Trang Fanpage AD Luxury Travel ở mục 2. Tạo mã truy cập trên Meta Developers) sẽ nhập ở đâu trong CRM.
+- **Giải pháp:**
+  - Bổ sung ô nhập **"🔑 3. Mã Truy Cập Trang (Page Access Token / EAAB...)"** kèm nút **"Lưu Token Page"** ngay trong khung *Cấu Hình Webhook Facebook Messenger* tại trang **Meta Ads & Leads** (`/meta-ads` > Cài Đặt CAPI).
+  - Bổ sung ô hướng dẫn 4 bước chi tiết hướng dẫn sao chép chuỗi mã `EAAB...` từ màn hình Meta Developers dán vào CRM để hệ thống dùng truy xuất Profile khách hàng và chi tiết Biểu mẫu Lead Ads.
+- **Trạng thái:** Đã hoàn thành, biên dịch ứng dụng thành công 100%.
+
+### 1.73 Tối Ưu & Tinh Gọn Cấu Hình Meta Conversions API (CAPI) Giống Pancake
+- **Mô tả yêu cầu:**
+  - Người dùng yêu cầu điều chỉnh form CAPI bắn dữ liệu đơn hàng sang Meta tinh gọn giống Pancake, chỉ tập trung vào Dataset ID / Pixel ID và CAPI Access Token sinh ra từ nút "Tạo mã truy cập" trong Trình quản lý sự kiện Meta.
+- **Giải pháp:**
+  - Tái cấu trúc form **Cấu Hình Meta Conversions API (CAPI)** trong `MetaAdsAnalytics.tsx`:
+    1. **Dataset ID / Meta Pixel ID** (bắt buộc - ví dụ: `1560803451392095`).
+    2. **CAPI Access Token (Mã Truy Cập Tập Dữ Liệu)** (bắt buộc - lấy từ nút *"Tạo mã truy cập"* tại *Trình quản lý sự kiện > Cài đặt > Thiết lập tiện ích tích hợp trực tiếp*).
+    3. **Mã Thử Nghiệm Sự Kiện (Test Event Code - CAPI)** (tùy chọn - ví dụ: `TEST67626`).
+  - Đưa các trường không bắt buộc (ID Fanpage & ID Tài khoản Quảng cáo) vào mục thu gọn *⚙️ Cấu Hình Bổ Sung (Tùy chọn nâng cao)*.
+  - Cập nhật khung hướng dẫn 3 bước minh họa đúng ảnh Trình quản lý sự kiện của Meta.
+- **Trạng thái:** Đã hoàn thành, kiểm tra biên dịch build thành công 100%.
+
+### 1.74 Kiểm Tra Lần Lượt Các Tab & Khắc Phục Lỗi Trùng Lặp Emoji Với Icon
+- **Mô tả yêu cầu / Lỗi:**
+  - Kiểm tra lần lượt các tab trong trang **Meta Ads & Leads** (Khách Hàng Tiềm Năng, Tổng Quan Hiệu Quả, Báo Cáo Chiến Dịch UTM, Nhật Ký Chuyển Đổi, Cấu Hình CAPI) và dọn dẹp triệt để các lỗi trùng lặp emoji đứng cạnh biểu tượng Lucide Icon trên các nút bấm, nhãn và ô thông tin.
+- **Giải pháp:**
+  - Rà soát toàn bộ các tệp component (`MetaAdsAnalytics.tsx`, `PotentialLeadsTab.tsx`, `MetaAdsPerformanceDashboard.tsx`):
+    1. Xóa bỏ emoji `⚡` trên các nút bấm "Đồng bộ từ Pancake ngay", "Đồng bộ từ Pancake", "Bắn Thử Webhook Realtime", "Bắn Test Event".
+    2. Xóa bỏ emoji `🔍` trên các nút "Kiểm Tra Kết Nối", "Kiểm Tra Token".
+    3. Xóa bỏ emoji `🔑` và `⚙️` trên các tiêu đề nhãn form và thanh mở rộng details.
+    4. Giữ nguyên duy nhất 1 Lucide Icon chuẩn hóa giao diện hệ thống cho từng nút hành động.
+- **Trạng thái:** Đã xử lý xong, biên dịch build và kiểm tra linter thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)
