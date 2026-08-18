@@ -64,19 +64,39 @@ export interface LeadRecord {
 }
 
 /**
- * Trích xuất số điện thoại Việt Nam từ nội dung tin nhắn
+ * Trích xuất số điện thoại Việt Nam từ nội dung tin nhắn (hỗ trợ định dạng có dấu cách, chấm, gạch ngang)
  */
 export function extractVietnamesePhone(text: string): string | null {
   if (!text) return null;
-  // Khớp số điện thoại 10 số (03x, 05x, 07x, 08x, 09x, hoặc +84 / 84)
-  const regex = /(?:(?:\+84|84|0)[3|5|7|8|9])[0-9]{8}\b/g;
-  const matches = text.match(regex);
+  const str = String(text);
+  
+  // 1. Tìm pattern số điện thoại Việt Nam có thể chứa khoảng trắng, dấu chấm, dấu gạch ngang
+  const regex = /(?:(?:\+84|84|0)[\s\.\-]?[35789])(?:[\s\.\-]?[0-9]){8}\b/g;
+  const matches = str.match(regex);
   if (matches && matches.length > 0) {
-    let raw = matches[0].replace(/\s|\.|\-/g, '');
+    for (const match of matches) {
+      let raw = match.replace(/[\s\.\-\(\)_]/g, '');
+      if (raw.startsWith('+84')) raw = '0' + raw.slice(3);
+      else if (raw.startsWith('84') && raw.length === 11) raw = '0' + raw.slice(2);
+      
+      if (/^0[35789][0-9]{8}$/.test(raw)) {
+        return raw;
+      }
+    }
+  }
+
+  // 2. Thử quét chuỗi số liên tiếp 10 số bắt đầu bằng 03, 05, 07, 08, 09
+  const cleanDigitsOnly = str.replace(/[^0-9+]/g, '');
+  const digitMatches = cleanDigitsOnly.match(/(?:(?:\+84|84|0)[35789][0-9]{8})/g);
+  if (digitMatches && digitMatches.length > 0) {
+    let raw = digitMatches[0];
     if (raw.startsWith('+84')) raw = '0' + raw.slice(3);
     else if (raw.startsWith('84') && raw.length === 11) raw = '0' + raw.slice(2);
-    return raw;
+    if (/^0[35789][0-9]{8}$/.test(raw)) {
+      return raw;
+    }
   }
+
   return null;
 }
 

@@ -76,7 +76,7 @@ const navigation = [
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting'] },
   { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
-  { name: 'Meta Ads & CAPI', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing', 'sale_leader'] },
+  { name: 'Meta Ads & Leads', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
 

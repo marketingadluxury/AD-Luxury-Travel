@@ -1,10 +1,18 @@
 import app from './app.js';
 import path from 'path';
 import express from 'express';
+import { startPancakeAutoSyncWorker } from './server/services/pancakeService.js';
 
 const PORT = 3000;
 
 async function startServer() {
+  // Tạm thời dừng bộ tự động quét ngầm Pancake (Polling) theo yêu cầu
+  // try {
+  //   startPancakeAutoSyncWorker(30000);
+  // } catch (e) {
+  //   console.warn('[Server] Không thể khởi động worker Pancake:', e);
+  // }
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

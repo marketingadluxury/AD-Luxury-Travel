@@ -638,6 +638,28 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   3. **Cập nhật Form Đợt Thanh Toán (`src/components/TourCostsManagement.tsx`):** Chuẩn hóa tất cả các ô trong form "Thêm đợt thanh toán mới" (Số tiền, Phương thức, Ngày thanh toán, Ghi chú, Ngân hàng, STK, Chủ TK) đồng bộ kích thước `h-9 px-2.5 py-1.5 text-xs rounded-lg border-slate-300 focus:ring-2 focus:ring-blue-500/20`.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
 
+### 1.69 Triển Khai Kết Nối Webhook Facebook Messenger Realtime (Phương Án 1)
+- **Mô tả yêu cầu / Lỗi:**
+  - Khách hàng mong muốn chuyển từ cơ chế quét ngầm Polling sang nhận dữ liệu số điện thoại và tin nhắn theo thời gian thực 100% (Realtime &lt; 0.5s) trực tiếp từ Meta Messenger khi khách nhắn tin trên Fanpage.
+- **Giải pháp:**
+  1. **Cơ sở hạ tầng Webhook:** Cấu hình các endpoint tiếp nhận `/api/meta-webhook`, `/api/meta/webhook` sẵn sàng xử lý yêu cầu xác thực `hub.verify_token` (`adluxury_tour_crm_meta_webhook_token`) và sự kiện sự cố tin nhắn mới từ Meta Graph API.
+  2. **Trích xuất SĐT & Bắn Realtime:** Khi khách nhắn tin có chứa số điện thoại trên Messenger, hệ thống tự động bóc tách SĐT, tạo bản ghi Lead trong Supabase, đồng thời đẩy sự kiện CAPI (Phone Lead) và phát tín hiệu **Supabase Realtime** tức thì về màn hình người dùng.
+  3. **Thêm Endpoint & UI Thử Nghiệm Giả Lập:** Tạo API `/api/meta-webhook/simulate` và bổ sung khung cấu hình *Cấu Hình Webhook Facebook Messenger (Realtime 100% - Phương Án 1)* kèm nút **"⚡ Bắn Thử Webhook Realtime"** tại trang *Đo lường & Đồng bộ Meta Ads*, cho phép người dùng chạy thử nghiệm và kiểm tra tốc độ nhảy số điện thoại tức thì trên giao diện.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter & biên dịch thành công 100%.
+
+### 1.70 Dọn Dẹp UI Tab Khách Hàng, Chuyển Báo Cáo Sang Tab Meta Ads & Phân Quyền Truy Cập
+- **Mô tả yêu cầu / Lỗi:**
+  1. Nút bấm và nhãn Tab tại Khách Hàng Tiềm Năng hiển thị trùng lặp cả Icon Lucide lẫn Emoji (ví dụ: `📈 📊 Báo Cáo...`, `🔄 ⚡ Đồng bộ...`).
+  2. Tab Khách Hàng Tiềm Năng hiển thị cả Báo Cáo Quảng Cáo làm rườm rà giao diện. Khách hàng yêu cầu chuyển toàn bộ Báo cáo sang duy nhất tab *Meta Ads & Leads*, Tab *Khách hàng* chỉ hiển thị trực tiếp Danh sách Lead.
+  3. Tạm thời tắt tiến trình Polling ngầm Pancake 30s.
+  4. Phân quyền tab *Meta Ads & Leads* (`/meta-ads`): Chỉ mở cho Quản trị viên (`admin`), BOD (`bod`), Trưởng phòng Marketing (`marketing_leader`) và Nhân viên Marketing (`marketing`).
+- **Giải pháp:**
+  1. **Tối ưu UI PotentialLeadsTab:** Loại bỏ sạch toàn bộ emoji trùng lặp trên các nút bấm ("Đồng bộ Pancake", "Giả lập Tin nhắn / Lead Ads"), chuẩn hóa dùng duy nhất Lucide Icon chuẩn UI hệ thống.
+  2. **Gỡ bỏ View Switcher Báo cáo:** Loại bỏ state `viewMode` và component `MetaAdsPerformanceDashboard` khỏi `PotentialLeadsTab.tsx`. Tab Khách Hàng Tiềm Năng giờ đây hiển thị trực tiếp Danh sách Lead chuyên nghiệp, tập trung 100% vào danh sách khách.
+  3. **Tắt Polling ngầm Pancake:** Tắt tiến trình chạy ngầm `startPancakeAutoSyncWorker` trong `server.ts` và `pancakeService.ts`. Giữ nguyên nút Đồng bộ Pancake thủ công và tiếp nhận Webhook Realtime.
+  4. **Phân quyền Tab Meta Ads:** Cập nhật `roleAccess` của `/meta-ads` trong `Layout.tsx` thành `['admin', 'bod', 'marketing_leader', 'marketing']`. Ẩn tab và chặn truy cập đối với các vai trò khác (Sale, Leader, Kế toán, Visa, HDV...).
+- **Trạng thái:** Đã hoàn thành, kiểm tra build thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

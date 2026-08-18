@@ -124,6 +124,60 @@ router.post(['/api/meta-messenger/webhook', '/api/meta/webhook'], async (req, re
 });
 
 /**
+ * 2.1 Bắn thử nghiệm giả lập sự kiện Webhook từ Meta (Dành cho kiểm tra Realtime)
+ */
+router.post(['/api/meta-webhook/simulate', '/api/meta/webhook/simulate', '/api/meta-messenger/webhook/simulate'], async (req, res) => {
+  try {
+    const { 
+      customer_name = 'Khách Thử Nghiệm Meta Webhook', 
+      customer_phone = '0987654321', 
+      message_text = 'Chào công ty AD Luxury, tư vấn giúp mình Tour du lịch giá tốt nhé! SĐT của mình: 0987654321',
+      page_id = '100234567890123'
+    } = req.body;
+
+    const fakeSenderId = `test_psid_${Date.now()}`;
+    
+    // Gửi sự kiện giả lập qua hàm xử lý incoming
+    const incoming: IncomingMessengerMessage = {
+      senderId: fakeSenderId,
+      recipientId: page_id,
+      timestamp: Date.now(),
+      messageId: `mid_sim_${Date.now()}`,
+      text: message_text || `Chào shop, số của tôi là ${customer_phone}`
+    };
+
+    // Tự động nhận diện và lưu
+    const leadRecord: LeadRecord = {
+      customer_name: customer_name,
+      customer_phone: customer_phone || extractVietnamesePhone(message_text),
+      source_channel: 'facebook_messenger',
+      page_id: page_id,
+      psid: fakeSenderId,
+      utm_source: 'facebook_messenger_webhook',
+      message_text: message_text,
+      status: 'lead_captured',
+      last_message_at: new Date().toISOString()
+    };
+
+    const saveResult = await saveLeadToDatabase(leadRecord);
+
+    res.json({
+      success: true,
+      message: '✅ Đã giả lập gửi Webhook Meta thành công! Dữ liệu đã được lưu và bắn lên Realtime.',
+      data: {
+        lead_id: saveResult.leadId,
+        customer_name,
+        customer_phone,
+        message_text
+      }
+    });
+  } catch (error: any) {
+    console.error('[Meta Webhook Simulation] Lỗi:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 3. Lấy danh sách Fanpage đã kết nối
  */
 router.get('/api/meta-messenger/pages', async (req, res) => {

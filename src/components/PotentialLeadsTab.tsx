@@ -32,9 +32,9 @@ import {
 import toast from 'react-hot-toast';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { MetaLead, Tour } from '@/types';
-import { fetchMetaLeads, updateMetaLead, deleteMetaLead } from '@/lib/metaCapiService';
-import { MetaAdsPerformanceDashboard } from './MetaAdsPerformanceDashboard';
+import { fetchMetaLeads, updateMetaLead, deleteMetaLead, syncPancakeLeads } from '@/lib/metaCapiService';
 import { format } from 'date-fns';
 
 interface PotentialLeadsTabProps {
@@ -47,6 +47,7 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
 
   const [leads, setLeads] = useState<MetaLead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncingPancake, setIsSyncingPancake] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLead, setSelectedLead] = useState<MetaLead | null>(null);
@@ -55,7 +56,6 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   const [editStatus, setEditStatus] = useState('lead_captured');
   const [editAssignedTo, setEditAssignedTo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
 
   // Simulation State
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
@@ -69,8 +69,10 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   const [isSimulating, setIsSimulating] = useState(false);
 
   // Load leads
-  const loadLeads = async () => {
-    setIsLoading(true);
+  const loadLeads = async (isSilent: boolean = false) => {
+    if (!isSilent) {
+      setIsLoading(true);
+    }
     try {
       const data = await fetchMetaLeads({
         search: searchTerm || undefined,
@@ -79,14 +81,35 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
       setLeads(data);
     } catch (err) {
       console.error('Lỗi khi tải danh sách leads:', err);
-      toast.error('Không thể tải danh sách khách hàng tiềm năng');
+      if (!isSilent) {
+        toast.error('Không thể tải danh sách khách hàng tiềm năng');
+      }
     } finally {
-      setIsLoading(false);
+      if (!isSilent) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     loadLeads();
+
+    let debounceTimer: any = null;
+    // Lắng nghe Realtime trên bảng leads để cập nhật ngay khi có khách hàng hoặc SĐT mới (cập nhật mượt mà, không giật màn hình)
+    const leadsChannel = supabase
+      .channel('potential_leads_realtime_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          loadLeads(true); // Cập nhật ngầm êm ái, không bật loading spinner gây giật nháy
+        }, 1500);
+      })
+      .subscribe();
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      supabase.removeChannel(leadsChannel);
+    };
   }, [statusFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -149,6 +172,24 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
       }
     } catch (err: any) {
       toast.error(err.message || 'Lỗi khi xóa Lead');
+    }
+  };
+
+  // Đồng bộ khách hàng tiềm năng từ Pancake
+  const handleSyncPancake = async () => {
+    setIsSyncingPancake(true);
+    try {
+      const res = await syncPancakeLeads();
+      if (res.success) {
+        toast.success(`⚡ Đồng bộ thành công! Quét ${res.conversations_checked || 0} hội thoại & khách hàng, lưu ${res.leads_synced || 0} khách (${res.phones_found || 0} SĐT).`);
+        loadLeads();
+      } else {
+        toast.error(res.error || 'Lỗi khi đồng bộ dữ liệu Pancake');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi khi đồng bộ Pancake');
+    } finally {
+      setIsSyncingPancake(false);
     }
   };
 
@@ -285,64 +326,50 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
-      {/* Tab Switcher: Báo Cáo Hiệu Suất Recharts vs Danh Sách Khách Hàng */}
+      {/* Thanh Header Quản lý Khách Hàng Tiềm Năng */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setViewMode('dashboard')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              viewMode === 'dashboard'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>📊 Báo Cáo & Hiệu Suất Quảng Cáo</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              viewMode === 'list'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>📋 Danh Sách Khách Hàng ({leads.length})</span>
-          </button>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              Danh Sách Khách Hàng Tiềm Năng (Leads Meta)
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
+                {leads.length} khách
+              </span>
+            </h3>
+            <p className="text-[11px] text-slate-500 font-medium">
+              Quản lý danh sách khách hàng tự động thu thập từ Facebook Messenger &amp; Lead Form Ads
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={handleSyncPancake}
+            disabled={isSyncingPancake}
+            className="h-9 px-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-50"
+            title="Đồng bộ hội thoại và SĐT từ Pancake Public API"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingPancake ? 'animate-spin' : ''}`} />
+            <span>{isSyncingPancake ? 'Đang đồng bộ...' : 'Đồng bộ Pancake'}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsSimModalOpen(true)}
-            className="h-9 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             title="Mở công cụ giả lập test Webhook & Lead Ads"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <Sparkles className="w-3.5 h-3.5 text-blue-100" />
             <span>Giả lập Tin nhắn / Lead Ads</span>
           </button>
         </div>
       </div>
 
-      {/* Hiển thị Dashboard nếu ở chế độ dashboard */}
-      {viewMode === 'dashboard' && (
-        <MetaAdsPerformanceDashboard
-          leads={leads}
-          orders={orders}
-          conversionLogs={[]}
-          onRefresh={loadLeads}
-          isLoading={isLoading}
-        />
-      )}
-
-      {/* Danh Sách Khách Hàng Tiềm Năng & Bộ Lọc */}
-      {viewMode === 'list' && (
-        <>
-          {/* 4 Thẻ KPI Chỉ Số Nổi Bật */}
+      {/* 4 Thẻ KPI Chỉ Số Nổi Bật */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
               <div className="flex items-center justify-between">
@@ -435,7 +462,7 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
 
               <button
                 type="button"
-                onClick={loadLeads}
+                onClick={() => loadLeads()}
                 disabled={isLoading}
                 className="h-10 w-10 shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 transition-colors cursor-pointer"
                 title="Làm mới danh sách"
@@ -610,8 +637,6 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
               </div>
             )}
           </div>
-        </>
-      )}
 
       {/* Modal Chỉnh Sửa Ghi Chú & Trạng Thái Lead */}
       {isEditingModalOpen && selectedLead && (

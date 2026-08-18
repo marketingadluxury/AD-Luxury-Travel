@@ -1,5 +1,6 @@
 import { MetaConversionLog, MetaTrackingType, MetaEventName } from '@/types';
 import { safeFetchApi } from './utils';
+import { supabase } from './supabase';
 
 export interface TriggerMetaEventParams {
   event_name: MetaEventName | string;
@@ -70,14 +71,30 @@ export async function triggerMetaCapiEvent(params: TriggerMetaEventParams): Prom
 }
 
 /**
- * Lấy cấu hình Meta CAPI từ backend
+ * Lấy cấu hình Meta CAPI từ backend hoặc trực tiếp từ Supabase
  */
 export async function fetchMetaCapiConfig(): Promise<any> {
   try {
     const res = await safeFetchApi('/api/meta-capi/config', { method: 'GET' });
     return res.data;
   } catch (err) {
-    console.warn('[Client Meta CAPI] Lỗi khi lấy config:', err);
+    console.warn('[Client Meta CAPI] Không thể gọi API, thử lấy trực tiếp từ Supabase:', err);
+    try {
+      const { data } = await supabase
+        .from('system_integrations')
+        .select('*')
+        .eq('integration_type', 'meta_capi')
+        .maybeSingle();
+      if (data) {
+        return {
+          pixel_id: data.config?.pixel_id || '',
+          access_token_masked: data.config?.access_token ? '******' : '',
+          has_access_token: Boolean(data.config?.access_token),
+          test_event_code: data.config?.test_event_code || '',
+          is_enabled: data.is_active
+        };
+      }
+    } catch (dbErr) {}
     return null;
   }
 }
@@ -107,7 +124,19 @@ export async function fetchMetaConversionLogs(limit: number = 100, eventName?: s
     const res = await safeFetchApi(url, { method: 'GET' });
     return res.data || [];
   } catch (err) {
-    console.warn('[Client Meta CAPI] Lỗi khi lấy logs:', err);
+    console.warn('[Client Meta CAPI] Không thể gọi API logs, thử lấy trực tiếp từ Supabase:', err);
+    try {
+      let query = supabase
+        .from('meta_conversion_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (eventName && eventName !== 'all') {
+        query = query.eq('event_name', eventName);
+      }
+      const { data } = await query;
+      return (data as MetaConversionLog[]) || [];
+    } catch (dbErr) {}
     return [];
   }
 }
@@ -128,7 +157,7 @@ export async function testMetaConnection(params?: {
 }
 
 /**
- * Lấy danh sách khách hàng tiềm năng (Leads) từ Meta Messenger Webhook
+ * Lấy danh sách khách hàng tiềm năng (Leads) từ Meta Messenger Webhook hoặc Supabase
  */
 export async function fetchMetaLeads(params?: {
   search?: string;
@@ -144,7 +173,25 @@ export async function fetchMetaLeads(params?: {
     const res = await safeFetchApi(`/api/meta-leads?${query.toString()}`, { method: 'GET' });
     return res.data || [];
   } catch (err) {
-    console.warn('[Client Meta CAPI] Lỗi khi lấy danh sách Leads:', err);
+    console.warn('[Client Meta CAPI] Không thể gọi API leads, thử lấy trực tiếp từ Supabase:', err);
+    try {
+      let q = supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (params?.status && params.status !== 'all') {
+        q = q.eq('status', params.status);
+      }
+      if (params?.search) {
+        q = q.or(`customer_name.ilike.%${params.search}%,customer_phone.ilike.%${params.search}%,message_text.ilike.%${params.search}%`);
+      }
+      if (params?.hasPhoneOnly) {
+        q = q.not('customer_phone', 'is', null);
+      }
+      const { data } = await q;
+      return data || [];
+    } catch (dbErr) {}
     return [];
   }
 }
@@ -160,19 +207,128 @@ export async function updateMetaLead(leadId: string, data: {
   notes?: string;
   assigned_to?: string;
 }): Promise<any> {
-  return await safeFetchApi(`/api/meta-leads/${leadId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
+  try {
+    return await safeFetchApi(`/api/meta-leads/${leadId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  } catch (err) {
+    const { error } = await supabase.from('leads').update(data).eq('id', leadId);
+    if (error) throw error;
+    return { success: true };
+  }
 }
 
 /**
  * Xóa Lead khỏi danh sách
  */
 export async function deleteMetaLead(leadId: string): Promise<any> {
-  return await safeFetchApi(`/api/meta-leads/${leadId}`, {
-    method: 'DELETE'
+  try {
+    return await safeFetchApi(`/api/meta-leads/${leadId}`, {
+      method: 'DELETE'
+    });
+  } catch (err) {
+    const { error } = await supabase.from('leads').delete().eq('id', leadId);
+    if (error) throw error;
+    return { success: true };
+  }
+}
+
+/**
+ * Lấy cấu hình Pancake Public API
+ */
+export async function fetchPancakeConfig(): Promise<any> {
+  try {
+    const res = await safeFetchApi('/api/pancake/config', { method: 'GET' });
+    return res.data;
+  } catch (err) {
+    console.warn('[Pancake Service] Không thể gọi API pancake config, thử lấy trực tiếp từ Supabase:', err);
+    try {
+      const { data } = await supabase
+        .from('system_integrations')
+        .select('*')
+        .eq('integration_type', 'pancake')
+        .maybeSingle();
+      if (data) {
+        return {
+          api_key_masked: data.config?.api_key ? '******' : '',
+          has_api_key: Boolean(data.config?.api_key),
+          is_active: data.is_active,
+          auto_sync: data.config?.auto_sync,
+          last_synced_at: data.last_synced_at
+        };
+      }
+    } catch (dbErr) {}
+    return null;
+  }
+}
+
+/**
+ * Lưu cấu hình Pancake Public API
+ */
+export async function savePancakeConfig(config: {
+  api_key: string;
+  is_active: boolean;
+  auto_sync?: boolean;
+}): Promise<any> {
+  return await safeFetchApi('/api/pancake/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
   });
 }
+
+/**
+ * Kiểm tra kết nối với Pancake Public API
+ */
+export async function testPancakeConnection(apiKey?: string): Promise<{
+  success: boolean;
+  pages?: Array<{ id: string; name: string; username?: string }>;
+  error?: string;
+}> {
+  return await safeFetchApi('/api/pancake/test-connection', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey })
+  });
+}
+
+/**
+ * Đồng bộ hội thoại & SĐT từ Pancake về Tour CRM
+ */
+export async function syncPancakeLeads(): Promise<{
+  success: boolean;
+  leads_synced?: number;
+  conversations_checked?: number;
+  phones_found?: number;
+  error?: string;
+}> {
+  return await safeFetchApi('/api/pancake/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+/**
+ * Bắn thử nghiệm giả lập sự kiện Meta Webhook (Realtime simulation)
+ */
+export async function simulateMetaWebhook(data?: {
+  customer_name?: string;
+  customer_phone?: string;
+  message_text?: string;
+  page_id?: string;
+}): Promise<{
+  success: boolean;
+  message?: string;
+  data?: any;
+  error?: string;
+}> {
+  return await safeFetchApi('/api/meta/webhook/simulate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data || {})
+  });
+}
+
 

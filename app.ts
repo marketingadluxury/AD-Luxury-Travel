@@ -10,6 +10,7 @@ import aiRoutes from './server/routes/aiRoutes.js';
 import googleChatRoutes from './server/routes/googleChatRoutes.js';
 import metaCapiRoutes from './server/routes/metaCapiRoutes.js';
 import metaMessengerRoutes from './server/routes/metaMessengerRoutes.js';
+import pancakeRoutes from './server/routes/pancakeRoutes.js';
 import { errorHandler } from './server/middleware/errorHandler.js';
 
 const app = express();
@@ -36,6 +37,7 @@ app.use('/', aiRoutes);
 app.use('/', googleChatRoutes);
 app.use('/', metaCapiRoutes);
 app.use('/', metaMessengerRoutes);
+app.use('/', pancakeRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

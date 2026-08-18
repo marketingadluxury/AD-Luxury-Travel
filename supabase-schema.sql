@@ -910,7 +910,7 @@ DROP POLICY IF EXISTS "Allow access to meta_chat_messages" ON meta_chat_messages
 CREATE POLICY "Allow access to meta_chat_messages" ON meta_chat_messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================
--- 4. Bảng Khách hàng tiềm năng (leads) từ Meta Messenger & Lead Forms
+-- 4. Bảng Khách hàng tiềm năng (leads) từ Pancake & Meta Messenger & Lead Forms
 -- ============================================================
 CREATE TABLE IF NOT EXISTS leads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -918,7 +918,7 @@ CREATE TABLE IF NOT EXISTS leads (
   customer_phone TEXT,
   customer_email TEXT,
   customer_avatar TEXT,
-  source_channel TEXT DEFAULT 'facebook_messenger', -- 'facebook_messenger' | 'meta_lead_form' | 'website' | 'manual'
+  source_channel TEXT DEFAULT 'facebook_messenger', -- 'facebook_messenger' | 'pancake_messenger' | 'meta_lead_form' | 'manual'
   page_id TEXT,
   psid TEXT,
   ad_id TEXT,
@@ -949,17 +949,56 @@ ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow access to leads" ON leads;
 CREATE POLICY "Allow access to leads" ON leads FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 5. Kích hoạt Realtime cho Meta Messenger & Leads
+-- ============================================================
+-- 5. Bảng Cấu hình Tích hợp bên thứ ba (system_integrations - Pancake, POS Cake, Meta)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS system_integrations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  integration_type TEXT NOT NULL UNIQUE,
+  config JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  last_synced_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+ALTER TABLE system_integrations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to system_integrations" ON system_integrations;
+CREATE POLICY "Allow access to system_integrations" ON system_integrations FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 6. Kích hoạt Realtime an toàn (bỏ qua nếu bảng đã tồn tại trong publication)
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE facebook_pages;
-    ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_conversations;
-    ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_messages;
-    ALTER PUBLICATION supabase_realtime ADD TABLE leads;
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE facebook_pages;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_conversations;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_messages;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE leads;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE system_integrations;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE meta_conversion_logs;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
   END IF;
-EXCEPTION
-  WHEN OTHERS THEN NULL;
 END $$;
 
 
