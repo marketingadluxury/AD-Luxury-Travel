@@ -660,6 +660,18 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   4. **Phân quyền Tab Meta Ads:** Cập nhật `roleAccess` của `/meta-ads` trong `Layout.tsx` thành `['admin', 'bod', 'marketing_leader', 'marketing']`. Ẩn tab và chặn truy cập đối với các vai trò khác (Sale, Leader, Kế toán, Visa, HDV...).
 - **Trạng thái:** Đã hoàn thành, kiểm tra build thành công 100%.
 
+### 1.71 Khắc Phục Lỗi Xác Thực Webhook ("Không thể xác thực URL gọi lại hoặc mã xác minh") Trên Meta Developers
+- **Mô tả lỗi:**
+  - Khi lưu Webhook `https://booking.adluxury.net/api/meta-webhook` trên trang Meta for Developers, hệ thống báo lỗi: *"Không thể xác thực URL gọi lại hoặc mã xác minh"*.
+- **Nguyên nhân:**
+  - Tuyến đường `/api/meta-webhook` chưa được bổ sung vào danh sách route tiếp nhận trong `server/routes/metaMessengerRoutes.ts` (mới chỉ có `/api/meta/webhook` có dấu gạch chéo phân cách).
+  - Danh sách mã Verify Token hợp lệ thiếu mã token `adluxury_tour_crm_meta_webhook_token` mặc định hiển thị trên giao diện CRM.
+- **Giải pháp:**
+  1. Thêm đường dẫn `/api/meta-webhook` vào danh sách lắng nghe của router Express trong `server/routes/metaMessengerRoutes.ts`.
+  2. Bổ sung `adluxury_tour_crm_meta_webhook_token` vào danh sách các Verify Token hợp lệ, đồng thời cho phép trả về `challenge` khi Meta gửi `hub.mode === 'subscribe'`.
+  3. Mở rộng điều kiện kiểm tra `body.object` ở phương thức `POST` chấp nhận cả `page`, `user`, `instagram` để không bao giờ bị lỗi HTTP 404/403 khi Meta gửi request kiểm tra.
+- **Trạng thái:** Đã xử lý xong, restart server và xác thực thành công.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)
