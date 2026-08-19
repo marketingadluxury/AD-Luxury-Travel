@@ -42,6 +42,7 @@ export interface LeadRecord {
   customer_phone?: string | null;
   customer_email?: string | null;
   customer_avatar?: string | null;
+  gender?: string | null;
   source_channel?: string;
   page_id?: string | null;
   psid?: string | null;
@@ -233,6 +234,7 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
     customer_phone: leadData.customer_phone || null,
     customer_email: leadData.customer_email || null,
     customer_avatar: leadData.customer_avatar || null,
+    gender: leadData.gender || null,
     source_channel: leadData.source_channel || 'facebook_messenger',
     page_id: leadData.page_id || null,
     psid: leadData.psid || null,
@@ -276,12 +278,29 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
       existingLead = data;
     }
 
-    if (!existingLead && leadData.psid && leadData.page_id) {
+    if (!existingLead && leadData.psid) {
+      // Ưu tiên khớp theo psid (Facebook PSID là định danh duy nhất theo Page)
+      let q = supabase
+        .from('leads')
+        .select('*')
+        .eq('psid', leadData.psid);
+      if (leadData.page_id) {
+        q = q.eq('page_id', leadData.page_id);
+      }
+      const { data } = await q
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      existingLead = data;
+    }
+
+    // Nếu vẫn chưa tìm thấy và có tên khách hàng, tìm lead có cùng tên mà chưa có SĐT
+    if (!existingLead && leadData.customer_name && leadData.customer_name !== 'Khách hàng Pancake' && leadData.customer_name !== 'Khách hàng tiềm năng') {
       const { data } = await supabase
         .from('leads')
         .select('*')
-        .eq('page_id', leadData.page_id)
-        .eq('psid', leadData.psid)
+        .eq('customer_name', leadData.customer_name)
+        .is('customer_phone', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -295,14 +314,17 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
         updated_at: now,
         last_message_at: now
       };
-      if (payload.customer_phone && !existingLead.customer_phone) updateData.customer_phone = payload.customer_phone;
-      if (payload.customer_email && !existingLead.customer_email) updateData.customer_email = payload.customer_email;
+      if (payload.customer_phone) updateData.customer_phone = payload.customer_phone;
+      if (payload.customer_email) updateData.customer_email = payload.customer_email;
       if (payload.message_text) updateData.message_text = payload.message_text;
-      if (payload.customer_avatar && !existingLead.customer_avatar) updateData.customer_avatar = payload.customer_avatar;
-      if (payload.ad_id && !existingLead.ad_id) updateData.ad_id = payload.ad_id;
-      if (payload.utm_campaign && !existingLead.utm_campaign) updateData.utm_campaign = payload.utm_campaign;
+      if (payload.customer_avatar) updateData.customer_avatar = payload.customer_avatar;
+      if (payload.gender) updateData.gender = payload.gender;
+      if (payload.ad_id) updateData.ad_id = payload.ad_id;
+      if (payload.utm_campaign) updateData.utm_campaign = payload.utm_campaign;
+      if (payload.source_channel) updateData.source_channel = payload.source_channel;
+      if (payload.notes) updateData.notes = payload.notes;
       if (payload.form_data && Object.keys(payload.form_data).length > 0) updateData.form_data = payload.form_data;
-      if (payload.tour_interest && !existingLead.tour_interest) updateData.tour_interest = payload.tour_interest;
+      if (payload.tour_interest) updateData.tour_interest = payload.tour_interest;
 
       const { data: updated, error: updErr } = await supabase
         .from('leads')

@@ -935,13 +935,13 @@ export default function MetaAdsAnalytics() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    Kết Nối Pancake Public API & Chat Messenger
+                    Kết Nối Pancake &amp; Botcake Public API
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                      Pancake v1
+                      Pancake / Botcake
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Tự động đồng bộ các hội thoại khách hàng trên Pancake, trích xuất Số Điện Thoại & Lead gửi về CRM và bắn CAPI.
+                    Tự động đồng bộ các hội thoại và khách hàng trên Pancake &amp; Botcake, trích xuất Số Điện Thoại &amp; Lead gửi về CRM và kích hoạt Meta CAPI.
                   </p>
                 </div>
               </div>
@@ -954,7 +954,7 @@ export default function MetaAdsAnalytics() {
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncingPancake ? 'animate-spin' : ''}`} />
-                  {isSyncingPancake ? 'Đang đồng bộ...' : 'Đồng bộ từ Pancake'}
+                  {isSyncingPancake ? 'Đang đồng bộ...' : 'Đồng bộ từ Pancake / Botcake'}
                 </button>
               </div>
             </div>
@@ -962,12 +962,12 @@ export default function MetaAdsAnalytics() {
             <form onSubmit={handleSavePancakeConfig} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Pancake Public API Access Token <span className="text-rose-500">*</span>
+                  Pancake / Botcake Public API Key <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <input
                     type={showPancakeKey ? 'text' : 'password'}
-                    placeholder="Dán mã Token từ Pancake (Bắt đầu bằng eyJhbGciOi...)"
+                    placeholder="Dán mã API Key từ Botcake hoặc Pancake (Bắt đầu bằng eyJhbGciOi...)"
                     value={pancakeApiKey}
                     onChange={(e) => setPancakeApiKey(e.target.value)}
                     className="w-full text-sm px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
@@ -984,14 +984,14 @@ export default function MetaAdsAnalytics() {
                 <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
                   <div className="font-bold text-slate-800 flex items-center gap-1.5">
                     <Info className="w-3.5 h-3.5 text-orange-600" />
-                    Hướng dẫn lấy Token trên Pancake (pages.fm):
+                    Hướng dẫn lấy API Key:
                   </div>
                   <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-500">
                     <li>
-                      <strong className="text-slate-700">Cách 1 (Quét tất cả Fanpage):</strong> Đăng nhập <em>pages.fm</em> &gt; Bấm vào <em>Ảnh đại diện tài khoản</em> (góc trên cùng bên phải) &gt; Chọn <strong>Cài đặt cá nhân</strong> &gt; Copy <strong>Mã truy cập API</strong>.
+                      <strong className="text-slate-700">Lấy từ Botcake (Khuyên dùng):</strong> Đăng nhập <em>botcake.io</em> &gt; Vào mục <strong>Cấu hình</strong> &gt; Chọn <strong>Tích hợp</strong> &gt; Tab <strong>API</strong> &gt; Bấm <strong>Sao chép</strong> mã Public API key.
                     </li>
                     <li>
-                      <strong className="text-slate-700">Cách 2 (Quét từng Fanpage):</strong> Mở Fanpage trên <em>pages.fm</em> &gt; Chọn <strong>Cài đặt</strong> (bánh răng) &gt; <strong>Công cụ</strong> &gt; Copy <strong>Page Access Token</strong>.
+                      <strong className="text-slate-700">Lấy từ Pancake (pages.fm):</strong> Đăng nhập <em>pages.fm</em> &gt; Bấm <em>Ảnh đại diện</em> &gt; Chọn <strong>Cài đặt cá nhân</strong> &gt; Copy <strong>Mã truy cập API</strong>.
                     </li>
                   </ul>
                 </div>

@@ -170,10 +170,11 @@ export async function fetchMetaLeads(params?: {
     if (params?.status && params.status !== 'all') query.append('status', params.status);
     if (params?.hasPhoneOnly) query.append('has_phone', 'true');
 
-    const res = await safeFetchApi(`/api/meta-leads?${query.toString()}`, { method: 'GET' });
+    const qs = query.toString();
+    const endpoint = qs ? `/api/meta-leads?${qs}` : '/api/meta-leads';
+    const res = await safeFetchApi(endpoint, { method: 'GET' });
     return res.data || [];
   } catch (err) {
-    console.warn('[Client Meta CAPI] Không thể gọi API leads, thử lấy trực tiếp từ Supabase:', err);
     try {
       let q = supabase
         .from('leads')
@@ -203,6 +204,8 @@ export async function updateMetaLead(leadId: string, data: {
   customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
+  customer_avatar?: string;
+  gender?: string;
   status?: string;
   notes?: string;
   assigned_to?: string;

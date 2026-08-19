@@ -918,6 +918,7 @@ CREATE TABLE IF NOT EXISTS leads (
   customer_phone TEXT,
   customer_email TEXT,
   customer_avatar TEXT,
+  gender TEXT, -- 'Nam' | 'Nữ' | 'Khác'
   source_channel TEXT DEFAULT 'facebook_messenger', -- 'facebook_messenger' | 'pancake_messenger' | 'meta_lead_form' | 'manual'
   page_id TEXT,
   psid TEXT,
@@ -938,6 +939,8 @@ CREATE TABLE IF NOT EXISTS leads (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
+
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS gender TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(customer_phone);
 CREATE INDEX IF NOT EXISTS idx_leads_psid ON leads(psid);
@@ -964,6 +967,11 @@ CREATE TABLE IF NOT EXISTS system_integrations (
 ALTER TABLE system_integrations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow access to system_integrations" ON system_integrations;
 CREATE POLICY "Allow access to system_integrations" ON system_integrations FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Bổ sung các cột phục vụ tích hợp Botcake / Meta Lead Ads
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meta_lead_id TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_status TEXT DEFAULT 'pending';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta_lead_id TEXT;
 
 -- 6. Kích hoạt Realtime an toàn (bỏ qua nếu bảng đã tồn tại trong publication)
 DO $$

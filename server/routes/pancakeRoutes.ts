@@ -10,20 +10,37 @@ import {
 const router = express.Router();
 
 /**
- * Endpoint xác thực Webhook Pancake (GET)
+ * Endpoint xác thực Webhook Pancake & Botcake (GET)
  */
-router.get('/api/pancake/webhook', (req, res) => {
+router.get(['/api/pancake/webhook', '/api/botcake/webhook'], (req, res) => {
   const challenge = req.query['hub.challenge'] || req.query['challenge'] || 'ok';
   res.status(200).send(challenge);
 });
 
 /**
- * Endpoint nhận dữ liệu Webhook Realtime từ Pancake (POST)
+ * Endpoint nhận dữ liệu Webhook Realtime từ Pancake & Botcake JSON API (POST)
  */
-router.post('/api/pancake/webhook', async (req, res) => {
+router.post(['/api/pancake/webhook', '/api/botcake/webhook'], async (req, res) => {
   try {
-    const payload = req.body;
-    console.log('[Pancake Webhook] Nhận dữ liệu sự kiện:', payload?.type || payload?.event || 'unknown');
+    let payload = req.body;
+    
+    // Nếu payload là dạng chuỗi thô (do header Content-Type chưa set application/json ở Botcake)
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch (jsonErr) {
+        try {
+          const params = new URLSearchParams(payload);
+          const obj: Record<string, any> = {};
+          for (const [key, value] of params.entries()) {
+            obj[key] = value;
+          }
+          if (Object.keys(obj).length > 0) payload = obj;
+        } catch (urlErr) {}
+      }
+    }
+
+    console.log('[Pancake/Botcake Webhook] Nhận payload:', JSON.stringify(payload).substring(0, 300));
     const result = await handleIncomingPancakeWebhook(payload);
     res.status(200).json(result);
   } catch (error: any) {

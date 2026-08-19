@@ -182,7 +182,7 @@ async function fetchPagesFromPancake(token: string): Promise<any[]> {
     // Silent fallback
   }
 
-  // 5. Thử endpoint POS Cake (Shops)
+  // 5. Thử endpoint POS Cake (Shops) & Botcake Public API
   try {
     const posUrl = `https://pos.pages.fm/api/v1/shops?api_key=${encodeURIComponent(cleanToken)}`;
     const posRes = await fetch(posUrl, { method: 'GET', headers });
@@ -196,6 +196,29 @@ async function fetchPagesFromPancake(token: string): Promise<any[]> {
           is_pos: true,
           page_access_token: cleanToken
         }));
+      }
+    }
+  } catch (e) {
+    // Silent fallback
+  }
+
+  // 5.1 Thử endpoint Botcake Public API (Customers / Subscribers)
+  try {
+    const botcakeUrls = [
+      `https://api.botcake.io/api/public_api/v1/customers?api_key=${encodeURIComponent(cleanToken)}&page_size=1`,
+      `https://botcake.io/api/public_api/v1/subscribers?api_key=${encodeURIComponent(cleanToken)}&page_size=1`,
+      `https://botcake.io/api/v1/customers?api_key=${encodeURIComponent(cleanToken)}&page_size=1`
+    ];
+
+    for (const bUrl of botcakeUrls) {
+      const bRes = await fetch(bUrl, { method: 'GET', headers });
+      if (bRes.ok) {
+        return [{
+          id: 'botcake_page',
+          name: 'Fanpage AD Luxury Travel (Botcake)',
+          is_botcake: true,
+          page_access_token: cleanToken
+        }];
       }
     }
   } catch (e) {
@@ -486,8 +509,14 @@ export async function syncPancakeConversations(): Promise<{
         } catch (e) {}
       }
 
-      // B. Thử thêm endpoint lấy khách hàng (Customers) từ Pancake
+      // B. Thử thêm endpoint lấy khách hàng (Customers) từ Botcake & Pancake theo chuẩn API Developers Botcake
       const customerEndpoints = [
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customers?access_token=${encodeURIComponent(token)}&page_size=100`,
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customers?api_key=${encodeURIComponent(token)}&page_size=100`,
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/subscribers?access_token=${encodeURIComponent(token)}&page_size=100`,
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/subscribers?api_key=${encodeURIComponent(token)}&page_size=100`,
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customer?access_token=${encodeURIComponent(token)}`,
+        `https://botcake.io/api/v1/pages/${pageId}/customers?access_token=${encodeURIComponent(token)}&page_size=100`,
         `https://pages.fm/api/public_api/v1/pages/${pageId}/customers?page_access_token=${encodeURIComponent(pageToken)}&page_size=100`,
         `https://pages.fm/api/public_api/v2/pages/${pageId}/customers?page_access_token=${encodeURIComponent(pageToken)}&page_size=100`,
         `https://pages.fm/api/v1/pages/${pageId}/customers?access_token=${encodeURIComponent(token)}&page_size=100`,
@@ -500,7 +529,7 @@ export async function syncPancakeConversations(): Promise<{
           const res = await fetch(custEndpoint, { headers });
           if (res.ok) {
             const data = await res.json() as any;
-            const list = data.customers || data.data || (Array.isArray(data) ? data : []);
+            const list = data.customers || data.data || data.subscribers || (Array.isArray(data) ? data : []);
             if (Array.isArray(list) && list.length > 0) {
               customersList = list;
               break;
@@ -634,13 +663,24 @@ export async function syncPancakeConversations(): Promise<{
         }
       }
 
-      // 4. Xử lý danh sách khách hàng (Customers) từ Pancake
+      // 4. Xử lý danh sách khách hàng (Customers) từ Pancake & Botcake
       for (const cust of customersList) {
-        const custName = cust.name || cust.full_name || 'Khách hàng Pancake';
-        const custPhone = extractVietnamesePhone(cust.phone || cust.mobile || cust.phone_number || (Array.isArray(cust.phone_numbers) ? cust.phone_numbers[0] : '')) || cust.phone || null;
-        const custEmail = cust.email || null;
+        const custName = cust.name || cust.full_name || `${cust.first_name || ''} ${cust.last_name || ''}`.trim() || 'Khách hàng Pancake';
+        const rawPhone = cust.phone || cust.mobile || cust.phone_number || cust.custom_fields?.phone || cust.custom_fields?.sdt || cust.variables?.phone || (Array.isArray(cust.phone_numbers) ? cust.phone_numbers[0] : '');
+        const custPhone = extractVietnamesePhone(rawPhone) || (rawPhone ? String(rawPhone).trim() : null);
+        const custEmail = cust.email || cust.custom_fields?.email || null;
         const custPsid = String(cust.id || cust.fb_id || cust.psid || '');
-        const custAvatar = cust.avatar_url || cust.avatar || null;
+        const custAvatar = cust.avatar_url || cust.avatar || cust.profile_pic || null;
+        
+        let custGender: string | null = null;
+        if (cust.gender) {
+          const g = String(cust.gender).toLowerCase();
+          if (g === 'male' || g === 'nam' || g === '1') custGender = 'Nam';
+          else if (g === 'female' || g === 'nu' || g === 'nữ' || g === '2') custGender = 'Nữ';
+        }
+
+        const adId = cust.ad_id || cust.adId || cust.custom_fields?.ad_id || null;
+        const campaign = cust.campaign || cust.campaign_name || cust.custom_fields?.campaign || null;
 
         if (custPhone) totalPhonesFound++;
 
@@ -649,13 +689,16 @@ export async function syncPancakeConversations(): Promise<{
           customer_phone: custPhone,
           customer_email: custEmail,
           customer_avatar: custAvatar,
-          source_channel: 'pancake_messenger',
+          gender: custGender,
+          ad_id: adId,
+          utm_campaign: campaign,
+          source_channel: adId ? `Ad ID: ${adId}` : 'pancake_messenger',
           page_id: pageId,
           psid: custPsid || null,
-          message_text: `Khách hàng từ danh sách Pancake (${pageName})`,
-          notes: `Khách hàng từ Pancake Customer Directory (Fanpage: ${pageName})`,
+          message_text: `Khách hàng từ danh mục Botcake/Pancake (${pageName})`,
+          notes: `Đồng bộ từ Botcake Customer API (Fanpage: ${pageName})`,
           status: 'lead_captured',
-          last_message_at: cust.updated_at || new Date().toISOString()
+          last_message_at: cust.updated_at || cust.inserted_at || new Date().toISOString()
         };
 
         const saveRes = await saveLeadToDatabase(leadRecord);
@@ -709,52 +752,117 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
   try {
     const supabase = getAdminSupabaseClient();
     
-    // 1. Phân tích các dạng event của Pancake
+    // 1. Phân tích các dạng event của Pancake / POS Cake
     const eventType = payload.type || payload.event || payload.action || 'message:created';
-    const pageId = String(payload.page_id || payload.pageId || payload.page?.id || '');
-    const pageName = payload.page_name || payload.page?.name || 'Fanpage AD Luxury';
+    const pageId = String(payload.page_id || payload.pageId || payload.page?.id || payload.shop_id || payload.shop?.id || '');
+    const pageName = payload.page_name || payload.page?.name || payload.shop?.name || 'Fanpage AD Luxury';
 
-    // Trích xuất khách hàng
-    const customer = payload.customer || payload.data?.customer || payload.conversation?.customer || {};
-    const customerName = customer.name || customer.full_name || payload.customer_name || 'Khách hàng Pancake';
+    // Trích xuất đơn hàng (nếu là webhook Order từ POS Cake)
+    const order = payload.order || payload.data?.order || (eventType.startsWith('order') ? payload : null);
+    const orderTotal = order ? (Number(order.total_price || order.total_amount || order.grand_total || order.subtotal || 0)) : 0;
+    const orderCode = order ? (order.code || order.order_id || order.id || '') : '';
+
+    // Trích xuất khách hàng & tên
+    const customer = payload.customer || payload.data?.customer || payload.conversation?.customer || order?.customer || order?.shipping_address || {};
+    let customerName = payload.customer_name || payload.name || payload.full_name || customer.name || customer.full_name || order?.customer_name;
+    if (!customerName && (payload.first_name || payload.last_name)) {
+      customerName = `${payload.first_name || ''} ${payload.last_name || ''}`.trim();
+    }
+    if (!customerName) customerName = 'Khách hàng Pancake';
+
     const psid = String(customer.id || customer.fb_id || payload.psid || payload.from?.id || '');
-    const avatar = customer.avatar_url || customer.avatar || null;
+    const avatar = payload.avatar || payload.customer_avatar || payload.profile_pic || payload.avatar_url || customer.avatar_url || customer.avatar || customer.profile_pic || null;
 
-    // Trích xuất tin nhắn
+    // Trích xuất giới tính (Nam / Nữ / khác)
+    let gender: string | null = null;
+    const rawGender = payload.gender || payload.customer_gender || payload.gioi_tinh || customer.gender || null;
+    if (rawGender) {
+      const g = String(rawGender).toLowerCase().trim();
+      if (g === 'male' || g === 'nam' || g === '1') gender = 'Nam';
+      else if (g === 'female' || g === 'nữ' || g === 'nu' || g === '2') gender = 'Nữ';
+      else gender = String(rawGender);
+    }
+
+    // Trích xuất tin nhắn hoặc mô tả đơn hàng
     const msgObj = payload.message || payload.data?.message || payload.conversation?.last_message || {};
-    const messageText = String(msgObj.message || msgObj.text || msgObj.content || payload.text || payload.message_text || '');
+    let messageText = String(msgObj.message || msgObj.text || msgObj.content || payload.text || payload.message_text || '');
+    if (!messageText && order) {
+      messageText = `Đơn hàng POS Cake #${orderCode}: Tổng tiền ${orderTotal.toLocaleString('vi-VN')} đ`;
+    }
 
-    // Trích xuất số điện thoại
+    // Trích xuất số điện thoại (từ tất cả biến thể và trường tùy chỉnh)
     let detectedPhone: string | null = null;
-    if (payload.phone_numbers && Array.isArray(payload.phone_numbers) && payload.phone_numbers.length > 0) {
+    const phoneCandidates = [
+      payload.phone,
+      payload.customer_phone,
+      payload.phone_number,
+      payload.mobile,
+      payload.tel,
+      payload.sdt,
+      payload.so_dien_thoai,
+      payload.custom_fields?.phone,
+      payload.custom_fields?.sdt,
+      payload.custom_fields?.phone_number,
+      payload.attributes?.phone,
+      payload.attributes?.phone_number,
+      order?.bill_phone_number,
+      order?.shipping_phone,
+      order?.phone_number,
+      customer.phone,
+      customer.mobile,
+      customer.phone_number
+    ];
+
+    for (const cand of phoneCandidates) {
+      if (cand) {
+        const extracted = extractVietnamesePhone(String(cand));
+        if (extracted) {
+          detectedPhone = extracted;
+          break;
+        } else if (String(cand).trim().length >= 9) {
+          detectedPhone = String(cand).trim();
+          break;
+        }
+      }
+    }
+
+    if (!detectedPhone && payload.phone_numbers && Array.isArray(payload.phone_numbers) && payload.phone_numbers.length > 0) {
       detectedPhone = extractVietnamesePhone(String(payload.phone_numbers[0])) || String(payload.phone_numbers[0]);
-    } else if (customer.phone || customer.mobile || customer.phone_number) {
-      const raw = customer.phone || customer.mobile || customer.phone_number;
-      detectedPhone = extractVietnamesePhone(String(raw)) || String(raw);
-    } else if (messageText) {
+    }
+
+    if (!detectedPhone && messageText) {
       detectedPhone = extractVietnamesePhone(messageText);
     }
 
-    const detectedEmail = extractEmail(messageText) || customer.email || null;
+    const detectedEmail = payload.email || payload.customer_email || payload.custom_fields?.email || extractEmail(messageText) || customer.email || order?.email || null;
+    const adId = payload.ad_id || payload.adId || payload.ad_name || order?.ad_id || null;
+    const campaignName = payload.utm_campaign || payload.campaign_id || payload.campaignId || payload.campaign_name || payload.campaign || null;
+    const createdAt = payload.created_at || payload.registered_at || payload.registration_date || payload.time || payload.timestamp || new Date().toISOString();
 
     // Lưu vào database CRM
+    const isOrderEvent = Boolean(order && (orderTotal > 0 || eventType.includes('order')));
     const leadRecord: LeadRecord = {
       customer_name: customerName,
       customer_phone: detectedPhone || null,
       customer_email: detectedEmail || null,
       customer_avatar: avatar,
-      source_channel: 'pancake_messenger',
+      gender: gender,
+      source_channel: payload.source || payload.source_channel || (adId ? `Ad ID: ${adId}` : (isOrderEvent ? 'pos_pancake_order' : 'pancake_messenger')),
       page_id: pageId || null,
       psid: psid || null,
-      message_text: messageText || 'Tin nhắn Realtime từ Pancake',
-      notes: `Nhận Realtime qua Pancake Webhook (${eventType})`,
-      status: 'lead_captured',
-      last_message_at: new Date().toISOString()
+      ad_id: adId || null,
+      utm_source: payload.utm_source || 'botcake',
+      utm_campaign: campaignName,
+      message_text: messageText || (isOrderEvent ? `Đơn hàng POS Cake #${orderCode}` : 'Khách để lại SĐT qua kịch bản Botcake / Pancake'),
+      notes: isOrderEvent ? `Đơn hàng Realtime từ POS Cake (#${orderCode}, ${orderTotal.toLocaleString('vi-VN')} đ)` : `Nhận Realtime qua Pancake/Botcake Webhook (${eventType})`,
+      status: isOrderEvent ? 'order_created' : 'lead_captured',
+      last_message_at: createdAt,
+      created_at: createdAt
     };
 
     const saveRes = await saveLeadToDatabase(leadRecord);
 
-    // Cập nhật hội thoại
+    // Cập nhật hội thoại nếu có psid
     if (psid && pageId) {
       try {
         await supabase.from('meta_chat_conversations').upsert({
@@ -764,7 +872,7 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
           customer_avatar: avatar,
           customer_phone: detectedPhone,
           customer_email: detectedEmail,
-          last_message_text: messageText || 'Tin nhắn mới từ Pancake',
+          last_message_text: messageText || 'Cập nhật từ POS Cake',
           last_message_at: new Date().toISOString(),
           unread_count: 1,
           status: 'active'
@@ -772,17 +880,33 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
       } catch (e) {}
     }
 
-    // Bắn sự kiện Meta CAPI nếu có SĐT
+    // Bắn sự kiện Meta CAPI
     if (detectedPhone) {
       try {
-        await sendMetaConversionEvent({
-          event_name: 'Lead',
-          tracking_type: 'PHONE_LEAD',
-          customer_name: customerName,
-          customer_phone: detectedPhone,
-          customer_email: detectedEmail || undefined,
-          utm_source: 'pancake_webhook'
-        });
+        if (isOrderEvent && orderTotal > 0) {
+          // Bắn sự kiện Purchase (Doanh thu đơn hàng thực tế)
+          await sendMetaConversionEvent({
+            event_name: 'Purchase',
+            tracking_type: 'PURCHASE_REVENUE',
+            order_id: String(orderCode || Date.now()),
+            revenue_value: orderTotal,
+            currency: 'VND',
+            customer_name: customerName,
+            customer_phone: detectedPhone,
+            customer_email: detectedEmail || undefined,
+            utm_source: 'pos_cake_webhook'
+          });
+        } else {
+          // Bắn sự kiện Lead (Khách hàng tiềm năng)
+          await sendMetaConversionEvent({
+            event_name: 'Lead',
+            tracking_type: 'PHONE_LEAD',
+            customer_name: customerName,
+            customer_phone: detectedPhone,
+            customer_email: detectedEmail || undefined,
+            utm_source: 'pancake_webhook'
+          });
+        }
       } catch (capiErr) {}
     }
 

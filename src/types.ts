@@ -241,6 +241,7 @@ export interface MetaLead {
   customer_phone?: string | null;
   customer_email?: string | null;
   customer_avatar?: string | null;
+  gender?: string | null;
   page_id?: string | null;
   psid?: string | null;
   ad_id?: string | null;

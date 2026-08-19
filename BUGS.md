@@ -703,6 +703,24 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
     4. Giữ nguyên duy nhất 1 Lucide Icon chuẩn hóa giao diện hệ thống cho từng nút hành động.
 - **Trạng thái:** Đã xử lý xong, biên dịch build và kiểm tra linter thành công 100%.
 
+### 1.75 Tích Hợp & Nâng Cấp Hỗ Trợ Botcake Public API Key
+- **Mô tả yêu cầu / Tính năng:**
+  - Hỗ trợ kết nối trực tiếp với **Botcake Public API Key** (từ `botcake.io > Cấu hình > Tích hợp > API`) song song với Pancake API.
+  - Tự động nhận diện token Botcake, truy xuất danh sách khách hàng (Customers / Subscribers) và đồng bộ số điện thoại/leads tự động về Tour CRM.
+- **Giải pháp:**
+  - Bổ sung các endpoint của Botcake (`https://api.botcake.io/api/public_api/v1/customers`, `https://botcake.io/api/v1/subscribers`) vào quy trình xác thực kết nối và đồng bộ khách hàng (`server/services/pancakeService.ts`).
+  - Cập nhật giao diện hướng dẫn người dùng tại `MetaAdsAnalytics.tsx` với chỉ dẫn rõ ràng cách sao chép API Key từ Botcake.
+- **Trạng thái:** Đã hoàn thành, kiểm tra biên dịch build thành công 100%.
+
+### 1.76 Nâng Cấp Bộ Xử Lý Webhook Hỗ Trợ Realtime Đơn Hàng & Khách Hàng Từ POS Cake (POS Pancake)
+- **Mô tả yêu cầu / Tính năng:**
+  - Hỗ trợ kết nối **Webhook Realtime** trực tiếp từ **POS Cake (pos.pancake.vn / pos.pages.fm)**.
+  - Tự động bắt sự kiện tạo đơn hàng (`order:created`), cập nhật đơn hàng, khách hàng mới, trích xuất SĐT, Doanh thu đơn hàng (`total_price`) và bắn ngay sự kiện `Purchase` hoặc `Lead` lên Meta CAPI theo thời gian thực (&lt; 0.5s).
+- **Giải pháp:**
+  - Nâng cấp `handleIncomingPancakeWebhook` trong `server/services/pancakeService.ts` để phân tích các trường đơn hàng của POS Cake (`order`, `bill_phone_number`, `shipping_phone`, `total_price`, `order_code`).
+  - Phân luồng thông minh: Nếu là sự kiện đơn hàng có giá trị tiền -> Bắn sự kiện `Purchase` (kèm doanh thu VND thực tế) lên Meta CAPI. Nếu là khách hàng mới/tin nhắn -> Bắn sự kiện `Lead` lên Meta CAPI.
+- **Trạng thái:** Đã hoàn thành, biên dịch build thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

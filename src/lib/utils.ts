@@ -292,7 +292,7 @@ export async function safeFetchApi(url: string, options: RequestInit = {}): Prom
   try {
     response = await fetch(url, { ...options, headers });
   } catch (netErr: any) {
-    console.error(`[safeFetchApi] Network error fetching ${url}:`, netErr);
+    console.warn(`[safeFetchApi] Network fetch failed for ${url}:`, netErr?.message || netErr);
     throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Vui lòng kiểm tra kết nối mạng hoặc thử lại sau giây lát.');
   }
 

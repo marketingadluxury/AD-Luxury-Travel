@@ -11,6 +11,7 @@ import googleChatRoutes from './server/routes/googleChatRoutes.js';
 import metaCapiRoutes from './server/routes/metaCapiRoutes.js';
 import metaMessengerRoutes from './server/routes/metaMessengerRoutes.js';
 import pancakeRoutes from './server/routes/pancakeRoutes.js';
+import botcakeRoutes from './server/routes/botcakeRoutes.js';
 import { errorHandler } from './server/middleware/errorHandler.js';
 
 const app = express();
@@ -19,6 +20,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.text({ limit: '50mb', type: ['text/*', 'application/*+json'] }));
 
 // Health Check API
 app.get(['/health', '/api/health'], (req, res) => {
@@ -38,6 +40,7 @@ app.use('/', googleChatRoutes);
 app.use('/', metaCapiRoutes);
 app.use('/', metaMessengerRoutes);
 app.use('/', pancakeRoutes);
+app.use('/', botcakeRoutes);
 
 // Global Error Handler
 app.use(errorHandler);
