@@ -28,14 +28,27 @@ import {
   HelpCircle,
   TrendingUp,
   Sliders,
-  ArrowUpDown
+  ArrowUpDown,
+  Settings,
+  Copy,
+  Check,
+  ShoppingBag,
+  Link as LinkIcon
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { MetaLead, Tour } from '@/types';
-import { fetchMetaLeads, updateMetaLead, deleteMetaLead, syncPancakeLeads } from '@/lib/metaCapiService';
+import { 
+  fetchMetaLeads, 
+  updateMetaLead, 
+  deleteMetaLead, 
+  syncPancakeLeads,
+  fetchPancakeConfig,
+  savePancakeConfig,
+  testPancakeConnection
+} from '@/lib/metaCapiService';
 import { format } from 'date-fns';
 
 interface PotentialLeadsTabProps {
@@ -78,6 +91,87 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   const [simTourInterest, setSimTourInterest] = useState('Tour Dubai 5N4Đ');
   const [simCampaign, setSimCampaign] = useState('Chiến dịch Quảng cáo Tour Mùa Thu 2026');
   const [isSimulating, setIsSimulating] = useState(false);
+
+  // POS Cake & Pancake Config Modal State
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [configApiKey, setConfigApiKey] = useState('');
+  const [hasExistingKey, setHasExistingKey] = useState(false);
+  const [isTestingConfig, setIsTestingConfig] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [testResult, setTestResult] = useState<{ success?: boolean; message?: string; pages?: any[] } | null>(null);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
+
+  const webhookUrl = 'https://booking.adluxury.net/api/pancake/webhook';
+
+  const handleOpenConfigModal = async () => {
+    setIsConfigModalOpen(true);
+    setTestResult(null);
+    try {
+      const cfg = await fetchPancakeConfig();
+      if (cfg) {
+        setHasExistingKey(cfg.has_api_key);
+        setConfigApiKey(cfg.api_key_masked || '');
+      }
+    } catch (e) {}
+  };
+
+  const handleCopyWebhook = () => {
+    navigator.clipboard.writeText(webhookUrl);
+    setCopiedWebhook(true);
+    toast.success('Đã sao chép Webhook URL vào bộ nhớ tạm!');
+    setTimeout(() => setCopiedWebhook(false), 2000);
+  };
+
+  const handleTestConnection = async () => {
+    setIsTestingConfig(true);
+    setTestResult(null);
+    try {
+      const res = await testPancakeConnection(configApiKey.includes('...') ? undefined : configApiKey);
+      if (res.success) {
+        toast.success('Kết nối API Pancake / POS Cake thành công!');
+        setTestResult({
+          success: true,
+          message: `Kết nối thành công! Tìm thấy ${res.pages?.length || 0} Fanpage / Cửa hàng.`,
+          pages: res.pages
+        });
+      } else {
+        toast.error(res.error || 'Kết nối không thành công');
+        setTestResult({
+          success: false,
+          message: res.error || 'Không thể xác thực API Key với Pancake/POS Cake.'
+        });
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi khi kiểm tra kết nối');
+      setTestResult({
+        success: false,
+        message: err.message
+      });
+    } finally {
+      setIsTestingConfig(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setIsSavingConfig(true);
+    try {
+      const res = await savePancakeConfig({
+        api_key: configApiKey,
+        is_active: true,
+        auto_sync: true
+      });
+      if (res.success) {
+        toast.success('Đã lưu cấu hình Pancake / POS Cake thành công!');
+        setIsConfigModalOpen(false);
+      } else {
+        toast.error(res.error || 'Lỗi khi lưu cấu hình');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi khi lưu cấu hình');
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
 
   // Load leads
   const loadLeads = async (isSilent: boolean = false) => {
@@ -420,6 +514,16 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleOpenConfigModal}
+            className="h-9 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all border border-slate-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            title="Xem Webhook URL và cấu hình API Key Pancake / POS Cake"
+          >
+            <Settings className="w-3.5 h-3.5 text-slate-600" />
+            <span>Cấu hình Webhook &amp; POS</span>
+          </button>
+
           <button
             type="button"
             onClick={handleSyncPancake}
@@ -1160,6 +1264,145 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                 {isDeletingBulk ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 Xóa {selectedLeadIds.length} Khách Hàng
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cấu Hình Webhook & API Pancake / POS Cake */}
+      {isConfigModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Cấu Hình Kết Nối Pancake &amp; POS Cake</h3>
+                  <p className="text-xs text-slate-500">Tự động nhận đơn hàng, khách hàng và đồng bộ tin nhắn</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(false)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Mục 1: Webhook URL để dán vào Pancake POS / Botcake */}
+            <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <LinkIcon className="w-3.5 h-3.5 text-blue-600" />
+                  Webhook URL Nhận Dữ Liệu Realtime:
+                </label>
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  Hoạt động 24/7
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={webhookUrl}
+                  className="flex-1 px-3 py-2 text-xs font-mono bg-white border border-slate-300 rounded-lg text-slate-800 select-all focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyWebhook}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  {copiedWebhook ? <Check className="w-3.5 h-3.5 text-emerald-200" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedWebhook ? 'Đã chép' : 'Sao chép'}</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                👉 <strong>Hướng dẫn trên Pancake POS:</strong> Vào <em>Cài đặt &gt; Cấu hình nâng cao &gt; Webhook / API</em>, dán URL trên vào ô <strong>Webhook URL</strong>, tích chọn dữ liệu: <strong>Đơn hàng</strong> và <strong>Khách hàng</strong>.
+              </p>
+            </div>
+
+            {/* Mục 2: API Token Pancake / POS Cake */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  Pancake / POS Cake Public API Key (Access Token):
+                </label>
+                <input
+                  type="text"
+                  value={configApiKey}
+                  onChange={(e) => setConfigApiKey(e.target.value)}
+                  placeholder={hasExistingKey ? 'Đã lưu API Key (nhập mới nếu muốn đổi)' : 'Dán Access Token của bạn từ Pancake / Pages.fm'}
+                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-hidden"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Lấy token tại: <em>Cài đặt trên Pancake POS / Pages.fm &gt; Cấu hình API / Token</em>.
+                </p>
+              </div>
+
+              {/* Test Result Message */}
+              {testResult && (
+                <div className={`p-3 rounded-xl text-xs font-medium border ${testResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
+                  <p className="font-bold">{testResult.message}</p>
+                  {testResult.pages && testResult.pages.length > 0 && (
+                    <ul className="mt-1.5 space-y-1 list-disc pl-4 text-[11px]">
+                      {testResult.pages.slice(0, 5).map((p: any, idx: number) => (
+                        <li key={idx}><strong>{p.name}</strong> (ID: {p.id})</li>
+                      ))}
+                      {testResult.pages.length > 5 && <li>...và {testResult.pages.length - 5} trang khác.</li>}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Hướng dẫn tính năng hỗ trợ */}
+            <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-100 text-[11px] text-blue-900 space-y-1.5 leading-relaxed">
+              <div className="font-bold flex items-center gap-1.5 text-blue-800">
+                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                Các tính năng tự động được kích hoạt:
+              </div>
+              <ul className="list-disc pl-4 space-y-0.5 text-slate-700">
+                <li>Tự động nhận đơn hàng POS Cake và đồng bộ khách hàng vào CRM.</li>
+                <li>Tự động kích hoạt sự kiện Meta Conversion API (Purchase &amp; Lead) chuẩn xác.</li>
+                <li>Hỗ trợ tra cứu địa chỉ hành chính Tỉnh/Huyện/Xã chuẩn Pancake Geo API.</li>
+                <li>Bắn chuông thông báo nội bộ và Google Chat khi có đơn/khách mới.</li>
+              </ul>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleTestConnection}
+                disabled={isTestingConfig}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isTestingConfig ? 'animate-spin' : ''}`} />
+                <span>{isTestingConfig ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsConfigModalOpen(false)}
+                  disabled={isSavingConfig}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveConfig}
+                  disabled={isSavingConfig}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSavingConfig ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>{isSavingConfig ? 'Đang lưu...' : 'Lưu Cấu Hình'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

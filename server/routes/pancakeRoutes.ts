@@ -4,27 +4,47 @@ import {
   savePancakeConfig, 
   testPancakeConnection, 
   syncPancakeConversations,
-  handleIncomingPancakeWebhook
+  handleIncomingPancakeWebhook,
+  getPosCakeProvinces,
+  getPosCakeDistricts,
+  getPosCakeCommunes,
+  getPosCakeShops
 } from '../services/pancakeService.js';
 
 const router = express.Router();
 
+// Danh sách các route webhook hợp lệ cho Pancake, POS Cake và Botcake
+const WEBHOOK_PATHS = [
+  '/api/pancake/webhook',
+  '/api/poscake/webhook',
+  '/api/pos/webhook',
+  '/api/botcake/webhook'
+];
+
 /**
- * Endpoint xác thực Webhook Pancake & Botcake (GET)
+ * Endpoint xác thực Webhook Pancake, POS Cake & Botcake (GET)
  */
-router.get(['/api/pancake/webhook', '/api/botcake/webhook'], (req, res) => {
+router.get(WEBHOOK_PATHS, (req, res) => {
   const challenge = req.query['hub.challenge'] || req.query['challenge'] || 'ok';
   res.status(200).send(challenge);
 });
 
 /**
- * Endpoint nhận dữ liệu Webhook Realtime từ Pancake & Botcake JSON API (POST)
+ * Endpoint nhận dữ liệu Webhook Realtime từ Pancake, POS Cake & Botcake (POST)
  */
-router.post(['/api/pancake/webhook', '/api/botcake/webhook'], async (req, res) => {
+router.post(WEBHOOK_PATHS, async (req, res) => {
+  console.log('\n======================================================');
+  console.log('📥 [PANCAKE / POS CAKE WEBHOOK REQUEST] -', new Date().toISOString());
+  console.log('📌 URL:', req.originalUrl || req.url);
+  console.log('📌 Method:', req.method);
+  console.log('📌 Headers:\n', JSON.stringify(req.headers, null, 2));
+  console.log('📌 Body Raw / Parsed:\n', typeof req.body === 'object' ? JSON.stringify(req.body, null, 2) : req.body);
+  console.log('======================================================\n');
+
   try {
     let payload = req.body;
     
-    // Nếu payload là dạng chuỗi thô (do header Content-Type chưa set application/json ở Botcake)
+    // Nếu payload là dạng chuỗi thô (do header Content-Type chưa set application/json ở Botcake/POS)
     if (typeof payload === 'string') {
       try {
         payload = JSON.parse(payload);
@@ -40,11 +60,11 @@ router.post(['/api/pancake/webhook', '/api/botcake/webhook'], async (req, res) =
       }
     }
 
-    console.log('[Pancake/Botcake Webhook] Nhận payload:', JSON.stringify(payload).substring(0, 300));
+    console.log('[Pancake/POS Cake Webhook] Nhận payload:', JSON.stringify(payload).substring(0, 300));
     const result = await handleIncomingPancakeWebhook(payload);
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('[Pancake Webhook] Lỗi:', error.message);
+    console.error('[Pancake/POS Cake Webhook] Lỗi:', error.message);
     res.status(200).json({ success: false, error: error.message });
   }
 });
@@ -123,6 +143,57 @@ router.post('/api/pancake/test-connection', async (req, res) => {
 router.post('/api/pancake/sync', async (req, res) => {
   try {
     const result = await syncPancakeConversations();
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Tra cứu Tỉnh/Thành phố từ Pancake POS Geo API
+ * (https://docs.pancake.biz/pos/api/#tag/address)
+ */
+router.get('/api/pancake/pos/geo/provinces', async (req, res) => {
+  try {
+    const result = await getPosCakeProvinces();
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Tra cứu Quận/Huyện theo Tỉnh từ Pancake POS Geo API
+ */
+router.get('/api/pancake/pos/geo/districts', async (req, res) => {
+  try {
+    const provinceId = String(req.query.province_id || '');
+    const result = await getPosCakeDistricts(provinceId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Tra cứu Xã/Phường theo Huyện từ Pancake POS Geo API
+ */
+router.get('/api/pancake/pos/geo/communes', async (req, res) => {
+  try {
+    const districtId = String(req.query.district_id || '');
+    const result = await getPosCakeCommunes(districtId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Lấy danh sách Shops từ POS Cake API
+ */
+router.get('/api/pancake/pos/shops', async (req, res) => {
+  try {
+    const result = await getPosCakeShops();
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

@@ -1,5 +1,6 @@
 import { getAdminSupabaseClient } from './supabaseService.js';
 import { sendMetaConversionEvent } from './metaCapiService.js';
+import { getPageAccessToken, fetchMetaUserProfile, saveLeadToDatabase } from './metaMessengerService.js';
 
 export interface BotcakeWebhookPayload {
   page_id?: string;
@@ -11,6 +12,10 @@ export interface BotcakeWebhookPayload {
   customer_phone?: string;
   email?: string;
   customer_email?: string;
+  avatar?: string;
+  avatar_url?: string;
+  profile_pic?: string;
+  user_profile_pic?: string;
   tags?: string[] | string;
   gender?: string;
   ad_id?: string;
@@ -111,13 +116,33 @@ export async function sendInternalSystemNotification(params: {
 export async function processBotcakeWebhook(payload: BotcakeWebhookPayload) {
   const supabase = getAdminSupabaseClient();
 
-  const fullName = (payload.full_name || payload.name || payload.customer_name || 'Khách hàng Botcake').trim();
+  let fullName = (payload.full_name || payload.name || payload.customer_name || 'Khách hàng Botcake').trim();
   const rawPhone = payload.phone || payload.customer_phone || '';
   const email = (payload.email || payload.customer_email || '').trim() || null;
   const pageId = payload.page_id || null;
-  const psid = payload.psid ? String(payload.psid) : null;
+  const psid = payload.psid ? String(payload.psid).trim() : null;
   const tags = Array.isArray(payload.tags) ? payload.tags : (payload.tags ? [String(payload.tags)] : []);
   const tagsString = tags.join(', ');
+
+  // Trích xuất hoặc lấy Avatar tự động
+  let avatar: string | null = payload.avatar || payload.avatar_url || payload.profile_pic || payload.user_profile_pic || payload.customer_avatar || null;
+  if (!avatar && psid && !psid.includes('{')) {
+    if (pageId) {
+      try {
+        const pageToken = await getPageAccessToken(pageId);
+        if (pageToken) {
+          const profile = await fetchMetaUserProfile(psid, pageToken);
+          if (profile.avatar_url) avatar = profile.avatar_url;
+          if (profile.name && (!fullName || fullName.includes('{') || fullName === 'Khách hàng Botcake')) {
+            fullName = profile.name;
+          }
+        }
+      } catch (e) {}
+    }
+    if (!avatar) {
+      avatar = `https://graph.facebook.com/${psid}/picture?type=normal`;
+    }
+  }
 
   const { e164, local: localPhone } = normalizeVietnamesePhone(rawPhone);
   const primaryPhone = localPhone || rawPhone || null;
@@ -157,11 +182,16 @@ export async function processBotcakeWebhook(payload: BotcakeWebhookPayload) {
         // Tìm 1 customer_id hợp lệ hoặc tạo khách hàng mới
         let customerId: string | null = null;
         try {
-          const { data: existCust } = await supabase
-            .from('customers')
-            .select('id')
-            .or(`phone.eq.${primaryPhone || ''},phone.eq.${e164 || ''}`)
-            .maybeSingle();
+          let custQuery = supabase.from('customers').select('id');
+          if (primaryPhone && e164 && e164 !== primaryPhone) {
+            custQuery = custQuery.or(`phone.eq.${primaryPhone},phone.eq.${e164}`);
+          } else if (primaryPhone) {
+            custQuery = custQuery.eq('phone', primaryPhone);
+          } else {
+            custQuery = custQuery.eq('phone', '0000000000');
+          }
+
+          const { data: existCust } = await custQuery.maybeSingle();
 
           if (existCust?.id) {
             customerId = existCust.id;
@@ -223,32 +253,13 @@ export async function processBotcakeWebhook(payload: BotcakeWebhookPayload) {
     }
   }
 
-  // 2. Đồng bộ vào bảng Khách Hàng Tiềm Năng (leads)
+  // 2. Đồng bộ vào bảng Khách Hàng Tiềm Năng (leads) qua saveLeadToDatabase
   try {
-    let matchedLeadId: string | null = null;
-
-    if (psid) {
-      const { data: leadByPsid } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('psid', psid)
-        .maybeSingle();
-      if (leadByPsid?.id) matchedLeadId = leadByPsid.id;
-    }
-
-    if (!matchedLeadId && primaryPhone) {
-      const { data: leadByPhone } = await supabase
-        .from('leads')
-        .select('id')
-        .or(`customer_phone.eq.${primaryPhone},customer_phone.eq.${e164 || ''}`)
-        .maybeSingle();
-      if (leadByPhone?.id) matchedLeadId = leadByPhone.id;
-    }
-
-    const leadPayload = {
+    await saveLeadToDatabase({
       customer_name: fullName,
       customer_phone: primaryPhone,
       customer_email: email,
+      customer_avatar: avatar,
       source_channel: 'pancake_messenger',
       page_id: pageId,
       psid: psid,
@@ -256,27 +267,11 @@ export async function processBotcakeWebhook(payload: BotcakeWebhookPayload) {
       utm_campaign: payload.campaign || null,
       message_text: tagsString ? `Tags Botcake: ${tagsString}` : 'Khách hàng liên hệ qua Botcake JSON API',
       notes: `Nhận tự động từ Botcake Webhook (Tags: ${tagsString || 'Không'})`,
-      status: 'lead_captured',
-      last_message_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+      status: 'lead_captured'
+    });
 
-    if (matchedLeadId) {
-      await supabase
-        .from('leads')
-        .update(leadPayload)
-        .eq('id', matchedLeadId);
-    } else {
-      await supabase
-        .from('leads')
-        .insert({
-          ...leadPayload,
-          created_at: new Date().toISOString()
-        });
-    }
-
-    // Đồng bộ vào meta_chat_conversations
-    if (psid && pageId) {
+    // Đồng bộ vào meta_chat_conversations nếu có psid và pageId hợp lệ
+    if (psid && pageId && !psid.includes('{')) {
       await supabase.from('meta_chat_conversations').upsert({
         page_id: pageId,
         psid: psid,

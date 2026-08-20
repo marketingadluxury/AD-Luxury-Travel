@@ -334,4 +334,32 @@ export async function simulateMetaWebhook(data?: {
   });
 }
 
+/**
+ * Lấy danh sách Tỉnh/Thành phố từ Pancake POS Geo API
+ */
+export async function fetchPosCakeProvinces(): Promise<{ success: boolean; data: any[]; error?: string }> {
+  return await safeFetchApi('/api/pancake/pos/geo/provinces', { method: 'GET' });
+}
+
+/**
+ * Lấy danh sách Quận/Huyện theo Tỉnh từ Pancake POS Geo API
+ */
+export async function fetchPosCakeDistricts(provinceId: string): Promise<{ success: boolean; data: any[]; error?: string }> {
+  return await safeFetchApi(`/api/pancake/pos/geo/districts?province_id=${encodeURIComponent(provinceId)}`, { method: 'GET' });
+}
+
+/**
+ * Lấy danh sách Xã/Phường theo Huyện từ Pancake POS Geo API
+ */
+export async function fetchPosCakeCommunes(districtId: string): Promise<{ success: boolean; data: any[]; error?: string }> {
+  return await safeFetchApi(`/api/pancake/pos/geo/communes?district_id=${encodeURIComponent(districtId)}`, { method: 'GET' });
+}
+
+/**
+ * Lấy danh sách Cửa hàng từ POS Cake API
+ */
+export async function fetchPosCakeShops(): Promise<{ success: boolean; data: any[]; error?: string }> {
+  return await safeFetchApi('/api/pancake/pos/shops', { method: 'GET' });
+}
+
 

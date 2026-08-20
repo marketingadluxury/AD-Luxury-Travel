@@ -471,11 +471,11 @@ router.get(['/api/meta-leads', '/api/leads'], async (req, res) => {
     const { search, status, has_phone, channel } = req.query;
     const supabase = getAdminSupabaseClient();
 
-    // 1. Thử truy vấn từ bảng `leads`
+    // 1. Truy vấn trực tiếp từ bảng `leads`
     try {
       let query = supabase
         .from('leads')
-        .select('*, profiles:assigned_to(full_name)')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (has_phone === 'true') {
@@ -495,21 +495,38 @@ router.get(['/api/meta-leads', '/api/leads'], async (req, res) => {
       }
 
       const { data, error } = await query;
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
+        // Gắn thêm assigned_name nếu có
+        const assignedIds = data.map(d => d.assigned_to).filter(Boolean);
+        let profileMap: Record<string, string> = {};
+        if (assignedIds.length > 0) {
+          try {
+            const { data: profs } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .in('id', assignedIds);
+            if (profs) {
+              for (const p of profs) {
+                profileMap[p.id] = p.full_name;
+              }
+            }
+          } catch (e) {}
+        }
+
         const leads = data.map((item: any) => ({
           ...item,
-          assigned_name: item.profiles?.full_name || null
+          assigned_name: item.assigned_to ? (profileMap[item.assigned_to] || null) : null
         }));
         return res.json({ success: true, data: leads });
       }
     } catch (leadsTableErr: any) {
-      console.warn('[Leads API] Không thể truy vấn bảng leads, chuyển sang meta_chat_conversations:', leadsTableErr.message);
+      console.warn('[Leads API] Lỗi truy vấn bảng leads:', leadsTableErr.message);
     }
 
-    // 2. Dự phòng: Truy vấn từ `meta_chat_conversations` nếu bảng `leads` chưa có dữ liệu
+    // 2. Dự phòng: Truy vấn từ `meta_chat_conversations` nếu bảng `leads` bị lỗi không tồn tại
     let fallbackQuery = supabase
       .from('meta_chat_conversations')
-      .select('*, profiles:assigned_to(full_name)')
+      .select('*')
       .order('updated_at', { ascending: false });
 
     if (has_phone === 'true') {
@@ -531,7 +548,7 @@ router.get(['/api/meta-leads', '/api/leads'], async (req, res) => {
       ...item,
       source_channel: item.utm_source || 'facebook_messenger',
       message_text: item.last_message,
-      assigned_name: item.profiles?.full_name || null
+      assigned_name: null
     }));
 
     res.json({

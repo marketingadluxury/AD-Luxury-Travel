@@ -22,6 +22,15 @@ router.get(['/webhooks/botcake', '/api/webhooks/botcake'], (req, res) => {
  * Tiếp nhận payload Webhook từ tính năng JSON API của Botcake
  */
 router.post(['/webhooks/botcake', '/api/webhooks/botcake'], (req, res) => {
+  // === [TEMPORARY LOGGER] Ghi log chi tiết toàn bộ Headers và Body nhận được từ Botcake ===
+  console.log('\n======================================================');
+  console.log('📥 [BOTCAKE WEBHOOK INCOMING REQUEST] -', new Date().toISOString());
+  console.log('📌 URL:', req.originalUrl || req.url);
+  console.log('📌 Method:', req.method);
+  console.log('📌 Headers:\n', JSON.stringify(req.headers, null, 2));
+  console.log('📌 Body Raw / Parsed:\n', typeof req.body === 'object' ? JSON.stringify(req.body, null, 2) : req.body);
+  console.log('======================================================\n');
+
   const secret = process.env.BOTCAKE_WEBHOOK_SECRET;
   const botcakeTokenHeader = req.headers['x-botcake-token'] || req.headers['x-webhook-secret'] || req.headers['authorization'];
 

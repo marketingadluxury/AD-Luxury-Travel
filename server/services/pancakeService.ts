@@ -1,6 +1,7 @@
 import { getAdminSupabaseClient } from './supabaseService.js';
 import { extractVietnamesePhone, extractEmail, saveLeadToDatabase, LeadRecord } from './metaMessengerService.js';
 import { sendMetaConversionEvent, getMetaCapiConfig } from './metaCapiService.js';
+import { sendInternalSystemNotification } from './botcakeService.js';
 
 export interface PancakeConfig {
   api_key?: string;
@@ -509,16 +510,22 @@ export async function syncPancakeConversations(): Promise<{
         } catch (e) {}
       }
 
-      // B. Thử thêm endpoint lấy khách hàng (Customers) từ Botcake & Pancake theo chuẩn API Developers Botcake
+      // B. Thử thêm endpoint lấy khách hàng (Customers / Subscribers) từ Botcake & Pancake theo chuẩn API Developers Botcake
       const customerEndpoints = [
         `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customers?access_token=${encodeURIComponent(token)}&page_size=100`,
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customers?page_access_token=${encodeURIComponent(pageToken)}&page_size=100`,
         `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customers?api_key=${encodeURIComponent(token)}&page_size=100`,
         `https://api.botcake.io/api/public_api/v1/pages/${pageId}/subscribers?access_token=${encodeURIComponent(token)}&page_size=100`,
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/subscribers?page_access_token=${encodeURIComponent(pageToken)}&page_size=100`,
         `https://api.botcake.io/api/public_api/v1/pages/${pageId}/subscribers?api_key=${encodeURIComponent(token)}&page_size=100`,
         `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customer?access_token=${encodeURIComponent(token)}`,
+        `https://api.botcake.io/api/public_api/v1/pages/${pageId}/customer?page_access_token=${encodeURIComponent(pageToken)}`,
         `https://botcake.io/api/v1/pages/${pageId}/customers?access_token=${encodeURIComponent(token)}&page_size=100`,
+        `https://botcake.io/api/public_api/v1/pages/${pageId}/customers?access_token=${encodeURIComponent(token)}&page_size=100`,
+        `https://botcake.io/api/public_api/v1/pages/${pageId}/subscribers?access_token=${encodeURIComponent(token)}&page_size=100`,
         `https://pages.fm/api/public_api/v1/pages/${pageId}/customers?page_access_token=${encodeURIComponent(pageToken)}&page_size=100`,
         `https://pages.fm/api/public_api/v2/pages/${pageId}/customers?page_access_token=${encodeURIComponent(pageToken)}&page_size=100`,
+        `https://pages.fm/api/v1/pages/${pageId}/customers?page_access_token=${encodeURIComponent(pageToken)}&page_size=100`,
         `https://pages.fm/api/v1/pages/${pageId}/customers?access_token=${encodeURIComponent(token)}&page_size=100`,
         `https://pos.pages.fm/api/v1/shops/${pageId}/customers?api_key=${encodeURIComponent(token)}&page_size=100`,
       ];
@@ -526,12 +533,17 @@ export async function syncPancakeConversations(): Promise<{
       let customersList: any[] = [];
       for (const custEndpoint of customerEndpoints) {
         try {
-          const res = await fetch(custEndpoint, { headers });
+          const authHeaders = {
+            ...headers,
+            'Authorization': `Bearer ${token}`
+          };
+          const res = await fetch(custEndpoint, { headers: authHeaders });
           if (res.ok) {
             const data = await res.json() as any;
             const list = data.customers || data.data || data.subscribers || (Array.isArray(data) ? data : []);
             if (Array.isArray(list) && list.length > 0) {
               customersList = list;
+              console.log(`[Botcake Sync] Lấy thành công ${list.length} khách hàng từ endpoint: ${custEndpoint}`);
               break;
             }
           }
@@ -666,21 +678,35 @@ export async function syncPancakeConversations(): Promise<{
       // 4. Xử lý danh sách khách hàng (Customers) từ Pancake & Botcake
       for (const cust of customersList) {
         const custName = cust.name || cust.full_name || `${cust.first_name || ''} ${cust.last_name || ''}`.trim() || 'Khách hàng Pancake';
-        const rawPhone = cust.phone || cust.mobile || cust.phone_number || cust.custom_fields?.phone || cust.custom_fields?.sdt || cust.variables?.phone || (Array.isArray(cust.phone_numbers) ? cust.phone_numbers[0] : '');
+        
+        let rawPhone = cust.phone || cust.mobile || cust.phone_number || cust.user_phone || (Array.isArray(cust.phone_numbers) ? cust.phone_numbers[0] : '');
+        if (!rawPhone && cust.custom_fields) {
+          rawPhone = cust.custom_fields.phone || cust.custom_fields.sdt || cust.custom_fields.phone_number || cust.custom_fields.so_dien_thoai || '';
+        }
+        if (!rawPhone && cust.variables) {
+          rawPhone = cust.variables.phone || cust.variables.sdt || cust.variables.so_dien_thoai || '';
+        }
+        if (!rawPhone && cust.attributes) {
+          rawPhone = cust.attributes.phone || cust.attributes.phone_number || cust.attributes.sdt || '';
+        }
+
         const custPhone = extractVietnamesePhone(rawPhone) || (rawPhone ? String(rawPhone).trim() : null);
-        const custEmail = cust.email || cust.custom_fields?.email || null;
-        const custPsid = String(cust.id || cust.fb_id || cust.psid || '');
-        const custAvatar = cust.avatar_url || cust.avatar || cust.profile_pic || null;
+        const custEmail = cust.email || cust.custom_fields?.email || cust.variables?.email || null;
+        const custPsid = String(cust.id || cust.fb_id || cust.psid || cust.recipient_id || '');
+        let custAvatar = cust.avatar_url || cust.avatar || cust.profile_pic || cust.picture?.data?.url || null;
+        if (!custAvatar && custPsid && !custPsid.includes('{')) {
+          custAvatar = `https://graph.facebook.com/${custPsid}/picture?type=normal`;
+        }
         
         let custGender: string | null = null;
         if (cust.gender) {
-          const g = String(cust.gender).toLowerCase();
+          const g = String(cust.gender).toLowerCase().trim();
           if (g === 'male' || g === 'nam' || g === '1') custGender = 'Nam';
           else if (g === 'female' || g === 'nu' || g === 'nữ' || g === '2') custGender = 'Nữ';
         }
 
-        const adId = cust.ad_id || cust.adId || cust.custom_fields?.ad_id || null;
-        const campaign = cust.campaign || cust.campaign_name || cust.custom_fields?.campaign || null;
+        const adId = cust.ad_id || cust.adId || cust.custom_fields?.ad_id || cust.custom_fields?.adId || null;
+        const campaign = cust.campaign || cust.campaign_name || cust.custom_fields?.campaign || cust.utm_campaign || null;
 
         if (custPhone) totalPhonesFound++;
 
@@ -753,41 +779,78 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
     const supabase = getAdminSupabaseClient();
     
     // 1. Phân tích các dạng event của Pancake / POS Cake
-    const eventType = payload.type || payload.event || payload.action || 'message:created';
-    const pageId = String(payload.page_id || payload.pageId || payload.page?.id || payload.shop_id || payload.shop?.id || '');
-    const pageName = payload.page_name || payload.page?.name || payload.shop?.name || 'Fanpage AD Luxury';
+    const eventType = String(payload.type || payload.event || payload.action || payload.topic || 'message:created').toLowerCase();
+    const pageId = String(payload.page_id || payload.pageId || payload.page?.id || payload.shop_id || payload.shop?.id || payload.data?.shop_id || '');
+    const pageName = payload.page_name || payload.page?.name || payload.shop?.name || payload.data?.shop?.name || 'Fanpage / Shop AD Luxury';
 
     // Trích xuất đơn hàng (nếu là webhook Order từ POS Cake)
-    const order = payload.order || payload.data?.order || (eventType.startsWith('order') ? payload : null);
-    const orderTotal = order ? (Number(order.total_price || order.total_amount || order.grand_total || order.subtotal || 0)) : 0;
-    const orderCode = order ? (order.code || order.order_id || order.id || '') : '';
+    const order = payload.order || payload.data?.order || (eventType.includes('order') ? (payload.data || payload) : null);
+    const orderTotal = order ? (Number(order.total_price || order.total_amount || order.grand_total || order.subtotal || order.order_total || 0)) : 0;
+    const orderCode = order ? (order.code || order.order_id || order.id || order.display_id || '') : '';
+    const orderStatus = order?.status_name || order?.status_text || (order?.status !== undefined ? `Trạng thái #${order.status}` : '');
 
-    // Trích xuất khách hàng & tên
-    const customer = payload.customer || payload.data?.customer || payload.conversation?.customer || order?.customer || order?.shipping_address || {};
-    let customerName = payload.customer_name || payload.name || payload.full_name || customer.name || customer.full_name || order?.customer_name;
+    // Trích xuất danh sách sản phẩm trong đơn hàng POS Cake
+    let itemsSummary = '';
+    const orderItems = order?.items || order?.order_items || order?.products || [];
+    if (Array.isArray(orderItems) && orderItems.length > 0) {
+      itemsSummary = orderItems.map((it: any) => {
+        const pName = it.product_name || it.name || it.title || 'Sản phẩm';
+        const vName = it.variation_name || it.variant_name || '';
+        const qty = it.quantity || it.qty || 1;
+        const price = Number(it.price || it.retail_price || 0);
+        return `${pName}${vName ? ` (${vName})` : ''} x${qty} [${price.toLocaleString('vi-VN')} đ]`;
+      }).join('; ');
+    }
+
+    // Trích xuất đối tác / khách hàng (từ POS Cake partner hoặc shipping address)
+    const partner = order?.partner || payload.partner || payload.customer || payload.data?.customer || payload.conversation?.customer || {};
+    const customer = payload.customer || payload.data?.customer || order?.customer || {};
+    const shipping = order?.shipping_address || payload.shipping_address || {};
+
+    let customerName = payload.customer_name || payload.name || payload.full_name || partner.name || partner.full_name || order?.bill_full_name || shipping.full_name || order?.customer_name;
+    if (customerName && (String(customerName).includes('{{') || String(customerName).startsWith('{'))) {
+      customerName = null;
+    }
     if (!customerName && (payload.first_name || payload.last_name)) {
       customerName = `${payload.first_name || ''} ${payload.last_name || ''}`.trim();
     }
-    if (!customerName) customerName = 'Khách hàng Pancake';
+    if (!customerName && (partner.first_name || partner.last_name)) {
+      customerName = `${partner.first_name || ''} ${partner.last_name || ''}`.trim();
+    }
+    if (!customerName) customerName = 'Khách hàng Pancake / POS Cake';
 
-    const psid = String(customer.id || customer.fb_id || payload.psid || payload.from?.id || '');
-    const avatar = payload.avatar || payload.customer_avatar || payload.profile_pic || payload.avatar_url || customer.avatar_url || customer.avatar || customer.profile_pic || null;
+    let psid = String(partner.fb_id || partner.id || payload.psid || payload.from?.id || customer.id || '');
+    if (psid.includes('{{') || psid.startsWith('{') || psid.length > 30) {
+      // nếu id không phải facebook psid (ví dụ uuid pos cake)
+      if (psid.includes('-') || !/^\d+$/.test(psid)) psid = '';
+    }
+
+    let avatar = payload.avatar || payload.customer_avatar || payload.profile_pic || payload.user_profile_pic || payload.avatar_url || partner.avatar_url || partner.avatar || null;
+    if (avatar && (String(avatar).includes('{{') || String(avatar).startsWith('{'))) {
+      avatar = null;
+    }
+    if (!avatar && psid) {
+      avatar = `https://graph.facebook.com/${psid}/picture?type=normal`;
+    }
 
     // Trích xuất giới tính (Nam / Nữ / khác)
     let gender: string | null = null;
-    const rawGender = payload.gender || payload.customer_gender || payload.gioi_tinh || customer.gender || null;
-    if (rawGender) {
+    const rawGender = payload.gender || payload.customer_gender || payload.gioi_tinh || partner.gender || customer.gender || null;
+    if (rawGender && !String(rawGender).includes('{{')) {
       const g = String(rawGender).toLowerCase().trim();
       if (g === 'male' || g === 'nam' || g === '1') gender = 'Nam';
       else if (g === 'female' || g === 'nữ' || g === 'nu' || g === '2') gender = 'Nữ';
       else gender = String(rawGender);
     }
 
+    // Trích xuất địa chỉ đầy đủ
+    const fullAddress = shipping.full_address || shipping.address || partner.full_address || partner.address || payload.address || null;
+
     // Trích xuất tin nhắn hoặc mô tả đơn hàng
     const msgObj = payload.message || payload.data?.message || payload.conversation?.last_message || {};
     let messageText = String(msgObj.message || msgObj.text || msgObj.content || payload.text || payload.message_text || '');
     if (!messageText && order) {
-      messageText = `Đơn hàng POS Cake #${orderCode}: Tổng tiền ${orderTotal.toLocaleString('vi-VN')} đ`;
+      messageText = `Đơn hàng POS Cake #${orderCode}${orderStatus ? ` (${orderStatus})` : ''}: Tổng ${orderTotal.toLocaleString('vi-VN')} đ${itemsSummary ? ` - ${itemsSummary}` : ''}`;
     }
 
     // Trích xuất số điện thoại (từ tất cả biến thể và trường tùy chỉnh)
@@ -796,6 +859,12 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
       payload.phone,
       payload.customer_phone,
       payload.phone_number,
+      order?.bill_phone_number,
+      shipping.phone_number,
+      shipping.phone,
+      partner.phone_number,
+      partner.phone,
+      partner.mobile,
       payload.mobile,
       payload.tel,
       payload.sdt,
@@ -805,62 +874,127 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
       payload.custom_fields?.phone_number,
       payload.attributes?.phone,
       payload.attributes?.phone_number,
-      order?.bill_phone_number,
-      order?.shipping_phone,
-      order?.phone_number,
       customer.phone,
       customer.mobile,
       customer.phone_number
     ];
 
     for (const cand of phoneCandidates) {
-      if (cand) {
+      if (cand && !String(cand).includes('{{')) {
         const extracted = extractVietnamesePhone(String(cand));
         if (extracted) {
           detectedPhone = extracted;
           break;
-        } else if (String(cand).trim().length >= 9) {
-          detectedPhone = String(cand).trim();
-          break;
+        } else {
+          const cleanNum = String(cand).replace(/[^0-9+]/g, '');
+          if (cleanNum.length >= 9 && cleanNum.length <= 11) {
+            detectedPhone = cleanNum;
+            break;
+          }
         }
       }
     }
 
-    if (!detectedPhone && payload.phone_numbers && Array.isArray(payload.phone_numbers) && payload.phone_numbers.length > 0) {
-      detectedPhone = extractVietnamesePhone(String(payload.phone_numbers[0])) || String(payload.phone_numbers[0]);
+    if (!detectedPhone && (partner.phone_numbers || payload.phone_numbers) && Array.isArray(partner.phone_numbers || payload.phone_numbers)) {
+      const pList = partner.phone_numbers || payload.phone_numbers;
+      if (pList.length > 0) {
+        const firstP = String(pList[0]);
+        if (!firstP.includes('{{')) {
+          detectedPhone = extractVietnamesePhone(firstP) || firstP;
+        }
+      }
     }
 
-    if (!detectedPhone && messageText) {
+    if (!detectedPhone && messageText && !messageText.includes('{{')) {
       detectedPhone = extractVietnamesePhone(messageText);
     }
 
-    const detectedEmail = payload.email || payload.customer_email || payload.custom_fields?.email || extractEmail(messageText) || customer.email || order?.email || null;
-    const adId = payload.ad_id || payload.adId || payload.ad_name || order?.ad_id || null;
-    const campaignName = payload.utm_campaign || payload.campaign_id || payload.campaignId || payload.campaign_name || payload.campaign || null;
-    const createdAt = payload.created_at || payload.registered_at || payload.registration_date || payload.time || payload.timestamp || new Date().toISOString();
+    let detectedEmail = payload.email || payload.customer_email || partner.email || customer.email || order?.email || payload.custom_fields?.email || extractEmail(messageText) || null;
+    if (detectedEmail && String(detectedEmail).includes('{{')) detectedEmail = null;
+
+    let adId = payload.ad_id || payload.adId || payload.ad_name || order?.ad_id || order?.fb_ad_id || null;
+    if (adId && String(adId).includes('{{')) adId = null;
+
+    let campaignName = payload.utm_campaign || payload.campaign_id || payload.campaignId || payload.campaign_name || payload.campaign || order?.utm_campaign || null;
+    if (campaignName && String(campaignName).includes('{{')) campaignName = null;
+    const createdAt = payload.created_at || payload.registered_at || payload.registration_date || payload.time || payload.timestamp || order?.inserted_at || new Date().toISOString();
 
     // Lưu vào database CRM
     const isOrderEvent = Boolean(order && (orderTotal > 0 || eventType.includes('order')));
+    const sourceChannelName = isOrderEvent ? 'pos_pancake_order' : (eventType.includes('customer') || eventType.includes('partner') ? 'pos_pancake_customer' : (adId ? `Ad ID: ${adId}` : 'pancake_messenger'));
+
+    let detailedNotes = `Nhận Realtime từ POS Cake Webhook (${eventType})`;
+    if (isOrderEvent) {
+      detailedNotes = `Đơn hàng POS Cake #${orderCode} - Giá trị: ${orderTotal.toLocaleString('vi-VN')} đ${orderStatus ? ` - ${orderStatus}` : ''}${fullAddress ? ` - Đ/c: ${fullAddress}` : ''}`;
+    } else if (fullAddress) {
+      detailedNotes += ` (Địa chỉ: ${fullAddress})`;
+    }
+
     const leadRecord: LeadRecord = {
       customer_name: customerName,
       customer_phone: detectedPhone || null,
       customer_email: detectedEmail || null,
       customer_avatar: avatar,
       gender: gender,
-      source_channel: payload.source || payload.source_channel || (adId ? `Ad ID: ${adId}` : (isOrderEvent ? 'pos_pancake_order' : 'pancake_messenger')),
+      source_channel: payload.source || payload.source_channel || sourceChannelName,
       page_id: pageId || null,
       psid: psid || null,
       ad_id: adId || null,
-      utm_source: payload.utm_source || 'botcake',
+      utm_source: payload.utm_source || (isOrderEvent ? 'pos_cake' : 'botcake'),
       utm_campaign: campaignName,
       message_text: messageText || (isOrderEvent ? `Đơn hàng POS Cake #${orderCode}` : 'Khách để lại SĐT qua kịch bản Botcake / Pancake'),
-      notes: isOrderEvent ? `Đơn hàng Realtime từ POS Cake (#${orderCode}, ${orderTotal.toLocaleString('vi-VN')} đ)` : `Nhận Realtime qua Pancake/Botcake Webhook (${eventType})`,
+      notes: detailedNotes,
       status: isOrderEvent ? 'order_created' : 'lead_captured',
       last_message_at: createdAt,
       created_at: createdAt
     };
 
     const saveRes = await saveLeadToDatabase(leadRecord);
+
+    // Đồng bộ vào bảng customers (Khách hàng trung tâm) nếu có SĐT
+    if (detectedPhone) {
+      try {
+        const { data: existCust } = await supabase
+          .from('customers')
+          .select('id, full_name, email, address')
+          .eq('phone', detectedPhone)
+          .maybeSingle();
+
+        if (existCust) {
+          await supabase.from('customers').update({
+            full_name: (existCust.full_name === 'Khách hàng mới' || !existCust.full_name) ? customerName : existCust.full_name,
+            email: detectedEmail || existCust.email,
+            address: fullAddress || existCust.address,
+            updated_at: new Date().toISOString()
+          }).eq('id', existCust.id);
+        } else {
+          await supabase.from('customers').insert({
+            full_name: customerName,
+            phone: detectedPhone,
+            email: detectedEmail,
+            address: fullAddress,
+            gender: gender,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        }
+      } catch (custErr: any) {
+        console.warn('[POS Cake Webhook] Không thể đồng bộ khách hàng vào bảng customers:', custErr.message);
+      }
+    }
+
+    // Bắn thông báo nội bộ (Google Chat & Chuông CRM)
+    try {
+      await sendInternalSystemNotification({
+        fullName: customerName,
+        phone: detectedPhone,
+        psid: psid,
+        pageId: pageId,
+        tags: payload.tags || (isOrderEvent ? ['POS Cake Order', `Đơn #${orderCode}`] : ['POS Cake Webhook'])
+      });
+    } catch (notifErr: any) {
+      console.warn('[Pancake/Botcake Webhook] Lỗi gửi thông báo:', notifErr.message);
+    }
 
     // Cập nhật hội thoại nếu có psid
     if (psid && pageId) {
@@ -904,7 +1038,7 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
             customer_name: customerName,
             customer_phone: detectedPhone,
             customer_email: detectedEmail || undefined,
-            utm_source: 'pancake_webhook'
+            utm_source: isOrderEvent ? 'pos_cake' : 'pancake_webhook'
           });
         }
       } catch (capiErr) {}
@@ -912,7 +1046,7 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
 
     return {
       success: true,
-      message: 'Đã xử lý Webhook Pancake thành công',
+      message: 'Đã xử lý Webhook POS Cake / Pancake thành công',
       lead: leadRecord
     };
   } catch (err: any) {
@@ -929,4 +1063,151 @@ let autoSyncInterval: any = null;
 export function startPancakeAutoSyncWorker(intervalMs = 30000) {
   console.log('[Pancake Worker] Tính năng Polling ngầm Pancake đang tạm dừng theo yêu cầu.');
   return;
+}
+
+/**
+ * ========================================================
+ * POS CAKE API INTEGRATIONS (Address / Orders / Customers)
+ * Theo chuẩn tài liệu: https://docs.pancake.biz/pos/api
+ * ========================================================
+ */
+
+/**
+ * Lấy danh sách Tỉnh/Thành phố từ Pancake POS Geo API
+ */
+export async function getPosCakeProvinces(apiKeyOverride?: string): Promise<{ success: boolean; data: any[]; error?: string }> {
+  try {
+    const config = await getPancakeConfig();
+    const token = apiKeyOverride || config.api_key || process.env.PANCAKE_PUBLIC_API_TOKEN || '';
+    
+    const urls = [
+      `https://pos.pages.fm/api/v1/geo/provinces${token ? `?api_key=${encodeURIComponent(token)}` : ''}`,
+      `https://pos.pancake.vn/api/v1/geo/provinces${token ? `?api_key=${encodeURIComponent(token)}` : ''}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'TourCRM/1.0 (AD Luxury Travel)' }
+        });
+        if (res.ok) {
+          const json = await res.json() as any;
+          const provinces = json.data || json.provinces || (Array.isArray(json) ? json : []);
+          if (Array.isArray(provinces) && provinces.length > 0) {
+            return { success: true, data: provinces };
+          }
+        }
+      } catch (e) {}
+    }
+
+    return { success: true, data: [] };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message };
+  }
+}
+
+/**
+ * Lấy danh sách Quận/Huyện theo Tỉnh từ Pancake POS Geo API
+ */
+export async function getPosCakeDistricts(provinceId: string, apiKeyOverride?: string): Promise<{ success: boolean; data: any[]; error?: string }> {
+  if (!provinceId) return { success: true, data: [] };
+  try {
+    const config = await getPancakeConfig();
+    const token = apiKeyOverride || config.api_key || process.env.PANCAKE_PUBLIC_API_TOKEN || '';
+
+    const urls = [
+      `https://pos.pages.fm/api/v1/geo/districts?province_id=${encodeURIComponent(provinceId)}${token ? `&api_key=${encodeURIComponent(token)}` : ''}`,
+      `https://pos.pancake.vn/api/v1/geo/districts?province_id=${encodeURIComponent(provinceId)}${token ? `&api_key=${encodeURIComponent(token)}` : ''}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'TourCRM/1.0 (AD Luxury Travel)' }
+        });
+        if (res.ok) {
+          const json = await res.json() as any;
+          const districts = json.data || json.districts || (Array.isArray(json) ? json : []);
+          if (Array.isArray(districts) && districts.length > 0) {
+            return { success: true, data: districts };
+          }
+        }
+      } catch (e) {}
+    }
+
+    return { success: true, data: [] };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message };
+  }
+}
+
+/**
+ * Lấy danh sách Xã/Phường theo Huyện từ Pancake POS Geo API
+ */
+export async function getPosCakeCommunes(districtId: string, apiKeyOverride?: string): Promise<{ success: boolean; data: any[]; error?: string }> {
+  if (!districtId) return { success: true, data: [] };
+  try {
+    const config = await getPancakeConfig();
+    const token = apiKeyOverride || config.api_key || process.env.PANCAKE_PUBLIC_API_TOKEN || '';
+
+    const urls = [
+      `https://pos.pages.fm/api/v1/geo/communes?district_id=${encodeURIComponent(districtId)}${token ? `&api_key=${encodeURIComponent(token)}` : ''}`,
+      `https://pos.pancake.vn/api/v1/geo/communes?district_id=${encodeURIComponent(districtId)}${token ? `&api_key=${encodeURIComponent(token)}` : ''}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'TourCRM/1.0 (AD Luxury Travel)' }
+        });
+        if (res.ok) {
+          const json = await res.json() as any;
+          const communes = json.data || json.communes || (Array.isArray(json) ? json : []);
+          if (Array.isArray(communes) && communes.length > 0) {
+            return { success: true, data: communes };
+          }
+        }
+      } catch (e) {}
+    }
+
+    return { success: true, data: [] };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message };
+  }
+}
+
+/**
+ * Lấy danh sách Cửa hàng (Shops) từ POS Cake API
+ */
+export async function getPosCakeShops(apiKeyOverride?: string): Promise<{ success: boolean; data: any[]; error?: string }> {
+  try {
+    const config = await getPancakeConfig();
+    const token = apiKeyOverride || config.api_key || process.env.PANCAKE_PUBLIC_API_TOKEN || '';
+    if (!token) return { success: false, data: [], error: 'Chưa cấu hình API Key Pancake / POS Cake' };
+
+    const urls = [
+      `https://pos.pages.fm/api/v1/shops?api_key=${encodeURIComponent(token)}`,
+      `https://pos.pancake.vn/api/v1/shops?api_key=${encodeURIComponent(token)}`,
+      `https://pages.fm/api/v1/shops?access_token=${encodeURIComponent(token)}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'TourCRM/1.0 (AD Luxury Travel)' }
+        });
+        if (res.ok) {
+          const json = await res.json() as any;
+          const shops = json.shops || json.data || (Array.isArray(json) ? json : []);
+          if (Array.isArray(shops) && shops.length > 0) {
+            return { success: true, data: shops };
+          }
+        }
+      } catch (e) {}
+    }
+
+    return { success: true, data: [] };
+  } catch (err: any) {
+    return { success: false, data: [], error: err.message };
+  }
 }

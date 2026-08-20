@@ -223,27 +223,51 @@ export async function fetchLeadgenDetailsFromMeta(leadgenId: string, pageAccessT
 }
 
 /**
+ * Helper loại bỏ các thẻ giữ chỗ chưa được render từ Botcake / Template (VD: {{psid}}, {{user_full_name}})
+ */
+function cleanPlaceholder(val: any): string | null {
+  if (val === undefined || val === null) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+  if (str.startsWith('{{') || str.endsWith('}}') || str.includes('{{#')) {
+    return null;
+  }
+  return str;
+}
+
+/**
  * Lưu / Cập nhật Khách Hàng Tiềm Năng trực tiếp vào bảng 'leads' trong Supabase
  */
 export async function saveLeadToDatabase(leadData: LeadRecord) {
   const supabase = getAdminSupabaseClient();
   const now = new Date().toISOString();
 
+  const cleanName = cleanPlaceholder(leadData.customer_name) || 'Khách hàng tiềm năng';
+  const cleanPhone = cleanPlaceholder(leadData.customer_phone);
+  const cleanEmail = cleanPlaceholder(leadData.customer_email);
+  const cleanAvatar = cleanPlaceholder(leadData.customer_avatar);
+  const cleanGender = cleanPlaceholder(leadData.gender);
+  const cleanPsid = cleanPlaceholder(leadData.psid);
+  const cleanAdId = cleanPlaceholder(leadData.ad_id);
+  const cleanPageId = cleanPlaceholder(leadData.page_id);
+  const cleanLeadgenId = cleanPlaceholder(leadData.leadgen_id);
+  const cleanCampaign = cleanPlaceholder(leadData.utm_campaign);
+
   const payload: Record<string, any> = {
-    customer_name: leadData.customer_name || 'Khách hàng tiềm năng',
-    customer_phone: leadData.customer_phone || null,
-    customer_email: leadData.customer_email || null,
-    customer_avatar: leadData.customer_avatar || null,
-    gender: leadData.gender || null,
+    customer_name: cleanName,
+    customer_phone: cleanPhone,
+    customer_email: cleanEmail,
+    customer_avatar: cleanAvatar,
+    gender: cleanGender,
     source_channel: leadData.source_channel || 'facebook_messenger',
-    page_id: leadData.page_id || null,
-    psid: leadData.psid || null,
-    ad_id: leadData.ad_id || null,
+    page_id: cleanPageId,
+    psid: cleanPsid,
+    ad_id: cleanAdId,
     form_id: leadData.form_id || null,
-    leadgen_id: leadData.leadgen_id || null,
+    leadgen_id: cleanLeadgenId,
     utm_source: leadData.utm_source || 'facebook',
     utm_medium: leadData.utm_medium || null,
-    utm_campaign: leadData.utm_campaign || null,
+    utm_campaign: cleanCampaign,
     utm_content: leadData.utm_content || null,
     message_text: leadData.message_text || null,
     form_data: leadData.form_data || {},
@@ -258,34 +282,34 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
     // 1. Kiểm tra lead đã tồn tại chưa trong bảng `leads`
     let existingLead: any = null;
 
-    if (leadData.leadgen_id) {
+    if (payload.leadgen_id) {
       const { data } = await supabase
         .from('leads')
         .select('*')
-        .eq('leadgen_id', leadData.leadgen_id)
+        .eq('leadgen_id', payload.leadgen_id)
         .maybeSingle();
       existingLead = data;
     }
 
-    if (!existingLead && leadData.customer_phone) {
+    if (!existingLead && payload.customer_phone) {
       const { data } = await supabase
         .from('leads')
         .select('*')
-        .eq('customer_phone', leadData.customer_phone)
+        .eq('customer_phone', payload.customer_phone)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       existingLead = data;
     }
 
-    if (!existingLead && leadData.psid) {
+    if (!existingLead && payload.psid) {
       // Ưu tiên khớp theo psid (Facebook PSID là định danh duy nhất theo Page)
       let q = supabase
         .from('leads')
         .select('*')
-        .eq('psid', leadData.psid);
-      if (leadData.page_id) {
-        q = q.eq('page_id', leadData.page_id);
+        .eq('psid', payload.psid);
+      if (payload.page_id) {
+        q = q.eq('page_id', payload.page_id);
       }
       const { data } = await q
         .order('created_at', { ascending: false })
@@ -295,11 +319,11 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
     }
 
     // Nếu vẫn chưa tìm thấy và có tên khách hàng, tìm lead có cùng tên mà chưa có SĐT
-    if (!existingLead && leadData.customer_name && leadData.customer_name !== 'Khách hàng Pancake' && leadData.customer_name !== 'Khách hàng tiềm năng') {
+    if (!existingLead && payload.customer_name && payload.customer_name !== 'Khách hàng Pancake' && payload.customer_name !== 'Khách hàng tiềm năng') {
       const { data } = await supabase
         .from('leads')
         .select('*')
-        .eq('customer_name', leadData.customer_name)
+        .eq('customer_name', payload.customer_name)
         .is('customer_phone', null)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -314,6 +338,9 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
         updated_at: now,
         last_message_at: now
       };
+      if (payload.customer_name && payload.customer_name !== 'Khách hàng Pancake' && payload.customer_name !== 'Khách hàng tiềm năng') {
+        updateData.customer_name = payload.customer_name;
+      }
       if (payload.customer_phone) updateData.customer_phone = payload.customer_phone;
       if (payload.customer_email) updateData.customer_email = payload.customer_email;
       if (payload.message_text) updateData.message_text = payload.message_text;
