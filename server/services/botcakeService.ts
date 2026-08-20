@@ -62,7 +62,7 @@ export function normalizeVietnamesePhone(rawInput: string | null | undefined): {
 }
 
 /**
- * Gửi thông báo nội bộ hệ thống (Google Chat & Bảng thông báo CRM)
+ * Gửi thông báo nội bộ hệ thống (Ghi nhận vào Bảng thông báo CRM)
  */
 export async function sendInternalSystemNotification(params: {
   fullName: string;
@@ -72,36 +72,17 @@ export async function sendInternalSystemNotification(params: {
   tags?: string[] | string;
   orderId?: string | null;
 }) {
-  const { fullName, phone, tags } = params;
+  const { fullName, phone } = params;
   const displayPhone = phone || 'Chưa cung cấp SĐT';
-  const tagInfo = Array.isArray(tags) ? tags.join(', ') : (tags ? String(tags) : '');
 
-  const chatMessageText = `🔥 CÓ LEAD MỚI TỪ BOTCAKE - Tên: ${fullName} - SĐT: ${displayPhone} - Hãy nhanh chóng liên hệ!${tagInfo ? ` [Tags: ${tagInfo}]` : ''}`;
-
-  // 1. Bắn thông báo sang Google Chat Webhook (Kênh ADL - Điều hành hoặc Sale)
-  const googleChatWebhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
-  if (googleChatWebhookUrl) {
-    try {
-      await fetch(googleChatWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: chatMessageText
-        })
-      });
-    } catch (chatError: any) {
-      console.warn('[Botcake -> Google Chat] Không thể gửi webhook Google Chat:', chatError.message);
-    }
-  }
-
-  // 2. Ghi nhận vào bảng system_notifications trong Supabase để hiển thị trên chuông thông báo CRM
+  // Ghi nhận vào bảng system_notifications trong Supabase để hiển thị trên chuông thông báo CRM
   try {
     const supabase = getAdminSupabaseClient();
     await supabase.from('system_notifications').insert({
       id: `botcake_notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       type: 'new_lead_botcake',
-      title: `Lead mới từ Botcake: ${fullName}`,
-      message: `Khách hàng ${fullName} (${displayPhone}) vừa để lại thông tin trên Botcake Messenger.`,
+      title: `Lead mới: ${fullName}`,
+      message: `Khách hàng ${fullName} (${displayPhone}) vừa để lại thông tin trên hệ thống.`,
       created_at: new Date().toISOString(),
       read: false
     });

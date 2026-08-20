@@ -721,6 +721,15 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   - Phân luồng thông minh: Nếu là sự kiện đơn hàng có giá trị tiền -> Bắn sự kiện `Purchase` (kèm doanh thu VND thực tế) lên Meta CAPI. Nếu là khách hàng mới/tin nhắn -> Bắn sự kiện `Lead` lên Meta CAPI.
 - **Trạng thái:** Đã hoàn thành, biên dịch build thành công 100%.
 
+### 1.77 Loại Bỏ Tích Hợp Gửi Thông Báo Tới Google Chat
+- **Mô tả yêu cầu:**
+  - Loại bỏ hoàn toàn luồng kết nối và bắn thông báo sang webhook Google Chat khi phát sinh Lead mới hoặc Đơn hàng mới từ Pancake/Botcake/POS Cake.
+- **Giải pháp:**
+  - Cập nhật hàm `sendInternalSystemNotification` trong `server/services/botcakeService.ts`, gỡ bỏ đoạn mã gọi webhook tới `process.env.GOOGLE_CHAT_WEBHOOK_URL`.
+  - Giữ lại thông báo nội bộ hệ thống trên thanh chuông thông báo (`system_notifications`) và bảng dữ liệu của Tour CRM.
+  - Cập nhật các ghi chú và text trên giao diện trong `PotentialLeadsTab.tsx` và `pancakeService.ts` để đồng bộ.
+- **Trạng thái:** Đã hoàn thành, biên dịch build thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

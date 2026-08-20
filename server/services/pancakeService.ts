@@ -983,7 +983,7 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
       }
     }
 
-    // Bắn thông báo nội bộ (Google Chat & Chuông CRM)
+    // Bắn thông báo nội bộ (Chuông thông báo CRM)
     try {
       await sendInternalSystemNotification({
         fullName: customerName,

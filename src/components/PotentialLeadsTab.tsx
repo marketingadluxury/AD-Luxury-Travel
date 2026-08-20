@@ -1368,7 +1368,7 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                 <li>Tự động nhận đơn hàng POS Cake và đồng bộ khách hàng vào CRM.</li>
                 <li>Tự động kích hoạt sự kiện Meta Conversion API (Purchase &amp; Lead) chuẩn xác.</li>
                 <li>Hỗ trợ tra cứu địa chỉ hành chính Tỉnh/Huyện/Xã chuẩn Pancake Geo API.</li>
-                <li>Bắn chuông thông báo nội bộ và Google Chat khi có đơn/khách mới.</li>
+                <li>Bắn chuông thông báo nội bộ hệ thống khi có đơn hàng hoặc khách hàng mới.</li>
               </ul>
             </div>
 
