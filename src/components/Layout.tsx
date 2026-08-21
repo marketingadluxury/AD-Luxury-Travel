@@ -22,6 +22,7 @@ import {
   Smartphone,
   MoreHorizontal,
   ChevronRight,
+  ChevronDown,
   LogOut,
   Ticket,
   Camera,
@@ -36,7 +37,8 @@ import {
   Flag,
   Key,
   Megaphone,
-  BarChart3
+  BarChart3,
+  Palmtree
 } from 'lucide-react';
 import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -54,6 +56,7 @@ const roleOptions = [
   { value: 'sale', label: 'Sale', icon: <Briefcase className="w-4 h-4 text-blue-600" /> },
   { value: 'visa', label: 'Bộ phận Visa', icon: <Globe className="w-4 h-4 text-indigo-600" /> },
   { value: 'accounting', label: 'Kế toán', icon: <Calculator className="w-4 h-4 text-emerald-600" /> },
+  { value: 'hr', label: 'Nhân sự (HR)', icon: <UserCheck className="w-4 h-4 text-cyan-600" /> },
   { value: 'tour_guide', label: 'Hướng Dẫn Viên (HDV)', icon: <Flag className="w-4 h-4 text-teal-600" /> },
   { value: 'admin', label: 'Quản trị viên (Full)', icon: <Key className="w-4 h-4 text-rose-600" /> },
   { value: 'marketing_leader', label: 'Trưởng phòng Marketing', icon: <Megaphone className="w-4 h-4 text-fuchsia-600" /> },
@@ -62,28 +65,129 @@ const roleOptions = [
 import { FeedbackModal } from './FeedbackModal';
 import { ERPCopilotModal } from './chat/ERPCopilotModal';
 
+export interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  roleAccess: Role[];
+}
 
-const navigation = [
+export interface NavGroup {
+  groupName: string;
+  icon: any;
+  items: NavItem[];
+}
+
+export type NavEntry = NavItem | NavGroup;
+
+export const navigationTree: NavGroup[] = [
+  {
+    groupName: 'Quản lý tour',
+    icon: Map,
+    items: [
+      { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide'] },
+      { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
+    ]
+  },
+  {
+    groupName: 'Bookings',
+    icon: ShoppingCart,
+    items: [
+      { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin'] },
+      { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
+      { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
+    ]
+  },
+  {
+    groupName: 'Hành chính nhân sự',
+    icon: FileCheck,
+    items: [
+      { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+      { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+    ]
+  },
+  {
+    groupName: 'Đối tác & Khách hàng',
+    icon: Users,
+    items: [
+      { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
+      { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
+    ]
+  },
+];
+
+export interface MainTabItem {
+  name: string;
+  href: string;
+  icon: any;
+  roleAccess: Role[];
+  matchPaths?: string[];
+  groupRef?: NavGroup;
+}
+
+export const mainSidebarNav: MainTabItem[] = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
+  {
+    name: 'Quản lý tour',
+    href: '/tours',
+    icon: Map,
+    roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'sale', 'visa', 'accounting', 'hr'],
+    matchPaths: ['/tours', '/tour-media'],
+    groupRef: navigationTree[0]
+  },
+  {
+    name: 'Bookings',
+    href: '/orders',
+    icon: ShoppingCart,
+    roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin', 'operator', 'visa'],
+    matchPaths: ['/orders', '/visa-services', '/visa-orders'],
+    groupRef: navigationTree[1]
+  },
+  { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },
+  {
+    name: 'Hành chính nhân sự',
+    href: '/leave-requests',
+    icon: FileCheck,
+    roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'],
+    matchPaths: ['/payment-proposals', '/leave-requests'],
+    groupRef: navigationTree[2]
+  },
+  { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
+  { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
+  {
+    name: 'Đối tác & Khách hàng',
+    href: '/customers',
+    icon: Users,
+    roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'visa', 'tour_guide'],
+    matchPaths: ['/customers', '/passengers'],
+    groupRef: navigationTree[3]
+  },
+];
+
+const allNavItems: NavItem[] = [
+  { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide'] },
-  { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin'] },
-  { name: 'Dịch vụ Visa', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
-  { name: 'Booking Visa', href: '/visa-orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
+  { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
   { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin'] },
-  { name: 'Xử lý Visa', href: '/visa', icon: FileText, roleAccess: ['visa', 'admin', 'bod'] },
-  { name: 'Kế toán & Hóa đơn', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
-  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod'] },
-  { name: 'Đại lý & CTV', href: '/customers', icon: Users, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting'] },
-  { name: 'Khách hàng', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
-  { name: 'Meta Ads & Leads', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
+  { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
+  { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
+  { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },
+  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+  { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+  { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
+  { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
+  { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
+  { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
+  { name: 'Cài đặt hệ thống', href: '/settings', icon: Settings, roleAccess: ['admin', 'hr'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole, displayRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [] } = useCRM();
+  const { currentRole, setCurrentRole, displayRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [], leaveRequests = [] } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -353,6 +457,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return notifications.filter(n => !n.read);
   }, [notifications]);
 
+  const activeGroup = React.useMemo(() => {
+    for (const group of navigationTree) {
+      if (group.items.some(child => child.href === location.pathname)) {
+        return group;
+      }
+    }
+    return undefined;
+  }, [location.pathname]);
+
   const getRoleLabel = (role: Role) => {
     switch (role) {
       case 'agent': return 'Đại lý (Agent)';
@@ -362,6 +475,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       case 'sale': return 'Sale';
       case 'visa': return 'Bộ phận Visa';
       case 'accounting': return 'Kế toán';
+      case 'hr': return 'Nhân sự (HR)';
       case 'admin': return 'Quản trị viên';
       case 'marketing_leader': return 'Trưởng phòng Marketing';
       case 'marketing': return 'Nhân viên Marketing';
@@ -371,10 +485,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Check access control for current page and role
   const isSettingsPath = location.pathname === '/settings';
-  const currentNavItem = navigation.find(n => n.href === location.pathname);
+  const currentNavItem = allNavItems.find(n => n.href === location.pathname);
   
   let hasAccess = false;
-  if (currentRole === 'admin') {
+  if (currentRole === 'admin' || (isSettingsPath && currentRole === 'hr')) {
     hasAccess = true;
   } else if (isSettingsPath) {
     hasAccess = false;
@@ -384,7 +498,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     hasAccess = true;
   }
 
-  const allowedNav = navigation.filter(item => item.roleAccess.includes(currentRole));
+  const pendingLeavesBadgeCount = React.useMemo(() => {
+    const currentUserId = profile?.id || user?.id || '';
+    if (['sale_leader', 'operator', 'marketing_leader'].includes(currentRole)) {
+      return leaveRequests.filter(r => r.status === 'pending').length;
+    }
+    if (['hr', 'bod', 'admin', 'accounting'].includes(currentRole)) {
+      return leaveRequests.filter(r => r.status === 'approved_level_1' || r.status === 'pending').length;
+    }
+    return 0;
+  }, [leaveRequests, currentRole, profile, user]);
 
   const AccessDeniedView = () => (
     <div className="flex flex-col items-center justify-center py-16 px-6 bg-white rounded-2xl border border-gray-200 shadow-xs max-w-md mx-auto my-8 text-center">
@@ -448,47 +571,65 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-          {allowedNav.map((item) => {
-            const isActive = location.pathname === item.href;
+        <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
+          {mainSidebarNav.map((item) => {
+            if (!item.roleAccess.includes(currentRole as any)) return null;
+
+            let targetHref = item.href;
+            if (item.groupRef) {
+              const accessibleChild = item.groupRef.items.find(child => child.roleAccess.includes(currentRole as any));
+              if (accessibleChild) {
+                const canAccessPrimary = allNavItems.find(n => n.href === item.href)?.roleAccess.includes(currentRole as any);
+                if (!canAccessPrimary) {
+                  targetHref = accessibleChild.href;
+                }
+              }
+            }
+
+            const isActive = location.pathname === targetHref || (item.matchPaths && item.matchPaths.includes(location.pathname));
+
             return (
               <Link
                 key={item.name}
-                to={item.href}
+                to={targetHref}
                 className={cn(
                   isActive
-                    ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs'
-                    : 'text-gray-700 hover:bg-gray-100',
-                  'group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-xl transition-colors relative'
+                    ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
+                    : 'text-gray-800 hover:bg-gray-100/80 font-semibold',
+                  'group flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors relative'
                 )}
               >
-                <div className="flex items-center">
+                <div className="flex items-center min-w-0 pr-1">
                   <item.icon
                     className={cn(
-                      isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500',
-                      'mr-3 flex-shrink-0 h-5 w-5'
+                      isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600',
+                      'mr-2.5 flex-shrink-0 h-4 w-4'
                     )}
-                    aria-hidden="true"
                   />
-                  <span>{item.name}</span>
+                  <span className="truncate">{item.name}</span>
                 </div>
+                {(item.href === '/leave-requests' || item.matchPaths?.includes('/leave-requests')) && pendingLeavesBadgeCount > 0 && (
+                  <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full shadow-2xs animate-pulse">
+                    {pendingLeavesBadgeCount}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
         
         {currentRole === 'admin' && (
-          <div className="p-4 border-t border-gray-200 shrink-0">
+          <div className="p-3 border-t border-gray-200 shrink-0">
             <Link
               to="/settings"
               className={cn(
                 location.pathname === '/settings'
-                  ? 'bg-blue-50 text-blue-700 font-semibold'
-                  : 'text-gray-700 hover:bg-gray-100',
-                'group flex items-center px-3 py-2 text-sm font-medium rounded-xl transition-colors'
+                  ? 'bg-blue-50 text-blue-700 font-bold'
+                  : 'text-gray-700 hover:bg-gray-100/80 font-medium',
+                'group flex items-center px-3 py-2 text-xs rounded-xl transition-colors'
               )}
             >
-              <Settings className="text-gray-400 group-hover:text-gray-500 mr-3 flex-shrink-0 h-5 w-5" />
+              <Settings className="text-gray-400 group-hover:text-gray-500 mr-2.5 flex-shrink-0 h-4 w-4" />
               Cài đặt hệ thống
             </Link>
           </div>
@@ -512,7 +653,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="flex items-center gap-2 min-w-0">
               <h1 className="text-[28px] font-bold text-gray-900 truncate" style={{ fontSize: '28px' }}>
-                {navigation.find(n => n.href === location.pathname)?.name || 'Tour CRM'}
+                {allNavItems.find(n => n.href === location.pathname)?.name || 'Tour CRM'}
               </h1>
               <span className="hidden sm:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">
                 {getRoleLabel(displayRole)}
@@ -616,6 +757,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                    <User className="h-4 w-4 mr-2 text-slate-400" />
                    Thông tin cá nhân
                  </Link>
+                 <Link 
+                   to="/leave-requests"
+                   className="w-full flex items-center px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                 >
+                   <Palmtree className="h-4 w-4 mr-2 text-emerald-600" />
+                   Nghỉ phép & Chấm công
+                 </Link>
                  <button 
                    onClick={() => signOut()}
                    className="w-full flex items-center text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
@@ -628,6 +776,39 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         
+        {/* Sub-Tabs Bar for Grouped Routes */}
+        {activeGroup && (
+          <div className="bg-white border-b border-gray-200 px-3.5 sm:px-6 py-2.5 shrink-0 z-10 shadow-2xs">
+            <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 overflow-x-auto max-w-full">
+              {activeGroup.items
+                .filter(item => item.roleAccess.includes(currentRole as any))
+                .map(item => {
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      className={cn(
+                        'px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer',
+                        isActive
+                          ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80 font-black'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      )}
+                    >
+                      <item.icon className={cn('w-3.5 h-3.5', isActive ? 'text-blue-600' : 'text-slate-400')} />
+                      <span>{item.name}</span>
+                      {item.href === '/leave-requests' && pendingLeavesBadgeCount > 0 && (
+                        <span className="ml-1 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] rounded-full font-black animate-pulse">
+                          {pendingLeavesBadgeCount}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
         {/* Main scrollable view */}
         <main className="flex-1 overflow-y-auto bg-gray-50 p-3 sm:p-6 md:p-8 pb-20 md:pb-8">
           {hasAccess ? children : <AccessDeniedView />}
@@ -761,18 +942,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* Nav list */}
             <div className="flex-1 overflow-y-auto p-3 space-y-1">
               <div className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider px-3 py-1">Menu Chức Năng</div>
-              {allowedNav.map((item) => {
-                const isActive = location.pathname === item.href;
+              {mainSidebarNav.map((item) => {
+                if (!item.roleAccess.includes(currentRole as any)) return null;
+
+                let targetHref = item.href;
+                if (item.groupRef) {
+                  const accessibleChild = item.groupRef.items.find(child => child.roleAccess.includes(currentRole as any));
+                  if (accessibleChild) {
+                    const canAccessPrimary = allNavItems.find(n => n.href === item.href)?.roleAccess.includes(currentRole as any);
+                    if (!canAccessPrimary) {
+                      targetHref = accessibleChild.href;
+                    }
+                  }
+                }
+
+                const isActive = location.pathname === targetHref || (item.matchPaths && item.matchPaths.includes(location.pathname));
+
                 return (
                   <Link
                     key={item.name}
-                    to={item.href}
+                    to={targetHref}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={cn(
                       isActive
-                        ? 'bg-blue-50 text-blue-700 font-bold shadow-xs'
-                        : 'text-gray-700 hover:bg-gray-100 font-medium',
-                      'flex items-center justify-between px-3 py-2.5 text-xs rounded-xl transition-colors'
+                        ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
+                        : 'text-gray-800 hover:bg-gray-100 font-semibold',
+                      'flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors'
                     )}
                   >
                     <div className="flex items-center">
@@ -784,7 +979,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       />
                       <span>{item.name}</span>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                    <div className="flex items-center gap-1.5">
+                      {(item.href === '/leave-requests' || item.matchPaths?.includes('/leave-requests')) && pendingLeavesBadgeCount > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full animate-pulse">
+                          {pendingLeavesBadgeCount}
+                        </span>
+                      )}
+                      <ChevronRight className="w-4 h-4 text-gray-300" />
+                    </div>
                   </Link>
                 );
               })}

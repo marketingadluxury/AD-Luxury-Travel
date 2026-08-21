@@ -20,7 +20,7 @@ export default function Settings() {
         </div>
         <h2 className="text-xl font-black text-gray-900 mb-2">Quyền truy cập hạn chế</h2>
         <p className="text-xs text-gray-500 mb-6 max-w-sm leading-relaxed font-semibold">
-          Chỉ có <span className="text-blue-600 font-bold">Quản trị viên (admin)</span> mới có quyền thay đổi các cài đặt và hạn mức phân hạng thành viên của hệ thống.
+          Chỉ có <span className="text-blue-600 font-bold">Quản trị viên (admin)</span> mới có quyền truy cập trang Cài đặt hệ thống.
         </p>
         <div className="text-xs bg-slate-50 border border-slate-200 p-3 rounded-lg font-bold text-slate-600">
           Mẹo: Hãy đổi vai trò của bạn ở thanh menu bên trái thành "Quản trị viên" để truy cập trang này.
@@ -50,7 +50,7 @@ export default function Settings() {
             <span>Cài đặt hệ thống</span>
           </h2>
           <p className="text-xs text-gray-500 mt-1 font-medium">
-            Quản lý các cấu hình hệ thống, hạng mức thành viên và phân quyền tài khoản người dùng CRM.
+            Quản lý các cấu hình hệ thống và hạng mức thành viên.
           </p>
         </div>
         <div className="text-xs px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200 font-extrabold uppercase tracking-wider">
@@ -59,7 +59,7 @@ export default function Settings() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex bg-slate-100 rounded-2xl p-1 border border-slate-200 shadow-inner gap-1">
+      <div className="flex flex-wrap bg-slate-100 rounded-2xl p-1 border border-slate-200 shadow-inner gap-1">
         <button
           onClick={() => setActiveTab('membership')}
           className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
@@ -84,7 +84,7 @@ export default function Settings() {
         </button>
       </div>
 
-      {activeTab === 'membership' ? (
+      {activeTab === 'membership' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Help & Guide card */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-150 rounded-2xl p-6 space-y-4">
@@ -228,9 +228,9 @@ export default function Settings() {
           </form>
         </div>
       </div>
-      ) : (
-        <UserManagement />
       )}
+
+      {activeTab === 'users' && <UserManagement />}
     </div>
   );
 }

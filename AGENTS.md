@@ -14,12 +14,19 @@ Tài liệu này lưu trữ toàn bộ thông tin cốt lõi, quy tắc phát tr
 
 ---
 
-## 2. Quy Tắc Hoạt Động & Giao Tiếp (Bắt Buộc)
+## 2. Quy Tắc Hoạt Động & Giao Tiếp (Bắt Buộc Cho Mọi Model Gemini)
 - **Ngôn ngữ giao tiếp:** Luôn luôn phản hồi bằng **Tiếng Việt**.
+- **Bảo mật & Trình bày kết quả (Quy tắc Thực hiện Ngầm & Không xuất log):**
+  - **TẤT CẢ các bước kiểm tra (Bước 1: Check AGENTS.md, BUGS.md; Bước 4: Double check...) chỉ được diễn ra ngầm (hoàn toàn silent trong quá trình suy nghĩ và gọi công cụ).**
+  - **Tuyệt đối KHÔNG** hiển thị các thông tin chạy ngầm của hệ thống, mã lệnh, kết quả tool call thô, tên file, đường dẫn nội bộ, log diff hay các chi tiết kỹ thuật ra giao diện trò chuyện cho người dùng.
+  - Tất cả phản hồi gửi tới người dùng chỉ bao gồm kết quả cuối cùng, được tổng hợp bằng **Tiếng Việt** ngắn gọn, rõ ràng, lịch sự và chuyên nghiệp.
 - **Định dạng hiển thị phép tính & công thức:** Tuyệt đối **KHÔNG** sử dụng công thức KaTeX/LaTeX hay các ký tự khối hệ thống như `$$`, `\text`, `\math`. Tất cả số liệu, phép tính, chiết khấu và giải thích số tiền phải được trình bày dưới dạng văn bản Tiếng Việt thuần túy, rõ ràng, trực quan (dùng văn bản Markdown thông thường, gạch đầu dòng, dấu trừ `-`, dấu cộng `+`, dấu bằng `=`) để đảm bảo dễ đọc và thân thiện trên mọi giao diện.
 - **Định dạng Thời gian & Lịch:**
   - **Định dạng hiển thị thời gian:** Tất cả thời gian trên hệ thống phải luôn tuân thủ chuẩn **`hh:mm dd/mm/yyyy`** (hoặc `dd/mm/yyyy` đối với ngày thuần túy).
   - **Lịch chọn ngày (Calendar):** Luôn sử dụng bộ chọn ngày chuẩn hóa Tiếng Việt (Thứ 2 - CN, Tháng 1 - Tháng 12, Hôm nay, Xóa ngày...) thông qua component `DatePicker.tsx` để đảm bảo trải nghiệm thuần Việt trên mọi thiết bị và trình duyệt.
+- **Quy tắc Thiết kế Nút Bấm & Tránh Double Icon / Duplicate CTA (Bắt Buộc):**
+  - **Tránh Double Icon:** Tuyệt đối không thêm các ký tự biểu tượng thủ công (như `+`, `*`, `-`) vào chuỗi text khi button/component đã sử dụng Icon tương ứng từ `lucide-react` (ví dụ: dùng `<Plus />` kèm `<span>Tạo đơn</span>`, tuyệt đối không viết `<span>+ Tạo đơn</span>`).
+  - **Tránh trùng lặp nút:** Không đặt 2 nút hành động chính (Call-to-Action) có cùng chức năng nằm cạnh nhau trong cùng một cụm màn hình/khối giao diện.
 - **Quy trình thay đổi logic:** Trước khi thực hiện bất kỳ thay đổi nào về logic hệ thống, cấu trúc database, hoặc tính năng chính, **PHẢI** giải thích chi tiết giải pháp cho người dùng và chỉ thực hiện sau khi có sự xác nhận của người dùng.
 - **Quản lý File & Storage:** 
   - **TẤT CẢ** các file tải lên (hình ảnh, tài liệu, file visa, hộ chiếu, hóa đơn...) **phải luôn được lưu vào Supabase Storage**.
@@ -170,6 +177,17 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
   - **Bộ lọc đa năng:** Hỗ trợ Tìm kiếm theo Từ khóa, Lọc theo Tháng khởi hành và Lọc theo Danh mục sản phẩm kèm nút "Xóa bộ lọc".
   - **Ẩn Tour Đã Khởi Hành:** Tại *Lịch khởi hành* (`DepartureCalendar.tsx`), hệ thống tự động lọc bỏ các tour có ngày khởi hành trước 00:00 ngày hôm nay, chỉ hiển thị các tour từ hôm nay trở đi. Nếu cần xem hoặc lưu trữ tour đã qua ngày đi, người dùng có thể tra cứu tại trang *Quản lý Tour* (`ToursManagement.tsx`).
   - **Khóa Đặt Chỗ Tour Quá Hạn:** Tại Lịch khởi hành (`DepartureCalendar.tsx`), các tour đã quá ngày đi sẽ tự động vô hiệu hóa nút đặt chỗ và hiển thị trạng thái `🔒 Tour đã quá lịch khởi hành`.
+- **Cơ Chế Tính Quỹ Phép Năm Tích Lũy Động (1 Ngày / Tháng):**
+  - **Quy tắc tích lũy:** Số ngày phép năm mặc định được tích lũy theo số tháng làm việc trong năm (1 ngày / 1 tháng). Ví dụ: Hiện tại là Tháng 8 thì quỹ phép năm mặc định là 8 ngày (thay vì cấp sẵn 12 ngày ngay từ đầu năm).
+  - **Năm quá khứ & tương lai:** Đối với các năm trước, số ngày phép mặc định là 12 ngày; đối với các năm tương lai là 0 ngày (tích lũy dần theo từng tháng khi năm đó đến).
+  - **Nhân viên mới:** Nếu nhân viên mới vào làm trong năm, quỹ phép sẽ được tính từ tháng bắt đầu làm việc đến thời điểm hiện tại.
+  - **Ưu tiên điều chỉnh thủ công của HR:** Mọi điều chỉnh thủ công từ bộ phận HR (trong bảng `leave_balances` / Quản lý quỹ phép) luôn được ưu tiên áp dụng tuyệt đối hơn công thức tích lũy tự động.
+  - **Vị Trí Tab Quản Lý Quỹ Phép:** Tính năng Quản lý Quỹ phép năm nhân viên nằm tập trung duy nhất tại trang **Hành chính nhân sự** (`/leave-requests`), hoàn toàn loại bỏ khỏi Cài đặt hệ thống (`/settings`).
+  - **Cấu Trúc Tab Quản Lý Người Dùng & Phân Quyền (`UserManagement.tsx`):**
+    - Trang Quản lý người dùng trong Cài đặt hệ thống được phân tách thành **3 tab** chuyên biệt:
+      1. **🏢 Quản lý Nhân sự Công ty (`company`):** Quản lý tất cả tài khoản nội bộ công ty (Admin, BOD, Sale Leader, Sale, Điều hành, Visa, Kế toán, HDV, HR, Marketing).
+      2. **🤝 Tài khoản Đại lý & CTV (`agents`):** Chuyên quản lý danh sách tài khoản đối tác ngoài (Đại lý, CTV).
+      3. **🏛️ Quản lý Team Kinh doanh (`teams`):** Quản lý cấu trúc nhóm kinh doanh, Gán Leader, KPI và thành viên.
 
 ---
 
@@ -286,6 +304,22 @@ Khi thực hiện nâng cấp hoặc sửa đổi bất kỳ file nào trong h�
   - Kiểm tra các lỗi phổ biến như đổi thứ tự React Hook, sai logic phân quyền, lỗi render vô tận, hay rớt dòng UI.
 - **Bước 5: Lưu lại thông tin về task đó**
   - Cập nhật nhật ký công việc hoặc lưu trữ thông tin cần thiết vào `AGENTS.md` / `BUGS.md` để đảm bảo ngữ cảnh cho các phiên làm việc tiếp theo.
+
+---
+
+## 12. Phân Hệ Quản Lý Nhân Sự (HR), Nghỉ Phép & Chấm Công
+- **Vai trò Nhân sự (`role: 'hr'`):**
+  - Quản lý phân hệ *Cài đặt Quỹ phép* (`/settings`) và *Nghỉ phép & Chấm công* (`/leave-requests`).
+  - Tuyệt đối **không có quyền** xem, thêm/sửa/xóa hay phân quyền thành viên trong mục *Quản lý người dùng & phân quyền* (`UserManagement`).
+  - Có quyền điều chỉnh số ngày phép / quỹ phép của toàn bộ nhân viên thủ công (qua bảng chấm công `TimesheetManagement.tsx` và phân hệ `LeaveBalanceManagement.tsx`).
+- **Quy trình Duyệt Nghỉ Phép 2 Cấp:**
+  - **Cấp 1:** Trưởng nhóm (Leader: `sale_leader`, `marketing_leader`, etc.) duyệt đơn của thành viên trong nhóm (`status` chuyển thành `approved_level_1`).
+  - **Cấp 2 (Duyệt cuối):** Nhân sự (`hr`) hoặc Ban Giám Đốc/Admin duyệt hoàn tất (`status` chuyển thành `approved_final`).
+- **Phân Quyền Xem Dữ Liệu Chấm Công & Quỹ Phép:**
+  - **Nhân viên thông thường:** Chỉ xem dữ liệu chấm công và quỹ phép của chính mình.
+  - **Trưởng nhóm (Leader):** Xem dữ liệu của chính mình và các thành viên trực thuộc nhóm phụ trách.
+  - **HR / BOD / Admin:** Xem toàn bộ nhân sự công ty.
+
 
 
 

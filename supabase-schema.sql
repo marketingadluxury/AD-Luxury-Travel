@@ -187,20 +187,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   CONSTRAINT bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users (id)
 );
 
--- 5. Bảng Visas (Quản lý hồ sơ Visa)
-CREATE TABLE IF NOT EXISTS visas (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
-  country TEXT NOT NULL,
-  type TEXT NOT NULL,
-  status TEXT NOT NULL,
-  submission_date DATE NOT NULL,
-  expected_date DATE NOT NULL,
-  internal_notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
-);
-
--- 6. Bảng Invoices (Quản lý hóa đơn - Thu/Chi)
+-- 5. Bảng Invoices (Quản lý hóa đơn - Thu/Chi)
 CREATE TABLE IF NOT EXISTS invoices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
@@ -503,60 +490,44 @@ SELECT
   t.name AS tour_name,
   t.visa_deadline
 FROM passengers p
-JOIN orders o ON p.order_id = o.id
+JOIN bookings o ON p.order_id = o.id
 JOIN tours t ON o.tour_id = t.id
-WHERE (o.status = 'sure' OR o.status = 'paid')
+WHERE (o.status = 'Confirmed' OR o.status = 'sure' OR o.status = 'paid')
   AND (p.visa_status IN ('pending', 'processing') OR p.needs_visa_service = TRUE)
   AND t.visa_deadline IS NOT NULL;
 
 -- 3. View Bảng tính Lợi nhuận thuần thực tế
 CREATE OR REPLACE VIEW executive_financial_margins AS
 SELECT 
-  COALESCE(SUM(o.total_price), 0) AS gross_revenue,
+  COALESCE(SUM(COALESCE(o.selling_price, o.total_amount, 0)), 0) AS gross_revenue,
   COALESCE(SUM(tc.flight_amount), 0) AS total_flight_cost,
   COALESCE(SUM(tc.commission_amount), 0) AS total_commission_cost,
   COALESCE(SUM(tc.flight_amount + tc.insurance_amount + tc.tour_guide_amount + tc.gift_amount + tc.commission_amount + tc.advertising_amount + tc.other_amount + tc.visa_amount), 0) AS total_expenses,
-  (COALESCE(SUM(o.total_price), 0) - COALESCE(SUM(tc.flight_amount + tc.insurance_amount + tc.tour_guide_amount + tc.gift_amount + tc.commission_amount + tc.advertising_amount + tc.other_amount + tc.visa_amount), 0)) AS net_profit
-FROM orders o
+  (COALESCE(SUM(COALESCE(o.selling_price, o.total_amount, 0)), 0) - COALESCE(SUM(tc.flight_amount + tc.insurance_amount + tc.tour_guide_amount + tc.gift_amount + tc.commission_amount + tc.advertising_amount + tc.other_amount + tc.visa_amount), 0)) AS net_profit
+FROM bookings o
 LEFT JOIN tour_costs tc ON o.tour_id = tc.tour_id
-WHERE o.status IN ('sure', 'paid');
+WHERE o.status IN ('Confirmed', 'sure', 'paid');
 
 -- 4. View Hiệu suất & Tỉ lệ đổi đơn Đại lý
 CREATE OR REPLACE VIEW executive_agent_performance AS
 SELECT 
   COALESCE(o.user_id::text, o.created_by) AS agent_key,
   o.created_by AS agent_name,
-  COUNT(CASE WHEN o.status = 'hold' THEN 1 END) AS hold_count,
-  COUNT(CASE WHEN o.status IN ('sure', 'paid') THEN 1 END) AS sure_count,
-  COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END) AS expired_count,
+  COUNT(CASE WHEN o.status = 'Hold' OR o.status = 'hold' THEN 1 END) AS hold_count,
+  COUNT(CASE WHEN o.status IN ('Confirmed', 'sure', 'paid') THEN 1 END) AS sure_count,
+  COUNT(CASE WHEN o.status = 'Cancelled' OR o.status = 'cancelled' THEN 1 END) AS expired_count,
   COUNT(o.id) AS total_orders,
-  COALESCE(SUM(CASE WHEN o.status IN ('sure', 'paid') THEN o.total_price ELSE 0 END), 0) AS total_revenue,
+  COALESCE(SUM(CASE WHEN o.status IN ('Confirmed', 'sure', 'paid') THEN COALESCE(o.selling_price, o.total_amount, 0) ELSE 0 END), 0) AS total_revenue,
   CASE 
-    WHEN COUNT(o.id) > 0 THEN ROUND((COUNT(CASE WHEN o.status IN ('sure', 'paid') THEN 1 END)::numeric / COUNT(o.id)::numeric) * 100, 2)
+    WHEN COUNT(o.id) > 0 THEN ROUND((COUNT(CASE WHEN o.status IN ('Confirmed', 'sure', 'paid') THEN 1 END)::numeric / COUNT(o.id)::numeric) * 100, 2)
     ELSE 0 
   END AS conversion_rate_pct,
   CASE 
-    WHEN COUNT(o.id) > 0 THEN ROUND((COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END)::numeric / COUNT(o.id)::numeric) * 100, 2)
+    WHEN COUNT(o.id) > 0 THEN ROUND((COUNT(CASE WHEN o.status = 'Cancelled' OR o.status = 'cancelled' THEN 1 END)::numeric / COUNT(o.id)::numeric) * 100, 2)
     ELSE 0 
   END AS expired_rate_pct
-FROM orders o
+FROM bookings o
 GROUP BY COALESCE(o.user_id::text, o.created_by), o.created_by;
-
--- ==============================================================================
--- BẢNG PHẢN HỒI GÓP Ý & BÁO LỖI (FEEDBACKS & BUG REPORTS)
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS feedbacks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  type TEXT DEFAULT 'Góp ý',
-  content TEXT NOT NULL,
-  image_url TEXT,
-  sender_name TEXT,
-  sender_email TEXT,
-  sender_phone TEXT,
-  sender_role TEXT,
-  status TEXT DEFAULT 'pending',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
 
 -- ==============================================================================
 -- BẢNG ĐỀ NGHỊ THANH TOÁN (PAYMENT PROPOSALS)
@@ -973,37 +944,91 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS meta_lead_id TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_status TEXT DEFAULT 'pending';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta_lead_id TEXT;
 
--- 6. Kích hoạt Realtime an toàn (bỏ qua nếu bảng đã tồn tại trong publication)
+-- ============================================================
+-- 7. BẢNG QUẢN LÝ NGHỈ PHÉP & BẢNG CHẤM CÔNG (HR & TIMESHEET)
+-- ============================================================
+
+-- Bảng Ngày Lễ Quốc Gia & Nghỉ Bù
+CREATE TABLE IF NOT EXISTS holidays (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  is_recurring BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE holidays ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to holidays" ON holidays;
+CREATE POLICY "Allow access to holidays" ON holidays FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Bảng Đơn Xin Nghỉ Phép (2 Cấp Phê Duyệt: Leader -> Kế toán/HR)
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  type TEXT NOT NULL DEFAULT 'annual', -- 'annual', 'unpaid', 'compensatory', 'special'
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'approved_level_1', 'approved_final', 'rejected'
+  reason TEXT NOT NULL,
+  handover_user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  level_1_approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  level_1_approved_at TIMESTAMPTZ,
+  final_approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  final_approved_at TIMESTAMPTZ,
+  reject_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE leave_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to leave_requests" ON leave_requests;
+CREATE POLICY "Allow access to leave_requests" ON leave_requests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Bảng Quỹ Phép Năm Nhân Viên
+CREATE TABLE IF NOT EXISTS leave_balances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  year INTEGER NOT NULL,
+  total_days NUMERIC NOT NULL DEFAULT 12,
+  used_days NUMERIC NOT NULL DEFAULT 0,
+  remaining_days NUMERIC NOT NULL DEFAULT 0,
+  note TEXT,
+  updated_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, year)
+);
+
+-- Bổ sung các cột mở rộng cho leave_balances (cho các DB đã khởi tạo từ trước)
+ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS remaining_days NUMERIC DEFAULT 0;
+ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS updated_by TEXT;
+ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Bổ sung cột cho holidays & profiles
+ALTER TABLE holidays ADD COLUMN IF NOT EXISTS holiday_type TEXT DEFAULT 'official_paid';
+ALTER TABLE holidays ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS join_date DATE;
+
+ALTER TABLE leave_balances ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow access to leave_balances" ON leave_balances;
+CREATE POLICY "Allow access to leave_balances" ON leave_balances FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 8. Kích hoạt Realtime cho các bảng Chấm công & Nghỉ phép
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     BEGIN
-      ALTER PUBLICATION supabase_realtime ADD TABLE facebook_pages;
+      ALTER PUBLICATION supabase_realtime ADD TABLE holidays;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
 
     BEGIN
-      ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_conversations;
+      ALTER PUBLICATION supabase_realtime ADD TABLE leave_requests;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
 
     BEGIN
-      ALTER PUBLICATION supabase_realtime ADD TABLE meta_chat_messages;
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
-
-    BEGIN
-      ALTER PUBLICATION supabase_realtime ADD TABLE leads;
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
-
-    BEGIN
-      ALTER PUBLICATION supabase_realtime ADD TABLE system_integrations;
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
-
-    BEGIN
-      ALTER PUBLICATION supabase_realtime ADD TABLE meta_conversion_logs;
+      ALTER PUBLICATION supabase_realtime ADD TABLE leave_balances;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
   END IF;

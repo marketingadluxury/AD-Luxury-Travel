@@ -18,7 +18,53 @@ router.get(['/admin/users', '/api/admin/users'], async (req, res) => {
       return;
     }
 
-    res.json(profiles || []);
+    // Try fetching Auth users list to map emails
+    let authUserEmailMap: Record<string, string> = {};
+    try {
+      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
+        if (authData && Array.isArray((authData as any).users)) {
+          (authData as any).users.forEach((u: any) => {
+            if (u && u.id && u.email) {
+              authUserEmailMap[u.id] = u.email;
+            }
+          });
+        }
+      }
+    } catch (authErr) {
+      console.warn('[Admin API] Không thể lấy listUsers từ Auth Admin API:', authErr);
+    }
+
+    const enrichedProfiles = (profiles || []).map(p => {
+      let email = p.email || authUserEmailMap[p.id];
+      if (!email) {
+        if (p.id === 'admin-default-1') email = 'marketing@adluxury.net';
+        else if (p.id === 'admin-default-2') email = 'marketing.adluxury@gmail.com';
+        else if (p.full_name) {
+          // Generate a sensible default email identifier based on name
+          const slug = p.full_name
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+          email = `${slug}@adluxury.net`;
+        } else {
+          email = 'user@adluxury.net';
+        }
+      }
+
+      // If database profile didn't have email stored, backfill it in background
+      if (!p.email && email && p.id) {
+        Promise.resolve(supabaseAdmin.from('profiles').update({ email }).eq('id', p.id)).catch(() => {});
+      }
+
+      return {
+        ...p,
+        email
+      };
+    });
+
+    res.json(enrichedProfiles);
   } catch (error: any) {
     console.error('Lỗi API GET /api/admin/users:', error);
     res.status(500).json({ error: error.message || 'Lỗi hệ thống khi lấy danh sách người dùng' });

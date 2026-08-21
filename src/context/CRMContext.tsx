@@ -1,9 +1,10 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem, ChatMessage, ChatChannel, MetaConversionLog } from '../types';
+import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem, ChatMessage, ChatChannel, MetaConversionLog, Holiday, LeaveRequest, LeaveBalance, LeaveStatus, LeaveType } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 import { triggerMetaCapiEvent, fetchMetaConversionLogs, fetchMetaCapiConfig } from '../lib/metaCapiService';
+import { DEFAULT_VIETNAM_HOLIDAYS, getLeaveRequestWorkdaysCount, calculateDefaultAccruedLeaveDays, calculateTotalUsedAnnualDays } from '../lib/payrollUtils';
 
 const idMap: { [key: string]: string } = {
   '1': 'a809b4db-9ee7-4c07-b352-09419106093d',
@@ -176,6 +177,20 @@ interface CRMContextType {
   fetchMetaLogs: (limit?: number, eventName?: string) => Promise<void>;
   metaCapiConfig: any;
   reloadMetaConfig: () => Promise<void>;
+  // Nghỉ phép & Ngày Lễ
+  holidays: Holiday[];
+  addHoliday: (holidayData: Omit<Holiday, 'id' | 'created_at'>) => Promise<Holiday>;
+  updateHoliday: (id: string, holidayData: Partial<Holiday>) => Promise<void>;
+  deleteHoliday: (id: string) => Promise<void>;
+  leaveRequests: LeaveRequest[];
+  createLeaveRequest: (requestData: Omit<LeaveRequest, 'id' | 'status' | 'created_at'>) => Promise<LeaveRequest>;
+  approveLeaveRequestLevel1: (id: string, approverName: string) => Promise<void>;
+  approveLeaveRequestFinal: (id: string, approverName: string) => Promise<void>;
+  rejectLeaveRequest: (id: string, approverName: string, reason: string) => Promise<void>;
+  deleteLeaveRequest: (id: string) => Promise<void>;
+  leaveBalances: LeaveBalance[];
+  fetchLeaveBalances: (year?: number) => Promise<void>;
+  updateLeaveBalance: (userId: string, year: number, balanceData: Partial<LeaveBalance>) => Promise<void>;
 }
 
 export const DEFAULT_CHAT_CHANNELS: ChatChannel[] = [
@@ -782,6 +797,557 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
   const [metaConversionLogs, setMetaConversionLogs] = useState<MetaConversionLog[]>([]);
   const [metaCapiConfig, setMetaCapiConfig] = useState<any>(null);
+
+  // 1. Quản lý Ngày Lễ (Holidays)
+  const [holidays, setHolidays] = useState<Holiday[]>(() => {
+    try {
+      const local = localStorage.getItem('crm_holidays');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Lọc trùng theo date + name
+          const seen = new Set<string>();
+          const deduped: Holiday[] = [];
+          for (const item of parsed) {
+            const key = `${item.date}_${item.name}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              deduped.push(item);
+            }
+          }
+          return deduped;
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi parse crm_holidays:', e);
+    }
+    return DEFAULT_VIETNAM_HOLIDAYS.map((h, i) => ({ ...h, id: `holiday-default-${i + 1}` }));
+  });
+
+  // 2. Quản lý Đơn Nghỉ Phép (Leave Requests)
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(() => {
+    try {
+      const local = localStorage.getItem('crm_leave_requests');
+      if (local) return JSON.parse(local);
+    } catch (e) {
+      console.warn('Lỗi parse crm_leave_requests:', e);
+    }
+    return [];
+  });
+
+  // 3. Quản lý Quỹ Phép Năm (Leave Balances)
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>(() => {
+    try {
+      const local = localStorage.getItem('crm_leave_balances');
+      if (local) return JSON.parse(local);
+    } catch (e) {
+      console.warn('Lỗi parse crm_leave_balances:', e);
+    }
+    return [];
+  });
+
+  const fetchHolidays = async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { data, error } = await supabase.from('holidays').select('*').order('date', { ascending: true });
+      if (!error && data && data.length > 0) {
+        // Tự động de-duplicate data trả về từ Supabase nếu có bản ghi trùng
+        const seen = new Set<string>();
+        const deduped: Holiday[] = [];
+        for (const item of data) {
+          const key = `${item.date}_${item.name}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            deduped.push(item as Holiday);
+          }
+        }
+        setHolidays(deduped);
+        localStorage.setItem('crm_holidays', JSON.stringify(deduped));
+      } else if (data && data.length === 0) {
+        // Nếu DB rỗng, gieo mầm dữ liệu ngày lễ mặc định
+        const seedData = DEFAULT_VIETNAM_HOLIDAYS.map(h => ({
+          date: h.date,
+          name: h.name,
+          is_recurring: h.is_recurring ?? false,
+          holiday_type: h.holiday_type || 'official_paid',
+          description: h.description ?? ''
+        }));
+        const { data: insertedData, error: insertError } = await supabase.from('holidays').insert(seedData).select();
+        if (!insertError && insertedData && insertedData.length > 0) {
+          setHolidays(insertedData as Holiday[]);
+          localStorage.setItem('crm_holidays', JSON.stringify(insertedData));
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi fetch holidays:', e);
+    }
+  };
+
+  const fetchLeaveRequests = async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { data, error } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        setLeaveRequests(data as LeaveRequest[]);
+        localStorage.setItem('crm_leave_requests', JSON.stringify(data));
+      }
+    } catch (e) {
+      console.warn('Lỗi fetch leave_requests:', e);
+    }
+  };
+
+  const fetchLeaveBalances = async (year?: number) => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      let query = supabase.from('leave_balances').select('*');
+      if (year !== undefined) {
+        query = query.eq('year', year);
+      }
+      const { data, error } = await query;
+      if (!error && data) {
+        setLeaveBalances(prev => {
+          if (year === undefined) return data as LeaveBalance[];
+          // Merge with other years in state
+          const otherYears = prev.filter(b => b.year !== year);
+          return [...otherYears, ...(data as LeaveBalance[])];
+        });
+        localStorage.setItem('crm_leave_balances', JSON.stringify(data));
+      } else if (error) {
+        console.warn('Lỗi fetch leave_balances:', error);
+      }
+    } catch (e) {
+      console.warn('Lỗi fetch leave_balances:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchHolidays();
+    fetchLeaveRequests();
+    fetchLeaveBalances();
+  }, []);
+
+  const addHoliday = async (holidayData: Omit<Holiday, 'id' | 'created_at'>): Promise<Holiday> => {
+    const newId = generateSafeUUID();
+    const newHoliday: Holiday = {
+      ...holidayData,
+      id: newId,
+      created_at: new Date().toISOString()
+    };
+
+    setHolidays(prev => {
+      const updated = [...prev, newHoliday].sort((a, b) => a.date.localeCompare(b.date));
+      localStorage.setItem('crm_holidays', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('holidays').insert([{
+          id: newId,
+          date: holidayData.date,
+          name: holidayData.name,
+          is_recurring: holidayData.is_recurring ?? false,
+          holiday_type: holidayData.holiday_type || 'official_paid',
+          description: holidayData.description ?? ''
+        }]);
+      } catch (err) {
+        console.warn('Lỗi insert holidays lên Supabase:', err);
+      }
+    }
+
+    logActivity({
+      action: `Thêm ngày lễ mới: ${newHoliday.name} (${newHoliday.date})`,
+      module: 'Hệ thống',
+      details: `Lặp lại: ${newHoliday.is_recurring ? 'Có' : 'Không'}`
+    });
+
+    toast.success(`Đã thêm ngày lễ: ${newHoliday.name}`);
+    return newHoliday;
+  };
+
+  const updateHoliday = async (id: string, holidayData: Partial<Holiday>): Promise<void> => {
+    const payload: Partial<Holiday> = {
+      ...holidayData,
+      description: holidayData.description !== undefined ? (holidayData.description || '') : ''
+    };
+
+    setHolidays(prev => {
+      const updated = prev.map(h => h.id === id ? { ...h, ...payload } : h);
+      localStorage.setItem('crm_holidays', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        // 1. Thử cập nhật theo ID
+        const { data: updatedRows, error } = await supabase
+          .from('holidays')
+          .update(payload)
+          .eq('id', id)
+          .select();
+
+        // 2. Nếu id không khớp trong DB (ví dụ ID fallback "def-x" hoặc "holiday-default-x")
+        if ((!updatedRows || updatedRows.length === 0) && holidayData.date) {
+          const { data: updatedByDate } = await supabase
+            .from('holidays')
+            .update(payload)
+            .eq('date', holidayData.date)
+            .select();
+
+          if (updatedByDate && updatedByDate.length > 0) {
+            const realHoliday = updatedByDate[0] as Holiday;
+            setHolidays(prev => {
+              const updated = prev.map(h => (h.id === id || h.date === holidayData.date) ? realHoliday : h);
+              localStorage.setItem('crm_holidays', JSON.stringify(updated));
+              return updated;
+            });
+          } else {
+            // Nếu chưa có trong DB, chèn mới
+            const { data: newRow } = await supabase
+              .from('holidays')
+              .insert([{
+                ...payload,
+                date: holidayData.date,
+                name: holidayData.name || 'Ngày nghỉ lễ'
+              }])
+              .select()
+              .single();
+
+            if (newRow) {
+              setHolidays(prev => {
+                const updated = prev.map(h => h.id === id ? (newRow as Holiday) : h);
+                localStorage.setItem('crm_holidays', JSON.stringify(updated));
+                return updated;
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi update holidays lên Supabase:', err);
+      }
+    }
+
+    toast.success('Đã cập nhật ngày lễ');
+  };
+
+  const deleteHoliday = async (id: string): Promise<void> => {
+    const target = holidays.find(h => h.id === id);
+    setHolidays(prev => {
+      const updated = prev.filter(h => h.id !== id);
+      localStorage.setItem('crm_holidays', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data } = await supabase.from('holidays').delete().eq('id', id).select();
+        if ((!data || data.length === 0) && target?.date) {
+          await supabase.from('holidays').delete().eq('date', target.date);
+        }
+      } catch (err) {
+        console.warn('Lỗi delete holidays trên Supabase:', err);
+      }
+    }
+
+    toast.success('Đã xóa ngày lễ');
+  };
+
+  const createLeaveRequest = async (requestData: Omit<LeaveRequest, 'id' | 'status' | 'created_at'>): Promise<LeaveRequest> => {
+    const newId = generateSafeUUID();
+    const newReq: LeaveRequest = {
+      ...requestData,
+      id: newId,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+
+    setLeaveRequests(prev => {
+      const updated = [newReq, ...prev];
+      localStorage.setItem('crm_leave_requests', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('leave_requests').insert([{
+          id: newId,
+          user_id: requestData.user_id,
+          start_date: requestData.start_date,
+          end_date: requestData.end_date,
+          type: requestData.type,
+          status: 'pending',
+          reason: requestData.reason,
+          handover_user_id: requestData.handover_user_id || null
+        }]);
+      } catch (err) {
+        console.warn('Lỗi insert leave_requests lên Supabase:', err);
+      }
+    }
+
+    logActivity({
+      action: `Tạo đơn xin nghỉ phép: ${requestData.user_name || 'Nhân viên'}`,
+      module: 'Thành viên',
+      details: `Từ ${requestData.start_date} đến ${requestData.end_date} - Loại: ${requestData.type}`
+    });
+
+    addSystemNotification({
+      id: generateSafeUUID(),
+      type: 'system',
+      title: 'Đơn xin nghỉ phép mới cần duyệt',
+      message: `${requestData.user_name || 'Nhân viên'} vừa gửi đơn xin nghỉ (${requestData.start_date} -> ${requestData.end_date}).`,
+      targetId: newId,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+
+    toast.success('Đã gửi đơn xin nghỉ phép thành công!');
+    return newReq;
+  };
+
+  const approveLeaveRequestLevel1 = async (id: string, approverName: string): Promise<void> => {
+    const currentUserId = profile?.id || user?.id || '';
+    setLeaveRequests(prev => {
+      const updated = prev.map(req => req.id === id ? {
+        ...req,
+        status: 'approved_level_1' as LeaveStatus,
+        approver_level_1_id: currentUserId,
+        approver_level_1_name: approverName
+      } : req);
+      localStorage.setItem('crm_leave_requests', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('leave_requests').update({
+          status: 'approved_level_1',
+          approver_level_1_id: currentUserId
+        }).eq('id', id);
+      } catch (err) {
+        console.warn('Lỗi approve cấp 1 leave_requests:', err);
+      }
+    }
+
+    toast.success('Trưởng bộ phận đã duyệt đơn (Cấp 1)');
+  };
+
+  const approveLeaveRequestFinal = async (id: string, approverName: string): Promise<void> => {
+    const currentUserId = profile?.id || user?.id || '';
+    const targetReq = leaveRequests.find(r => r.id === id);
+
+    setLeaveRequests(prev => {
+      const updated = prev.map(req => req.id === id ? {
+        ...req,
+        status: 'approved_final' as LeaveStatus,
+        approver_final_id: currentUserId,
+        approver_final_name: approverName
+      } : req);
+      localStorage.setItem('crm_leave_requests', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Nếu là phép năm (annual), tự động trừ vào quỹ phép của user trong năm
+    if (targetReq && targetReq.type === 'annual') {
+      const requestYear = targetReq.start_date ? new Date(targetReq.start_date).getFullYear() : new Date().getFullYear();
+      const userProfile = profilesList.find(p => p.id === targetReq.user_id);
+      const defaultTotalDays = calculateDefaultAccruedLeaveDays(requestYear, userProfile);
+
+      // Tính tổng số ngày nghỉ phép năm đã duyệt bao gồm cả đơn vừa duyệt này (cộng gộp ngày nghỉ hoán đổi Cty)
+      const mockApprovedRequests = leaveRequests.map(req => req.id === id ? { ...req, status: 'approved_final' as const } : req);
+      const allApprovedAnnualDays = calculateTotalUsedAnnualDays(targetReq.user_id, requestYear, mockApprovedRequests, holidays);
+
+      setLeaveBalances(prev => {
+        const existing = prev.find(b => b.user_id === targetReq.user_id && b.year === requestYear);
+        let updatedBalances: LeaveBalance[];
+        if (existing) {
+          updatedBalances = prev.map(b => (b.user_id === targetReq.user_id && b.year === requestYear) ? {
+            ...b,
+            used_days: Math.max(Number(b.used_days || 0), allApprovedAnnualDays)
+          } : b);
+        } else {
+          updatedBalances = [...prev, {
+            user_id: targetReq.user_id,
+            year: requestYear,
+            total_days: defaultTotalDays,
+            used_days: allApprovedAnnualDays
+          }];
+        }
+        localStorage.setItem('crm_leave_balances', JSON.stringify(updatedBalances));
+        return updatedBalances;
+      });
+
+      if (isSupabaseConfigured()) {
+        try {
+          const existingInState = leaveBalances.find(b => b.user_id === targetReq.user_id && b.year === requestYear);
+          const totalDaysToSave = existingInState?.total_days ?? defaultTotalDays;
+          const usedDaysToSave = Math.max(Number(existingInState?.used_days || 0), allApprovedAnnualDays);
+
+          const payload = {
+            user_id: targetReq.user_id,
+            year: requestYear,
+            total_days: totalDaysToSave,
+            used_days: usedDaysToSave,
+            remaining_days: Math.max(0, totalDaysToSave - usedDaysToSave),
+            updated_at: new Date().toISOString()
+          };
+
+          await supabase.from('leave_balances').upsert([payload], { onConflict: 'user_id,year' });
+        } catch (err) {
+          console.warn('Lỗi cập nhật quỹ phép trên Supabase:', err);
+        }
+      }
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('leave_requests').update({
+          status: 'approved_final',
+          approver_final_id: currentUserId
+        }).eq('id', id);
+      } catch (err) {
+        console.warn('Lỗi approve final leave_requests:', err);
+      }
+    }
+
+    toast.success('Đã duyệt đơn nghỉ phép thành công (Cấp cuối)!');
+  };
+
+  const rejectLeaveRequest = async (id: string, approverName: string, reason: string): Promise<void> => {
+    setLeaveRequests(prev => {
+      const updated = prev.map(req => req.id === id ? {
+        ...req,
+        status: 'rejected' as LeaveStatus,
+        rejection_reason: reason
+      } : req);
+      localStorage.setItem('crm_leave_requests', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('leave_requests').update({
+          status: 'rejected',
+          rejection_reason: reason
+        }).eq('id', id);
+      } catch (err) {
+        console.warn('Lỗi reject leave_requests:', err);
+      }
+    }
+
+    toast.error('Đã từ chối đơn xin nghỉ phép');
+  };
+
+  const deleteLeaveRequest = async (id: string): Promise<void> => {
+    const targetReq = leaveRequests.find(r => r.id === id);
+
+    setLeaveRequests(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      localStorage.setItem('crm_leave_requests', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (targetReq && targetReq.type === 'annual' && targetReq.status === 'approved_final') {
+      const requestYear = targetReq.start_date ? new Date(targetReq.start_date).getFullYear() : new Date().getFullYear();
+      const userProfile = profilesList.find(p => p.id === targetReq.user_id);
+      const defaultTotalDays = calculateDefaultAccruedLeaveDays(requestYear, userProfile);
+
+      const remainingRequests = leaveRequests.filter(req => req.id !== id);
+      const remainingApprovedAnnualDays = calculateTotalUsedAnnualDays(targetReq.user_id, requestYear, remainingRequests, holidays);
+
+      setLeaveBalances(prev => {
+        const updatedBalances = prev.map(b => (b.user_id === targetReq.user_id && b.year === requestYear) ? {
+          ...b,
+          used_days: remainingApprovedAnnualDays
+        } : b);
+        localStorage.setItem('crm_leave_balances', JSON.stringify(updatedBalances));
+        return updatedBalances;
+      });
+
+      if (isSupabaseConfigured()) {
+        try {
+          const existingInState = leaveBalances.find(b => b.user_id === targetReq.user_id && b.year === requestYear);
+          const totalDaysToSave = existingInState?.total_days ?? defaultTotalDays;
+
+          const payload = {
+            user_id: targetReq.user_id,
+            year: requestYear,
+            total_days: totalDaysToSave,
+            used_days: remainingApprovedAnnualDays,
+            remaining_days: Math.max(0, totalDaysToSave - remainingApprovedAnnualDays),
+            updated_at: new Date().toISOString()
+          };
+
+          await supabase.from('leave_balances').upsert([payload], { onConflict: 'user_id,year' });
+        } catch (err) {
+          console.warn('Lỗi cập nhật quỹ phép sau khi xóa đơn trên Supabase:', err);
+        }
+      }
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('leave_requests').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Lỗi delete leave_requests:', err);
+      }
+    }
+
+    toast.success('Đã xóa đơn xin nghỉ phép');
+  };
+
+  const updateLeaveBalance = async (userId: string, year: number, balanceData: Partial<LeaveBalance>): Promise<void> => {
+    const userProfile = profilesList.find(p => p.id === userId);
+    const defaultAccrued = calculateDefaultAccruedLeaveDays(year, userProfile);
+
+    setLeaveBalances(prev => {
+      const exists = prev.some(b => b.user_id === userId && b.year === year);
+      let updated: LeaveBalance[];
+      if (exists) {
+        updated = prev.map(b => (b.user_id === userId && b.year === year) ? { ...b, ...balanceData } : b);
+      } else {
+        updated = [...prev, {
+          user_id: userId,
+          year,
+          total_days: balanceData.total_days ?? defaultAccrued,
+          used_days: balanceData.used_days ?? 0,
+          ...balanceData
+        }];
+      }
+      localStorage.setItem('crm_leave_balances', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        const payload: Record<string, any> = {
+          user_id: userId,
+          year,
+          total_days: balanceData.total_days,
+          used_days: balanceData.used_days,
+          remaining_days: balanceData.remaining_days,
+          note: balanceData.note,
+          updated_by: balanceData.updated_by,
+          updated_at: new Date().toISOString()
+        };
+
+        // Clean undefined fields
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+        const { error } = await supabase.from('leave_balances').upsert([payload], { onConflict: 'user_id,year' });
+        if (error) {
+          console.error('Lỗi khi lưu leave_balances lên Supabase:', error);
+          toast.error(`Chưa lưu được lên CSDL Supabase (${error.code || 'ERR'}): ${error.message}`);
+          return;
+        }
+      } catch (err: any) {
+        console.error('Lỗi update leave_balances:', err);
+        toast.error('Không thể lưu quỹ phép lên Supabase');
+        return;
+      }
+    }
+
+    toast.success('Đã lưu cập nhật quỹ phép nhân viên');
+  };
 
   const fetchMetaLogs = async (limit: number = 100, eventName?: string) => {
     try {
@@ -5711,7 +6277,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       metaConversionLogs,
       fetchMetaLogs,
       metaCapiConfig,
-      reloadMetaConfig
+      reloadMetaConfig,
+      holidays,
+      addHoliday,
+      updateHoliday,
+      deleteHoliday,
+      leaveRequests,
+      createLeaveRequest,
+      approveLeaveRequestLevel1,
+      approveLeaveRequestFinal,
+      rejectLeaveRequest,
+      deleteLeaveRequest,
+      leaveBalances,
+      fetchLeaveBalances,
+      updateLeaveBalance
     }}>
       {children}
     </CRMContext.Provider>

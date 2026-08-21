@@ -1,4 +1,40 @@
-export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'bod' | 'tour_guide' | 'marketing' | 'marketing_leader' | 'agent' | 'CTV';
+export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'bod' | 'tour_guide' | 'marketing' | 'marketing_leader' | 'agent' | 'CTV' | 'hr';
+
+export interface RoleConfig {
+  label: string;
+  color: string;
+  bg: string;
+  border: string;
+}
+
+export const ROLE_LABELS: Record<Role, RoleConfig> = {
+  admin: { label: 'Quản trị viên (Admin)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
+  sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
+  sale: { label: 'Sale', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+  operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
+  visa: { label: 'Bộ phận Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+  accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  tour_guide: { label: 'Hướng Dẫn Viên (HDV)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
+  agent: { label: 'Đại lý (Agent)', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' },
+  bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
+  hr: { label: 'Nhân sự (HR)', color: 'text-cyan-800', bg: 'bg-cyan-50', border: 'border-cyan-200' },
+  marketing_leader: { label: 'Trưởng phòng Marketing', color: 'text-fuchsia-800', bg: 'bg-fuchsia-100', border: 'border-fuchsia-300' },
+  marketing: { label: 'Nhân viên Marketing', color: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200' },
+  CTV: { label: 'Cộng Tác Viên (CTV)', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' }
+};
+
+export const getRoleConfig = (role?: string | null): RoleConfig => {
+  if (!role) {
+    return { label: 'Nhân sự', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' };
+  }
+  const normalized = role.toLowerCase() as Role;
+  return ROLE_LABELS[normalized] || {
+    label: role,
+    color: 'text-slate-700',
+    bg: 'bg-slate-50',
+    border: 'border-slate-200'
+  };
+};
 
 export interface User {
   id: string;
@@ -26,6 +62,7 @@ export interface Profile {
   bank_name?: string;
   bank_account_number?: string;
   bank_account_holder?: string;
+  join_date?: string;
   notes?: string;
   status?: 'active' | 'inactive';
   tier?: string;
@@ -464,6 +501,80 @@ export interface ChatChannel {
   created_by?: string;
   created_at?: string;
 }
+
+export type HolidayType = 'official_paid' | 'bridge_annual_or_unpaid' | 'unpaid_company';
+
+export interface Holiday {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  is_recurring?: boolean;
+  holiday_type?: HolidayType; // 'official_paid' (hưởng lương), 'bridge_annual_or_unpaid' (hoán đổi/cầu nối), 'unpaid_company' (nghỉ ko lương toàn cty)
+  description?: string;
+  created_at?: string;
+}
+
+export type LeaveType = 'annual' | 'unpaid' | 'compensatory' | 'special';
+export type LeaveStatus = 'pending' | 'approved_level_1' | 'approved_final' | 'rejected';
+
+export interface LeaveRequest {
+  id: string;
+  user_id: string;
+  user_name?: string;
+  user_email?: string;
+  user_role?: Role;
+  start_date: string; // YYYY-MM-DD
+  end_date: string; // YYYY-MM-DD
+  type: LeaveType;
+  status: LeaveStatus;
+  reason: string;
+  handover_user_id?: string | null;
+  handover_user_name?: string | null;
+  approver_level_1_id?: string | null;
+  approver_level_1_name?: string | null;
+  approver_final_id?: string | null;
+  approver_final_name?: string | null;
+  rejection_reason?: string | null;
+  created_at?: string;
+}
+
+export interface LeaveBalance {
+  id?: string;
+  user_id: string;
+  user_name?: string;
+  user_email?: string;
+  year: number;
+  total_days: number; // Mặc định 12
+  used_days: number;
+  remaining_days?: number;
+  note?: string;
+  updated_by?: string;
+  created_at?: string;
+}
+
+export interface EmployeeTimesheetRow {
+  user_id: string;
+  employee_name: string;
+  employee_email: string;
+  employee_role: string;
+  department_name?: string;
+  month: number;
+  year: number;
+  standard_working_days: number; // Ngày công chuẩn tháng
+  paid_leave_days: number; // Nghỉ phép năm có lương
+  compensatory_leave_days: number; // Nghỉ bù
+  special_leave_days: number; // Nghỉ chế độ
+  unpaid_leave_days: number; // Nghỉ không lương
+  actual_working_days: number; // Ngày công hạch toán
+  leave_balance_remaining: number; // Quỹ phép năm còn lại
+  leave_details?: LeaveRequest[];
+  bridge_leave_applied?: {
+    date: string;
+    type: 'paid_annual' | 'unpaid';
+    name: string;
+  }[];
+}
+
 
 
 

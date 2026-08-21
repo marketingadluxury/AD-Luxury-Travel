@@ -44,6 +44,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import { TimesheetManagement } from '@/components/TimesheetManagement';
+import { LeaveManagementTab } from '@/components/LeaveManagementTab';
 
 export default function AccountingInvoice() {
   const { 
@@ -128,7 +130,7 @@ export default function AccountingInvoice() {
     return createdBy;
   }, [profilesMap, orders, profile, user]);
 
-  const [activeTab, setActiveTab] = useState<'receipts' | 'vat' | 'payments' | 'tours'>(
+  const [activeTab, setActiveTab] = useState<'receipts' | 'vat' | 'payments' | 'tours' | 'timesheet' | 'leaves'>(
     (currentRole === 'accounting' || currentRole === 'admin') ? 'receipts' : 'payments'
   );
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
@@ -815,16 +817,38 @@ export default function AccountingInvoice() {
             {isAccountantOrAdmin ? 'Phiếu chi / Hoàn tiền' : 'Đề xuất phiếu chi'}
           </button>
           {isAccountantOrAdmin && (
-            <button
-              onClick={() => setActiveTab('tours')}
-              className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
-                activeTab === 'tours'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Báo cáo tour
-            </button>
+            <>
+              <button
+                onClick={() => setActiveTab('tours')}
+                className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  activeTab === 'tours'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Báo cáo tour
+              </button>
+              <button
+                onClick={() => setActiveTab('timesheet')}
+                className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  activeTab === 'timesheet'
+                    ? 'bg-white text-emerald-700 shadow-sm font-bold'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📊 Bảng chấm công
+              </button>
+              <button
+                onClick={() => setActiveTab('leaves')}
+                className={`flex-1 md:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  activeTab === 'leaves'
+                    ? 'bg-white text-blue-700 shadow-sm font-bold'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                🌴 Quản lý nghỉ phép
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -3027,6 +3051,20 @@ export default function AccountingInvoice() {
               );
             })()
           )}
+        </div>
+      )}
+
+      {/* Tab 5: BẢNG CHẤM CÔNG VÀ XUẤT EXCEL */}
+      {activeTab === 'timesheet' && (
+        <div className="mt-6">
+          <TimesheetManagement />
+        </div>
+      )}
+
+      {/* Tab 6: QUẢN LÝ ĐƠN NGHỈ PHÉP & PHÊ DUYỆT */}
+      {activeTab === 'leaves' && (
+        <div className="mt-6">
+          <LeaveManagementTab />
         </div>
       )}
 

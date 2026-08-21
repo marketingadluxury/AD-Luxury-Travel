@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useCRM } from '../context/CRMContext';
 import { supabase } from '../lib/supabase';
 import { Role, Team } from '../types';
 import { 
   Users, UserPlus, Edit2, Trash2, Shield, Key, Mail, Phone, 
   Building2, Search, X, Check, AlertCircle, RefreshCw, Eye, EyeOff,
-  Target, Layers, Plus, Award, UserCheck, ChevronRight
+  Target, Layers, Plus, Award, UserCheck, ChevronRight, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -32,6 +33,7 @@ const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; bord
   tour_guide: { label: 'Hướng Dẫn Viên (HDV)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
   agent: { label: 'Đại lý (Agent)', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' },
   bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
+  hr: { label: 'Nhân sự (HR)', color: 'text-cyan-800', bg: 'bg-cyan-50', border: 'border-cyan-200' },
   marketing_leader: { label: 'Trưởng phòng Marketing', color: 'text-fuchsia-800', bg: 'bg-fuchsia-100', border: 'border-fuchsia-300' },
   marketing: { label: 'Nhân viên Marketing', color: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200' },
   CTV: { label: 'Cộng Tác Viên (CTV)', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' }
@@ -39,7 +41,23 @@ const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; bord
 
 export default function UserManagement() {
   const { session } = useAuth();
-  const [activeTab, setActiveTab] = useState<'users' | 'teams'>('users');
+  const { currentRole } = useCRM();
+
+  if (currentRole === 'hr') {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-6 bg-white rounded-2xl border border-gray-200 shadow-sm max-w-md mx-auto my-8 text-center font-sans">
+        <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-4 border border-rose-200">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h3 className="text-lg font-black text-gray-900 mb-2">Quyền truy cập hạn chế</h3>
+        <p className="text-xs text-gray-500 max-w-sm leading-relaxed font-semibold">
+          Bộ phận Nhân sự (HR) không có quyền truy cập vào danh sách thành viên và phân quyền hệ thống.
+        </p>
+      </div>
+    );
+  }
+
+  const [activeTab, setActiveTab] = useState<'company' | 'agents' | 'teams'>('company');
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,7 +165,24 @@ export default function UserManagement() {
         }
       }
 
-      setUsers(loadedUsers);
+      const normalizedUsers = loadedUsers.map(u => {
+        if (!u.email) {
+          if (u.id === 'admin-default-1') return { ...u, email: 'marketing@adluxury.net' };
+          if (u.id === 'admin-default-2') return { ...u, email: 'marketing.adluxury@gmail.com' };
+          if (u.full_name) {
+            const slug = u.full_name
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, '');
+            return { ...u, email: `${slug}@adluxury.net` };
+          }
+          return { ...u, email: 'user@adluxury.net' };
+        }
+        return u;
+      });
+
+      setUsers(normalizedUsers);
     } catch (err: any) {
       console.warn('Error fetching users:', err);
     } finally {
@@ -201,7 +236,7 @@ export default function UserManagement() {
       full_name: '',
       phone: '',
       company_name: 'AD Luxury Travel',
-      role: 'agent',
+      role: activeTab === 'agents' ? 'agent' : 'sale',
       leader_id: '',
       team_id: '',
       team_name: ''
@@ -418,7 +453,11 @@ export default function UserManagement() {
   };
 
   // Filter and search users
-  const filteredUsers = users.filter(user => {
+  const companyUsers = users.filter(u => !['agent', 'CTV'].includes(u.role));
+  const agentUsers = users.filter(u => ['agent', 'CTV'].includes(u.role));
+  const baseUsersForTab = activeTab === 'agents' ? agentUsers : companyUsers;
+
+  const filteredUsers = baseUsersForTab.filter(user => {
     const matchesSearch = 
       (user.full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (user.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -453,19 +492,34 @@ export default function UserManagement() {
 
       {/* Main Tab Navigation */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-xl">
+        <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-xl flex-wrap">
           <button
-            onClick={() => setActiveTab('users')}
+            onClick={() => { setActiveTab('company'); setRoleFilter('all'); }}
             className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'users' 
+              activeTab === 'company' 
                 ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80' 
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
-            <Users className="w-4 h-4" />
-            <span>Quản lý Nhân sự & Tài khoản</span>
+            <Users className="w-4 h-4 text-blue-600" />
+            <span>Quản lý Nhân sự Công ty</span>
             <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-extrabold">
-              {users.length}
+              {companyUsers.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('agents'); setRoleFilter('all'); }}
+            className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'agents' 
+                ? 'bg-white text-amber-800 shadow-sm border border-slate-200/80' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <UserCheck className="w-4 h-4 text-amber-600" />
+            <span>Tài khoản Đại lý & CTV</span>
+            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">
+              {agentUsers.length}
             </span>
           </button>
 
@@ -473,7 +527,7 @@ export default function UserManagement() {
             onClick={() => setActiveTab('teams')}
             className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'teams' 
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80' 
+                ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80' 
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
@@ -486,13 +540,13 @@ export default function UserManagement() {
         </div>
 
         <div>
-          {activeTab === 'users' ? (
+          {activeTab !== 'teams' ? (
             <button
               onClick={handleOpenAddUser}
               className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Thêm Tài khoản Mới</span>
+              <span>{activeTab === 'agents' ? 'Thêm Đại lý / CTV Mới' : 'Thêm Nhân sự Mới'}</span>
             </button>
           ) : (
             <button
@@ -506,8 +560,8 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* TAB 1: USER ACCOUNTS MANAGEMENT */}
-      {activeTab === 'users' && (
+      {/* TAB 1 & 2: USER ACCOUNTS MANAGEMENT (COMPANY STAFF / AGENTS) */}
+      {(activeTab === 'company' || activeTab === 'agents') && (
         <div className="space-y-4">
           {/* Filters & Search */}
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -540,12 +594,14 @@ export default function UserManagement() {
                   onChange={(e) => setRoleFilter(e.target.value)}
                   className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
                 >
-                  <option value="all">Tất cả ({users.length})</option>
-                  {Object.entries(ROLE_LABELS).map(([roleKey, roleVal]) => (
-                    <option key={roleKey} value={roleKey}>
-                      {roleVal.label} ({users.filter(u => u.role === roleKey).length})
-                    </option>
-                  ))}
+                  <option value="all">Tất cả ({baseUsersForTab.length})</option>
+                  {Object.entries(ROLE_LABELS)
+                    .filter(([roleKey]) => activeTab === 'agents' ? ['agent', 'CTV'].includes(roleKey) : !['agent', 'CTV'].includes(roleKey))
+                    .map(([roleKey, roleVal]) => (
+                      <option key={roleKey} value={roleKey}>
+                        {roleVal.label} ({users.filter(u => u.role === roleKey).length})
+                      </option>
+                    ))}
                 </select>
               </div>
 

@@ -63,6 +63,7 @@ import {
   Legend
 } from 'recharts';
 import { Role, Team, TeamPerformanceSummary, SalePerformanceSummary } from '../types';
+import { EmployeeLeaveBalanceWidget } from '../components/LeaveRequestModal';
 
 // Palette màu sắc thiết kế hiện đại đồng bộ hệ thống
 const PIE_COLORS = ['#2563eb', '#1e293b', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6'];
@@ -1380,6 +1381,9 @@ export default function Dashboard() {
       {/* ========================================================================= */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Widget Phép Năm & Tạo Đơn Nghỉ Phép Cá Nhân */}
+          <EmployeeLeaveBalanceWidget />
+
           {/* Top KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Card 1: Tổng doanh số chốt */}
@@ -1456,7 +1460,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 tracking-tight">Dự Báo Doanh Thu</h2>
-                  <p className="text-xs text-slate-500 font-medium">Báo cáo dự báo & tăng trưởng doanh thu theo tháng</p>
+                  <p className="text-xs text-slate-700 font-bold">Báo cáo dự báo & tăng trưởng doanh thu theo tháng</p>
                 </div>
 
                 <select
@@ -1512,7 +1516,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 tracking-tight">Cơ Cấu Kênh Bán</h2>
-                  <p className="text-xs text-slate-500 font-medium">Phân bổ nguồn khách hàng & kênh kinh doanh</p>
+                  <p className="text-xs text-slate-700 font-bold">Phân bổ nguồn khách hàng & kênh kinh doanh</p>
                 </div>
 
                 <select
@@ -1578,7 +1582,7 @@ export default function Dashboard() {
             <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 tracking-tight">Bảng Chi Tiết Doanh Số Kinh Doanh</h2>
-                <p className="text-xs text-slate-500 font-medium">Báo cáo hiệu quả kinh doanh theo từng Nhân viên Sale</p>
+                <p className="text-xs text-slate-700 font-bold">Báo cáo hiệu quả kinh doanh theo từng Nhân viên Sale</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">

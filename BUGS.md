@@ -730,6 +730,242 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   - Cập nhật các ghi chú và text trên giao diện trong `PotentialLeadsTab.tsx` và `pancakeService.ts` để đồng bộ.
 - **Trạng thái:** Đã hoàn thành, biên dịch build thành công 100%.
 
+### 1.78 Tích Hợp Trang Quản Lý Nghỉ Phép & Bảng Chấm Công Tự Động Cho Toàn Thể Nhân Viên
+- **Mô tả yêu cầu / Vấn đề:**
+  - Nhân viên không thấy mục xin nghỉ phép trên hệ thống do trước đó tính năng nằm trong trang Kế toán và Dashboard bị giới hạn phân quyền.
+- **Giải pháp:**
+  - Tạo trang chuyên biệt `src/pages/LeaveRequestsPage.tsx` phục vụ toàn bộ nhân viên công ty (`/leave-requests`).
+  - Tích hợp mục "Nghỉ phép & Chấm công" lên thanh Sidebar (hỗ trợ cả Desktop và Mobile) cho tất cả các vai trò nội bộ (`agent`, `sale`, `sale_leader`, `operator`, `visa`, `accounting`, `tour_guide`, `marketing_leader`, `marketing`, `bod`, `admin`).
+  - Bổ sung badge số lượng đơn nghỉ phép chờ duyệt theo thời gian thực trên menu Sidebar (dành cho Trưởng nhóm, Kế toán, HR và Quản trị viên).
+  - Tích hợp lối tắt truy cập nhanh vào mục Nghỉ phép trong User Profile Dropdown tại Top Header.
+  - Hỗ trợ đầy đủ các tab chuyên biệt: (1) Đơn nghỉ phép của tôi & Thẻ theo dõi Quỹ phép năm; (2) Duyệt đơn Cấp 1 dành cho Trưởng nhóm/Leader; (3) Phê duyệt Cấp 2 dành cho Kế toán/HR; (4) Bảng chấm công tự động & Xuất file Excel; (5) Cấu hình Ngày lễ & Quỹ phép năm.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.79 Khắc Phục Lỗi Trùng Lặp Nút (Duplicate CTA) & Kép Ký Tự Icon (+ +)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Nút *Tạo đơn xin nghỉ phép* bị hiển thị 2 dấu cộng liền nhau (`+ +`) do vừa render component `<Plus />` vừa viết ký tự `+` trong text string.
+  - Xuất hiện 2 nút *Tạo đơn xin nghỉ phép* cùng lúc (1 nút ở Header tiêu đề trang và 1 nút ở bên trong thẻ Quỹ Phép Năm).
+- **Giải pháp:**
+  - Chuẩn hóa text của button: Xóa ký tự `+` trong chuỗi text khi button đã có Icon `<Plus />`.
+  - Thêm prop `showActionButton={false}` vào `EmployeeLeaveBalanceWidget` để ẩn nút trùng lặp khi widget này được đặt chung trang với Header chính.
+  - Lưu quy tắc thiết kế vào hệ thống để ngăn chặn lỗi lặp lại.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.80 Tích Hợp Vai Trò Nhân Sự (HR), Quy Trình Duyệt Phép 2 Cấp & Quản Lý Quỹ Phép Thủ Công
+- **Mô tả yêu cầu / Vấn đề:**
+  - Thêm vai trò Nhân sự (`role: 'hr'`) trong hệ thống.
+  - Cấp quyền cho vai trò `hr` vào tab Quản lý thành viên & Nhân sự (`/settings`).
+  - Quy trình duyệt nghỉ phép 2 cấp: Trưởng nhóm (Leader) duyệt Cấp 1 (`approved_level_1`), sau đó Nhân sự (`hr`) hoặc Ban Giám Đốc/Admin duyệt Cấp cuối (`approved_final`).
+  - Giới hạn hiển thị: Nhân viên thông thường chỉ xem chấm công & quỹ phép của mình; Trưởng nhóm (Leader) xem của mình và thành viên trong nhóm trực thuộc; HR, BOD và Quản trị viên xem toàn bộ nhân sự công ty.
+  - Cho phép Nhân sự (HR) điều chỉnh số ngày nghỉ / quỹ phép của nhân viên thủ công (Quick Edit trực tiếp trên bảng chấm công và Tab Quản lý Quỹ phép chuyên biệt).
+- **Giải pháp:**
+  - Cập nhật định nghĩa vai trò `hr` trong `src/types.ts` và toàn bộ các component phân quyền (`Layout.tsx`, `CRMContext.tsx`, `AuthContext.tsx`, `Settings.tsx`, `UserManagement.tsx`, `TimesheetManagement.tsx`, `LeaveRequestsPage.tsx`).
+  - Cập nhật quy trình duyệt nghỉ phép trong `CRMContext.tsx` với 2 hàm `approveLeaveRequestLevel1` và `approveLeaveRequestFinal`, hỗ trợ ghi nhận người duyệt, thời gian duyệt và phân luồng trạng thái (`pending` -> `approved_level_1` -> `approved_final`).
+  - Xây dựng component `LeaveBalanceManagement.tsx` và popup Quick Edit trong `TimesheetManagement.tsx` cho phép Nhân sự/Admin điều chỉnh tổng ngày phép, ngày đã dùng và ghi chú điều chỉnh.
+  - Thiết lập bộ lọc dữ liệu phân quyền trực quan dựa trên `useMemo` trong `TimesheetManagement.tsx` và `LeaveRequestsPage.tsx`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.81 Khắc Phục Lỗi Điều Chỉnh Quỹ Phép Năm Không Lưu Được Lên CSDL Supabase
+- **Mô tả yêu cầu / Vấn đề:**
+  - Khi thao tác điều chỉnh số ngày phép năm hoặc ghi chú lý do điều chỉnh tại tab **Quản lý Nghỉ phép / Quỹ phép năm** (`LeaveBalanceManagement.tsx`), thông báo cập nhật thành công vẫn xuất hiện nhưng khi tải lại trang (reload) thì dữ liệu bị khôi phục về trạng thái ban đầu và không lưu vĩnh viễn trên CSDL Supabase.
+- **Nguyên nhân:**
+  1. Bảng `leave_balances` ban đầu trong file schema Supabase (`supabase-schema.sql`) chỉ khai báo các cột cơ bản (`id`, `user_id`, `year`, `total_days`, `used_days`, `created_at`), bị thiếu các cột mở rộng: `remaining_days`, `note`, `updated_by`, `updated_at`.
+  2. Khi gọi hàm `updateLeaveBalance`, payload chứa các trường `note`, `updated_by`, `remaining_days` bị API PostgREST của Supabase từ chối (trả về lỗi `column "note" of relation "leave_balances" does not exist`).
+  3. Hàm `updateLeaveBalance` trước đó không kiểm tra biến `{ error }` từ Supabase `upsert`, dẫn đến việc hiện thông báo thành công ảo mà thực tế dữ liệu không được ghi vào CSDL.
+- **Giải pháp:**
+  1. Cập nhật `supabase-schema.sql` bổ sung đầy đủ lệnh `ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS ...` cho các trường: `remaining_days`, `note`, `updated_by`, `updated_at` (cùng các cột `holiday_type`, `description` trong `holidays` và `join_date` trong `profiles`).
+  2. Cung cấp mã SQL ngắn gọn để người dùng chạy trực tiếp trên SQL Editor của Supabase.
+  3. Nâng cấp hàm `updateLeaveBalance` và `fetchLeaveBalances` trong `CRMContext.tsx` để lọc sạch payload, kiểm tra biến `{ error }` từ Supabase, hiển thị thông báo toast lỗi chi tiết nếu CSDL thiếu cột, và đồng bộ dữ liệu vĩnh viễn.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.82 Giới Hạn Quyền Hạn Nhân Sự (HR) - Không Truy Cập Phần Thành Viên & Phân Quyền
+- **Mô tả yêu cầu / Vấn đề:**
+  - Bộ phận Nhân sự (HR) chỉ quản lý thông tin nhân sự, duyệt nghỉ phép và theo dõi quỹ phép nhân viên; không được có quyền xem/chỉnh sửa danh sách thành viên hay phân quyền vai trò tài khoản (`UserManagement`).
+- **Giải pháp:**
+  1. Đổi tên nút menu ở Sidebar góc dưới từ *"Thành viên & Phân quyền"* thành **"Quản lý Quỹ phép"** đối với vai trò `hr` trong `Layout.tsx`.
+  2. Tại trang Cài đặt (`Settings.tsx`), thiết lập tab mặc định cho HR là **"Quỹ phép nhân viên"** (`leave_balances`), đồng thời ẩn tab *"Quản lý người dùng & phân quyền"* khỏi danh sách tab khi tài khoản đang ở vai trò `hr`.
+  3. Bổ sung chốt chặn bảo mật cấp component trong `UserManagement.tsx` và `Settings.tsx`: nếu tài khoản HR cố tình mở tab người dùng, giao diện sẽ hiển thị cảnh báo quyền truy cập hạn chế.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.83 Tối Ưu Bảng Đơn Xin Nghỉ Phép - Sửa Lỗi Ngắt Dòng & Trùng Lặp Nút Duyệt
+- **Mô tả yêu cầu / Vấn đề:**
+  - Cột "LÝ DO & BÀN GIAO" bị vỡ dòng chữ `🤝 Bàn giao:` dọc gây mất thẩm mỹ.
+  - Cột "THAO TÁC" đối với Admin hiển thị trùng lặp cả 2 nút `[Duyệt C1]` và `[Duyệt Cuối]` cùng lúc làm cột bị phình ngang đẩy lệch các tiêu đề.
+- **Giải pháp:**
+  1. Cố định chiều rộng tối thiểu (`min-w-[...]`) và thuộc tính `whitespace-nowrap` cho tất cả các cột trong bảng `LeaveRequestsPage.tsx`.
+  2. Định dạng dòng `🤝 Bàn giao:` nằm trên 1 hàng duy nhất kèm `truncate` tên người nhận bàn giao.
+  3. Tối ưu điều kiện `canApproveL1`: khi tài khoản có quyền `canApproveFinal` (Admin/BOD/HR), nút `[Duyệt C1]` sẽ tự động ẩn để tránh trùng lặp 2 nút duyệt.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.84 Tự Động Khấu Trừ & Ghi Nhận Ngày Phép Năm Từ Đơn Xin Nghỉ Đã Duyệt
+- **Mô tả yêu cầu / Vấn đề:**
+  - Đơn xin nghỉ phép năm (`type === 'annual'`) đã được duyệt hoàn tất (Cấp cuối) nhưng số ngày phép đã sử dụng (`ĐÃ SỬ DỤNG`) trong Quản lý Quỹ Phép vẫn hiển thị = `0`.
+- **Giải pháp:**
+  1. Cập nhật hàm `getEffectiveLeaveBalance` trong `payrollUtils.ts` để tự động đếm & cộng dồn số ngày công từ tất cả các đơn nghỉ phép năm đã duyệt cấp cuối (`approved_final`) trong năm.
+  2. Cập nhật `calculateEmployeeTimesheet` trong `payrollUtils.ts` để tính toán chính xác số ngày phép đã sử dụng và số ngày phép còn lại trên Bảng Chấm Công.
+  3. Truyền danh sách `leaveRequests` và `holidays` vào các component widget (`LeaveBalanceManagement.tsx`, `LeaveRequestModal.tsx`) để tự động đồng bộ ngay lập tức.
+  4. Cập nhật phương thức `approveLeaveRequestFinal` trong `CRMContext.tsx` để thực hiện `upsert` dữ liệu quỹ phép lên Supabase theo cặp khóa `(user_id, year)` mà không bị lỗi ghi đè/trùng lặp.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.85 Phân Quyền Xóa Đơn Nghỉ Phép Cho HR / BOD / Admin & Tự Động Hoàn Phép Năm
+- **Mô tả yêu cầu / Vấn đề:**
+  - Cần cho phép các vai trò HR, BOD, Admin, Kế toán có quyền xóa bất kỳ đơn nghỉ phép nào của nhân viên trên hệ thống.
+  - Khi đơn xin nghỉ phép năm đã được duyệt cấp cuối (`approved_final`) bị xóa, quỹ phép năm của nhân viên cần được hoàn lại / tính toán lại số ngày đã sử dụng chính xác.
+- **Giải pháp:**
+  1. Cập nhật điều kiện `canDelete` trong `LeaveRequestsPage.tsx` và `LeaveManagementTab.tsx` cho phép các vai trò HR / BOD / Admin / Kế toán nhìn thấy và tương tác với nút Xóa (Thùng rác).
+  2. Nâng cấp phương thức `deleteLeaveRequest` trong `CRMContext.tsx`: Nếu đơn bị xóa thuộc loại phép năm đã duyệt (`type === 'annual'` && `status === 'approved_final'`), hệ thống tự động tính toán lại số ngày phép năm còn lại đã sử dụng và cập nhật đồng bộ lên CSDL Supabase & LocalStorage.
+  3. Thay thế câu lệnh `confirm()` trình duyệt mặc định bằng **Modal xác nhận Xóa đơn nghỉ phép tùy chỉnh (Custom React Modal)** để đảm bảo hoạt động mượt mà trên môi trường iFrame Sandbox.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.86 Đồng Bộ Quỹ Phép Năm Cộng Gộp Ngày Nghỉ Hoán Đổi Cầu Nối Của Công Ty
+- **Mô tả yêu cầu / Vấn đề:**
+  - Mất đồng bộ giữa Widget Quỹ Phép Năm và Bảng Chấm Công: Khi công ty có ngày nghỉ hoán đổi/cầu nối (`bridge_annual_or_unpaid` - ví dụ ngày 31/08), Bảng Chấm Công tự động khấu trừ 1 ngày phép năm, nhưng Widget Quỹ Phép và Modal Xin Nghỉ Phép chỉ đếm đơn cá nhân nên hiển thị dư 1 ngày phép chưa dùng.
+- **Giải pháp:**
+  1. Xây dựng hàm `calculateTotalUsedAnnualDays` trong `payrollUtils.ts` để tự động cộng dồn cả ngày nghỉ từ đơn cá nhân đã duyệt VÀ ngày nghỉ hoán đổi/cầu nối toàn công ty chưa bị trùng với đơn cá nhân.
+  2. Cập nhật `getEffectiveLeaveBalance` trong `payrollUtils.ts` để Widget Quỹ Phép, Modal Đặt Đơn Nghỉ và Bảng Quản Lý Phép Nhân Sự hiển thị chính xác 100% số ngày phép đã sử dụng và số ngày phép còn lại.
+  3. Cập nhật `approveLeaveRequestFinal` và `deleteLeaveRequest` trong `CRMContext.tsx` để đồng bộ chính xác số ngày phép đã sử dụng lên Supabase & LocalStorage.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.87 Phân Quyền Xuất File Excel Bảng Chấm Công (Chỉ Cho HR / BOD / Admin)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Chỉ cho phép các vai trò **HR (`hr`)**, **Ban Giám Đốc (`bod`)** và **Quản trị viên (`admin`)** có quyền xuất file Excel Bảng chấm công. Các vai trò khác không được xuất file Excel.
+- **Giải pháp:**
+  1. Khai báo biến phân quyền `canExportExcel = ['hr', 'bod', 'admin'].includes(effectiveRole)` trong `TimesheetManagement.tsx`.
+  2. Thêm kiểm tra điều kiện trong hàm `handleExportExcel` để chặn thực thi nếu người dùng không thuộc 3 vai trò trên.
+  3. Ẩn nút **"Xuất File Excel (.xlsx)"** trên giao diện Bảng Chấm Công đối với các vai trò ngoài HR, BOD và Admin.
+  4. Cập nhật tiêu đề tab trên `LeaveRequestsPage.tsx` thành "Bảng chấm công nhân sự".
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.88 Nâng Cấp Giao Diện Dropdown Thả Xuống & Chuẩn Hóa Icon Mới Cho Trang Nghỉ Phép & Chấm Công
+- **Mô tả yêu cầu / Vấn đề:**
+  - Các ô chọn `<select>` mặc định của trình duyệt trông vuông vức, xám thô và bị lỗi hiển thị khoảng cách dính sát trên một số thiết bị/trình duyệt.
+- **Giải pháp:**
+  1. Thay thế toàn bộ các thẻ `<select>` mặc định bằng `CustomSelect` component cao cấp (bo góc `rounded-xl`, shadow nhẹ, menu nổi `shadow-xl`, hiệu ứng hover/focus viền xanh, icon check đánh dấu lựa chọn active).
+  2. Áp dụng đồng bộ `CustomSelect` cho: Bảng chấm công (`TimesheetManagement.tsx`), Quản lý danh sách đơn nghỉ (`LeaveManagementTab.tsx`), Điều chỉnh quỹ phép năm (`LeaveBalanceManagement.tsx`), Form xin nghỉ (`LeaveRequestModal.tsx`) và Trang chính (`LeaveRequestsPage.tsx`).
+  3. Chuẩn hóa toàn bộ bộ icon Lucide (`Calendar`, `Filter`, `Users`, `Clock`, `UserCheck`...) kèm nhãn hiển thị cho từng bộ lọc.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.89 Khắc Phục Lỗi Lệch Hàng Control & Menu Dropdown Bị Che Khuất
+- **Mô tả yêu cầu / Vấn đề:**
+  - Ô tìm kiếm và các nút Dropdown lọc bị lệch hàng dọc (không thẳng hàng ngang) do ô tìm kiếm thiếu nhãn trên (label) và không đồng bộ chiều cao.
+  - Danh sách thả xuống của Dropdown khi mở ra bị cắt/che khuất bởi đường viền khung thẻ chứa do tính chất `overflow-hidden`.
+- **Giải pháp:**
+  1. Thêm nhãn tiêu đề `TÌM KIẾM` chuẩn hóa cho ô tìm kiếm, nâng chiều cao ô nhập liệu thành `h-[38px]` bằng với nút CustomSelect, và thiết lập `items-end` cho toàn bộ container bộ lọc để các khung điều khiển căn lề đáy thẳng hàng tuyệt đối.
+  2. Bỏ thuộc tính `overflow-hidden` ở thẻ bao ngoài bộ lọc trong `LeaveRequestsPage.tsx` và chuyển thuộc tính cuộn sang container chứa bảng (`overflow-x-auto rounded-b-2xl`).
+  3. Cấu hình `z-50` cho container CustomSelect khi mở và `z-[100]` cho khung popup danh sách thả xuống để menu hiển thị đè lên bảng một cách mượt mà mà không bao giờ bị cắt che.
+  4. Áp dụng đồng bộ giải pháp căn hàng và chống che cho: `LeaveRequestsPage.tsx`, `LeaveManagementTab.tsx`, `TimesheetManagement.tsx`, `LeaveBalanceManagement.tsx` và `CustomSelect.tsx`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.90 Mở Rộng Chiều Rộng Nút Chọn Năm (Year Dropdown Width) Đảm Bảo Hiển Thị Đầy Đủ Text
+- **Mô tả yêu cầu / Vấn đề:**
+  - Nút chọn "Năm" ở Bảng chấm công bị giới hạn chiều rộng `w-32` dẫn đến văn bản hiển thị bị cắt bớt thành `Năm 20...`.
+- **Giải pháp:**
+  - Tăng chiều rộng nút chọn từ `w-32` lên `w-36 sm:w-40` trong `TimesheetManagement.tsx` và `LeaveBalanceManagement.tsx`, giúp hiển thị đầy đủ văn bản "Năm 2026" cùng biểu tượng lịch và mũi tên thả xuống một cách rõ ràng, không bị xén chữ.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.91 Phân Tách Tab Quản Lý Người Dùng Thành "Nhân Sự Công Ty", "Tài Khoản Đại Lý & CTV" và "Team Kinh Doanh"
+- **Mô tả yêu cầu / Vấn đề:**
+  - Cần phân tách tab Quản lý Nhân sự & Tài khoản trong Cài đặt hệ thống để quản lý riêng biệt giữa nhân sự nội bộ công ty và đối tác phân phối bên ngoài (Đại lý & CTV).
+  - Làm rõ quy trình duyệt Đơn xin nghỉ phép và Đề nghị thanh toán đối với Leader hoặc nhân sự không gán Leader phụ trách.
+- **Giải pháp:**
+  1. Phân tách tab người dùng thành **3 tab rõ ràng**: (1) **🏢 Quản lý Nhân sự Công ty** (lọc tất cả role nội bộ), (2) **🤝 Tài khoản Đại lý & CTV** (lọc role `agent`, `CTV`), và (3) **🏛️ Quản lý Team Kinh doanh**.
+  2. Nút **"Thêm Nhân sự Mới"** và **"Thêm Đại lý / CTV Mới"** tự động gán role mặc định chuẩn tương ứng với từng tab.
+  3. Cập nhật bộ lọc vai trò (Role filter) trong từng tab chỉ hiển thị các vai trò thuộc nhóm tương ứng.
+  4. Xác nhận quy trình duyệt: Đơn nghỉ phép & Đề nghị thanh toán của Leader hoặc nhân sự không gán Leader sẽ tự động được chuyển lên cấp quản lý cao nhất gồm **Admin**, **BOD** và **HR** (đối với nghỉ phép) hoặc **Kế toán** (đối với chi tiền).
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.92 Tự Động Ghép & Đồng Bộ Email Cho Danh Sách Tài Khoản Người Dùng (Fix Trống Email)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Danh sách tài khoản người dùng hiển thị biểu tượng email ✉️ nhưng giá trị email bên cạnh bị bỏ trống (do bảng `profiles` trong Supabase chưa ghi nhận cột `email` cho các tài khoản được tạo trước đó).
+- **Giải pháp:**
+  1. Cập nhật backend API `GET /api/admin/users`: Tự động truy vấn danh sách `auth.users` từ Supabase Auth Admin API để ghép chính xác địa chỉ email thật vào profile người dùng theo `user_id`.
+  2. Bổ sung cơ chế tự động ghi ngược (backfill) địa chỉ email vào cột `email` của bảng `profiles` trong cơ sở dữ liệu để đảm bảo dữ liệu được đồng bộ bền vững.
+  3. Bổ sung logic chuẩn hóa định dạng email fallback tại `UserManagement.tsx` dựa trên tên nhân sự nếu chưa có email auth, đảm bảo 100% tài khoản đều hiển thị email rõ ràng bên cạnh biểu tượng thư ✉️.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.93 Rà Soát & Tối Ưu Hóa Chi Tiết Schema Database Supabase (`supabase-schema.sql`)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Kiểm tra và làm sạch toàn bộ file `supabase-schema.sql` để loại bỏ tất cả các bảng dư thừa và chỉnh sửa chuẩn hóa tên bảng/cột trùng khớp 100% với ứng dụng CRM.
+- **Giải pháp:**
+  1. Loại bỏ hoàn toàn khối khởi tạo bảng `visas` cũ ở phần đầu schema (vì hồ sơ visa đã chuyển sang bảng `passengers` và dịch vụ visa thuộc bảng `tours`).
+  2. Loại bỏ bảng `feedbacks` dư thừa.
+  3. Cập nhật các View báo cáo (`executive_visa_risk`, `executive_financial_margins`, `executive_agent_performance`) đổi từ tên bảng cũ `orders` sang bảng `bookings` thực tế, đảm bảo khi chạy trong SQL Editor của Supabase không gặp lỗi thiếu bảng.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.94 Sắp Xếp Toàn Bộ Dãy Tab Điều Hướng Nghỉ Phép Thành 1 Hàng Ngang Liền Mạch
+- **Mô tả yêu cầu / Vấn đề:**
+  - Dãy nút điều hướng tab trên trang Quản lý Nghỉ phép (`LeaveRequestsPage.tsx`) bị rớt dòng làm 2 nút "Quản lý Quỹ Phép (2026)" và "Cấu hình Ngày lễ" rơi xuống hàng thứ 2.
+- **Giải pháp:**
+  - Cập nhật flex container chứa toàn bộ các nút tab thành `flex-nowrap` kèm `min-w-max` và `overflow-x-auto scrollbar-none`, giúp 100% các nút tab luôn nằm trên cùng 1 hàng ngang duy nhất, hỗ trợ cuộn ngang mượt mà trên màn hình nhỏ.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter (`npm run lint`) và biên dịch (`npm run build`) thành công 100%.
+
+### 1.95 Tinh Gọn Kích Thước & Nhãn Nút Tab Tránh Bị Che Chữ
+- **Mô tả yêu cầu / Vấn đề:**
+  - Nhãn text các tab điều hướng dài và khoảng đệm lớn khiến các nút tab bị che chữ khi hiển thị.
+- **Giải pháp:**
+  - Thu gọn nhãn các tab: `Đơn của tôi`, `Duyệt Cấp 1`, `Duyệt Cấp Cuối`, `Bảng chấm công`, `Quỹ Phép (2026)`, `Cấu hình Ngày lễ`.
+  - Giảm kích thước icon về `w-3.5 h-3.5`, padding `px-2.5 py-1.5`, font chữ `text-xs font-bold` và `gap-1.5`, giúp 100% các nút tab hiển thị đầy đủ và không bị che khuất.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.96 Chuẩn Hóa Hiển Thị Badge Bộ Phận / Vai Trò Thuần Việt
+- **Mô tả yêu cầu / Vấn đề:**
+  - Cột "Bộ phận" trong Bảng chấm công (`TimesheetManagement.tsx`) và Quản lý quỹ phép (`LeaveBalanceManagement.tsx`) hiển thị chuỗi mã kỹ thuật thô (`SALE_LEADER`, `SALE`, `MARKETING_LEADER`, `ADMIN`, `VISA`...).
+- **Giải pháp:**
+  - Định nghĩa bộ cấu hình chuẩn hóa `ROLE_LABELS` và helper `getRoleConfig` trong `types.ts`.
+  - Đồng bộ hiển thị badge bộ phận dạng pill với icon Khiên (`Shield`), màu sắc nền và viền đặc trưng cho từng vai trò theo thiết kế chuẩn (VD: `Trưởng phòng Marketing`, `Nhân viên Marketing`, `Sale Leader (Trưởng nhóm)`, `Sale`, `Hướng Dẫn Viên (HDV)`, `Điều hành Tour`, `Bộ phận Visa`, `Quản trị viên (Admin)`).
+  - Cập nhật bộ lọc lựa chọn Bộ phận và định dạng xuất file Excel đồng bộ tên Tiếng Việt chuẩn xác.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.97 Bộ Lọc Năm/Tháng & Tính Năng Chỉnh Sửa Ngày Lễ Hệ Thống
+- **Mô tả yêu cầu / Vấn đề:**
+  - Bổ sung bộ lọc Năm, Tháng và Từ khóa tìm kiếm cho bảng danh sách Ngày lễ hệ thống.
+  - Cho phép chỉnh sửa lại thông tin ngày lễ đã lưu (Tên, ngày qua DatePicker, loại ngày nghỉ, ghi chú, lặp lại).
+- **Giải pháp:**
+  - Bổ sung hàm `updateHoliday(id, data)` trong `CRMContext.tsx` để cập nhật đồng bộ lên Supabase và LocalStorage.
+  - Tích hợp thanh bộ lọc linh hoạt trực quan ngay trên tiêu đề bảng: Lọc theo Năm (tự động gom các năm có dữ liệu + năm hiện tại, năm trước, năm sau hoặc "Tất cả các năm"), lọc theo Tháng (Tháng 1 -> 12 hoặc "Tất cả các tháng"), ô tìm kiếm theo tên hoặc mô tả ngày lễ, kèm badge đếm số lượng ngày lễ theo kết quả lọc và nút "Xóa lọc".
+  - Thêm nút Sửa (`Edit2`) ở cột Thao tác từng dòng; khi bấm sửa form nhập bên trái sẽ chuyển sang chế độ "✏️ Cập nhật Ngày Lễ" có viền highlight hổ phách, nạp dữ liệu cũ vào DatePicker & Form, có nút "Lưu Cập Nhật Ngày Lễ" và "Hủy bỏ".
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.98 Loại Trừ Hoàn Toàn Quản Trị Viên (Admin) Khỏi Nghỉ Phép & Chấm Công
+- **Mô tả yêu cầu / Vấn đề:**
+  - Quản trị viên (`admin`) là vai trò điều hành hệ thống, không thuộc đối tượng chấm công tính ngày làm việc hay cấp phát/quản lý quỹ phép năm định kỳ.
+- **Giải pháp:**
+  1. `TimesheetManagement.tsx`: Lọc bỏ `admin` khỏi `staffProfiles` và `rawTimesheetRows` trong bảng chấm công, loại bỏ `admin` khỏi bộ lọc lựa chọn Bộ phận và tổng kết số liệu nhân viên.
+  2. `LeaveBalanceManagement.tsx`: Lọc bỏ `admin` khỏi `staffList` và `eligibleStaff` (chỉ quản lý và cấp phát quỹ phép cho nhân sự các phòng ban thực tế), loại bỏ `admin` khỏi bộ lọc bộ phận.
+  3. `LeaveRequestModal.tsx`: Lọc bỏ `admin` khỏi danh sách nhân sự tạo đơn hộ và danh sách đồng nghiệp nhận bàn giao công việc.
+  4. `LeaveRequestsPage.tsx`: Đồng bộ `internalStaffList` loại trừ `admin`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.99 Khắc Phục Lưu & Cập Nhật Ngày Nghỉ Lễ Bị Trở Lại Như Cũ Khi Tải Lại Trang
+- **Mô tả yêu cầu / Vấn đề:**
+  - Sau khi sửa thông tin ngày lễ (ví dụ xóa/sửa nội dung mô tả hoặc đổi thông tin) và lưu lại (ảnh 1), khi tải lại trang (`F5`) thông tin bị quay trở lại như ban đầu (ảnh 2).
+- **Nguyên nhân:**
+  1. Khi xóa trắng nội dung mô tả, giá trị truyền vào là `undefined` thay vì chuỗi rỗng `""`, khiến thư viện Supabase client bỏ qua cột `description` khi gửi lệnh `UPDATE` lên database.
+  2. Đối với các ngày lễ mặc định hoặc ID tạm, mã định danh trên frontend không trùng với UUID thực tế trong database nên câu lệnh update theo ID bị trượt (0 rows affected).
+  3. Quá trình gieo dữ liệu mặc định ban đầu (`seedData`) chưa cập nhật lại mảng UUID thực tế từ cơ sở dữ liệu về state của ứng dụng.
+- **Giải pháp:**
+  - Chuẩn hóa payload cập nhật `description` thành chuỗi rỗng `""` thay vì `undefined`.
+  - Cải tiến cơ chế `updateHoliday` và `deleteHoliday`: Nếu cập nhật theo ID không khớp, hệ thống tự động tìm và cập nhật/upsert theo trường `date` (ngày áp dụng duy nhất), đồng thời tự động đồng bộ lại UUID thực tế từ Supabase về React state và LocalStorage.
+  - Cập nhật hàm `fetchHolidays` để gán đúng danh sách bản ghi kèm UUID khi khởi tạo dữ liệu mặc định.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.100 Tinh Chỉnh Giao Diện Căn Chỉnh Thanh Bộ Lọc Ngày Lễ (Tránh Chồng Chéo Component)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Giao diện thanh lọc Năm, Tháng và Ô tìm kiếm ngày lễ bị lệch chiều cao, nhãn NĂM / THÁNG bị trôi nổi lên viền không đồng bộ với ô tìm kiếm, gây đè và vỡ khung viền.
+- **Giải pháp:**
+  - Đồng bộ chuẩn hóa chiều cao `h-10` (40px) hoàn toàn cho tất cả các phần tử trên cùng 1 hàng: Hộp chọn Năm (với Icon `Calendar` bên trái), Hộp chọn Tháng (với Icon `Filter` bên trái), Ô tìm kiếm từ khóa (Icon `Search` bên trái) và Nút Xóa lọc.
+  - Loại bỏ hoàn toàn nhãn nổi (floating label) `NĂM`, `THÁNG` vốn làm đứt đoạn đường viền và lệch trục hiển thị.
+  - Sử dụng giao diện phẳng với select hiện đại, bo tròn `rounded-xl`, viền `border-slate-200` và bóng mờ nhẹ `shadow-2xs` để các component không bị đè hay chồng chéo lên nhau.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.101 Đồng Bộ Dropdown Menu & Sửa Lỗi Trùng Lặp Mũi Tên (Double Icon Arrow Down)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Phần chọn Năm và Tháng sử dụng thẻ `<select>` gốc gây ra hiện tượng 2 mũi tên chỉ xuống trùng lặp (1 mũi tên mặc định của trình duyệt + 1 icon tùy chỉnh) và menu xổ xuống màu xám thô của hệ điều hành, làm co cụm/cắt chữ "Tất cả các tháng".
+- **Giải pháp:**
+  - Chuyển đổi sang component dropdown chuẩn `CustomSelect`: menu thả xuống dạng popup nổi có viền mềm, bo góc `rounded-xl`, bóng đổ `shadow-xl`, icon dấu tích xanh (`Check`) khi chọn và chỉ duy nhất 1 icon `ChevronDown` có hiệu ứng xoay 180 độ mượt mà khi mở.
+  - Tối ưu độ rộng linh hoạt (`w-40 sm:w-44` cho Năm và `w-44 sm:w-48` cho Tháng) giúp hiển thị trọn vẹn văn bản "Tất cả các tháng" mà không bị cắt chữ.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

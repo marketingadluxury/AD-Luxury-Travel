@@ -745,7 +745,7 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                             </td>
 
                             {/* Họ và tên + Avatar */}
-                            <td className="py-3.5 px-4 whitespace-nowrap">
+                            <td className="py-3.5 px-[10px] whitespace-nowrap">
                               <div className="flex items-center gap-3">
                                 {lead.customer_avatar ? (
                                   <img
@@ -782,7 +782,7 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                             </td>
 
                             {/* Giới tính */}
-                            <td className="py-3.5 px-4 whitespace-nowrap">
+                            <td className="py-3.5 px-[10px] whitespace-nowrap">
                               {lead.gender === 'Nam' || lead.gender === 'male' ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                                   Nam
