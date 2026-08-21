@@ -93,7 +93,7 @@ export function calculateTotalUsedAnnualDays(
 
   let approvedUsedDays = 0;
   approvedAnnualLeaves.forEach((req) => {
-    approvedUsedDays += getLeaveRequestWorkdaysCount(req.start_date, req.end_date, effectiveHolidays);
+    approvedUsedDays += getLeaveRequestWorkdaysCount(req.start_date, req.end_date, effectiveHolidays, req.leave_session, req.total_days);
   });
 
   // 2. Đếm các ngày nghỉ hoán đổi / cầu nối ('bridge_annual_or_unpaid') trong năm chưa bị trùng với đơn nghỉ phép
@@ -287,14 +287,40 @@ export function calculateStandardWorkingDays(month: number, year: number, holida
 /**
  * Tính số ngày làm việc thực tế giữa 2 mốc thời gian (start_date -> end_date) trong 1 tháng cụ thể
  * Chỉ đếm các ngày thuộc tháng đó, là ngày trong tuần (T2-T6) và không trùng ngày Lễ.
+ * Hỗ trợ các đơn nghỉ nửa ngày (session: morning/afternoon -> 0.5 ngày).
  */
 export function calculateWorkingDaysInRange(
   startDateStr: string,
   endDateStr: string,
   targetMonth: number,
   targetYear: number,
-  holidays: Holiday[] = []
+  holidays: Holiday[] = [],
+  leaveSession?: 'all_day' | 'morning' | 'afternoon',
+  totalDaysOverride?: number
 ): number {
+  if (totalDaysOverride !== undefined && totalDaysOverride !== null && totalDaysOverride > 0) {
+    // Nếu có override rõ ràng (ví dụ 0.5) và đơn chỉ trong 1 ngày
+    if (startDateStr === endDateStr) {
+      const d = new Date(startDateStr);
+      if (d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth) {
+        if (isWorkingDay(d, holidays)) {
+          return totalDaysOverride;
+        }
+      }
+      return 0;
+    }
+  }
+
+  if (startDateStr === endDateStr && (leaveSession === 'morning' || leaveSession === 'afternoon')) {
+    const d = new Date(startDateStr);
+    if (d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth) {
+      if (isWorkingDay(d, holidays)) {
+        return 0.5;
+      }
+    }
+    return 0;
+  }
+
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
 
@@ -371,7 +397,15 @@ export function calculateEmployeeTimesheet(
   let unpaidLeaveDays = 0; // Nghỉ không lương (unpaid)
 
   userApprovedLeaves.forEach((req) => {
-    const daysInMonth = calculateWorkingDaysInRange(req.start_date, req.end_date, month, year, holidays);
+    const daysInMonth = calculateWorkingDaysInRange(
+      req.start_date,
+      req.end_date,
+      month,
+      year,
+      holidays,
+      req.leave_session,
+      req.total_days
+    );
 
     if (req.type === 'annual') {
       paidLeaveDays += daysInMonth;
@@ -400,7 +434,13 @@ export function calculateEmployeeTimesheet(
 
   let approvedAnnualDaysYear = 0;
   annualLeavesForYear.forEach((req) => {
-    approvedAnnualDaysYear += getLeaveRequestWorkdaysCount(req.start_date, req.end_date, holidays);
+    approvedAnnualDaysYear += getLeaveRequestWorkdaysCount(
+      req.start_date,
+      req.end_date,
+      holidays,
+      req.leave_session,
+      req.total_days
+    );
   });
 
   const usedDays = Math.max(leaveBalance?.used_days ?? 0, approvedAnnualDaysYear);
@@ -495,9 +535,34 @@ export function calculateEmployeeTimesheet(
 
 
 /**
- * Tính tổng số ngày làm việc thực tế của một đơn xin nghỉ phép bất kỳ (để trừ quỹ phép)
+ * Tính tổng số ngày làm việc thực tế của một đơn xin nghỉ phép bất kỳ (để trừ quỹ phép hoặc hiển thị)
+ * Hỗ trợ các đơn nghỉ nửa ngày (session: morning/afternoon -> 0.5 ngày).
  */
-export function getLeaveRequestWorkdaysCount(startDateStr: string, endDateStr: string, holidays: Holiday[] = []): number {
+export function getLeaveRequestWorkdaysCount(
+  startDateStr: string,
+  endDateStr: string,
+  holidays: Holiday[] = [],
+  leaveSession?: 'all_day' | 'morning' | 'afternoon',
+  totalDaysOverride?: number
+): number {
+  if (totalDaysOverride !== undefined && totalDaysOverride !== null && totalDaysOverride > 0) {
+    if (startDateStr === endDateStr) {
+      const d = new Date(startDateStr);
+      if (isWorkingDay(d, holidays)) {
+        return totalDaysOverride;
+      }
+      return 0;
+    }
+  }
+
+  if (startDateStr === endDateStr && (leaveSession === 'morning' || leaveSession === 'afternoon')) {
+    const d = new Date(startDateStr);
+    if (isWorkingDay(d, holidays)) {
+      return 0.5;
+    }
+    return 0;
+  }
+
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
 

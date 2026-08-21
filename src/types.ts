@@ -515,6 +515,7 @@ export interface Holiday {
 }
 
 export type LeaveType = 'annual' | 'unpaid' | 'compensatory' | 'special';
+export type LeaveSession = 'all_day' | 'morning' | 'afternoon';
 export type LeaveStatus = 'pending' | 'approved_level_1' | 'approved_final' | 'rejected';
 
 export interface LeaveRequest {
@@ -525,6 +526,8 @@ export interface LeaveRequest {
   user_role?: Role;
   start_date: string; // YYYY-MM-DD
   end_date: string; // YYYY-MM-DD
+  leave_session?: LeaveSession; // 'all_day' (1.0 ngày), 'morning' (0.5 ngày sáng), 'afternoon' (0.5 ngày chiều)
+  total_days?: number; // 0.5, 1.0, 2.0...
   type: LeaveType;
   status: LeaveStatus;
   reason: string;

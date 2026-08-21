@@ -966,6 +966,44 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   - Tối ưu độ rộng linh hoạt (`w-40 sm:w-44` cho Năm và `w-44 sm:w-48` cho Tháng) giúp hiển thị trọn vẹn văn bản "Tất cả các tháng" mà không bị cắt chữ.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
 
+### 1.102 Đồng Bộ Toàn Diện Vai Trò BOD (Ban Giám Đốc) Vào Mục Nghỉ Phép & Chấm Công
+- **Mô tả yêu cầu / Vấn đề:**
+  - Thiết lập và mở rộng đầy đủ quyền hạn, khả năng quản trị và điều phối của vai trò Ban Giám Đốc (`bod`) vào toàn bộ mô-đun Nghỉ phép & Chấm công (`/leave-requests`).
+- **Chi tiết phân quyền cho BOD:**
+  1. **Duyệt Đơn Nghỉ Phép Cấp 1 & Cấp Cuối (Final):** BOD có quyền xem toàn bộ đơn nghỉ phép của công ty, duyệt trực tiếp cấp 1 hoặc duyệt hoàn tất cấp cuối (Final Approval), đồng thời từ chối đơn kèm lý do rõ ràng.
+  2. **Bảng Chấm Công (Timesheet):** BOD có quyền xem toàn bộ danh sách nhân viên nội bộ tất cả các phòng ban, tổng hợp công ty, lọc theo bộ phận và xuất báo cáo.
+  3. **Quản Lý Quỹ Phép Năm (Leave Balances):** BOD có quyền truy cập tab Quỹ phép và điều chỉnh số ngày phép năm cho toàn bộ nhân sự.
+  4. **Cấu Hình Ngày Lễ (Holidays Settings):** BOD có quyền quản lý, thêm, sửa, xóa danh mục ngày nghỉ lễ/nghỉ bù hệ thống.
+  5. **Bộ Lọc Bộ Phận:** Hỗ trợ lọc riêng nhân sự thuộc khối Ban Giám Đốc (`bod`) trong Bảng Chấm Công và Quản Lý Quỹ Phép.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.103 Loại Bỏ Triệt Để Tài Khoản Đã Xóa Khỏi Hành Chính Nhân Sự & Toàn Bộ Hệ Thống
+- **Mô tả yêu cầu / Vấn đề:**
+  - Khi xóa tài khoản người dùng khỏi hệ thống trong mục Quản lý người dùng, nhân viên đã xóa vẫn xuất hiện ở Bảng Chấm Công và Quản Lý Quỹ Phép trong trang Hành chính nhân sự.
+- **Nguyên nhân:**
+  1. Hàm xóa người dùng ở `UserManagement.tsx` chỉ xóa local state trong component mà chưa gọi hàm đồng bộ `deleteUser` / `refreshProfiles` của `CRMContext`, khiến danh sách `profilesList` trong ngữ cảnh ứng dụng và bộ nhớ đệm `localStorage` không được cập nhật ngay lập tức.
+  2. Cơ chế `refreshProfiles` trước đó tự động nạp lại các profile từ `localStorage` (`tour_crm_agent_profiles`) dù người dùng đã bị xóa khỏi cơ sở dữ liệu.
+- **Giải pháp:**
+  - Bổ sung hàm `deleteUser` vào `CRMContext` để xóa dữ liệu trên API/Supabase, cập nhật tức thì `profilesList`, ghi nhận ID tài khoản vào danh sách đen `crm_deleted_user_ids` và làm sạch cache `localStorage`.
+  - Cập nhật `refreshProfiles`: Ưu tiên dữ liệu từ cơ sở dữ liệu làm nguồn chân lý (Source of Truth), lọc bỏ ngay lập tức các ID trong `crm_deleted_user_ids` và cập nhật lại cache lưu trữ sạch.
+  - Tích hợp bộ lọc `crm_deleted_user_ids` hai lớp vào `UserManagement.tsx`, `TimesheetManagement.tsx` và `LeaveBalanceManagement.tsx`, đảm bảo tài khoản đã xóa lập tức biến mất hoàn toàn và vĩnh viễn trên mọi màn hình.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.104 Bổ Sung Tính Năng Xin Nghỉ 0.5 Ngày (Nửa Ngày: Buổi Sáng / Buổi Chiều)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Bổ sung khả năng xin nghỉ phép 0.5 ngày (nửa ngày) thay vì bắt buộc nghỉ tối thiểu 1.0 ngày như trước đây.
+- **Giải pháp:**
+  1. **Khai báo kiểu dữ liệu (`types.ts`):** Thêm kiểu `LeaveSession = 'all_day' | 'morning' | 'afternoon'` và mở rộng interface `LeaveRequest` với `leave_session?: LeaveSession` cùng `total_days?: number`.
+  2. **Logic tính ngày công & quỹ phép (`payrollUtils.ts`):**
+     - Cập nhật hàm `calculateWorkingDaysInRange` và `getLeaveRequestWorkdaysCount` hỗ trợ tham số `leave_session` (trả về chính xác 0.5 ngày khi chọn buổi sáng hoặc buổi chiều trong ngày làm việc).
+     - Cập nhật hàm `calculateTotalUsedAnnualDays` và `calculateEmployeeTimesheet` để cộng dồn chính xác số ngày công thực tế (hỗ trợ số thực 0.5) khi tính bảng chấm công và số ngày phép năm đã sử dụng.
+  3. **Biểu mẫu Tạo Đơn (`LeaveRequestModal.tsx`):**
+     - Khi người dùng chọn khoảng thời gian có ngày bắt đầu trùng ngày kết thúc (`startDate === endDate`), hiển thị bộ chọn thời lượng: **Cả ngày (1.0 ngày công)**, **Buổi sáng (0.5 ngày công)** và **Buổi chiều (0.5 ngày công)**.
+     - Tự động đồng bộ số ngày công hiển thị và lưu đầy đủ thông tin `leave_session`, `total_days` vào cơ sở dữ liệu.
+  4. **Danh Sách Đơn (`LeaveRequestsPage.tsx`):**
+     - Bảng danh sách đơn nghỉ hiển thị trực quan badge thời lượng (`☀️ Buổi sáng` / `🌅 Buổi chiều`) kèm số ngày công chính xác (`0.5 ngày công`).
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

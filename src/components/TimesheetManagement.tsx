@@ -60,7 +60,9 @@ export const TimesheetManagement: React.FC = () => {
 
   // Danh sách nhân viên theo phân quyền hiển thị (loại trừ Admin, Đại lý và CTV)
   const staffProfiles = useMemo(() => {
+    const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
     return profilesList.filter((p) => {
+      if (deletedIds.has(p.id)) return false;
       // Loại trừ Admin, Đại lý và CTV ra khỏi danh sách chấm công
       if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
 

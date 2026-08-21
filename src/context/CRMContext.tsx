@@ -72,6 +72,7 @@ interface CRMContextType {
   addAgentProfile: (profileData: Omit<UserProfile, 'id'> & { id?: string }) => Promise<UserProfile>;
   updateAgentProfile: (id: string, updatedData: Partial<UserProfile>) => Promise<void>;
   deleteAgentProfile: (id: string) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
   currentRole: Role;
   setCurrentRole: (role: Role) => void;
   displayRole: Role;
@@ -490,26 +491,30 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         }
       }
 
-      // Merge với dữ liệu tùy chỉnh từ localStorage
+      // Lọc bỏ các tài khoản đã bị xóa
+      const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
+
+      if (remoteProfiles.length > 0) {
+        const validProfiles = remoteProfiles.filter(p => !deletedIds.has(p.id));
+        setProfilesList(validProfiles);
+        saveProfilesToLocalStorage(validProfiles);
+        return;
+      }
+
+      // Fallback từ localStorage khi không có remote profiles
       const cached = localStorage.getItem('tour_crm_agent_profiles');
       if (cached) {
         try {
           const localProfiles = JSON.parse(cached) as UserProfile[];
           if (Array.isArray(localProfiles) && localProfiles.length > 0) {
-            const profileMap = new Map<string, UserProfile>();
-            remoteProfiles.forEach(p => profileMap.set(p.id, p));
-            localProfiles.forEach(p => profileMap.set(p.id, p));
-            const merged = Array.from(profileMap.values());
-            setProfilesList(merged);
+            const validProfiles = localProfiles.filter(p => !deletedIds.has(p.id));
+            setProfilesList(validProfiles);
+            saveProfilesToLocalStorage(validProfiles);
             return;
           }
         } catch (e) {
           console.warn('Lỗi parse local profiles:', e);
         }
-      }
-
-      if (remoteProfiles.length > 0) {
-        setProfilesList(remoteProfiles);
       }
     } catch (err) {
       console.warn('Lỗi khi tải danh sách profiles:', err);
@@ -650,33 +655,53 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
-  const deleteAgentProfile = async (id: string): Promise<void> => {
+  const deleteUser = async (id: string): Promise<void> => {
     const realUuid = toUuid(id);
     const target = profilesList.find(p => p.id === id || p.id === realUuid);
+    
+    // Ghi nhận ID đã xóa vào localStorage để không bao giờ tái xuất hiện
+    try {
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]');
+      if (!deletedIds.includes(id)) deletedIds.push(id);
+      if (realUuid && !deletedIds.includes(realUuid)) deletedIds.push(realUuid);
+      localStorage.setItem('crm_deleted_user_ids', JSON.stringify(deletedIds));
+    } catch (e) {
+      console.warn('Lỗi lưu crm_deleted_user_ids:', e);
+    }
+
+    // Cập nhật state và localStorage ngay lập tức
     setProfilesList(prev => {
       const updated = prev.filter(p => p.id !== id && p.id !== realUuid);
       saveProfilesToLocalStorage(updated);
       return updated;
     });
 
+    // Xóa trên backend API
+    try {
+      await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Lỗi gọi API xóa user:', err);
+    }
+
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.from('profiles').delete().eq('id', realUuid);
-        if (error) {
-          console.warn('Không thể xóa profile trên Supabase (chỉ xóa local):', error);
-        }
+        await supabase.from('profiles').delete().eq('id', realUuid);
       } catch (err) {
-        console.warn('Lỗi khi xóa profile:', err);
+        console.warn('Lỗi khi xóa profile trên Supabase:', err);
       }
     }
 
     if (target) {
       logActivity({
-        action: `Xóa ${target.role === 'agent' ? 'Đại lý' : 'CTV'}: ${target.full_name}`,
+        action: `Xóa thành viên: ${target.full_name}`,
         module: 'Thành viên',
-        details: `Đã xóa profile ID #${id}`
+        details: `Đã xóa tài khoản ID #${id} (${target.role})`
       });
     }
+  };
+
+  const deleteAgentProfile = async (id: string): Promise<void> => {
+    await deleteUser(id);
   };
 
   const markNotificationAsRead = async (notifId: string) => {
@@ -1058,6 +1083,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       ...requestData,
       id: newId,
       status: 'pending',
+      leave_session: requestData.leave_session || 'all_day',
+      total_days: requestData.total_days,
       created_at: new Date().toISOString()
     };
 
@@ -1074,27 +1101,49 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           user_id: requestData.user_id,
           start_date: requestData.start_date,
           end_date: requestData.end_date,
+          leave_session: requestData.leave_session || 'all_day',
+          total_days: requestData.total_days,
           type: requestData.type,
           status: 'pending',
           reason: requestData.reason,
           handover_user_id: requestData.handover_user_id || null
         }]);
       } catch (err) {
-        console.warn('Lỗi insert leave_requests lên Supabase:', err);
+        console.warn('Lỗi insert leave_requests lên Supabase (thử fallback nếu cột mới chưa có):', err);
+        try {
+          await supabase.from('leave_requests').insert([{
+            id: newId,
+            user_id: requestData.user_id,
+            start_date: requestData.start_date,
+            end_date: requestData.end_date,
+            type: requestData.type,
+            status: 'pending',
+            reason: `${requestData.leave_session && requestData.leave_session !== 'all_day' ? `[Nghỉ ${requestData.leave_session === 'morning' ? 'Buổi sáng (0.5 ngày)' : 'Buổi chiều (0.5 ngày)'}] ` : ''}${requestData.reason}`,
+            handover_user_id: requestData.handover_user_id || null
+          }]);
+        } catch (fallbackErr) {
+          console.warn('Lỗi fallback insert leave_requests:', fallbackErr);
+        }
       }
     }
+
+    const sessionText = requestData.leave_session === 'morning' 
+      ? ' (Buổi sáng - 0.5 ngày)' 
+      : requestData.leave_session === 'afternoon' 
+      ? ' (Buổi chiều - 0.5 ngày)' 
+      : '';
 
     logActivity({
       action: `Tạo đơn xin nghỉ phép: ${requestData.user_name || 'Nhân viên'}`,
       module: 'Thành viên',
-      details: `Từ ${requestData.start_date} đến ${requestData.end_date} - Loại: ${requestData.type}`
+      details: `Từ ${requestData.start_date} đến ${requestData.end_date}${sessionText} - Loại: ${requestData.type}`
     });
 
     addSystemNotification({
       id: generateSafeUUID(),
       type: 'system',
       title: 'Đơn xin nghỉ phép mới cần duyệt',
-      message: `${requestData.user_name || 'Nhân viên'} vừa gửi đơn xin nghỉ (${requestData.start_date} -> ${requestData.end_date}).`,
+      message: `${requestData.user_name || 'Nhân viên'} vừa gửi đơn xin nghỉ (${requestData.start_date} -> ${requestData.end_date}${sessionText}).`,
       targetId: newId,
       createdAt: new Date().toISOString(),
       read: false
@@ -6219,6 +6268,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       addAgentProfile,
       updateAgentProfile,
       deleteAgentProfile,
+      deleteUser,
       currentRole,
       setCurrentRole,
       displayRole,

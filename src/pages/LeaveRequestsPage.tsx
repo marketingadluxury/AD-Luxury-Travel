@@ -158,7 +158,7 @@ export default function LeaveRequestsPage() {
     }
     await rejectLeaveRequest(
       rejectingId,
-      profile?.full_name || user?.email || 'Quản lý',
+      profile?.full_name || user?.email || (effectiveRole === 'bod' ? 'Ban Giám Đốc' : effectiveRole === 'hr' ? 'Nhân sự (HR)' : 'Quản lý'),
       rejectReason.trim()
     );
     setRejectingId(null);
@@ -854,7 +854,10 @@ export default function LeaveRequestsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-150">
                   {displayRequests.map((req) => {
-                    const daysCount = getLeaveRequestWorkdaysCount(req.start_date, req.end_date, holidays);
+                    const session = req.leave_session || 'all_day';
+                    const daysCount = req.total_days !== undefined
+                      ? req.total_days
+                      : getLeaveRequestWorkdaysCount(req.start_date, req.end_date, holidays, session);
                     const isMyRequest = req.user_id === currentUserId;
                     const canDelete = (isMyRequest && (req.status === 'pending' || req.status === 'rejected')) || isHRorBODorAdmin;
 
@@ -890,6 +893,15 @@ export default function LeaveRequestsPage() {
                             <span className="text-gray-400 font-normal mx-1">đến</span> 
                             {req.end_date.split('-').reverse().join('/')}
                           </div>
+                          {session !== 'all_day' && (
+                            <div className="mt-0.5">
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                session === 'morning' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-orange-50 text-orange-700 border border-orange-200'
+                              }`}>
+                                {session === 'morning' ? '☀️ Buổi sáng' : '🌅 Buổi chiều'}
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3 px-4 text-center whitespace-nowrap">
@@ -924,9 +936,9 @@ export default function LeaveRequestsPage() {
                             {/* Nút Duyệt Cấp 1 (Trưởng nhóm) */}
                             {canApproveL1 && (
                               <button
-                                onClick={() => approveLeaveRequestLevel1(req.id, profile?.full_name || 'Leader')}
+                                onClick={() => approveLeaveRequestLevel1(req.id, profile?.full_name || (['admin', 'bod'].includes(effectiveRole) ? 'Ban Giám Đốc' : 'Trưởng nhóm'))}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer whitespace-nowrap"
-                                title="Trưởng nhóm duyệt cấp 1"
+                                title="Trưởng nhóm / BOD duyệt cấp 1"
                               >
                                 <Check className="w-3.5 h-3.5" />
                                 <span>Duyệt C1</span>
@@ -936,9 +948,9 @@ export default function LeaveRequestsPage() {
                             {/* Nút Duyệt Cấp 2 / Duyệt Cuối (HR / BOD / Admin) */}
                             {canApproveFinal && (
                               <button
-                                onClick={() => approveLeaveRequestFinal(req.id, profile?.full_name || (effectiveRole === 'hr' ? 'Nhân sự (HR)' : 'Ban Giám Đốc/Admin'))}
+                                onClick={() => approveLeaveRequestFinal(req.id, profile?.full_name || (effectiveRole === 'hr' ? 'Nhân sự (HR)' : effectiveRole === 'bod' ? 'Ban Giám Đốc (BOD)' : 'Quản trị viên (Admin)'))}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer whitespace-nowrap"
-                                title="HR / BOD duyệt hoàn tất"
+                                title="HR / BOD / Admin duyệt hoàn tất"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>Duyệt Cuối</span>

@@ -41,7 +41,7 @@ const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; bord
 
 export default function UserManagement() {
   const { session } = useAuth();
-  const { currentRole } = useCRM();
+  const { currentRole, deleteUser, refreshProfiles } = useCRM();
 
   if (currentRole === 'hr') {
     return (
@@ -182,7 +182,8 @@ export default function UserManagement() {
         return u;
       });
 
-      setUsers(normalizedUsers);
+      const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
+      setUsers(normalizedUsers.filter(u => !deletedIds.has(u.id)));
     } catch (err: any) {
       console.warn('Error fetching users:', err);
     } finally {
@@ -314,6 +315,7 @@ export default function UserManagement() {
       setActionSuccess(editingUser ? 'Cập nhật thông tin tài khoản thành công!' : 'Thêm tài khoản người dùng mới thành công!');
       setIsFormOpen(false);
       fetchUsers();
+      refreshProfiles();
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || 'Đã xảy ra lỗi không xác định.');
@@ -325,27 +327,15 @@ export default function UserManagement() {
     try {
       setIsDeleting(true);
       setError(null);
-      const token = session?.access_token;
-      const headers: HeadersInit = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
+      const targetId = deleteTarget.id;
 
-      const response = await fetch(`/api/admin/users/${deleteTarget.id}`, {
-        method: 'DELETE',
-        headers
-      });
+      // Xóa qua CRMContext để đồng bộ ngay lập tức toàn bộ hệ thống
+      await deleteUser(targetId);
 
-      if (!response.ok) {
-        let errorMsg = 'Lỗi khi xóa người dùng.';
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errJson = await response.json();
-          errorMsg = errJson.error || errorMsg;
-        }
-        throw new Error(errorMsg);
-      }
-
-      setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
+      setUsers(prev => prev.filter(u => u.id !== targetId));
       setDeleteTarget(null);
+      await refreshProfiles();
       setActionSuccess('Xóa tài khoản người dùng thành công!');
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err: any) {

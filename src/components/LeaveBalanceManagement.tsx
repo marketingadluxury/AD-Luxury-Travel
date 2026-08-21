@@ -37,7 +37,9 @@ export const LeaveBalanceManagement: React.FC = () => {
 
   // Danh sách nhân sự nội bộ (loại trừ Admin, đại lý và CTV)
   const staffList = useMemo(() => {
+    const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
     return profilesList.filter((p) => {
+      if (deletedIds.has(p.id)) return false;
       // Loại trừ Admin, Đại lý và CTV
       if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
 

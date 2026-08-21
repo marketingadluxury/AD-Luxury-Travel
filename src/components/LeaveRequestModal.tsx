@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, Plus, AlertCircle, Clock, CheckCircle2, UserCheck, X } from 'lucide-react';
+import { Calendar, AlertCircle, Clock, CheckCircle2, UserCheck, X, Sun, Sunset } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
-import { LeaveType } from '../types';
+import { LeaveType, LeaveSession } from '../types';
 import { getLeaveRequestWorkdaysCount, getEffectiveLeaveBalance } from '../lib/payrollUtils';
 import { DatePicker } from './DatePicker';
 import { CustomSelect } from './CustomSelect';
@@ -26,16 +26,21 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [leaveSession, setLeaveSession] = useState<LeaveSession>('all_day');
   const [leaveType, setLeaveType] = useState<LeaveType>('annual');
   const [reason, setReason] = useState('');
   const [handoverUserId, setHandoverUserId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Kiểm tra xem có phải đơn xin nghỉ trong 1 ngày không (để cho phép chọn Buổi sáng / Buổi chiều / Cả ngày)
+  const isSingleDay = startDate && endDate && startDate === endDate;
+
   // Tính số ngày làm việc thực tế cho đơn
   const requestedWorkdays = useMemo(() => {
     if (!startDate || !endDate) return 0;
-    return getLeaveRequestWorkdaysCount(startDate, endDate, holidays);
-  }, [startDate, endDate, holidays]);
+    const session = isSingleDay ? leaveSession : 'all_day';
+    return getLeaveRequestWorkdaysCount(startDate, endDate, holidays, session);
+  }, [startDate, endDate, holidays, isSingleDay, leaveSession]);
 
   // Cảnh báo nếu chọn phép năm nhưng số ngày xin vượt quá quỹ còn lại
   const isOverBalance = leaveType === 'annual' && requestedWorkdays > userBalance.remaining;
@@ -64,6 +69,8 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
     setIsSubmitting(true);
     try {
       const handoverUser = profilesList.find((p) => p.id === handoverUserId);
+      const sessionToSave: LeaveSession = isSingleDay ? leaveSession : 'all_day';
+
       await createLeaveRequest({
         user_id: currentUserId,
         user_name: profile?.full_name || user?.email || 'Nhân viên',
@@ -71,6 +78,8 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
         user_role: profile?.role || 'sale',
         start_date: startDate,
         end_date: endDate,
+        leave_session: sessionToSave,
+        total_days: requestedWorkdays,
         type: leaveType,
         reason: reason.trim(),
         handover_user_id: handoverUserId || null,
@@ -81,6 +90,7 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
       // Reset form
       setStartDate('');
       setEndDate('');
+      setLeaveSession('all_day');
       setReason('');
       setHandoverUserId('');
       setLeaveType('annual');
@@ -210,7 +220,10 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
               </label>
               <DatePicker
                 value={startDate}
-                onChange={(val) => setStartDate(val)}
+                onChange={(val) => {
+                  setStartDate(val);
+                  if (!endDate) setEndDate(val);
+                }}
                 placeholder="Chọn ngày bắt đầu"
               />
             </div>
@@ -226,12 +239,80 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
             </div>
           </div>
 
+          {/* Tùy chọn Buổi nghỉ (Chỉ hiển thị khi nghỉ trong 1 ngày) */}
+          {isSingleDay && (
+            <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <label className="block text-xs font-bold text-slate-700">
+                Thời lượng nghỉ trong ngày:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLeaveSession('all_day')}
+                  className={`p-2 rounded-lg border text-center transition-all ${
+                    leaveSession === 'all_day'
+                      ? 'bg-blue-50 border-blue-500 text-blue-800 font-bold shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Clock className="w-4 h-4 mx-auto mb-1 text-blue-600" />
+                  <div className="text-xs">Cả ngày</div>
+                  <div className="text-[10px] text-slate-500 font-normal">1.0 ngày công</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLeaveSession('morning')}
+                  className={`p-2 rounded-lg border text-center transition-all ${
+                    leaveSession === 'morning'
+                      ? 'bg-amber-50 border-amber-500 text-amber-800 font-bold shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Sun className="w-4 h-4 mx-auto mb-1 text-amber-500" />
+                  <div className="text-xs">Buổi sáng</div>
+                  <div className="text-[10px] text-slate-500 font-normal">0.5 ngày công</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLeaveSession('afternoon')}
+                  className={`p-2 rounded-lg border text-center transition-all ${
+                    leaveSession === 'afternoon'
+                      ? 'bg-orange-50 border-orange-500 text-orange-800 font-bold shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Sunset className="w-4 h-4 mx-auto mb-1 text-orange-500" />
+                  <div className="text-xs">Buổi chiều</div>
+                  <div className="text-[10px] text-slate-500 font-normal">0.5 ngày công</div>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Hiển thị số ngày công nghỉ thực tế */}
           {startDate && endDate && (
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs">
-              <span className="text-slate-600">Thời gian nghỉ thực tế (không tính T7, CN, Lễ):</span>
-              <span className="font-bold text-slate-900 text-sm">{requestedWorkdays} ngày làm việc</span>
-            </div>
+            <>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs">
+                <span className="text-slate-600">Thời gian nghỉ thực tế (không tính T7, CN, Lễ):</span>
+                <span className="font-bold text-slate-900 text-sm">
+                  {requestedWorkdays} ngày làm việc {isSingleDay && leaveSession !== 'all_day' ? `(${leaveSession === 'morning' ? 'Buổi sáng' : 'Buổi chiều'})` : ''}
+                </span>
+              </div>
+
+              {requestedWorkdays === 0 && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-800">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Ngày chọn không phải là ngày làm việc!</p>
+                    <p className="mt-0.5 text-rose-700">
+                      Khoảng thời gian bạn chọn rơi vào <strong>Thứ 7, Chủ Nhật hoặc Ngày Lễ</strong> (công ty mặc định nghỉ). Vui lòng chọn ngày làm việc trong tuần (Thứ 2 - Thứ 6) để gửi đơn xin nghỉ.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Cảnh báo nếu vượt quá quỹ phép năm */}
