@@ -63,7 +63,6 @@ import {
   Legend
 } from 'recharts';
 import { Role, Team, TeamPerformanceSummary, SalePerformanceSummary } from '../types';
-import { EmployeeLeaveBalanceWidget } from '../components/LeaveRequestModal';
 
 // Palette màu sắc thiết kế hiện đại đồng bộ hệ thống
 const PIE_COLORS = ['#2563eb', '#1e293b', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6'];
@@ -1381,9 +1380,6 @@ export default function Dashboard() {
       {/* ========================================================================= */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Widget Phép Năm & Tạo Đơn Nghỉ Phép Cá Nhân */}
-          <EmployeeLeaveBalanceWidget />
-
           {/* Top KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Card 1: Tổng doanh số chốt */}

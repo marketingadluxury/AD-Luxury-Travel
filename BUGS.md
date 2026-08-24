@@ -6,6 +6,11 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Loại bỏ khối Quỹ phép năm khỏi trang Bảng điều khiển (Dashboard)
+- **Mô tả vấn đề:** Khối "Quỹ Phép Năm (2026)" và nút "Tạo Đơn Xin Nghỉ" hiển thị ở đầu tab Tổng quan trang Bảng điều khiển gây dư thừa do tính năng này đã được tập trung quản lý chuyên biệt tại trang Hành chính nhân sự (`/leave-requests`).
+- **Giải pháp:** Đã loại bỏ hoàn toàn component `EmployeeLeaveBalanceWidget` khỏi tab Tổng quan trong `Dashboard.tsx`.
+- **Trạng thái:** Đã hoàn thiện, kiểm tra linter và biên dịch thành công.
+
 ### 1.0 Nâng cấp thanh Toolbar Quản lý Tour: Chuyển đổi Loại Tour thành Segmented Tabs & Chuẩn hóa Dropdown
 - **Mô tả vấn đề:** 
   - Hộp chọn "Loại tour" trước đây nằm trong dropdown gây mất thao tác khi muốn lọc nhanh.
