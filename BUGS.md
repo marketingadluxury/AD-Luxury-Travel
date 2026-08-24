@@ -6,6 +6,16 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Nâng cấp thanh Toolbar Quản lý Tour: Chuyển đổi Loại Tour thành Segmented Tabs & Chuẩn hóa Dropdown
+- **Mô tả vấn đề:** 
+  - Hộp chọn "Loại tour" trước đây nằm trong dropdown gây mất thao tác khi muốn lọc nhanh.
+  - Các dropdown tìm kiếm, tháng và danh mục thị trường có phong cách chưa thực sự hiện đại, chưa có icon dẫn hướng rõ ràng.
+- **Giải pháp:**
+  1. Đưa phân loại tour ra ngoài thành cụm **Segmented Tabs** trực quan với badge số lượng và màu sắc nhận diện đặc trưng (Tất cả, AD Tự vận hành, Gửi khách đối tác, Đoàn riêng).
+  2. Bố cục lại thanh công cụ theo 2 hàng logic: Hàng 1 chọn nhanh Loại tour + Trạng thái thời gian; Hàng 2 gồm Ô tìm kiếm thông minh + Dropdown Tháng + Dropdown Danh mục + Nút Xóa lọc.
+  3. Bổ sung icon đầu mục cho các dropdown (`Calendar`, `Tag`) cùng giao diện bo góc `rounded-xl`, màu nền sáng thanh lịch và viền bóng nhẹ.
+- **Trạng thái:** Đã hoàn thiện, kiểm tra linter và biên dịch thành công.
+
 ### 1.1 Lỗi nút "Xóa" ảnh đoàn không hoạt động
 - **Mô tả lỗi:** Nút "Xóa" ảnh đoàn tại các modal/trang upload ảnh (`TourMediaUploader.tsx`, `HDVQuickUploadModal.tsx`, `TourGallery.tsx`, `GuestPhotoUploadPage.tsx`) trước đó sử dụng hộp thoại `window.confirm` mặc định của trình duyệt, dẫn đến việc không hoạt động đúng cách trong môi trường iFrame của AI Studio. Đồng thời gặp lỗi thay đổi thứ tự React Hooks (`Rules of Hooks`) khi khai báo hook sau một khối logic rẽ nhánh.
 - **Giải pháp:** 

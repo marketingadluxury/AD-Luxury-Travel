@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, AlertCircle, Clock, CheckCircle2, UserCheck, X, Sun, Sunset } from 'lucide-react';
+import { Calendar, AlertCircle, Clock, CheckCircle2, UserCheck, X, Sun, Sunset, Plus } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { LeaveType, LeaveSession } from '../types';
