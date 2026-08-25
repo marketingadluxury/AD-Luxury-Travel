@@ -12,6 +12,7 @@ import metaCapiRoutes from './server/routes/metaCapiRoutes.js';
 import metaMessengerRoutes from './server/routes/metaMessengerRoutes.js';
 import pancakeRoutes from './server/routes/pancakeRoutes.js';
 import botcakeRoutes from './server/routes/botcakeRoutes.js';
+import poscakeRoutes from './server/routes/poscakeRoutes.js';
 import { errorHandler } from './server/middleware/errorHandler.js';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/', metaCapiRoutes);
 app.use('/', metaMessengerRoutes);
 app.use('/', pancakeRoutes);
 app.use('/', botcakeRoutes);
+app.use('/', poscakeRoutes);
 
 // Global Error Handler
 app.use(errorHandler);
