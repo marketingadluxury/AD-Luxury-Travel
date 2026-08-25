@@ -6,89 +6,41 @@ import {
   XCircle, 
   AlertTriangle, 
   RefreshCw, 
-  Save, 
-  Send, 
   ShieldCheck, 
-  Database, 
-  Eye, 
-  EyeOff, 
   Search, 
-  Filter, 
-  ChevronRight, 
   BarChart3, 
   DollarSign, 
   PhoneCall, 
   ShoppingCart, 
   Layers, 
-  ExternalLink,
   Code2,
-  Info,
   Sliders,
-  Check,
-  X,
-  Zap,
   Users,
-  MessageSquare,
   Bot
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { supabase } from '@/lib/supabase';
-import { MetaConversionLog, MetaEventName, MetaLead } from '@/types';
+import { MetaConversionLog, MetaLead } from '@/types';
 import { 
   fetchMetaCapiConfig, 
-  saveMetaCapiConfig, 
   fetchMetaConversionLogs, 
-  fetchMetaLeads,
-  testMetaConnection,
-  triggerMetaCapiEvent,
-  fetchPancakeConfig,
-  savePancakeConfig,
-  testPancakeConnection,
-  syncPancakeLeads,
-  simulateMetaWebhook
+  fetchMetaLeads
 } from '@/lib/metaCapiService';
 import { MetaAdsPerformanceDashboard } from '@/components/MetaAdsPerformanceDashboard';
 import { PotentialLeadsTab } from '@/components/PotentialLeadsTab';
+import { MetaCapiSettingsSection } from '@/components/MetaCapiSettingsSection';
 import { formatCurrency } from '@/lib/utils';
-
-interface DiagnosisResult {
-  tokenValid: boolean;
-  tokenOwner?: { id: string; name: string; type?: string; link?: string };
-  permissions?: { name: string; status: string }[];
-  pageStatus?: { id: string; name: string; isSubscribedToWebhook?: boolean; webhookApps?: any[]; error?: string };
-  pixelStatus?: { id: string; name?: string; canAccess: boolean; error?: string };
-  adAccountStatus?: { id: string; name?: string; currency?: string; status?: number; error?: string };
-  recommendations: string[];
-  rawErrors: string[];
-}
 
 export default function MetaAdsAnalytics() {
   const navigate = useNavigate();
-  const { orders = [], tours = [] } = useCRM();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { orders = [] } = useCRM();
 
-  // State cấu hình Meta CAPI
+  // Trạng thái cấu hình Meta CAPI (đọc trạng thái hoạt động)
   const [pixelId, setPixelId] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [testEventCode, setTestEventCode] = useState('');
-  const [pageId, setPageId] = useState('103836966010338');
-  const [adAccountId, setAdAccountId] = useState('');
   const [isEnabled, setIsEnabled] = useState(true);
-  const [showAccessToken, setShowAccessToken] = useState(false);
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [isDiagnosing, setIsDiagnosing] = useState(false);
-  const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
-
-  // State cấu hình Pancake
-  const [pancakeApiKey, setPancakeApiKey] = useState('');
-  const [showPancakeKey, setShowPancakeKey] = useState(false);
-  const [isPancakeActive, setIsPancakeActive] = useState(true);
-  const [isSavingPancake, setIsSavingPancake] = useState(false);
-  const [isTestingPancake, setIsTestingPancake] = useState(false);
-  const [isSyncingPancake, setIsSyncingPancake] = useState(false);
-  const [pancakePages, setPancakePages] = useState<Array<{ id: string; name: string; username?: string }>>([]);
 
   // State Logs & Filter & Leads
   const [logs, setLogs] = useState<MetaConversionLog[]>([]);
@@ -102,29 +54,31 @@ export default function MetaAdsAnalytics() {
   // Active Tab: leads | overview | campaigns | logs | settings
   const [activeTab, setActiveTab] = useState<'leads' | 'overview' | 'campaigns' | 'logs' | 'settings'>('leads');
 
+  // Đọc tab từ URL nếu có
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'settings' || tabParam === 'meta-capi' || tabParam === 'capi') {
+      setActiveTab('settings');
+    } else if (tabParam === 'overview' || tabParam === 'campaigns' || tabParam === 'logs' || tabParam === 'leads') {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
+
   // Load config, logs & leads khi vào trang
   const loadData = async (isSilent: boolean = false) => {
     if (!isSilent) {
       setIsLoadingLogs(true);
     }
     try {
-      const [configData, pancakeData, logsData, leadsData] = await Promise.all([
+      const [configData, logsData, leadsData] = await Promise.all([
         fetchMetaCapiConfig(),
-        fetchPancakeConfig(),
         fetchMetaConversionLogs(200),
         fetchMetaLeads()
       ]);
 
       if (configData) {
         setPixelId(configData.pixel_id || '');
-        setAccessToken(configData.access_token_masked || '');
-        setTestEventCode(configData.test_event_code || '');
         setIsEnabled(configData.is_enabled !== false);
-      }
-
-      if (pancakeData) {
-        setPancakeApiKey(pancakeData.api_key_masked || '');
-        setIsPancakeActive(pancakeData.is_active !== false);
       }
 
       setLogs(logsData || []);
@@ -145,7 +99,7 @@ export default function MetaAdsAnalytics() {
     loadData();
 
     let debounceTimer: any = null;
-    // Lắng nghe Realtime từ Supabase khi có lead mới từ Webhook / Auto-sync (debounced silent update)
+    // Lắng nghe Realtime từ Supabase khi có lead mới từ Webhook / Lead Form
     const leadsChannel = supabase
       .channel('realtime_meta_leads_channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
@@ -168,127 +122,6 @@ export default function MetaAdsAnalytics() {
     };
   }, []);
 
-  const [isSimulatingWebhook, setIsSimulatingWebhook] = useState(false);
-
-  // Bắn thử nghiệm giả lập Webhook Meta Messenger
-  const handleSimulateMetaWebhook = async () => {
-    setIsSimulatingWebhook(true);
-    try {
-      const randomPhone = '09' + Math.floor(10000000 + Math.random() * 90000000);
-      const res = await simulateMetaWebhook({
-        customer_name: 'Khách Test Realtime Meta Webhook',
-        customer_phone: randomPhone,
-        message_text: `Chào shop AD Luxury, em muốn đăng ký tư vấn tour! SĐT liên hệ của em là ${randomPhone}`,
-        page_id: pageId || '100234567890123'
-      });
-
-      if (res.success) {
-        toast.success(`⚡ Bắn Webhook Realtime thành công! Đã tạo Lead test [${randomPhone}] & đẩy vào hệ thống.`);
-        loadData();
-      } else {
-        toast.error(res.error || 'Lỗi khi giả lập Webhook Meta');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Lỗi khi giả lập Webhook Meta');
-    } finally {
-      setIsSimulatingWebhook(false);
-    }
-  };
-
-  // Lưu cấu hình CAPI
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pixelId.trim()) {
-      toast.error('Vui lòng nhập Meta Pixel ID / Dataset ID');
-      return;
-    }
-
-    setIsSavingConfig(true);
-    try {
-      const res = await saveMetaCapiConfig({
-        pixel_id: pixelId.trim(),
-        access_token: accessToken.trim(),
-        test_event_code: testEventCode.trim() || undefined,
-        is_enabled: isEnabled
-      });
-
-      if (res.success) {
-        toast.success('Đã lưu cấu hình Meta CAPI thành công!');
-        loadData();
-      } else {
-        toast.error(res.error || 'Lỗi khi lưu cấu hình');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Lỗi lưu cấu hình');
-    } finally {
-      setIsSavingConfig(false);
-    }
-  };
-
-  // Lưu cấu hình Pancake
-  const handleSavePancakeConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pancakeApiKey.trim()) {
-      toast.error('Vui lòng nhập Pancake Public API Token');
-      return;
-    }
-
-    setIsSavingPancake(true);
-    try {
-      const res = await savePancakeConfig({
-        api_key: pancakeApiKey.trim(),
-        is_active: isPancakeActive
-      });
-
-      if (res.success) {
-        toast.success('Đã lưu cấu hình Pancake Public API thành công!');
-        loadData();
-      } else {
-        toast.error(res.error || 'Lỗi khi lưu cấu hình Pancake');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Lỗi lưu cấu hình Pancake');
-    } finally {
-      setIsSavingPancake(false);
-    }
-  };
-
-  // Kiểm tra kết nối Pancake
-  const handleTestPancakeConnection = async () => {
-    setIsTestingPancake(true);
-    try {
-      const res = await testPancakeConnection(pancakeApiKey.trim());
-      if (res.success && res.pages) {
-        setPancakePages(res.pages);
-        toast.success(`✅ Kết nối Pancake thành công! Đã tìm thấy ${res.pages.length} Fanpage.`);
-      } else {
-        toast.error(res.error || 'Không thể kết nối Pancake API với Token này.');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Lỗi khi kiểm tra kết nối Pancake');
-    } finally {
-      setIsTestingPancake(false);
-    }
-  };
-
-  // Đồng bộ khách hàng tiềm năng từ Pancake
-  const handleSyncPancake = async () => {
-    setIsSyncingPancake(true);
-    try {
-      const res = await syncPancakeLeads();
-      if (res.success) {
-        toast.success(`⚡ Đồng bộ thành công! Quét ${res.conversations_checked || 0} hội thoại & khách hàng, lưu ${res.leads_synced || 0} khách (${res.phones_found || 0} SĐT).`);
-        loadData();
-      } else {
-        toast.error(res.error || 'Lỗi khi đồng bộ dữ liệu Pancake');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Lỗi khi đồng bộ Pancake');
-    } finally {
-      setIsSyncingPancake(false);
-    }
-  };
-
   // Chuyển tới trang tạo booking khi click vào lead
   const handleSelectLeadForBooking = (lead: MetaLead) => {
     navigate('/', {
@@ -301,65 +134,6 @@ export default function MetaAdsAnalytics() {
         prefillNotes: lead.notes || lead.last_message
       }
     });
-  };
-
-  // Test kết nối sự kiện
-  const handleTestConnection = async () => {
-    setIsTestingConnection(true);
-    try {
-      const res = await testMetaConnection({
-        pixel_id: pixelId.trim() || undefined,
-        access_token: (!accessToken.includes('...') && accessToken.trim()) ? accessToken.trim() : undefined,
-        test_event_code: testEventCode.trim() || undefined
-      });
-
-      if (res.success) {
-        toast.success(res.message || 'Kết nối Meta CAPI thành công mỹ mãn!');
-        loadData();
-      } else {
-        toast.error(res.error || 'Kiểm tra kết nối thất bại');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Lỗi khi kiểm tra kết nối Meta CAPI');
-    } finally {
-      setIsTestingConnection(false);
-    }
-  };
-
-  // Chẩn đoán Token & Quyền Meta
-  const handleDiagnoseToken = async () => {
-    const tokenToTest = accessToken.trim();
-
-    setIsDiagnosing(true);
-    setDiagnosisResult(null);
-    try {
-      const res = await fetch('/api/meta-capi/diagnose-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accessToken: tokenToTest || undefined,
-          pageId: pageId.trim() || undefined,
-          pixelId: pixelId.trim() || undefined,
-          adAccountId: adAccountId.trim() || undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success && data.diagnosis) {
-        setDiagnosisResult(data.diagnosis);
-        if (data.diagnosis.tokenValid) {
-          toast.success('Đã hoàn tất chẩn đoán kết nối Meta API!');
-        } else {
-          toast.error('Token không hợp lệ hoặc đã hết hạn.');
-        }
-      } else {
-        toast.error(data.message || 'Lỗi khi chẩn đoán kết nối.');
-      }
-    } catch (err: any) {
-      toast.error('Lỗi gọi API chẩn đoán: ' + err.message);
-    } finally {
-      setIsDiagnosing(false);
-    }
   };
 
   // Thống kê tổng quan
@@ -492,17 +266,21 @@ export default function MetaAdsAnalytics() {
             <button
               onClick={() => loadData()}
               disabled={isLoadingLogs}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all backdrop-blur-sm border border-white/10 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all backdrop-blur-sm border border-white/10 disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin' : ''}`} />
               Làm mới
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-all shadow-lg shadow-blue-600/30"
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-white text-blue-900 shadow-white/20'
+                  : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30'
+              }`}
             >
               <Sliders className="w-4 h-4" />
-              Cài đặt CAPI
+              Cấu hình Meta CAPI
             </button>
           </div>
         </div>
@@ -575,93 +353,68 @@ export default function MetaAdsAnalytics() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('leads')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'leads'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Users className="w-4 h-4" /> Khách Hàng Tiềm Năng (Leads Hub) ({leads.length})
-        </button>
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('leads')}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+              activeTab === 'leads'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Users className="w-4 h-4" /> Khách Hàng Tiềm Năng (Leads Hub) ({leads.length})
+          </button>
 
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'overview'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4" /> Tổng Quan Hiệu Quả
-        </button>
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+              activeTab === 'overview'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" /> Tổng Quan Hiệu Quả
+          </button>
 
-        <button
-          onClick={() => setActiveTab('campaigns')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'campaigns'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Layers className="w-4 h-4" /> Báo Cáo Chiến Dịch UTM ({campaignStats.length})
-        </button>
+          <button
+            onClick={() => setActiveTab('campaigns')}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+              activeTab === 'campaigns'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Layers className="w-4 h-4" /> Báo Cáo Chiến Dịch UTM ({campaignStats.length})
+          </button>
 
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'logs'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Activity className="w-4 h-4" /> Nhật Ký Chuyển Đổi Meta ({filteredLogs.length})
-        </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+              activeTab === 'logs'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Activity className="w-4 h-4" /> Nhật Ký Chuyển Đổi Meta ({filteredLogs.length})
+          </button>
 
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'settings'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Sliders className="w-4 h-4" /> Cấu Hình Meta CAPI & Pancake
-        </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+              activeTab === 'settings'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Sliders className="w-4 h-4" /> Cấu Hình Meta CAPI
+          </button>
+        </div>
       </div>
 
       {/* TAB KHÁCH HÀNG TIỀM NĂNG (LEADS HUB) */}
       {activeTab === 'leads' && (
         <div className="space-y-4">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                <Bot className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">
-                  Trung Tâm Khách Hàng Tiềm Năng (Messenger & Pancake)
-                </h3>
-                <p className="text-xs text-slate-600">
-                  Tự động quét số điện thoại từ tin nhắn Pancake Fanpage & Meta Lead Form. Bấm nút bên cạnh để đồng bộ tức thì.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleSyncPancake}
-                disabled={isSyncingPancake}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingPancake ? 'animate-spin' : ''}`} />
-                {isSyncingPancake ? 'Đang đồng bộ...' : 'Đồng bộ từ Pancake ngay'}
-              </button>
-            </div>
-          </div>
-
           <PotentialLeadsTab onSelectLeadForBooking={handleSelectLeadForBooking} />
         </div>
       )}
@@ -922,682 +675,10 @@ export default function MetaAdsAnalytics() {
         </div>
       )}
 
-      {/* TAB 4: CÀI ĐẶT CẤU HÌNH META PIXEL, CAPI & PANCAKE */}
+      {/* TAB 4: CẤU HÌNH META CAPI & PANCAKE */}
       {activeTab === 'settings' && (
-        <div className="space-y-6">
-
-          {/* KHỐI CẤU HÌNH PANCAKE PUBLIC API & FANPAGE CHAT */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs font-bold text-base">
-                  🥞
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    Kết Nối Pancake &amp; Botcake Public API
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                      Pancake / Botcake
-                    </span>
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Tự động đồng bộ các hội thoại và khách hàng trên Pancake &amp; Botcake, trích xuất Số Điện Thoại &amp; Lead gửi về CRM và kích hoạt Meta CAPI.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSyncPancake}
-                  disabled={isSyncingPancake}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingPancake ? 'animate-spin' : ''}`} />
-                  {isSyncingPancake ? 'Đang đồng bộ...' : 'Đồng bộ từ Pancake / Botcake'}
-                </button>
-              </div>
-            </div>
-
-            <form onSubmit={handleSavePancakeConfig} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Pancake / Botcake Public API Key <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPancakeKey ? 'text' : 'password'}
-                    placeholder="Dán mã API Key từ Botcake hoặc Pancake (Bắt đầu bằng eyJhbGciOi...)"
-                    value={pancakeApiKey}
-                    onChange={(e) => setPancakeApiKey(e.target.value)}
-                    className="w-full text-sm px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPancakeKey(!showPancakeKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showPancakeKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
-                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5 text-orange-600" />
-                    Hướng dẫn lấy API Key:
-                  </div>
-                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-500">
-                    <li>
-                      <strong className="text-slate-700">Lấy từ Botcake (Khuyên dùng):</strong> Đăng nhập <em>botcake.io</em> &gt; Vào mục <strong>Cấu hình</strong> &gt; Chọn <strong>Tích hợp</strong> &gt; Tab <strong>API</strong> &gt; Bấm <strong>Sao chép</strong> mã Public API key.
-                    </li>
-                    <li>
-                      <strong className="text-slate-700">Lấy từ Pancake (pages.fm):</strong> Đăng nhập <em>pages.fm</em> &gt; Bấm <em>Ảnh đại diện</em> &gt; Chọn <strong>Cài đặt cá nhân</strong> &gt; Copy <strong>Mã truy cập API</strong>.
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* AUTO-SYNC REALTIME POLLING ENGINE */}
-              <div className="p-4 bg-orange-50/80 rounded-xl border border-orange-200/90 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-orange-950">
-                    <Zap className="w-4 h-4 text-orange-600 animate-pulse" />
-                    Cơ Chế Tự Động Quét Nền Realtime (Auto-Sync Polling):
-                  </div>
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-                    Đang quét tự động mỗi 30s
-                  </span>
-                </div>
-
-                <div className="text-[12px] text-slate-700 space-y-1.5 bg-white/80 p-3 rounded-lg border border-orange-100">
-                  <p>
-                    ⚡ <strong>Hoàn toàn tự động - Không cần cài Webhook:</strong> Do Pancake không mở mục cấu hình Webhook cho người dùng phổ thông, Tour CRM đã tích hợp sẵn <strong>Tiến trình Quét Ngầm (Background Worker)</strong>.
-                  </p>
-                  <p className="text-slate-600 text-[11px]">
-                    ● Mỗi <strong>30 giây</strong>, máy chủ tự động truy vấn qua API Pancake để lấy các cuộc trò chuyện, tin nhắn mới và bóc tách số điện thoại.<br />
-                    ● Ngay khi phát hiện số điện thoại mới, hệ thống tự động lưu vào bảng <strong>Leads</strong> và kích hoạt sự kiện <strong>Meta Conversion API (Phone Lead)</strong> tức thì.
-                  </p>
-                </div>
-              </div>
-
-              {pancakePages.length > 0 && (
-                <div className="p-3.5 bg-orange-50/60 rounded-xl border border-orange-200/80 space-y-2">
-                  <span className="text-xs font-bold text-orange-900 block">
-                    Danh Sách Fanpage Đã Kết Nối Trên Pancake ({pancakePages.length} trang):
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {pancakePages.map(page => (
-                      <span
-                        key={page.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-slate-800 rounded-lg text-xs font-bold border border-orange-200 shadow-2xs"
-                      >
-                        <Check className="w-3.5 h-3.5 text-orange-600" />
-                        {page.name} <span className="text-[10px] text-slate-400 font-normal">({page.id})</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isPancakeActive}
-                    onChange={(e) => setIsPancakeActive(e.target.checked)}
-                    className="w-4 h-4 text-orange-600 rounded border-slate-300 focus:ring-orange-500"
-                  />
-                  <span className="text-xs font-bold text-slate-700">Bật tự động nhận diện khách hàng từ Pancake</span>
-                </label>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTestPancakeConnection}
-                    disabled={isTestingPancake}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <ShieldCheck className={`w-3.5 h-3.5 ${isTestingPancake ? 'animate-spin' : ''}`} />
-                    {isTestingPancake ? 'Đang kiểm tra...' : 'Kiểm Tra Kết Nối'}
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isSavingPancake}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    {isSavingPancake ? 'Đang lưu...' : 'Lưu Cấu Hình Pancake'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-
-          {/* CẤU HÌNH WEBHOOK META MESSENGER REALTIME (PHƯƠNG ÁN 1) */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-indigo-600 animate-pulse" />
-                  Cấu Hình Webhook Facebook Messenger (Realtime 100% - Phương Án 1)
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Nhận ngay số điện thoại và tin nhắn từ khách hàng trên Messenger theo thời gian thực (Realtime &lt; 0.5s) trực tiếp từ Meta.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-                  Realtime Active
-                </span>
-
-                <button
-                  type="button"
-                  onClick={handleSimulateMetaWebhook}
-                  disabled={isSimulatingWebhook}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                >
-                  <Send className={`w-3.5 h-3.5 ${isSimulatingWebhook ? 'animate-spin' : ''}`} />
-                  {isSimulatingWebhook ? 'Đang bắn test...' : 'Bắn Thử Webhook Realtime'}
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  1. Webhook Callback URL (Điền vào Meta Developers / Page Webhook)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={`${window.location.origin}/api/meta-webhook`}
-                    className="w-full text-xs font-mono px-3 py-2 bg-slate-50 rounded-xl border border-slate-300 text-slate-700 select-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/api/meta-webhook`);
-                      toast.success('Đã copy Webhook Callback URL!');
-                    }}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  2. Verify Token (Mã Xác Nhận Webhook)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value="adluxury_tour_crm_meta_webhook_token"
-                    className="w-full text-xs font-mono px-3 py-2 bg-slate-50 rounded-xl border border-slate-300 text-slate-700 select-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText('adluxury_tour_crm_meta_webhook_token');
-                      toast.success('Đã copy Verify Token!');
-                    }}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
-                  >
-                    Copy Token
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Mục 3: Nhập Mã Truy Cập Trang (Page Access Token) vừa bấm nút 'Tạo' trên Meta */}
-            <div className="p-4 bg-indigo-50/90 rounded-2xl border border-indigo-200/90 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <label className="block text-xs font-bold text-indigo-950 uppercase tracking-wider">
-                  3. Mã Truy Cập Trang (Page Access Token / EAAB...) <span className="text-rose-600">*</span>
-                </label>
-                <span className="text-[11px] font-medium text-indigo-700">
-                  (Dán mã sau khi nhấn nút <strong className="text-indigo-900">"Tạo"</strong> bên cạnh Fanpage AD Luxury Travel trên Meta)
-                </span>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type={showAccessToken ? 'text' : 'password'}
-                    placeholder="Dán Mã Truy Cập Trang vừa Tạo (Bắt đầu bằng EAAB... hoặc EAA...)"
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    className="w-full text-xs font-mono px-3.5 py-2.5 pr-10 bg-white rounded-xl border border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAccessToken(!showAccessToken)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showAccessToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!accessToken.trim()) {
-                      toast.error('Vui lòng dán Mã Truy Cập Trang (Page Access Token)');
-                      return;
-                    }
-                    setIsSavingConfig(true);
-                    try {
-                      const res = await saveMetaCapiConfig({
-                        pixel_id: pixelId.trim() || '123456789',
-                        access_token: accessToken.trim(),
-                        test_event_code: testEventCode.trim() || undefined,
-                        is_enabled: isEnabled
-                      });
-                      if (res.success) {
-                        toast.success('✅ Đã lưu Mã Truy Cập Trang (Page Access Token) thành công!');
-                        loadData();
-                      } else {
-                        toast.error(res.error || 'Không thể lưu Token');
-                      }
-                    } catch (err: any) {
-                      toast.error(err.message || 'Lỗi lưu Token');
-                    } finally {
-                      setIsSavingConfig(false);
-                    }
-                  }}
-                  disabled={isSavingConfig}
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{isSavingConfig ? 'Đang lưu...' : 'Lưu Token Page'}</span>
-                </button>
-              </div>
-
-              <div className="p-3 bg-white/90 rounded-xl border border-indigo-100 text-xs text-indigo-900 space-y-1.5">
-                <div className="font-bold flex items-center gap-1.5 text-indigo-950">
-                  <Info className="w-4 h-4 text-indigo-600" />
-                  Hướng dẫn nhập mã thu được từ nút "Tạo":
-                </div>
-                <ol className="list-decimal pl-5 space-y-1 text-[11px] text-slate-700">
-                  <li>
-                    Tại mục <strong>2. Tạo mã truy cập</strong> trên Meta Developers (ảnh của bạn), bấm nút <strong>Tạo</strong> ở dòng Fanpage <strong>AD Luxury Travel</strong>.
-                  </li>
-                  <li>
-                    Meta sẽ hiển thị một cửa sổ chứa chuỗi ký tự dài (bắt đầu bằng <code>EAAB...</code>) &gt; Nhấn <strong>Sao chép (Copy)</strong>.
-                  </li>
-                  <li>
-                    Dán chuỗi đó vào ô <strong>3. Mã Truy Cập Trang</strong> ở trên &gt; Bấm <strong>Lưu Token Page</strong>.
-                  </li>
-                  <li>
-                    CRM sẽ tự động dùng mã này để truy xuất tên, ảnh đại diện và chi tiết mẫu đăng ký Lead Form Ads khi khách gửi tin nhắn!
-                  </li>
-                </ol>
-              </div>
-            </div>
-
-            <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-100 text-xs text-indigo-950 space-y-1">
-              <div className="font-bold flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-indigo-600" />
-                Hướng dẫn tích hợp Webhook Realtime trên Meta for Developers / Fanpage:
-              </div>
-              <ol className="list-decimal pl-5 space-y-1 text-[11px] text-indigo-900">
-                <li>Truy cập <strong>Meta Developers</strong> (developers.facebook.com) &gt; Chọn App của bạn &gt; Mục <strong>Webhooks</strong>.</li>
-                <li>Chọn Object <strong>Page</strong> &gt; Nhấn <strong>Subscribe to this object</strong>.</li>
-                <li>Dán <strong>Callback URL</strong> và <strong>Verify Token</strong> ở trên vào &gt; Nhấn <strong>Verify and Save</strong>.</li>
-                <li>Tích chọn các trường sự kiện: <code>messages</code>, <code>messaging_postbacks</code>, <code>leadgen</code> để tự động nhận tin nhắn &amp; số điện thoại Realtime.</li>
-              </ol>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                  <Sliders className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">
-                    Cấu Hình Meta Conversions API (CAPI) - Bắn Dữ Liệu Đơn Hàng Sang Meta
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Cấu hình tối giản giống Pancake: Chỉ cần Dataset ID và Access Token từ Trình quản lý sự kiện để tự động gửi sự kiện chuyển đổi (Lead &amp; Đơn hàng) về Meta.
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleSaveConfig} className="space-y-4 mt-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      1. Dataset ID / Meta Pixel ID <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: 1560803451392095"
-                      value={pixelId}
-                      onChange={(e) => setPixelId(e.target.value)}
-                      className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono shadow-2xs"
-                      required
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      ID Tập dữ liệu hoặc Pixel hiển thị trên Trình quản lý sự kiện Meta.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      2. Mã Thử Nghiệm Sự Kiện (Test Event Code - CAPI)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: TEST67626 (để trống nếu chạy thực tế)"
-                      value={testEventCode}
-                      onChange={(e) => setTestEventCode(e.target.value)}
-                      className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono shadow-2xs"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Lấy từ tab "Thử nghiệm sự kiện" trên Meta để kiểm tra dữ liệu nảy realtime.
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      3. CAPI Access Token (Mã Truy Cập Tập Dữ Liệu) <span className="text-rose-500">*</span>
-                    </label>
-                    <span className="text-[11px] text-blue-600 font-medium">
-                      (Mã tạo từ nút "Tạo mã truy cập" trong Trình quản lý sự kiện)
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showAccessToken ? 'text' : 'password'}
-                      placeholder="Dán mã bắt đầu bằng EAAB... hoặc EAATD..."
-                      value={accessToken}
-                      onChange={(e) => setAccessToken(e.target.value)}
-                      className="w-full text-sm px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono shadow-2xs"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowAccessToken(!showAccessToken)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showAccessToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Hướng dẫn 3 bước đơn giản trùng khớp ảnh Trình quản lý sự kiện */}
-                <div className="p-3.5 bg-blue-50/80 rounded-xl border border-blue-200/90 text-xs text-blue-950 space-y-2">
-                  <div className="font-bold flex items-center gap-1.5 text-blue-900">
-                    <Info className="w-4 h-4 text-blue-600 shrink-0" />
-                    Cách lấy CAPI Access Token từ Trình Quản Lý Sự Kiện Meta (Events Manager):
-                  </div>
-                  <ol className="list-decimal pl-5 space-y-1 text-[11px] text-slate-700">
-                    <li>
-                      Mở <strong>Trình quản lý sự kiện (Meta Events Manager)</strong> &gt; Chọn <strong>Tập dữ liệu / Pixel</strong> của bạn.
-                    </li>
-                    <li>
-                      Chuyển sang tab <strong>Cài đặt</strong> &gt; Cuộn xuống mục <strong>Thiết lập tiện ích tích hợp trực tiếp</strong>.
-                    </li>
-                    <li>
-                      Nhấn nút <strong>"Tạo mã truy cập"</strong> (như ảnh chụp của bạn) &gt; Copy chuỗi mã <code>EAA...</code> dán vào ô số 3 ở trên.
-                    </li>
-                  </ol>
-                </div>
-
-                {/* Tùy chọn nâng cao (ID Fanpage & ID Tài khoản QC) */}
-                <details className="group border border-slate-200 rounded-xl p-3.5 bg-slate-50/50">
-                  <summary className="text-xs font-bold text-slate-700 cursor-pointer flex items-center justify-between select-none">
-                    <span>Cấu Hình Bổ Sung: ID Fanpage &amp; Tài Khoản Quảng Cáo (Tùy chọn nâng cao)</span>
-                    <span className="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
-                  </summary>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                        ID Fanpage Facebook (Page ID)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ví dụ: 103836966010338"
-                        value={pageId}
-                        onChange={(e) => setPageId(e.target.value)}
-                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                        ID Tài Khoản Quảng Cáo (Ad Account ID)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ví dụ: act_1234567890"
-                        value={adAccountId}
-                        onChange={(e) => setAdAccountId(e.target.value)}
-                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono bg-white"
-                      />
-                    </div>
-                  </div>
-                </details>
-
-                <div className="pt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
-                  <label className="flex items-center gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isEnabled}
-                      onChange={(e) => setIsEnabled(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                    />
-                    <span className="text-xs font-bold text-slate-800">Kích hoạt tự động bắn sự kiện CAPI khi tạo/thanh toán đơn hàng</span>
-                  </label>
-
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={handleDiagnoseToken}
-                      disabled={isDiagnosing}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-                    >
-                      <ShieldCheck className={`w-4 h-4 ${isDiagnosing ? 'animate-spin' : ''}`} />
-                      {isDiagnosing ? 'Đang kiểm tra...' : 'Kiểm Tra Token'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleTestConnection}
-                      disabled={isTestingConnection}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      <Send className={`w-3.5 h-3.5 ${isTestingConnection ? 'animate-spin' : ''}`} />
-                      {isTestingConnection ? 'Đang test...' : 'Bắn Test Event'}
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={isSavingConfig}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-xs shadow-blue-600/20 disabled:opacity-50 cursor-pointer"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      {isSavingConfig ? 'Đang lưu...' : 'Lưu Cấu Hình CAPI'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            {/* Cột hướng dẫn */}
-            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 space-y-4">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Info className="w-4 h-4 text-blue-600" />
-                Quy trình tự động bắn CAPI
-              </h3>
-
-              <ul className="text-xs text-slate-600 space-y-2.5 list-disc pl-4">
-                <li>
-                  <strong className="text-slate-800">Sự kiện Lead:</strong> Tự động kích hoạt khi nhận SĐT mới từ Facebook Messenger, Lead Form hoặc Pancake.
-                </li>
-                <li>
-                  <strong className="text-slate-800">Sự kiện Purchase (Đơn hàng):</strong> Tự động kích hoạt khi nhân viên chốt Đơn hàng Tour trên CRM.
-                </li>
-                <li>
-                  <strong className="text-slate-800">Bảo mật SHA256:</strong> Số điện thoại &amp; Email của khách được mã hóa SHA-256 theo chuẩn Meta trước khi gửi đi.
-                </li>
-              </ul>
-
-              <div className="pt-3 border-t border-slate-200 text-xs text-slate-500">
-                Sau khi bấm <strong>"Lưu Cấu Hình CAPI"</strong>, bạn có thể bấm <strong>"Bắn Test Event"</strong> để kiểm tra dữ liệu xuất hiện ngay lập tức trong tab <em>Thử nghiệm sự kiện</em> trên Meta!
-              </div>
-            </div>
-          </div>
-
-          {/* BẢNG KẾT QUẢ CHẨN ĐOÁN CHI TIẾT (NẾU ĐÃ BẤM CHẨN ĐOÁN) */}
-          {diagnosisResult && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5 animate-in fade-in duration-300">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                    diagnosisResult.tokenValid ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
-                  }`}>
-                    {diagnosisResult.tokenValid ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800 text-base">
-                      Kết Quả Chẩn Đoán Kết Nối Meta API
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      {diagnosisResult.tokenValid 
-                        ? `Mã Token Hợp Lệ • Chủ sở hữu: ${diagnosisResult.tokenOwner?.name || 'N/A'} (ID: ${diagnosisResult.tokenOwner?.id || 'N/A'})` 
-                        : 'Mã Token Không Hợp Lệ Hoặc Đã Hết Hạn'}
-                    </p>
-                  </div>
-                </div>
-
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                  diagnosisResult.tokenValid ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                }`}>
-                  {diagnosisResult.tokenValid ? '● ĐÃ XÁC THỰC' : '✕ LỖI KẾT NỐI'}
-                </span>
-              </div>
-
-              {/* Lưới kiểm tra các thành phần */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* 1. Fanpage & Webhook Subscriptions */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase">1. Fanpage & Webhook</span>
-                    {diagnosisResult.pageStatus?.isSubscribedToWebhook ? (
-                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Đã kết nối Webhook
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-bold text-amber-600 flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Chưa Subscribed
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    <div><strong>Tên Trang:</strong> {diagnosisResult.pageStatus?.name || diagnosisResult.tokenOwner?.name || 'Chưa nhận diện'}</div>
-                    <div><strong>Page ID:</strong> {diagnosisResult.pageStatus?.id || pageId || 'N/A'}</div>
-                  </div>
-                </div>
-
-                {/* 2. Pixel / CAPI Dataset */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase">2. Pixel / Dataset CAPI</span>
-                    {diagnosisResult.pixelStatus?.canAccess ? (
-                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Quyền hợp lệ
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-bold text-slate-500">
-                        {pixelId ? '✕ Không truy cập được' : '○ Chưa nhập Pixel ID'}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    <div><strong>Tên Pixel:</strong> {diagnosisResult.pixelStatus?.name || 'Dataset'}</div>
-                    <div><strong>Pixel ID:</strong> {pixelId || 'Chưa điền'}</div>
-                  </div>
-                </div>
-
-                {/* 3. Ad Account */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase">3. Tài Khoản Ads</span>
-                    {diagnosisResult.adAccountStatus?.name ? (
-                      <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Hoạt động
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-bold text-slate-500">
-                        {adAccountId ? '✕ Không tìm thấy' : '○ Tùy chọn'}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    <div><strong>Tên TK:</strong> {diagnosisResult.adAccountStatus?.name || 'Tài khoản Ads'}</div>
-                    <div><strong>Tiền tệ:</strong> {diagnosisResult.adAccountStatus?.currency || 'VND'}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Danh sách Quyền hạn (Permissions) */}
-              {diagnosisResult.permissions && diagnosisResult.permissions.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Danh Sách Quyền Đã Cấp (Permissions):
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {diagnosisResult.permissions.map((p) => (
-                      <span
-                        key={p.name}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${
-                          p.status === 'granted'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-slate-100 text-slate-500 border border-slate-200'
-                        }`}
-                      >
-                        {p.status === 'granted' ? <Check className="w-3 h-3 text-emerald-600" /> : <X className="w-3 h-3 text-slate-400" />}
-                        {p.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Gợi ý khắc phục (Recommendations) */}
-              {diagnosisResult.recommendations.length > 0 && (
-                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
-                    <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    Khuyến Nghị Khắc Phục Để Dữ Liệu Tự Động Đổ Về:
-                  </div>
-                  <ul className="text-xs text-amber-900 space-y-1 list-disc pl-5">
-                    {diagnosisResult.recommendations.map((rec, idx) => (
-                      <li key={idx}>{rec}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Lỗi thô nếu có */}
-              {diagnosisResult.rawErrors.length > 0 && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-mono">
-                  {diagnosisResult.rawErrors.join(' | ')}
-                </div>
-              )}
-            </div>
-          )}
+        <div className="space-y-4">
+          <MetaCapiSettingsSection onConfigSaved={() => loadData(true)} />
         </div>
       )}
 

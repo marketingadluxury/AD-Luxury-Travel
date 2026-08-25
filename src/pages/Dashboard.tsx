@@ -62,7 +62,9 @@ import {
   Cell,
   Legend
 } from 'recharts';
-import { Role, Team, TeamPerformanceSummary, SalePerformanceSummary } from '../types';
+import { Role, Team, TeamPerformanceSummary, SalePerformanceSummary, MetaLead, MetaConversionLog } from '../types';
+import { fetchMetaLeads, fetchMetaConversionLogs } from '../lib/metaCapiService';
+import { MetaAdsPerformanceDashboard } from '../components/MetaAdsPerformanceDashboard';
 
 // Palette màu sắc thiết kế hiện đại đồng bộ hệ thống
 const PIE_COLORS = ['#2563eb', '#1e293b', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6'];
@@ -199,6 +201,9 @@ export default function Dashboard() {
 
   // Tải danh sách Teams động từ Database Supabase và API
   const [dbTeams, setDbTeams] = useState<Team[]>([]);
+  const [dashboardMetaLeads, setDashboardMetaLeads] = useState<MetaLead[]>([]);
+  const [dashboardMetaLogs, setDashboardMetaLogs] = useState<MetaConversionLog[]>([]);
+  const [isLoadingMetaAds, setIsLoadingMetaAds] = useState(false);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -229,7 +234,26 @@ export default function Dashboard() {
       }
     };
 
+    const fetchMetaAdsData = async () => {
+      try {
+        setIsLoadingMetaAds(true);
+        const [leadsData, logsData] = await Promise.all([
+          fetchMetaLeads(),
+          fetchMetaConversionLogs()
+        ]);
+        if (isMounted) {
+          setDashboardMetaLeads(leadsData || []);
+          setDashboardMetaLogs(logsData || []);
+        }
+      } catch (err) {
+        console.warn('Lỗi khi tải dữ liệu Meta Ads cho Dashboard:', err);
+      } finally {
+        if (isMounted) setIsLoadingMetaAds(false);
+      }
+    };
+
     fetchTeamsList();
+    fetchMetaAdsData();
     return () => { isMounted = false; };
   }, []);
 
@@ -1819,6 +1843,31 @@ export default function Dashboard() {
                 )}
               </div>
             )}
+          </div>
+
+          {/* Widget Báo Cáo Hiệu Quả Quảng Cáo Meta Ads & CAPI */}
+          <div className="pt-2">
+            <MetaAdsPerformanceDashboard
+              leads={dashboardMetaLeads}
+              orders={orders}
+              conversionLogs={dashboardMetaLogs}
+              isLoading={isLoadingMetaAds}
+              onRefresh={async () => {
+                try {
+                  setIsLoadingMetaAds(true);
+                  const [leadsData, logsData] = await Promise.all([
+                    fetchMetaLeads(),
+                    fetchMetaConversionLogs()
+                  ]);
+                  setDashboardMetaLeads(leadsData || []);
+                  setDashboardMetaLogs(logsData || []);
+                } catch (err) {
+                  console.error(err);
+                } finally {
+                  setIsLoadingMetaAds(false);
+                }
+              }}
+            />
           </div>
         </div>
       )}
