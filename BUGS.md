@@ -6,6 +6,22 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Chuẩn Hóa & Điều Hướng Chính Xác Toàn Bộ Hệ Thống Thông Báo (Notification Routing & Filtering)
+- **Mô tả yêu cầu & vấn đề:**
+  1. Khi người dùng bấm vào các mục thông báo trên thanh chuông thông báo (`Layout.tsx`), hệ thống điều hướng sai trang hoặc chuyển nhầm về Đơn hàng Tour thay vì trang chức năng tương ứng (ví dụ: thông báo duyệt nghỉ phép chuyển về Đơn hàng thay vì Quản lý Nghỉ phép & Chấm công; thông báo hóa đơn, duyệt chi chuyển không đúng tab Kế toán; thông báo Visa và Ảnh đoàn không tự động lọc dữ liệu đích).
+  2. Phân quyền hiển thị thông báo chưa lọc chính xác cho các vai trò chuyên biệt (HR chỉ thấy đơn nghỉ phép/chấm công; Kế toán thấy hóa đơn/phiếu thu/phiếu chi/đề nghị thanh toán; Visa thấy hồ sơ visa; Sale/Leader chỉ thấy đơn hàng và thành viên liên quan).
+- **Giải pháp thực hiện:**
+  1. **Điều hướng thông minh trong `Layout.tsx`:** Tách biệt và phân loại điều hướng chi tiết cho từng loại thông báo:
+     - **Nghỉ phép / Chấm công:** Điều hướng đến `/leave-requests` với `tab` tương ứng (`team_approval`, `final_approval`, `my_leaves`) và truyền `searchTarget` (họ tên nhân sự hoặc mã đơn).
+     - **Đề nghị thanh toán:** Điều hướng đến `/payment-proposals` và điền tự động `searchTarget` (mã đề nghị thanh toán).
+     - **Ảnh đoàn Tour:** Điều hướng đến `/tour-media` và kích hoạt lọc theo mã Tour.
+     - **Kế toán / Thu Chi / VAT:** Điều hướng đến `/accounting` kèm đúng `tab` (`receipts`, `payments`, `vat`) và điền `searchTarget` (mã hóa đơn, phiếu thu, phiếu chi, hoặc mã đơn).
+     - **Visa & Hộ chiếu:** Phân biệt chính xác giữa Dịch vụ Visa lẻ (`/visa-orders` hoặc `/visa-services`) và Duyệt hồ sơ visa hành khách (`/visa-processing`) kèm truyền từ khóa tìm kiếm.
+     - **Đơn hàng Tour:** Điều hướng đến `/orders` với `searchTarget` và tự động mở rộng chi tiết đơn hàng (`expandOrderId`).
+  2. **Bộ lọc thông báo Real-time theo vai trò (`Layout.tsx`):** Cập nhật bộ lọc `notifications` để phân quyền chặt chẽ theo `currentRole` (HR, Kế toán, Visa, Sale Leader, Sale, Admin, BOD).
+  3. **Xử lý `location.state` tại các trang nhận:** Bổ sung và chuẩn hóa `useEffect` đọc `location.state` tại `LeaveRequestsPage.tsx`, `AccountingInvoice.tsx`, `VisaOrders.tsx`, `OrdersManagement.tsx`, `TourMediaManagement.tsx`, `PaymentProposals.tsx` để tự động chuyển tab, điền ô tìm kiếm, mở rộng bộ lọc và làm sạch `window.history.replaceState` tránh bị kích hoạt lại khi người dùng tải lại trang.
+- **Trạng thái:** Đã hoàn thành, vượt qua toàn bộ các bài kiểm tra Linter (`npm run lint`) và Biên dịch (`npm run build`) thành công 100%.
+
 ### 1.0 Chuẩn Hóa Dropdown, Icon và Giao Diện Toàn Diện Tab Đề Nghị Thanh Toán (Payment Proposals)
 - **Mô tả yêu cầu:**
   1. Kiểm tra lại toàn bộ giao diện (UI audit) tab Đề nghị thanh toán (`PaymentProposals.tsx`).

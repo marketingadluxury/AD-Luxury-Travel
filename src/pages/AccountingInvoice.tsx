@@ -431,10 +431,15 @@ export default function AccountingInvoice() {
 
   // Handle click from notifications
   useEffect(() => {
-    if (location.state?.searchTarget) {
-      setSearchTerm(location.state.searchTarget);
-      setFilterReceiptStatus('all');
-      setFilterPaymentStatus('all');
+    if (location.state) {
+      if (location.state.tab) {
+        setActiveTab(location.state.tab as any);
+      }
+      if (location.state.searchTarget) {
+        setSearchTerm(location.state.searchTarget);
+        setFilterReceiptStatus('all');
+        setFilterPaymentStatus('all');
+      }
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);

@@ -93,18 +93,22 @@ export default function PaymentProposals() {
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
-    if (location.state?.searchTarget) {
-      setSearchTerm(location.state.searchTarget);
-    }
-  }, [location.state]);
   const [statusFilter, setStatusFilter] = useState<'all' | ProposalStatus>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'individual' | 'tour' | 'general'>('all');
   const [viewScope, setViewScope] = useState<'all' | 'my'>('all');
   const [timeRange, setTimeRange] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  useEffect(() => {
+    if (location.state?.searchTarget) {
+      setSearchTerm(location.state.searchTarget);
+      setStatusFilter('all');
+      setTypeFilter('all');
+      setTimeRange('all');
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);

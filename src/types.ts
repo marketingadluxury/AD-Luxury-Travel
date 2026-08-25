@@ -466,7 +466,7 @@ export interface TourCost {
 
 export interface Notification {
   id: string;
-  type: 'accounting' | 'visa' | 'extension' | 'order' | 'system';
+  type: 'accounting' | 'visa' | 'extension' | 'order' | 'system' | 'leave' | 'proposal' | 'media';
   title: string;
   message: string;
   targetId?: string;

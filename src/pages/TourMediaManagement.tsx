@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Camera, Share2, Folder, ExternalLink, Search, Calendar, User, UploadCloud, Trash2, ShieldCheck, Image as ImageIcon, Sparkles, FolderOpen, RefreshCw, MapPin, X, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -56,6 +57,23 @@ export default function TourMediaManagement() {
       };
     })
   ];
+
+  const location = useLocation();
+
+  // Handle navigation from notifications
+  useEffect(() => {
+    if (location.state) {
+      if (location.state.searchTarget) {
+        setSearchTerm(location.state.searchTarget);
+        setSelectedTimeRange('all');
+        setSelectedDestination('all');
+      }
+      if (location.state.tourId) {
+        setSelectedTourId(location.state.tourId);
+      }
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Auto open upload modal if accessed via direct QR link / URL parameter
   useEffect(() => {

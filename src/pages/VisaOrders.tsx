@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
@@ -77,6 +78,7 @@ export default function VisaOrders() {
     return Array.from(map.values());
   }, [passengers, allOrders, currentRole, profile]);
 
+  const location = useLocation();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [editingPassenger, setEditingPassenger] = useState<Passenger | null>(null);
@@ -86,6 +88,19 @@ export default function VisaOrders() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Handle navigation from notifications
+  useEffect(() => {
+    if (location.state) {
+      if (location.state.searchTarget) {
+        setSearchTerm(location.state.searchTarget);
+      }
+      if (location.state.expandOrderId) {
+        setExpandedOrderId(location.state.expandOrderId);
+      }
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
   const [confirmModalData, setConfirmModalData] = useState<{
     isOpen: boolean;
     title: string;

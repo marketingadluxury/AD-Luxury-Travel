@@ -187,7 +187,7 @@ const allNavItems: NavItem[] = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole, displayRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [], leaveRequests = [] } = useCRM();
+  const { currentRole, setCurrentRole, displayRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [], leaveRequests = [], tours = [] } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -254,11 +254,57 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     const titleLower = (notif.title || '').toLowerCase();
     const msgLower = (notif.message || '').toLowerCase();
+    const fullText = `${titleLower} ${msgLower}`;
+
+    // 1. NGHỈ PHÉP & CHẤM CÔNG (Leave Requests & Timesheet)
+    const isLeaveNotif = 
+      notif.type === 'leave' || 
+      titleLower.includes('nghỉ phép') || 
+      msgLower.includes('nghỉ phép') ||
+      titleLower.includes('đơn xin nghỉ') || 
+      msgLower.includes('đơn xin nghỉ') ||
+      titleLower.includes('chấm công') ||
+      msgLower.includes('chấm công');
+
+    if (isLeaveNotif) {
+      let targetTab: 'my_leaves' | 'team_approval' | 'final_approval' = 'my_leaves';
+      const isLeader = ['sale_leader', 'operator', 'marketing_leader'].includes(currentRole);
+      const isHRorAdmin = ['hr', 'admin', 'bod'].includes(currentRole);
+
+      if (isHRorAdmin) {
+        if (msgLower.includes('cấp 1') || msgLower.includes('leader duyệt') || msgLower.includes('chờ duyệt cấp cuối') || msgLower.includes('cần duyệt')) {
+          targetTab = 'final_approval';
+        } else {
+          targetTab = 'final_approval';
+        }
+      } else if (isLeader) {
+        if (msgLower.includes('cần duyệt') || msgLower.includes('chờ duyệt') || msgLower.includes('vừa gửi đơn')) {
+          targetTab = 'team_approval';
+        } else {
+          targetTab = 'my_leaves';
+        }
+      } else {
+        targetTab = 'my_leaves';
+      }
+
+      // Extract search target (person name or request code)
+      let leaveSearch = '';
+      const nameMatch = (notif.message || '').match(/của\s+([^.,(\n]+)/i) || (notif.message || '').match(/nhân sự\s+([^.,(\n]+)/i);
+      if (nameMatch && nameMatch[1]) {
+        leaveSearch = nameMatch[1].trim();
+      }
+
+      navigate('/leave-requests', { state: { tab: targetTab, searchTarget: leaveSearch } });
+      return;
+    }
+
+    // 2. ĐỀ NGHỊ THANH TOÁN (Payment Proposals)
     const isPaymentProposalNotif = 
+      notif.type === 'payment_proposal' ||
       titleLower.includes('đề nghị thanh toán') || 
       msgLower.includes('đề nghị thanh toán') || 
       msgLower.includes('dntt-') ||
-      (notif.targetId && String(notif.targetId).startsWith('DNTT-'));
+      (notif.targetId && String(notif.targetId).toUpperCase().startsWith('DNTT-'));
 
     if (isPaymentProposalNotif) {
       let proposalSearch = '';
@@ -272,16 +318,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Trích xuất mã đối tượng tìm kiếm chung từ nội dung hoặc targetId
     let searchTarget = '';
     const hashMatch = (notif.message || '').match(/#([a-zA-Z0-9-]+)/) || (notif.title || '').match(/#([a-zA-Z0-9-]+)/);
     if (hashMatch && hashMatch[1]) {
       searchTarget = hashMatch[1];
     } else {
-      const codeMatch = (notif.message || '').match(/(?:booking|đơn hàng|đơn giữ chỗ|mã)\s+([a-zA-Z0-9-]+)/i);
+      const codeMatch = (notif.message || '').match(/(?:booking|đơn hàng|đơn giữ chỗ|phiếu thu|phiếu chi|mã|tour|đoàn)\s+([a-zA-Z0-9-]+)/i);
       if (codeMatch && codeMatch[1]) {
         searchTarget = codeMatch[1];
       } else if (notif.targetId) {
-        if (notif.targetId.length > 8 && notif.targetId.includes('-')) {
+        const matchingOrder = orders.find(o => o.id === notif.targetId || o.id.toLowerCase().startsWith(String(notif.targetId).toLowerCase()));
+        if (matchingOrder) {
+          searchTarget = matchingOrder.id.includes('-') ? matchingOrder.id.split('-')[0] : matchingOrder.id.substring(0, 8);
+        } else if (notif.targetId.length > 8 && notif.targetId.includes('-')) {
           searchTarget = notif.targetId.substring(0, 8);
         } else {
           searchTarget = notif.targetId;
@@ -289,31 +339,90 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
     }
 
-    const isAccountingUser = ['accounting', 'admin'].includes(currentRole);
-    const isVisaUser = ['visa', 'admin'].includes(currentRole);
+    // 3. ẢNH KHÁCH ĐOÀN & DRIVE HDV
+    const isTourMediaNotif = 
+      titleLower.includes('ảnh đoàn') || 
+      msgLower.includes('ảnh đoàn') || 
+      titleLower.includes('album ảnh') ||
+      msgLower.includes('album ảnh') ||
+      (titleLower.includes('hdv') && (msgLower.includes('ảnh') || msgLower.includes('media')));
 
-    if (notif.type === 'accounting') {
+    if (isTourMediaNotif) {
+      let tourSearch = searchTarget;
+      const tourMatch = (notif.message || '').match(/\[([a-zA-Z0-9-]+)\]/);
+      if (tourMatch && tourMatch[1]) {
+        tourSearch = tourMatch[1];
+      }
+      navigate('/tour-media', { state: { searchTarget: tourSearch } });
+      return;
+    }
+
+    // 4. KẾ TOÁN (Thu, Chi, Hoàn tiền, VAT)
+    const isAccountingUser = ['accounting', 'admin', 'bod'].includes(currentRole);
+    const isAccountingNotif = 
+      notif.type === 'accounting' ||
+      titleLower.includes('hóa đơn') ||
+      titleLower.includes('phiếu thu') ||
+      titleLower.includes('phiếu chi') ||
+      titleLower.includes('kế toán') ||
+      titleLower.includes('hoàn tiền') ||
+      msgLower.includes('phiếu thu') ||
+      msgLower.includes('phiếu chi') ||
+      msgLower.includes('hoàn tiền cho booking');
+
+    if (isAccountingNotif) {
       if (isAccountingUser) {
         let tab: 'receipts' | 'payments' | 'vat' = 'receipts';
-        const msg = ((notif.title || '') + ' ' + (notif.message || '')).toLowerCase();
-        if (msg.includes('chi') || msg.includes('hoàn tiền') || msg.includes('phiếu chi')) {
+        if (fullText.includes('chi') || fullText.includes('hoàn tiền') || fullText.includes('phiếu chi')) {
           tab = 'payments';
-        } else if (msg.includes('vat') || msg.includes('xuất hóa đơn')) {
+        } else if (fullText.includes('vat') || fullText.includes('xuất hóa đơn')) {
           tab = 'vat';
         }
         navigate('/accounting', { state: { searchTarget, tab } });
       } else {
-        navigate('/orders', { state: { searchTarget } });
+        // Nếu là Sale / Đại lý / Khác -> Đưa về đơn hàng của họ để xem chi tiết
+        navigate('/orders', { state: { searchTarget, expandOrderId: searchTarget } });
       }
-    } else if (notif.type === 'visa') {
-      if (isVisaUser) {
+      return;
+    }
+
+    // 5. DỊCH VỤ VISA LẺ vs HỒ SƠ VISA ĐOÀN
+    const isVisaServiceOrderNotif = 
+      fullText.includes('dịch vụ visa') || 
+      fullText.includes('visa lẻ') || 
+      fullText.includes('đơn visa') ||
+      (notif.targetId && orders.some(o => (o.id === notif.targetId || o.id.startsWith(notif.targetId)) && tours.some(t => t.id === o.tour_id && t.tour_type === 'visa')));
+
+    if (isVisaServiceOrderNotif) {
+      navigate('/visa-orders', { state: { searchTarget, expandOrderId: searchTarget } });
+      return;
+    }
+
+    const isVisaDocNotif = 
+      notif.type === 'visa' || 
+      fullText.includes('visa') || 
+      fullText.includes('hộ chiếu') || 
+      fullText.includes('passport');
+
+    if (isVisaDocNotif) {
+      const isVisaStaff = ['visa', 'admin', 'operator', 'bod'].includes(currentRole);
+      if (isVisaStaff) {
         navigate('/visa', { state: { searchTarget } });
       } else {
-        navigate('/orders', { state: { searchTarget } });
+        navigate('/orders', { state: { searchTarget, expandOrderId: searchTarget } });
       }
-    } else {
-      navigate('/orders', { state: { searchTarget } });
+      return;
     }
+
+    // 6. BOOKING TOUR / GIỮ CHỖ / CHỐT SURE / HỦY / GIA HẠN
+    const matchedOrder = orders.find(o => o.id === searchTarget || o.id.toLowerCase().startsWith(searchTarget.toLowerCase()));
+    const matchedTour = matchedOrder ? tours.find(t => t.id === matchedOrder.tour_id) : null;
+    if (matchedTour?.tour_type === 'visa') {
+      navigate('/visa-orders', { state: { searchTarget, expandOrderId: matchedOrder?.id || searchTarget } });
+      return;
+    }
+
+    navigate('/orders', { state: { searchTarget, expandOrderId: matchedOrder?.id || searchTarget } });
   };
 
   const notifications = React.useMemo(() => {
@@ -358,6 +467,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         .map(p => p.id)
     );
 
+    const myLeaveIds = new Set(
+      (leaveRequests || [])
+        .filter(lr => {
+          if (lr.user_id === currentUserId) return true;
+          if (currentRole === 'sale_leader' || currentRole === 'operator' || currentRole === 'marketing_leader') {
+            const creator = profilesList.find(p => p.id === lr.user_id);
+            return creator?.leader_id === currentUserId || (profile?.team_id && creator?.team_id === profile.team_id);
+          }
+          return false;
+        })
+        .map(lr => lr.id)
+    );
+
     return allNotifications.filter(n => {
       // Filter out legacy mock sample notifications or unlinked invalid notifications
       if (n.id === 'N-1' || n.id === 'N-2' || n.targetId === 'P-101' || n.targetId === 'O-1001') {
@@ -399,27 +521,39 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       const matchesUserPassenger = n.targetId ? myPassengerIds.has(n.targetId) : false;
       const matchesUserProposal = n.targetId ? myProposalIds.has(n.targetId) : false;
-      const isDirectlyRelevant = matchesUserOrder || matchesUserPassenger || matchesUserProposal;
+      const matchesUserLeave = n.targetId ? myLeaveIds.has(n.targetId) : false;
+      const isDirectlyRelevant = matchesUserOrder || matchesUserPassenger || matchesUserProposal || matchesUserLeave;
 
-      // 2. Sale Leader: Notifications for their own + team members' orders, passengers, proposals, plus system alerts
-      if (currentRole === 'sale_leader') {
-        if (n.type === 'system' && !n.targetId) return true;
+      // 2. HR Department: All leave requests, timesheets, HR notifications
+      if (currentRole === 'hr') {
+        if (n.type === 'leave' || title.includes('nghỉ phép') || msg.includes('nghỉ phép') || title.includes('chấm công') || msg.includes('chấm công')) {
+          return true;
+        }
         return isDirectlyRelevant;
       }
 
-      // 3. Regular Sale & Agent: Notifications strictly for their own orders, passengers, proposals
+      // 3. Sale Leader: Notifications for their own + team members' orders, passengers, proposals, leaves, plus system alerts
+      if (currentRole === 'sale_leader') {
+        if (n.type === 'system' && !n.targetId) return true;
+        if (n.type === 'leave' || title.includes('nghỉ phép') || msg.includes('nghỉ phép')) {
+          return matchesUserLeave || (userFullName && msg.includes(userFullName));
+        }
+        return isDirectlyRelevant;
+      }
+
+      // 4. Regular Sale & Agent: Notifications strictly for their own orders, passengers, proposals, leaves
       if (['sale', 'agent'].includes(currentRole)) {
         if (n.type === 'system' && !n.targetId) return true;
         return isDirectlyRelevant;
       }
 
-      // 4. Visa department: Visa related or directly relevant
+      // 5. Visa department: Visa related or directly relevant
       if (currentRole === 'visa') {
         if (n.type === 'visa' || title.includes('visa') || msg.includes('visa')) return true;
         return isDirectlyRelevant;
       }
 
-      // 5. Accounting department: Accounting, proposals, invoices, receipts
+      // 6. Accounting department: Accounting, proposals, invoices, receipts
       if (currentRole === 'accounting') {
         if (n.type === 'system') return true;
         if (
@@ -435,7 +569,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         return isDirectlyRelevant;
       }
 
-      // 6. Operator department: Extension requests, hold status, tour operations, cancellations
+      // 7. Operator department: Extension requests, hold status, tour operations, cancellations, leaves
       if (currentRole === 'operator') {
         if (n.type === 'system') return true;
         if (
@@ -451,7 +585,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       return isDirectlyRelevant;
     });
-  }, [allNotifications, currentRole, orders, passengers, paymentProposals, profile, user]);
+  }, [allNotifications, currentRole, orders, passengers, paymentProposals, leaveRequests, profilesList, profile, user]);
 
   const unreadNotifications = React.useMemo(() => {
     return notifications.filter(n => !n.read);

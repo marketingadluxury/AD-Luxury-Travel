@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Calendar,
@@ -62,6 +63,7 @@ export default function LeaveRequestsPage() {
   const isHRorBODorAdmin = ['hr', 'bod', 'admin', 'accounting'].includes(effectiveRole);
   const isHROrAdmin = ['hr', 'admin', 'bod'].includes(effectiveRole);
 
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'my_leaves' | 'team_approval' | 'final_approval' | 'timesheet' | 'leave_balances' | 'holidays_settings'>('my_leaves');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -69,6 +71,21 @@ export default function LeaveRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | LeaveStatus>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | LeaveType>('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Handle navigation from notifications
+  useEffect(() => {
+    if (location.state) {
+      if (location.state.tab) {
+        setActiveTab(location.state.tab);
+      }
+      if (location.state.searchTarget) {
+        setSearchTerm(location.state.searchTarget);
+        setStatusFilter('all');
+        setTypeFilter('all');
+      }
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Modal Từ chối
   const [rejectingId, setRejectingId] = useState<string | null>(null);

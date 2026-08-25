@@ -80,18 +80,6 @@ export default function OrdersManagement() {
     }
   };
 
-  // Xử lý click từ thông báo
-  useEffect(() => {
-    if (location.state?.searchTarget) {
-      setOrderSearchTerm(location.state.searchTarget);
-      setOrderFilterStatus('all'); // Mở rộng bộ lọc
-      setOrderFilterTimeRange('all');
-
-      // Clear state để không tự nhảy lại khi F5
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state]);
-
   const handleCopyOrderCode = (e: React.MouseEvent, orderId: string) => {
     e.stopPropagation();
     const cleanCode = orderId.substring(0, 8).toUpperCase();
@@ -644,6 +632,31 @@ export default function OrdersManagement() {
   const toggleOrderExpand = (orderId: string) => {
     setExpandedOrderId(prev => prev === orderId ? null : orderId);
   };
+
+  // Xử lý click từ thông báo
+  useEffect(() => {
+    if (location.state) {
+      if (location.state.searchTarget) {
+        setOrderSearchTerm(location.state.searchTarget);
+        setOrderFilterStatus('all');
+        setOrderFilterTimeRange('all');
+        setOrderFilterTourId('all');
+        setOrderFilterCreator('all');
+        setOrderFilterPaymentStatus('all');
+        setOrderFilterHoldStatus('all');
+      }
+      if (location.state.expandOrderId) {
+        const found = allOrders.find(o => o.id === location.state.expandOrderId || o.id.startsWith(location.state.expandOrderId));
+        if (found) {
+          setExpandedOrderId(found.id);
+        } else {
+          setExpandedOrderId(location.state.expandOrderId);
+        }
+      }
+      // Clear state để không tự nhảy lại khi F5
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, allOrders]);
 
   // New Order Form State
   const [selectedTourId, setSelectedTourId] = useState('');

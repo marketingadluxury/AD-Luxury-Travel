@@ -52,7 +52,7 @@ function isSupabaseConfigured(): boolean {
 
 export interface Notification {
   id: string;
-  type: 'visa' | 'accounting' | 'extension' | 'order' | 'system';
+  type: 'visa' | 'accounting' | 'extension' | 'order' | 'system' | 'leave' | 'proposal' | 'media';
   title: string;
   message: string;
   targetId: string; // ID of order or passenger
