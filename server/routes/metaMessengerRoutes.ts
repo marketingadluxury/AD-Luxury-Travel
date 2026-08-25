@@ -589,7 +589,7 @@ router.post(['/api/meta-leads', '/api/leads'], async (req, res) => {
 router.put(['/api/meta-leads/:id', '/api/leads/:id'], async (req, res) => {
   try {
     const { id } = req.params;
-    const { customer_name, customer_phone, customer_email, status, notes, assigned_to, tour_interest } = req.body;
+    const { customer_name, customer_phone, customer_email, gender, birthday, fb_id, status, notes, assigned_to, tour_interest, ad_id, utm_campaign } = req.body;
     const supabase = getAdminSupabaseClient();
 
     const updatePayload: Record<string, any> = {
@@ -599,6 +599,11 @@ router.put(['/api/meta-leads/:id', '/api/leads/:id'], async (req, res) => {
     if (customer_name !== undefined) updatePayload.customer_name = customer_name;
     if (customer_phone !== undefined) updatePayload.customer_phone = customer_phone;
     if (customer_email !== undefined) updatePayload.customer_email = customer_email;
+    if (gender !== undefined) updatePayload.gender = gender;
+    if (birthday !== undefined) updatePayload.birthday = birthday;
+    if (fb_id !== undefined) updatePayload.fb_id = fb_id;
+    if (ad_id !== undefined) updatePayload.ad_id = ad_id;
+    if (utm_campaign !== undefined) updatePayload.utm_campaign = utm_campaign;
     if (status !== undefined) updatePayload.status = status;
     if (notes !== undefined) updatePayload.notes = notes;
     if (tour_interest !== undefined) updatePayload.tour_interest = tour_interest;

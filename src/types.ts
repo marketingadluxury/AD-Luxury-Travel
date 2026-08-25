@@ -23,6 +23,22 @@ export const ROLE_LABELS: Record<Role, RoleConfig> = {
   CTV: { label: 'Cộng Tác Viên (CTV)', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' }
 };
 
+export const ROLE_DEPARTMENT_ORDER: Record<string, number> = {
+  bod: 1,
+  hr: 2,
+  sale_leader: 3,
+  sale: 4,
+  marketing_leader: 5,
+  marketing: 6,
+  operator: 7,
+  accounting: 8,
+  visa: 9,
+  tour_guide: 10,
+  admin: 11,
+  agent: 12,
+  CTV: 13,
+};
+
 export const getRoleConfig = (role?: string | null): RoleConfig => {
   if (!role) {
     return { label: 'Nhân sự', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' };
@@ -279,12 +295,23 @@ export interface MetaLead {
   customer_email?: string | null;
   customer_avatar?: string | null;
   gender?: string | null;
+  birthday?: string | null;
+  fb_id?: string | null;
   page_id?: string | null;
+  shop_id?: string | null;
   psid?: string | null;
+  pancake_id?: string | null;
   ad_id?: string | null;
+  ad_name?: string | null;
+  campaign_id?: string | null;
+  adset_id?: string | null;
+  adset_name?: string | null;
   meta_lead_id?: string | null;
   utm_source?: string | null;
+  utm_medium?: string | null;
   utm_campaign?: string | null;
+  utm_content?: string | null;
+  utm_term?: string | null;
   source_channel?: string | null;
   last_message?: string | null;
   last_message_at?: string | null;

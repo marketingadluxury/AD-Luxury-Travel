@@ -43,16 +43,25 @@ export interface LeadRecord {
   customer_email?: string | null;
   customer_avatar?: string | null;
   gender?: string | null;
+  birthday?: string | null;
+  fb_id?: string | null;
+  pancake_id?: string | null;
   source_channel?: string;
   page_id?: string | null;
+  shop_id?: string | null;
   psid?: string | null;
   ad_id?: string | null;
+  ad_name?: string | null;
+  campaign_id?: string | null;
+  adset_id?: string | null;
+  adset_name?: string | null;
   form_id?: string | null;
   leadgen_id?: string | null;
   utm_source?: string | null;
   utm_medium?: string | null;
   utm_campaign?: string | null;
   utm_content?: string | null;
+  utm_term?: string | null;
   message_text?: string | null;
   form_data?: any;
   status?: string;
@@ -247,11 +256,19 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
   const cleanEmail = cleanPlaceholder(leadData.customer_email);
   const cleanAvatar = cleanPlaceholder(leadData.customer_avatar);
   const cleanGender = cleanPlaceholder(leadData.gender);
-  const cleanPsid = cleanPlaceholder(leadData.psid);
-  const cleanAdId = cleanPlaceholder(leadData.ad_id);
+  const cleanBirthday = cleanPlaceholder(leadData.birthday);
+  const cleanFbId = cleanPlaceholder(leadData.fb_id) || cleanPlaceholder(leadData.psid);
+  const cleanPancakeId = cleanPlaceholder(leadData.pancake_id);
+  const cleanPsid = cleanPlaceholder(leadData.psid) || cleanFbId;
   const cleanPageId = cleanPlaceholder(leadData.page_id);
-  const cleanLeadgenId = cleanPlaceholder(leadData.leadgen_id);
+  const cleanShopId = cleanPlaceholder(leadData.shop_id);
+  const cleanAdId = cleanPlaceholder(leadData.ad_id);
+  const cleanAdName = cleanPlaceholder(leadData.ad_name);
+  const cleanCampaignId = cleanPlaceholder(leadData.campaign_id);
   const cleanCampaign = cleanPlaceholder(leadData.utm_campaign);
+  const cleanAdsetId = cleanPlaceholder(leadData.adset_id);
+  const cleanAdsetName = cleanPlaceholder(leadData.adset_name);
+  const cleanLeadgenId = cleanPlaceholder(leadData.leadgen_id);
 
   const payload: Record<string, any> = {
     customer_name: cleanName,
@@ -259,16 +276,25 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
     customer_email: cleanEmail,
     customer_avatar: cleanAvatar,
     gender: cleanGender,
+    birthday: cleanBirthday,
+    fb_id: cleanFbId,
+    pancake_id: cleanPancakeId,
     source_channel: leadData.source_channel || 'facebook_messenger',
     page_id: cleanPageId,
+    shop_id: cleanShopId,
     psid: cleanPsid,
     ad_id: cleanAdId,
+    ad_name: cleanAdName,
+    campaign_id: cleanCampaignId,
+    adset_id: cleanAdsetId,
+    adset_name: cleanAdsetName,
     form_id: leadData.form_id || null,
     leadgen_id: cleanLeadgenId,
     utm_source: leadData.utm_source || 'facebook',
     utm_medium: leadData.utm_medium || null,
     utm_campaign: cleanCampaign,
     utm_content: leadData.utm_content || null,
+    utm_term: leadData.utm_term || null,
     message_text: leadData.message_text || null,
     form_data: leadData.form_data || {},
     status: leadData.status || 'lead_captured',
@@ -346,8 +372,20 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
       if (payload.message_text) updateData.message_text = payload.message_text;
       if (payload.customer_avatar) updateData.customer_avatar = payload.customer_avatar;
       if (payload.gender) updateData.gender = payload.gender;
+      if (payload.birthday) updateData.birthday = payload.birthday;
+      if (payload.fb_id) updateData.fb_id = payload.fb_id;
+      if (payload.pancake_id) updateData.pancake_id = payload.pancake_id;
       if (payload.ad_id) updateData.ad_id = payload.ad_id;
+      if (payload.ad_name) updateData.ad_name = payload.ad_name;
+      if (payload.campaign_id) updateData.campaign_id = payload.campaign_id;
       if (payload.utm_campaign) updateData.utm_campaign = payload.utm_campaign;
+      if (payload.adset_id) updateData.adset_id = payload.adset_id;
+      if (payload.adset_name) updateData.adset_name = payload.adset_name;
+      if (payload.utm_source) updateData.utm_source = payload.utm_source;
+      if (payload.utm_medium) updateData.utm_medium = payload.utm_medium;
+      if (payload.utm_content) updateData.utm_content = payload.utm_content;
+      if (payload.utm_term) updateData.utm_term = payload.utm_term;
+      if (payload.shop_id) updateData.shop_id = payload.shop_id;
       if (payload.source_channel) updateData.source_channel = payload.source_channel;
       if (payload.notes) updateData.notes = payload.notes;
       if (payload.form_data && Object.keys(payload.form_data).length > 0) updateData.form_data = payload.form_data;
@@ -372,6 +410,43 @@ export async function saveLeadToDatabase(leadData: LeadRecord) {
 
       if (insErr) throw insErr;
       if (inserted) leadId = inserted.id;
+    }
+
+    // Tự động đồng bộ vào bảng trung tâm `customers` nếu có SĐT
+    if (payload.customer_phone) {
+      try {
+        const { data: existCust } = await supabase
+          .from('customers')
+          .select('id, full_name, email, phone, gender, birthday, fb_id, pancake_id')
+          .eq('phone', payload.customer_phone)
+          .maybeSingle();
+
+        const custPayload: Record<string, any> = {
+          full_name: payload.customer_name && payload.customer_name !== 'Khách hàng tiềm năng' ? payload.customer_name : undefined,
+          phone: payload.customer_phone,
+          email: payload.customer_email || undefined,
+          gender: payload.gender || undefined,
+          birthday: payload.birthday || undefined,
+          fb_id: payload.fb_id || payload.psid || undefined,
+          pancake_id: payload.pancake_id || undefined,
+          ad_id: payload.ad_id || undefined,
+          campaign_name: payload.utm_campaign || undefined,
+          utm_source: payload.utm_source || undefined,
+          updated_at: now
+        };
+        // Lọc bỏ undefined
+        Object.keys(custPayload).forEach(k => custPayload[k] === undefined && delete custPayload[k]);
+
+        if (existCust) {
+          await supabase.from('customers').update(custPayload).eq('id', existCust.id);
+        } else {
+          custPayload.created_at = now;
+          if (!custPayload.full_name) custPayload.full_name = payload.customer_name || 'Khách hàng';
+          await supabase.from('customers').insert([custPayload]);
+        }
+      } catch (cErr: any) {
+        console.warn('[Sync to Customers Table] Lỗi nhẹ:', cErr.message);
+      }
     }
 
     console.log(`[Supabase Leads] Đã lưu thành công Lead vào bảng leads: ID ${leadId} - ${payload.customer_name} (${payload.customer_phone || 'Chưa có SĐT'})`);

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
-import { LeaveBalance, Profile, getRoleConfig } from '../types';
+import { LeaveBalance, Profile, getRoleConfig, ROLE_DEPARTMENT_ORDER } from '../types';
 import { getEffectiveLeaveBalance } from '../lib/payrollUtils';
 import { CustomSelect } from './CustomSelect';
 
@@ -35,29 +35,38 @@ export const LeaveBalanceManagement: React.FC = () => {
   const [modalNote, setModalNote] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Danh sách nhân sự nội bộ (loại trừ Admin, đại lý và CTV)
+  // Danh sách nhân sự nội bộ (mặc định sắp xếp theo bộ phận)
   const staffList = useMemo(() => {
     const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
-    return profilesList.filter((p) => {
-      if (deletedIds.has(p.id)) return false;
-      // Loại trừ Admin, Đại lý và CTV
-      if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
+    return profilesList
+      .filter((p) => {
+        if (deletedIds.has(p.id)) return false;
+        // Loại trừ Admin, Đại lý và CTV
+        if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
 
-      const isInternal = ['hr', 'sale', 'sale_leader', 'operator', 'accounting', 'visa', 'bod', 'tour_guide', 'marketing', 'marketing_leader'].includes(p.role || '');
-      if (!isInternal) return false;
+        const isInternal = ['hr', 'sale', 'sale_leader', 'operator', 'accounting', 'visa', 'bod', 'tour_guide', 'marketing', 'marketing_leader'].includes(p.role || '');
+        if (!isInternal) return false;
 
-      if (roleFilter !== 'all' && p.role !== roleFilter) return false;
+        if (roleFilter !== 'all' && p.role !== roleFilter) return false;
 
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase();
-        const matchName = (p.full_name || '').toLowerCase().includes(term);
-        const matchEmail = (p.email || '').toLowerCase().includes(term);
-        const matchPhone = (p.phone || '').toLowerCase().includes(term);
-        if (!matchName && !matchEmail && !matchPhone) return false;
-      }
+        if (searchTerm.trim()) {
+          const term = searchTerm.toLowerCase();
+          const matchName = (p.full_name || '').toLowerCase().includes(term);
+          const matchEmail = (p.email || '').toLowerCase().includes(term);
+          const matchPhone = (p.phone || '').toLowerCase().includes(term);
+          if (!matchName && !matchEmail && !matchPhone) return false;
+        }
 
-      return true;
-    });
+        return true;
+      })
+      .sort((a, b) => {
+        const orderA = ROLE_DEPARTMENT_ORDER[a.role || ''] || 99;
+        const orderB = ROLE_DEPARTMENT_ORDER[b.role || ''] || 99;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'vi');
+      });
   }, [profilesList, roleFilter, searchTerm]);
 
   // Mở modal điều chỉnh
@@ -183,16 +192,16 @@ export const LeaveBalanceManagement: React.FC = () => {
             onChange={(val) => setRoleFilter(val)}
             options={[
               { value: 'all', label: 'Tất cả bộ phận' },
-              { value: 'sale', label: 'Nhân viên Kinh doanh (Sale)' },
+              { value: 'bod', label: 'Ban Giám Đốc (BOD)' },
+              { value: 'hr', label: 'Nhân sự (HR)' },
               { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)' },
-              { value: 'marketing', label: 'Nhân viên Marketing' },
+              { value: 'sale', label: 'Nhân viên Kinh doanh (Sale)' },
               { value: 'marketing_leader', label: 'Trưởng phòng Marketing' },
+              { value: 'marketing', label: 'Nhân viên Marketing' },
               { value: 'operator', label: 'Điều hành Tour' },
               { value: 'accounting', label: 'Kế toán' },
               { value: 'visa', label: 'Bộ phận Visa' },
               { value: 'tour_guide', label: 'Hướng Dẫn Viên (HDV)' },
-              { value: 'hr', label: 'Nhân sự (HR)' },
-              { value: 'bod', label: 'Ban Giám Đốc (BOD)' },
               { value: 'admin', label: 'Quản trị viên (Admin)' },
             ]}
             icon={<Users className="w-3.5 h-3.5 text-slate-500" />}

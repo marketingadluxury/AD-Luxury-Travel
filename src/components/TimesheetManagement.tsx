@@ -22,7 +22,7 @@ import * as XLSX from 'xlsx';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { calculateEmployeeTimesheet, calculateStandardWorkingDays } from '../lib/payrollUtils';
-import { EmployeeTimesheetRow, Holiday, HolidayType, getRoleConfig } from '../types';
+import { EmployeeTimesheetRow, Holiday, HolidayType, getRoleConfig, ROLE_DEPARTMENT_ORDER } from '../types';
 import { DatePicker } from './DatePicker';
 import { CustomSelect, SelectOption } from './CustomSelect';
 
@@ -58,46 +58,55 @@ export const TimesheetManagement: React.FC = () => {
   const [quickEditUsed, setQuickEditUsed] = useState<number>(0);
   const [quickEditNote, setQuickEditNote] = useState<string>('');
 
-  // Danh sách nhân viên theo phân quyền hiển thị (loại trừ Admin, Đại lý và CTV)
+  // Danh sách nhân viên theo phân quyền hiển thị (loại trừ Admin, Đại lý và CTV - mặc định sắp xếp theo bộ phận)
   const staffProfiles = useMemo(() => {
     const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
-    return profilesList.filter((p) => {
-      if (deletedIds.has(p.id)) return false;
-      // Loại trừ Admin, Đại lý và CTV ra khỏi danh sách chấm công
-      if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
+    return profilesList
+      .filter((p) => {
+        if (deletedIds.has(p.id)) return false;
+        // Loại trừ Admin, Đại lý và CTV ra khỏi danh sách chấm công
+        if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
 
-      // Chỉ tính công cho nhân viên công ty (sale, leader, operator, accounting, visa, bod, tour_guide, marketing...)
-      const isInternalStaff = ['hr', 'sale', 'sale_leader', 'operator', 'accounting', 'visa', 'bod', 'tour_guide', 'marketing', 'marketing_leader'].includes(p.role || '');
-      if (!isInternalStaff) return false;
+        // Chỉ tính công cho nhân viên công ty (sale, leader, operator, accounting, visa, bod, tour_guide, marketing...)
+        const isInternalStaff = ['hr', 'sale', 'sale_leader', 'operator', 'accounting', 'visa', 'bod', 'tour_guide', 'marketing', 'marketing_leader'].includes(p.role || '');
+        if (!isInternalStaff) return false;
 
-      // Phân quyền hiển thị dữ liệu:
-      // 1. HR/BOD/Admin/Kế toán: Thấy tất cả nhân viên
-      // 2. Leader (Trưởng nhóm): Thấy chính mình + các nhân viên trực thuộc nhóm (leader_id = currentUserId hoặc chung team_id)
-      // 3. Nhân viên thông thường: Chỉ thấy duy nhất bảng công của chính mình
-      if (!isHRorBODorAdmin) {
-        if (isLeader) {
-          const isMe = p.id === currentUserId;
-          const isMySubordinate = p.leader_id === currentUserId;
-          const isSameTeam = profile?.team_id && p.team_id === profile.team_id;
-          if (!isMe && !isMySubordinate && !isSameTeam) return false;
-        } else {
-          // Employee: only see self
-          if (p.id !== currentUserId) return false;
+        // Phân quyền hiển thị dữ liệu:
+        // 1. HR/BOD/Admin/Kế toán: Thấy tất cả nhân viên
+        // 2. Leader (Trưởng nhóm): Thấy chính mình + các nhân viên trực thuộc nhóm (leader_id = currentUserId hoặc chung team_id)
+        // 3. Nhân viên thông thường: Chỉ thấy duy nhất bảng công của chính mình
+        if (!isHRorBODorAdmin) {
+          if (isLeader) {
+            const isMe = p.id === currentUserId;
+            const isMySubordinate = p.leader_id === currentUserId;
+            const isSameTeam = profile?.team_id && p.team_id === profile.team_id;
+            if (!isMe && !isMySubordinate && !isSameTeam) return false;
+          } else {
+            // Employee: only see self
+            if (p.id !== currentUserId) return false;
+          }
         }
-      }
 
-      if (selectedRoleFilter !== 'all' && p.role !== selectedRoleFilter) return false;
+        if (selectedRoleFilter !== 'all' && p.role !== selectedRoleFilter) return false;
 
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase();
-        const matchName = (p.full_name || '').toLowerCase().includes(term);
-        const matchEmail = (p.email || '').toLowerCase().includes(term);
-        const matchPhone = (p.phone || '').toLowerCase().includes(term);
-        if (!matchName && !matchEmail && !matchPhone) return false;
-      }
+        if (searchTerm.trim()) {
+          const term = searchTerm.toLowerCase();
+          const matchName = (p.full_name || '').toLowerCase().includes(term);
+          const matchEmail = (p.email || '').toLowerCase().includes(term);
+          const matchPhone = (p.phone || '').toLowerCase().includes(term);
+          if (!matchName && !matchEmail && !matchPhone) return false;
+        }
 
-      return true;
-    });
+        return true;
+      })
+      .sort((a, b) => {
+        const orderA = ROLE_DEPARTMENT_ORDER[a.role || ''] || 99;
+        const orderB = ROLE_DEPARTMENT_ORDER[b.role || ''] || 99;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'vi');
+      });
   }, [profilesList, selectedRoleFilter, searchTerm, isHRorBODorAdmin, isLeader, currentUserId, profile]);
 
   // Chuẩn chuẩn ngày công của tháng
@@ -314,16 +323,16 @@ export const TimesheetManagement: React.FC = () => {
             onChange={(val) => setSelectedRoleFilter(val)}
             options={[
               { value: 'all', label: 'Tất cả bộ phận' },
-              { value: 'sale', label: 'Nhân viên Kinh doanh (Sale)' },
+              { value: 'bod', label: 'Ban Giám Đốc (BOD)' },
+              { value: 'hr', label: 'Nhân sự (HR)' },
               { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)' },
-              { value: 'marketing', label: 'Nhân viên Marketing' },
+              { value: 'sale', label: 'Nhân viên Kinh doanh (Sale)' },
               { value: 'marketing_leader', label: 'Trưởng phòng Marketing' },
+              { value: 'marketing', label: 'Nhân viên Marketing' },
               { value: 'operator', label: 'Điều hành Tour' },
               { value: 'accounting', label: 'Kế toán' },
               { value: 'visa', label: 'Bộ phận Visa' },
               { value: 'tour_guide', label: 'Hướng Dẫn Viên (HDV)' },
-              { value: 'hr', label: 'Nhân sự (HR)' },
-              { value: 'bod', label: 'Ban Giám Đốc (BOD)' },
               { value: 'admin', label: 'Quản trị viên (Admin)' },
             ]}
             icon={<Filter className="w-3.5 h-3.5 text-slate-500" />}

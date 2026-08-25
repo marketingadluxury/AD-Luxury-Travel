@@ -1013,7 +1013,7 @@ ALTER TABLE leave_balances ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow access to leave_balances" ON leave_balances;
 CREATE POLICY "Allow access to leave_balances" ON leave_balances FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 8. Kích hoạt Realtime cho các bảng Chấm công & Nghỉ phép
+-- 8. Kích hoạt Realtime cho các bảng Chấm công & Nghỉ phép & Leads
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
@@ -1031,8 +1031,27 @@ BEGIN
       ALTER PUBLICATION supabase_realtime ADD TABLE leave_balances;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
+
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE leads;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
   END IF;
 END $$;
+
+-- 9. Bổ sung các cột mở rộng cho leads & customers từ POS Cake / Pancake / Meta Ads
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS birthday TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS fb_id TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS ad_name TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS campaign_id TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS adset_id TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS adset_name TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_term TEXT;
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS birthday TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS fb_id TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS gender TEXT;
+
 
 
 

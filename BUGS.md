@@ -6,6 +6,39 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Chuẩn Hóa Dropdown, Icon và Giao Diện Toàn Diện Tab Đề Nghị Thanh Toán (Payment Proposals)
+- **Mô tả yêu cầu:**
+  1. Kiểm tra lại toàn bộ giao diện (UI audit) tab Đề nghị thanh toán (`PaymentProposals.tsx`).
+  2. Thay thế toàn bộ các thẻ `<select>` mặc định bằng component `CustomSelect` chuẩn hóa thiết kế của hệ thống.
+  3. Rà soát và cập nhật hệ thống icon (`lucide-react`) đồng bộ, loại bỏ double icon và ký tự thủ công (`+`, `✕`, `👤`, v.v.), đảm bảo UI tinh tế, hiện đại.
+- **Giải pháp thực hiện:**
+  1. **Bộ lọc trên trang:** Chuyển đổi dropdown Trạng thái duyệt (`filterStatus`) và Phân loại chi phí (`filterType`) sang `CustomSelect` kèm icon trực quan và nhãn màu rõ ràng. Bổ sung nút "Xóa bộ lọc" (`RotateCcw`).
+  2. **Biểu mẫu Tạo đề nghị mới (Create Modal):** Thay thế toàn bộ dropdown HTML bằng `CustomSelect` cho 3 trường: Loại chi phí (`proposalTypeFormOptions`), Chọn Tour liên quan (`tourFormOptions`) và Ngân hàng thụ hưởng (`bankOptions`).
+  3. **Hệ thống Icon & Badge:** Đồng bộ icon cho tiêu đề cột Kanban (`Hourglass`, `Clock`, `CheckCircle2`, `XCircle`), badge loại chi phí (`Plane` cho Tour, `Building2` cho Chi chung, `User` cho Chi lẻ), thay thế ký tự `✕` bằng icon `X` trong tất cả modal header, chuẩn hóa các nút bấm kèm icon `Plus`, `Search`, `Filter`.
+- **Trạng thái:** Đã hoàn thành, vượt qua toàn bộ các bài kiểm tra Lint và Build thành công 100%.
+
+### 1.0 Tích Hợp Webhook POS Cake / Pancake: Thu Thập Đầy Đủ Dữ Liệu Khách Hàng & Quảng Cáo (Meta Ads)
+- **Mô tả yêu cầu:**
+  1. Loại bỏ các phương thức tải file tĩnh thủ công, chuyển sang kết nối trực tiếp qua Webhook chuẩn POS Cake / Pancake API (theo đặc tả `https://docs.pancake.biz/pos/api/#models/WebhookProductResponse`).
+  2. Bóc tách và lưu trữ đầy đủ các trường dữ liệu:
+     - **Thông tin khách hàng:** Họ và tên (`customer_name`), Số điện thoại (`customer_phone`), Giới tính (`gender`: Nam/Nữ), Facebook ID / PSID (`fb_id`), Ngày tháng năm sinh (`birthday`).
+     - **Dữ liệu Quảng cáo & Marketing:** Ad ID (`ad_id`), Tên quảng cáo (`ad_name`), ID Chiến dịch (`campaign_id`), Tên chiến dịch (`utm_campaign`), ID Nhóm quảng cáo (`adset_id`), Tên nhóm quảng cáo (`adset_name`), UTM Tracking (`utm_source`, `utm_medium`, `utm_content`, `utm_term`).
+  3. Hiển thị trực quan trên giao diện bảng Khách Hàng Tiềm Năng (`PotentialLeadsTab.tsx`) và hỗ trợ chỉnh sửa chi tiết trong Modal (kèm nút Sao chép FB ID, link mở trang cá nhân Facebook, hiển thị ngày sinh theo chuẩn `dd/mm/yyyy`).
+- **Giải pháp thực hiện:**
+  1. **Backend (Webhook Handler & API):** Cập nhật `pancakeService.ts` và `metaMessengerService.ts` để phân tích sâu payload từ webhook POS Cake (bao gồm cả sự kiện đơn hàng `order_created`, `order_updated` và sự kiện khách hàng `customer_created`, `partner_created`), bóc tách chính xác `birthday`, `gender`, `fb_id`, `ad_id`, `ad_name`, `campaign_id`, `utm_campaign`, `adset_name`, `utm_source`, `utm_medium`.
+  2. **API & Database:** Cập nhật endpoint `PUT /api/meta-leads/:id` và `updateMetaLead` hỗ trợ cập nhật động các trường mới. Bổ sung các cột `birthday`, `fb_id`, `ad_name`, `campaign_id`, `adset_id`, `adset_name`, `utm_term` vào `leads` và `customers` trong `supabase-schema.sql` cùng kích hoạt Realtime publication.
+  3. **Frontend:** Cập nhật bảng và modal chi tiết trong `PotentialLeadsTab.tsx` với giao diện trực quan, chia thành 3 khối rõ ràng: *Thông tin Khách hàng* (Giới tính, Ngày sinh, FB ID), *Dữ liệu Quảng cáo* (Ad ID, Ad Name, Campaign, Adset, UTM) và *Quản lý Chăm sóc* (Trạng thái, Gán Sale, Ghi chú).
+- **Trạng thái:** Đã hoàn thành, vượt qua toàn bộ các bài kiểm tra Lint và Build thành công 100%.
+
+
+### 1.0 Mặc định sắp xếp danh sách nhân sự theo Bộ phận (Quỹ phép năm & Chấm công)
+- **Mô tả vấn đề:** Danh sách nhân viên trong bảng "Quản Lý & Điều Chỉnh Quỹ Phép Năm Thủ Công" và "Bảng Chấm Công & Quản Lý Công Chuẩn" hiển thị lộn xộn theo thứ tự đăng ký hoặc ngẫu nhiên, gây khó khăn cho Nhân sự (HR), Quản trị viên và Ban Giám Đốc khi theo dõi tình hình nhân sự theo từng phòng ban.
+- **Giải pháp:**
+  1. Thiết lập chuẩn phân loại thứ tự phòng ban (`ROLE_DEPARTMENT_ORDER`): Ban Giám Đốc (BOD) -> Nhân sự (HR) -> Sale Leader -> Sale -> Trưởng phòng Marketing -> Nhân viên Marketing -> Điều hành Tour -> Kế toán -> Bộ phận Visa -> Hướng Dẫn Viên -> Quản trị viên.
+  2. Cập nhật hàm tính danh sách nhân sự `staffList` trong `LeaveBalanceManagement.tsx` và `staffProfiles` trong `TimesheetManagement.tsx` để tự động sắp xếp theo thứ tự bộ phận, các nhân sự trong cùng bộ phận sẽ được xếp theo thứ tự bảng chữ cái tiếng Việt của họ tên (`localeCompare`).
+  3. Đồng bộ lại thứ tự các tùy chọn trong dropdown lọc Bộ phận theo chuẩn phòng ban thống nhất.
+- **Trạng thái:** Đã hoàn thiện, kiểm tra linter và biên dịch thành công.
+
 ### 1.0 Loại bỏ khối Quỹ phép năm khỏi trang Bảng điều khiển (Dashboard)
 - **Mô tả vấn đề:** Khối "Quỹ Phép Năm (2026)" và nút "Tạo Đơn Xin Nghỉ" hiển thị ở đầu tab Tổng quan trang Bảng điều khiển gây dư thừa do tính năng này đã được tập trung quản lý chuyên biệt tại trang Hành chính nhân sự (`/leave-requests`).
 - **Giải pháp:** Đã loại bỏ hoàn toàn component `EmployeeLeaveBalanceWidget` khỏi tab Tổng quan trong `Dashboard.tsx`.

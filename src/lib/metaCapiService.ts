@@ -206,9 +206,12 @@ export async function updateMetaLead(leadId: string, data: {
   customer_email?: string;
   customer_avatar?: string;
   gender?: string;
+  birthday?: string;
+  fb_id?: string;
   status?: string;
   notes?: string;
   assigned_to?: string;
+  [key: string]: any;
 }): Promise<any> {
   try {
     return await safeFetchApi(`/api/meta-leads/${leadId}`, {

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { PaymentProposal, ProposalStatus } from '@/types';
 import { DatePicker } from '@/components/DatePicker';
 import { TimeRangeFilter } from '@/components/TimeRangeFilter';
+import { CustomSelect, SelectOption } from '@/components/CustomSelect';
 import { isDateInTimeRange } from '@/lib/dateUtils';
 import { formatDateVi, formatDateTimeVi } from '@/lib/utils';
 import {
@@ -34,7 +35,13 @@ import {
   ChevronRight,
   FileText,
   LayoutGrid,
-  List
+  List,
+  User,
+  Plane,
+  Layers,
+  RotateCcw,
+  Compass,
+  X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -396,11 +403,51 @@ export default function PaymentProposals() {
   }, [paymentProposals]);
 
   const kanbanColumns = [
-    { id: 'pending_leader', title: '⏳ 1. Chờ Leader duyệt', bgHeader: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
-    { id: 'approved_leader', title: '🏦 2. Chờ Kế toán chi', bgHeader: 'bg-blue-600 text-white', borderCol: 'border-blue-200 bg-blue-50/20' },
-    { id: 'approved_accounting', title: '✅ 3. Đã chi tiền', bgHeader: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
-    { id: 'rejected', title: '❌ 4. Bị từ chối', bgHeader: 'bg-rose-600 text-white', borderCol: 'border-rose-200 bg-rose-50/20' },
+    { id: 'pending_leader', title: '1. Chờ Leader duyệt', icon: Clock, bgHeader: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
+    { id: 'approved_leader', title: '2. Chờ Kế toán chi', icon: Building2, bgHeader: 'bg-blue-600 text-white', borderCol: 'border-blue-200 bg-blue-50/20' },
+    { id: 'approved_accounting', title: '3. Đã chi tiền', icon: CheckCircle2, bgHeader: 'bg-emerald-600 text-white', borderCol: 'border-emerald-200 bg-emerald-50/20' },
+    { id: 'rejected', title: '4. Bị từ chối', icon: XCircle, bgHeader: 'bg-rose-600 text-white', borderCol: 'border-rose-200 bg-rose-50/20' },
   ];
+
+  // Options for CustomSelect dropdowns
+  const statusFilterOptions: SelectOption[] = [
+    { value: 'all', label: 'Tất cả trạng thái', icon: <Filter className="w-3.5 h-3.5 text-slate-500" /> },
+    { value: 'pending_leader', label: 'Chờ Leader duyệt', icon: <Clock className="w-3.5 h-3.5 text-amber-500" /> },
+    { value: 'approved_leader', label: 'Chờ Kế toán chi', icon: <Building2 className="w-3.5 h-3.5 text-blue-500" /> },
+    { value: 'approved_accounting', label: 'Đã chi tiền', icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> },
+    { value: 'rejected_leader', label: 'Từ chối (Leader)', icon: <XCircle className="w-3.5 h-3.5 text-rose-500" /> },
+    { value: 'rejected_accounting', label: 'Từ chối (Kế toán)', icon: <XCircle className="w-3.5 h-3.5 text-rose-500" /> },
+  ];
+
+  const typeFilterOptions: SelectOption[] = [
+    { value: 'all', label: 'Tất cả loại chi phí', icon: <Layers className="w-3.5 h-3.5 text-slate-500" /> },
+    { value: 'individual', label: 'Chi Lẻ / Cá nhân', icon: <User className="w-3.5 h-3.5 text-indigo-500" /> },
+    { value: 'tour', label: 'Chi Theo Tour', icon: <Plane className="w-3.5 h-3.5 text-teal-500" /> },
+    { value: 'general', label: 'Chi Phí Chung', icon: <Building2 className="w-3.5 h-3.5 text-purple-500" /> },
+  ];
+
+  const proposalTypeFormOptions: SelectOption[] = [
+    { value: 'individual', label: 'Chi Lẻ / Cá nhân', icon: <User className="w-3.5 h-3.5 text-indigo-600" /> },
+    { value: 'tour', label: 'Chi Theo Tour', icon: <Plane className="w-3.5 h-3.5 text-teal-600" /> },
+    { value: 'general', label: 'Chi Phí Chung Khác', icon: <Building2 className="w-3.5 h-3.5 text-purple-600" /> },
+  ];
+
+  const tourFormOptions: SelectOption[] = useMemo(() => [
+    { value: '', label: '-- Chọn Tour liên quan --', icon: <Compass className="w-3.5 h-3.5 text-slate-400" /> },
+    ...tours.filter(t => t.tour_type !== 'visa').map(t => ({
+      value: t.id,
+      label: `[${t.code || 'Tour'}] ${t.name || ''} (${t.start_date ? formatDateVi(t.start_date) : ''})`,
+      icon: <Plane className="w-3.5 h-3.5 text-teal-600" />
+    }))
+  ], [tours]);
+
+  const bankOptions: SelectOption[] = useMemo(() => [
+    ...VIETNAM_BANKS.map(b => ({
+      value: b,
+      label: b,
+      icon: <Building2 className="w-3.5 h-3.5 text-blue-600" />
+    }))
+  ], []);
 
   // If Agent attempts access
   if (isAgent) {
@@ -542,29 +589,19 @@ export default function PaymentProposals() {
               </button>
             </div>
 
-            <select
+            <CustomSelect
+              options={statusFilterOptions}
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="h-9 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="pending_leader">⏳ Chờ Leader duyệt</option>
-              <option value="approved_leader">🏦 Chờ Kế toán chi</option>
-              <option value="approved_accounting">✅ Đã chi tiền</option>
-              <option value="rejected_leader">❌ Từ chối (Leader)</option>
-              <option value="rejected_accounting">❌ Từ chối (Kế toán)</option>
-            </select>
+              onChange={(val) => setStatusFilter(val as any)}
+              buttonClassName="bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs h-9 min-w-[170px]"
+            />
 
-            <select
+            <CustomSelect
+              options={typeFilterOptions}
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as any)}
-              className="h-9 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-            >
-              <option value="all">Tất cả loại đề nghị</option>
-              <option value="individual">👤 Chi Lẻ / Cá nhân</option>
-              <option value="tour">✈️ Chi Theo Tour</option>
-              <option value="general">🏢 Chi Phí Chung</option>
-            </select>
+              onChange={(val) => setTypeFilter(val as any)}
+              buttonClassName="bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs h-9 min-w-[160px]"
+            />
 
             <TimeRangeFilter
               value={timeRange}
@@ -575,8 +612,28 @@ export default function PaymentProposals() {
               onChangeEndDate={setEndDate}
               prefixText="Tạo"
               alignPopover="right"
-              selectClassName="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              selectClassName="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 cursor-pointer h-9"
             />
+
+            {(statusFilter !== 'all' || typeFilter !== 'all' || viewScope !== 'all' || timeRange !== 'all' || searchTerm.trim() !== '') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setTypeFilter('all');
+                  setViewScope('all');
+                  setTimeRange('all');
+                  setStartDate('');
+                  setEndDate('');
+                  setSearchTerm('');
+                }}
+                className="h-9 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
+                title="Xóa tất cả bộ lọc"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                <span className="hidden sm:inline">Xóa bộ lọc</span>
+              </button>
+            )}
             
             <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
               <button
@@ -625,9 +682,10 @@ export default function PaymentProposals() {
               {paymentProposals.length === 0 && (
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="mt-4 px-4 py-2 bg-[#0038A8] text-white font-bold text-xs rounded-xl shadow-xs hover:bg-blue-900 transition-colors"
+                  className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-[#0038A8] text-white font-bold text-xs rounded-xl shadow-xs hover:bg-blue-900 transition-colors cursor-pointer"
                 >
-                  + Tạo đề nghị ngay
+                  <Plus className="w-4 h-4" />
+                  <span>Tạo đề nghị ngay</span>
                 </button>
               )}
             </div>
@@ -644,11 +702,16 @@ export default function PaymentProposals() {
                       return p.status === col.id;
                     });
 
+                    const IconComponent = col.icon;
+
                     return (
                       <div key={col.id} className={`rounded-2xl border ${col.borderCol} p-3 flex flex-col space-y-3 h-full max-h-[80vh] min-w-0`}>
                         {/* COLUMN HEADER */}
                         <div className={`p-2.5 rounded-xl shadow-2xs flex items-center justify-between ${col.bgHeader}`}>
-                          <h4 className="text-xs font-black uppercase tracking-wider line-clamp-1">{col.title}</h4>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <IconComponent className="w-4 h-4 shrink-0" />
+                            <h4 className="text-xs font-black uppercase tracking-wider line-clamp-1">{col.title}</h4>
+                          </div>
                           <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full shrink-0">
                             {colProposals.length}
                           </span>
@@ -687,11 +750,26 @@ export default function PaymentProposals() {
                                       <UserCheck className="w-3 h-3 text-slate-400 shrink-0" />
                                       <span className="truncate" title={proposal.created_by_name}>{proposal.created_by_name}</span>
                                     </div>
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase border ${
+                                    <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase border ${
                                       proposal.proposal_type === 'individual' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
                                       proposal.proposal_type === 'tour' ? 'bg-teal-50 text-teal-700 border-teal-200' : 'bg-slate-100 text-slate-700 border-slate-200'
                                     }`}>
-                                      {proposal.proposal_type === 'tour' ? 'Tour' : proposal.proposal_type === 'general' ? 'Chung' : 'Lẻ'}
+                                      {proposal.proposal_type === 'tour' ? (
+                                        <>
+                                          <Plane className="w-2.5 h-2.5 text-teal-600" />
+                                          <span>Tour</span>
+                                        </>
+                                      ) : proposal.proposal_type === 'general' ? (
+                                        <>
+                                          <Building2 className="w-2.5 h-2.5 text-slate-600" />
+                                          <span>Chung</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <User className="w-2.5 h-2.5 text-indigo-600" />
+                                          <span>Lẻ</span>
+                                        </>
+                                      )}
                                     </span>
                                   </div>
                                 </div>
@@ -749,14 +827,29 @@ export default function PaymentProposals() {
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="font-bold text-gray-900 line-clamp-2">{p.title}</div>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                             p.proposal_type === 'tour'
                               ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                               : p.proposal_type === 'general'
                               ? 'bg-purple-50 text-purple-700 border-purple-200'
                               : 'bg-gray-100 text-gray-700 border-gray-200'
                           }`}>
-                            {p.proposal_type === 'tour' ? '✈️ Theo Tour' : p.proposal_type === 'general' ? '🏢 Chi Chung' : '👤 Chi Lẻ'}
+                            {p.proposal_type === 'tour' ? (
+                              <>
+                                <Plane className="w-3 h-3 text-indigo-600" />
+                                <span>Theo Tour</span>
+                              </>
+                            ) : p.proposal_type === 'general' ? (
+                              <>
+                                <Building2 className="w-3 h-3 text-purple-600" />
+                                <span>Chi Chung</span>
+                              </>
+                            ) : (
+                              <>
+                                <User className="w-3 h-3 text-gray-600" />
+                                <span>Chi Lẻ</span>
+                              </>
+                            )}
                           </span>
                           {p.tour_code && (
                             <span className="text-[10px] font-mono bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 font-bold truncate max-w-[120px]">
@@ -955,10 +1048,12 @@ export default function PaymentProposals() {
                   <h2 className="text-lg font-bold">Tạo Đề Nghị Thanh Toán Mới</h2>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="text-white/80 hover:text-white text-xl font-bold p-1 rounded-lg hover:bg-white/10"
+                  className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Đóng"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
@@ -985,15 +1080,12 @@ export default function PaymentProposals() {
                     <label className="block text-xs font-bold text-gray-800 mb-1">
                       Loại chi phí
                     </label>
-                    <select
+                    <CustomSelect
+                      options={proposalTypeFormOptions}
                       value={formData.proposal_type}
-                      onChange={(e) => setFormData(prev => ({ ...prev, proposal_type: e.target.value as any }))}
-                      className="w-full h-9 px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-                    >
-                      <option value="individual">👤 Chi Lẻ / Cá nhân</option>
-                      <option value="tour">✈️ Chi Theo Tour</option>
-                      <option value="general">🏢 Chi Phí Chung Khác</option>
-                    </select>
+                      onChange={(val) => setFormData(prev => ({ ...prev, proposal_type: val as any }))}
+                      buttonClassName="w-full h-10 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
                   </div>
 
                   {formData.proposal_type === 'tour' && (
@@ -1001,19 +1093,13 @@ export default function PaymentProposals() {
                       <label className="block text-xs font-bold text-gray-800 mb-1">
                         Chọn Tour liên quan <span className="text-rose-500">*</span>
                       </label>
-                      <select
-                        required
+                      <CustomSelect
+                        options={tourFormOptions}
                         value={formData.tour_id}
-                        onChange={(e) => setFormData(prev => ({ ...prev, tour_id: e.target.value }))}
-                        className="w-full h-9 px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-                      >
-                        <option value="">-- Chọn Tour --</option>
-                        {tours.map(t => (
-                          <option key={t.id} value={t.id}>
-                            [{t.code}] {t.name} ({formatDateVi(t.start_date)})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => setFormData(prev => ({ ...prev, tour_id: val }))}
+                        placeholder="-- Chọn Tour liên quan --"
+                        buttonClassName="w-full h-10 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
                     </div>
                   )}
                 </div>
@@ -1084,15 +1170,12 @@ export default function PaymentProposals() {
                         <label className="block text-[11px] font-bold text-gray-700 mb-1">
                           Ngân hàng thụ hưởng <span className="text-rose-500">*</span>
                         </label>
-                        <select
+                        <CustomSelect
+                          options={bankOptions}
                           value={formData.bank_name}
-                          onChange={(e) => setFormData(prev => ({ ...prev, bank_name: e.target.value }))}
-                          className="w-full h-9 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-                        >
-                          {VIETNAM_BANKS.map(b => (
-                            <option key={b} value={b}>{b}</option>
-                          ))}
-                        </select>
+                          onChange={(val) => setFormData(prev => ({ ...prev, bank_name: val }))}
+                          buttonClassName="w-full h-10 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        />
                       </div>
 
                       {formData.bank_name === 'Khác (Nhập chi tiết bên dưới)' && (
@@ -1351,10 +1434,12 @@ export default function PaymentProposals() {
                   <h2 className="text-lg font-bold">{selectedProposal.code}</h2>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowDetailModal(false)}
-                  className="text-white/80 hover:text-white text-xl font-bold p-1 rounded-lg hover:bg-white/10"
+                  className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Đóng"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 

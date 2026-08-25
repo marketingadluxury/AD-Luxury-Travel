@@ -705,8 +705,20 @@ export async function syncPancakeConversations(): Promise<{
           else if (g === 'female' || g === 'nu' || g === 'nữ' || g === '2') custGender = 'Nữ';
         }
 
-        const adId = cust.ad_id || cust.adId || cust.custom_fields?.ad_id || cust.custom_fields?.adId || null;
+        // Trích xuất ngày sinh
+        let custBirthday = cust.birthday || cust.date_of_birth || cust.dob || cust.custom_fields?.birthday || cust.custom_fields?.date_of_birth || cust.custom_fields?.ngay_sinh || null;
+        if (custBirthday && String(custBirthday).includes('{{')) custBirthday = null;
+
+        // Trích xuất FB ID & Pancake ID
+        const custFbId = String(cust.fb_id || cust.id || cust.psid || cust.recipient_id || '');
+        const custPancakeId = String(cust.id || cust.customer_id || '');
+
+        const adId = cust.ad_id || cust.adId || cust.fb_ad_id || cust.custom_fields?.ad_id || cust.custom_fields?.adId || null;
+        const adName = cust.ad_name || cust.adName || cust.custom_fields?.ad_name || null;
+        const campaignId = cust.campaign_id || cust.campaignId || cust.custom_fields?.campaign_id || null;
         const campaign = cust.campaign || cust.campaign_name || cust.custom_fields?.campaign || cust.utm_campaign || null;
+        const adsetId = cust.adset_id || cust.adsetId || cust.custom_fields?.adset_id || null;
+        const adsetName = cust.adset_name || cust.adsetName || cust.custom_fields?.adset_name || null;
 
         if (custPhone) totalPhonesFound++;
 
@@ -716,8 +728,20 @@ export async function syncPancakeConversations(): Promise<{
           customer_email: custEmail,
           customer_avatar: custAvatar,
           gender: custGender,
+          birthday: custBirthday,
+          fb_id: custFbId || null,
+          pancake_id: custPancakeId || null,
           ad_id: adId,
+          ad_name: adName,
+          campaign_id: campaignId,
+          adset_id: adsetId,
+          adset_name: adsetName,
           utm_campaign: campaign,
+          utm_source: cust.utm_source || 'pancake_customer',
+          utm_medium: cust.utm_medium || null,
+          utm_content: cust.utm_content || null,
+          utm_term: cust.utm_term || null,
+          shop_id: cust.shop_id || null,
           source_channel: adId ? `Ad ID: ${adId}` : 'pancake_messenger',
           page_id: pageId,
           psid: custPsid || null,
@@ -912,15 +936,42 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
     let detectedEmail = payload.email || payload.customer_email || partner.email || customer.email || order?.email || payload.custom_fields?.email || extractEmail(messageText) || null;
     if (detectedEmail && String(detectedEmail).includes('{{')) detectedEmail = null;
 
-    let adId = payload.ad_id || payload.adId || payload.ad_name || order?.ad_id || order?.fb_ad_id || null;
+    // Trích xuất ngày sinh của khách hàng
+    let detectedBirthday = payload.birthday || payload.date_of_birth || payload.dob || partner.birthday || partner.date_of_birth || partner.dob || customer.birthday || customer.date_of_birth || payload.custom_fields?.birthday || payload.custom_fields?.date_of_birth || payload.custom_fields?.ngay_sinh || null;
+    if (detectedBirthday && String(detectedBirthday).includes('{{')) detectedBirthday = null;
+
+    // Trích xuất FB ID & Pancake ID
+    const detectedFbId = String(partner.fb_id || payload.fb_id || customer.fb_id || psid || '');
+    const detectedPancakeId = String(partner.id || customer.id || payload.pancake_id || payload.id || '');
+
+    // Trích xuất dữ liệu quảng cáo (Ads & Campaign metadata)
+    let adId = payload.ad_id || payload.adId || payload.fb_ad_id || order?.ad_id || order?.fb_ad_id || payload.custom_fields?.ad_id || null;
     if (adId && String(adId).includes('{{')) adId = null;
 
-    let campaignName = payload.utm_campaign || payload.campaign_id || payload.campaignId || payload.campaign_name || payload.campaign || order?.utm_campaign || null;
+    let adName = payload.ad_name || payload.adName || order?.ad_name || payload.custom_fields?.ad_name || null;
+    if (adName && String(adName).includes('{{')) adName = null;
+
+    let campaignId = payload.campaign_id || payload.campaignId || order?.campaign_id || payload.custom_fields?.campaign_id || null;
+    if (campaignId && String(campaignId).includes('{{')) campaignId = null;
+
+    let campaignName = payload.utm_campaign || payload.campaign_name || payload.campaign || order?.utm_campaign || null;
     if (campaignName && String(campaignName).includes('{{')) campaignName = null;
+
+    let adsetId = payload.adset_id || payload.adsetId || order?.adset_id || payload.custom_fields?.adset_id || null;
+    if (adsetId && String(adsetId).includes('{{')) adsetId = null;
+
+    let adsetName = payload.adset_name || payload.adsetName || order?.adset_name || payload.custom_fields?.adset_name || null;
+    if (adsetName && String(adsetName).includes('{{')) adsetName = null;
+
+    const isOrderEvent = Boolean(order && (orderTotal > 0 || eventType.includes('order')));
+
+    let utmSource = payload.utm_source || order?.utm_source || (isOrderEvent ? 'pos_cake' : 'botcake');
+    let utmMedium = payload.utm_medium || order?.utm_medium || null;
+    let utmContent = payload.utm_content || order?.utm_content || null;
+    let utmTerm = payload.utm_term || order?.utm_term || null;
     const createdAt = payload.created_at || payload.registered_at || payload.registration_date || payload.time || payload.timestamp || order?.inserted_at || new Date().toISOString();
 
     // Lưu vào database CRM
-    const isOrderEvent = Boolean(order && (orderTotal > 0 || eventType.includes('order')));
     const sourceChannelName = isOrderEvent ? 'pos_pancake_order' : (eventType.includes('customer') || eventType.includes('partner') ? 'pos_pancake_customer' : (adId ? `Ad ID: ${adId}` : 'pancake_messenger'));
 
     let detailedNotes = `Nhận Realtime từ POS Cake Webhook (${eventType})`;
@@ -936,12 +987,23 @@ export async function handleIncomingPancakeWebhook(payload: any): Promise<{
       customer_email: detectedEmail || null,
       customer_avatar: avatar,
       gender: gender,
+      birthday: detectedBirthday,
+      fb_id: detectedFbId || null,
+      pancake_id: detectedPancakeId || null,
       source_channel: payload.source || payload.source_channel || sourceChannelName,
       page_id: pageId || null,
+      shop_id: pageId || payload.shop_id || order?.shop_id || null,
       psid: psid || null,
       ad_id: adId || null,
-      utm_source: payload.utm_source || (isOrderEvent ? 'pos_cake' : 'botcake'),
+      ad_name: adName || null,
+      campaign_id: campaignId || null,
+      adset_id: adsetId || null,
+      adset_name: adsetName || null,
+      utm_source: utmSource,
+      utm_medium: utmMedium,
       utm_campaign: campaignName,
+      utm_content: utmContent,
+      utm_term: utmTerm,
       message_text: messageText || (isOrderEvent ? `Đơn hàng POS Cake #${orderCode}` : 'Khách để lại SĐT qua kịch bản Botcake / Pancake'),
       notes: detailedNotes,
       status: isOrderEvent ? 'order_created' : 'lead_captured',

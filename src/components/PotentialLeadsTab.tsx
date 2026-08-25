@@ -33,7 +33,9 @@ import {
   Copy,
   Check,
   ShoppingBag,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Cake,
+  Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCRM } from '@/context/CRMContext';
@@ -71,6 +73,9 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
   const [editNotes, setEditNotes] = useState('');
   const [editStatus, setEditStatus] = useState('lead_captured');
   const [editGender, setEditGender] = useState('');
+  const [editBirthday, setEditBirthday] = useState('');
+  const [editFbId, setEditFbId] = useState('');
+  const [copiedFbId, setCopiedFbId] = useState(false);
   const [editAssignedTo, setEditAssignedTo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -257,13 +262,32 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
     }
   };
 
+  // Helper format ngày sinh
+  const formatBirthday = (b?: string) => {
+    if (!b) return null;
+    try {
+      const parts = b.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      const d = new Date(b);
+      if (!isNaN(d.getTime())) {
+        return format(d, 'dd/MM/yyyy');
+      }
+    } catch (e) {}
+    return b;
+  };
+
   // Open Edit Modal
   const openEditModal = (lead: MetaLead) => {
     setSelectedLead(lead);
     setEditNotes(lead.notes || '');
     setEditStatus(lead.status || 'lead_captured');
     setEditGender(lead.gender || '');
+    setEditBirthday(lead.birthday || '');
+    setEditFbId(lead.fb_id || lead.psid || '');
     setEditAssignedTo(lead.assigned_to || '');
+    setCopiedFbId(false);
     setIsEditingModalOpen(true);
   };
 
@@ -276,6 +300,8 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
         status: editStatus,
         notes: editNotes,
         gender: editGender || undefined,
+        birthday: editBirthday || undefined,
+        fb_id: editFbId || undefined,
         assigned_to: editAssignedTo || undefined
       });
       if (res.success) {
@@ -707,10 +733,10 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                             className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                           />
                         </th>
-                        <th className="py-3.5 px-4">Họ và tên</th>
-                        <th className="py-3.5 px-4">Giới tính</th>
+                        <th className="py-3.5 px-4">Khách hàng</th>
+                        <th className="py-3.5 px-4">Giới tính &amp; Ngày sinh</th>
                         <th className="py-3.5 px-4">Số điện thoại</th>
-                        <th className="py-3.5 px-4">Nguồn</th>
+                        <th className="py-3.5 px-4">Dữ liệu Quảng cáo (Ads)</th>
                         <th className="py-3.5 px-4">Trạng thái</th>
                         <th 
                           className="py-3.5 px-4 cursor-pointer select-none hover:text-blue-600 transition-colors"
@@ -744,8 +770,8 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                               />
                             </td>
 
-                            {/* Họ và tên + Avatar */}
-                            <td className="py-3.5 px-[10px] whitespace-nowrap">
+                            {/* Họ và tên + Avatar + FB ID */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
                               <div className="flex items-center gap-3">
                                 {lead.customer_avatar ? (
                                   <img
@@ -763,12 +789,38 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                                   </div>
                                 )}
                                 <div>
-                                  <div className="font-bold text-slate-900 text-xs">
+                                  <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                                     {lead.customer_name || 'Khách chưa có tên'}
                                   </div>
                                   {lead.customer_email && (
                                     <div className="text-[11px] text-slate-400 font-normal">
                                       {lead.customer_email}
+                                    </div>
+                                  )}
+                                  {(lead.fb_id || lead.psid) && (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span 
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200/80 cursor-pointer hover:bg-blue-100 transition-colors"
+                                        title="Click để sao chép FB ID"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(lead.fb_id || lead.psid || '');
+                                          toast.success(`Đã sao chép FB ID: ${lead.fb_id || lead.psid}`);
+                                        }}
+                                      >
+                                        <Globe className="w-2.5 h-2.5 text-blue-600" />
+                                        FB: {lead.fb_id || lead.psid}
+                                      </span>
+                                      {lead.fb_id && !isNaN(Number(lead.fb_id)) && (
+                                        <a
+                                          href={`https://facebook.com/${lead.fb_id}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-blue-500 hover:text-blue-700"
+                                          title="Mở trang Facebook cá nhân"
+                                        >
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      )}
                                     </div>
                                   )}
                                   {lead.assigned_name && (
@@ -781,19 +833,29 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                               </div>
                             </td>
 
-                            {/* Giới tính */}
-                            <td className="py-3.5 px-[10px] whitespace-nowrap">
-                              {lead.gender === 'Nam' || lead.gender === 'male' ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                  Nam
-                                </span>
-                              ) : lead.gender === 'Nữ' || lead.gender === 'female' ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-pink-50 text-pink-700 border border-pink-200">
-                                  Nữ
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 font-medium text-xs">-</span>
-                              )}
+                            {/* Giới tính & Ngày sinh */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="space-y-1">
+                                <div>
+                                  {lead.gender === 'Nam' || lead.gender === 'male' ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                      Nam
+                                    </span>
+                                  ) : lead.gender === 'Nữ' || lead.gender === 'female' ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-pink-50 text-pink-700 border border-pink-200">
+                                      Nữ
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 font-medium text-xs">-</span>
+                                  )}
+                                </div>
+                                {lead.birthday && (
+                                  <div className="inline-flex items-center gap-1 text-[11px] text-slate-700 font-semibold" title={`Ngày sinh: ${lead.birthday}`}>
+                                    <Cake className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                    <span>{formatBirthday(lead.birthday)}</span>
+                                  </div>
+                                )}
+                              </div>
                             </td>
 
                             {/* Số điện thoại */}
@@ -811,24 +873,34 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                               )}
                             </td>
 
-                            {/* Nguồn (Ưu tiên Ad ID & Campaign ID) */}
+                            {/* Dữ liệu Quảng cáo (Ads / Campaign / UTM) */}
                             <td className="py-3.5 px-4">
-                              <div className="space-y-1">
+                              <div className="space-y-1 max-w-[240px]">
                                 {lead.ad_id && (
                                   <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200" title={`Ad ID: ${lead.ad_id}`}>
-                                    <Tag className="w-3 h-3 text-purple-500" />
-                                    Ad ID: {lead.ad_id}
+                                    <Tag className="w-3 h-3 text-purple-500 shrink-0" />
+                                    <span>Ad: {lead.ad_id}</span>
+                                  </div>
+                                )}
+                                {lead.ad_name && (
+                                  <div className="text-[10px] font-semibold text-purple-900 truncate" title={`Tên Ad: ${lead.ad_name}`}>
+                                    {lead.ad_name}
                                   </div>
                                 )}
                                 {lead.utm_campaign && (
-                                  <div className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 max-w-[200px] truncate" title={`Chiến dịch: ${lead.utm_campaign}`}>
+                                  <div className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 max-w-full truncate" title={`Chiến dịch: ${lead.utm_campaign}`}>
                                     <Tag className="w-3 h-3 text-indigo-500 shrink-0" />
                                     <span className="truncate">{lead.utm_campaign}</span>
                                   </div>
                                 )}
+                                {lead.adset_name && (
+                                  <div className="inline-flex items-center gap-1 text-[10px] font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 max-w-full truncate" title={`Nhóm QC: ${lead.adset_name}`}>
+                                    <span className="truncate">{lead.adset_name}</span>
+                                  </div>
+                                )}
                                 {!lead.ad_id && !lead.utm_campaign && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
-                                    {lead.source_channel === 'pancake_messenger' ? 'PANCAKE' : (lead.source_channel === 'meta_lead_form' ? 'LEAD ADS' : (lead.source_channel || 'FACEBOOK'))}
+                                    {lead.source_channel === 'pancake_messenger' ? 'POS CAKE' : (lead.source_channel === 'meta_lead_form' ? 'LEAD ADS' : (lead.source_channel || 'FACEBOOK'))}
                                   </span>
                                 )}
                               </div>
@@ -866,7 +938,7 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
                                   type="button"
                                   onClick={() => openEditModal(lead)}
                                   className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
-                                  title="Cập nhật ghi chú & trạng thái"
+                                  title="Chi tiết & Cập nhật thông tin"
                                 >
                                   <Sliders className="w-3.5 h-3.5" />
                                 </button>
@@ -893,14 +965,14 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
               )}
             </div>
 
-      {/* Modal Chỉnh Sửa Ghi Chú & Trạng Thái Lead */}
+      {/* Modal Chi Tiết & Chỉnh Sửa Khách Hàng Tiềm Năng */}
       {isEditingModalOpen && selectedLead && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-600" />
-                Cập nhật Khách Hàng Tiềm Năng
+                Chi Tiết &amp; Cập Nhật Khách Hàng Tiềm Năng
               </h3>
               <button
                 type="button"
@@ -911,69 +983,193 @@ export const PotentialLeadsTab: React.FC<PotentialLeadsTabProps> = ({ onSelectLe
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-100 space-y-1">
-                <div className="font-bold text-slate-900 text-sm">{selectedLead.customer_name}</div>
-                <div className="text-blue-700 font-semibold">{selectedLead.customer_phone || 'Chưa có SĐT'}</div>
+            <div className="space-y-4 text-xs">
+              
+              {/* Header Box tóm tắt */}
+              <div className="bg-blue-50/70 p-3.5 rounded-xl border border-blue-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-slate-900 text-sm">{selectedLead.customer_name || 'Khách chưa có tên'}</div>
+                  {selectedLead.customer_phone && (
+                    <a
+                      href={`tel:${selectedLead.customer_phone}`}
+                      className="text-blue-700 font-bold bg-white px-2 py-0.5 rounded-lg border border-blue-200 text-xs inline-flex items-center gap-1"
+                    >
+                      <Phone className="w-3 h-3 text-blue-600" />
+                      {selectedLead.customer_phone}
+                    </a>
+                  )}
+                </div>
                 {selectedLead.last_message && (
-                  <div className="text-slate-600 text-[11px] mt-1 bg-white p-2 rounded border border-blue-100">
+                  <div className="text-slate-700 text-[11px] bg-white p-2.5 rounded-lg border border-blue-100">
+                    <span className="font-semibold text-slate-500">Tin nhắn/Nội dung: </span>
                     "{selectedLead.last_message}"
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Trạng thái chăm sóc:</label>
-                <select
-                  value={editStatus}
-                  onChange={e => setEditStatus(e.target.value)}
-                  className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="lead_captured">Mới để lại SĐT</option>
-                  <option value="contacted">Đã liên hệ tư vấn</option>
-                  <option value="lead_converted">Đã chốt Booking</option>
-                  <option value="unqualified">Chưa phù hợp / Hủy</option>
-                </select>
+              {/* Khối 1: Thông tin Khách hàng (POS Cake & Messenger) */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                  <User className="w-3.5 h-3.5 text-blue-600" />
+                  Thông Tin Khách Hàng
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">Giới tính:</label>
+                    <select
+                      value={editGender}
+                      onChange={e => setEditGender(e.target.value)}
+                      className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">-- Chưa xác định --</option>
+                      <option value="Nam">Nam</option>
+                      <option value="Nữ">Nữ</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1 flex items-center gap-1">
+                      <Cake className="w-3 h-3 text-amber-500" />
+                      Ngày tháng năm sinh:
+                    </label>
+                    <input
+                      type="date"
+                      value={editBirthday}
+                      onChange={e => setEditBirthday(e.target.value)}
+                      className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-600 font-bold mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Globe className="w-3 h-3 text-blue-600" />
+                        Facebook ID / PSID:
+                      </span>
+                      {editFbId && !isNaN(Number(editFbId)) && (
+                        <a
+                          href={`https://facebook.com/${editFbId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 hover:underline inline-flex items-center gap-0.5 text-[11px] font-normal"
+                        >
+                          Mở Facebook Profile <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={editFbId}
+                        onChange={e => setEditFbId(e.target.value)}
+                        placeholder="Nhập Facebook ID hoặc PSID..."
+                        className="flex-1 h-9 px-3 border border-slate-300 rounded-lg font-mono text-xs bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                      {editFbId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(editFbId);
+                            setCopiedFbId(true);
+                            setTimeout(() => setCopiedFbId(false), 2000);
+                            toast.success('Đã sao chép Facebook ID');
+                          }}
+                          className="h-9 px-3 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-300 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          {copiedFbId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedFbId ? 'Đã chép' : 'Sao chép'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Giới tính:</label>
-                <select
-                  value={editGender}
-                  onChange={e => setEditGender(e.target.value)}
-                  className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="">-- Chưa xác định --</option>
-                  <option value="Nam">Nam</option>
-                  <option value="Nữ">Nữ</option>
-                </select>
+              {/* Khối 2: Dữ liệu Quảng cáo (Meta Ads & POS Cake Tracking) */}
+              <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200/80 space-y-2.5">
+                <div className="font-bold text-purple-950 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-purple-600" />
+                    Dữ Liệu Quảng Cáo &amp; Chiến Dịch (Ads / UTM)
+                  </span>
+                  <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
+                    {selectedLead.source_channel || 'Meta Ads / POS Cake'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-white p-2 rounded-lg border border-purple-100">
+                    <span className="text-slate-500 block">Ad ID:</span>
+                    <span className="font-mono font-bold text-purple-700">{selectedLead.ad_id || 'Không có'}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-purple-100">
+                    <span className="text-slate-500 block">Tên Quảng Cáo (Ad Name):</span>
+                    <span className="font-semibold text-slate-800">{selectedLead.ad_name || 'Không có'}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-purple-100">
+                    <span className="text-slate-500 block">Chiến Dịch (Campaign):</span>
+                    <span className="font-semibold text-indigo-700">{selectedLead.utm_campaign || selectedLead.campaign_id || 'Không có'}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-purple-100">
+                    <span className="text-slate-500 block">Nhóm QC (Adset):</span>
+                    <span className="font-semibold text-teal-700">{selectedLead.adset_name || selectedLead.adset_id || 'Không có'}</span>
+                  </div>
+                  {selectedLead.utm_source && (
+                    <div className="bg-white p-2 rounded-lg border border-purple-100 sm:col-span-2">
+                      <span className="text-slate-500 block">UTM Tracking:</span>
+                      <span className="font-mono text-slate-700">
+                        source: <b>{selectedLead.utm_source}</b>
+                        {selectedLead.utm_medium ? ` | medium: ${selectedLead.utm_medium}` : ''}
+                        {selectedLead.utm_content ? ` | content: ${selectedLead.utm_content}` : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Gán Nhân viên Sale phụ trách:</label>
-                <select
-                  value={editAssignedTo}
-                  onChange={e => setEditAssignedTo(e.target.value)}
-                  className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="">-- Chưa gán (Chung cho đội Sale) --</option>
-                  {profilesList.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name || p.email} ({p.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Khối 3: Quản lý Chăm sóc & Tư vấn */}
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Trạng thái chăm sóc:</label>
+                  <select
+                    value={editStatus}
+                    onChange={e => setEditStatus(e.target.value)}
+                    className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="lead_captured">Mới để lại SĐT</option>
+                    <option value="contacted">Đã liên hệ tư vấn</option>
+                    <option value="lead_converted">Đã chốt Booking</option>
+                    <option value="unqualified">Chưa phù hợp / Hủy</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Ghi chú nhu cầu khách (Tuyến tour, ngày đi mong muốn, số khách...):</label>
-                <textarea
-                  rows={3}
-                  value={editNotes}
-                  onChange={e => setEditNotes(e.target.value)}
-                  placeholder="Nhập ghi chú chi tiết..."
-                  className="w-full p-2.5 border border-slate-300 rounded-lg font-medium bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400"
-                />
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Gán Nhân viên Sale phụ trách:</label>
+                  <select
+                    value={editAssignedTo}
+                    onChange={e => setEditAssignedTo(e.target.value)}
+                    className="w-full h-9 px-3 border border-slate-300 rounded-lg font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">-- Chưa gán (Chung cho đội Sale) --</option>
+                    {profilesList.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.full_name || p.email} ({p.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Ghi chú nhu cầu khách (Tuyến tour, ngày đi mong muốn, số khách...):</label>
+                  <textarea
+                    rows={3}
+                    value={editNotes}
+                    onChange={e => setEditNotes(e.target.value)}
+                    placeholder="Nhập ghi chú chi tiết..."
+                    className="w-full p-2.5 border border-slate-300 rounded-lg font-medium bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400"
+                  />
+                </div>
               </div>
             </div>
 
