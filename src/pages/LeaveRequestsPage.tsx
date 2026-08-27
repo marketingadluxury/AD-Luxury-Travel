@@ -129,7 +129,7 @@ export default function LeaveRequestsPage() {
   // Đơn chờ HR / BOD / Admin duyệt cấp 2 (Final)
   const pendingFinalRequests = useMemo(() => {
     if (!isHRorBODorAdmin) return [];
-    return leaveRequests.filter((r) => r.status === 'approved_level_1' || (['admin', 'bod'].includes(effectiveRole) && r.status === 'pending'));
+    return leaveRequests.filter((r) => r.status === 'approved_level_1' || (['admin', 'bod', 'hr'].includes(effectiveRole) && r.status === 'pending'));
   }, [leaveRequests, isHRorBODorAdmin, effectiveRole]);
 
   // Danh sách theo tab hiện tại
@@ -138,7 +138,7 @@ export default function LeaveRequestsPage() {
     if (activeTab === 'my_leaves') {
       list = myRequests;
     } else if (activeTab === 'team_approval') {
-      if (['admin', 'bod'].includes(effectiveRole)) {
+      if (['admin', 'bod', 'hr'].includes(effectiveRole)) {
         list = leaveRequests.filter((r) => r.status === 'pending');
       } else {
         list = leaveRequests.filter((r) => {
@@ -148,7 +148,7 @@ export default function LeaveRequestsPage() {
         });
       }
     } else if (activeTab === 'final_approval') {
-      list = leaveRequests.filter((r) => r.status === 'approved_level_1' || r.status === 'approved_final' || r.status === 'rejected');
+      list = leaveRequests.filter((r) => r.status === 'approved_level_1' || r.status === 'approved_final' || r.status === 'rejected' || (['admin', 'bod', 'hr'].includes(effectiveRole) && r.status === 'pending'));
     } else {
       list = leaveRequests;
     }

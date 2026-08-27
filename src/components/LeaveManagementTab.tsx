@@ -54,10 +54,10 @@ export const LeaveManagementTab: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Quyền duyệt:
-  // Cấp 1: Trưởng phòng (sale_leader, operator, marketing_leader) hoặc Admin / BOD
+  // Cấp 1: Trưởng phòng (sale_leader, operator, marketing_leader) hoặc Admin / BOD / HR
   // Cấp 2 (Final): Kế toán / HR / Admin / BOD
-  const canApproveLevel1 = ['sale_leader', 'operator', 'marketing_leader', 'admin', 'bod', 'accounting'].includes(currentRole);
-  const canApproveFinal = ['accounting', 'admin', 'bod'].includes(currentRole);
+  const canApproveLevel1 = ['sale_leader', 'operator', 'marketing_leader', 'admin', 'bod', 'accounting', 'hr'].includes(currentRole);
+  const canApproveFinal = ['accounting', 'admin', 'bod', 'hr'].includes(currentRole);
 
   const filteredRequests = useMemo(() => {
     return leaveRequests.filter((req) => {

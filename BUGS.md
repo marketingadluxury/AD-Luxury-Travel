@@ -1104,6 +1104,14 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   - Cập nhật `src/components/LeaveRequestModal.tsx`: thay thế `CustomSelect` bằng ô nhập `input type="text"`, cho phép người dùng tự do nhập tên đồng nghiệp hoặc nội dung bàn giao công việc mà không bị giới hạn bởi danh sách tài khoản.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
 
+### 1.108 Phân Quyền HR Duyệt Cấp Cuối Đơn Nghỉ Phép
+- **Mô tả yêu cầu / Vấn đề:**
+  - Cho phép tài khoản có vai trò Nhân sự (`role === 'hr'`) có quyền xem, phê duyệt cấp cuối (`approved_final`) hoặc từ chối đối với tất cả các đơn nghỉ phép trên hệ thống (bao gồm cả đơn ở trạng thái chờ duyệt cấp 1 hoặc đã duyệt cấp 1).
+- **Giải pháp:**
+  - Bổ sung vai trò `hr` vào danh sách quyền kiểm tra `pendingFinalRequests`, `displayRequests`, `canApproveFinal` trong `src/pages/LeaveRequestsPage.tsx` và `src/components/LeaveManagementTab.tsx`.
+  - HR có thể bấm nút "Duyệt Cuối" trực tiếp hoặc qua tab "Duyệt Cấp Cuối" đối với bất kỳ đơn nghỉ phép nào của nhân sự trong công ty.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)
