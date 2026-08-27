@@ -964,20 +964,41 @@ CREATE POLICY "Allow access to holidays" ON holidays FOR ALL TO anon, authentica
 -- Bảng Đơn Xin Nghỉ Phép (2 Cấp Phê Duyệt: Leader -> Kế toán/HR)
 CREATE TABLE IF NOT EXISTS leave_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id UUID,
+  user_name TEXT,
+  user_email TEXT,
+  user_role TEXT,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
+  leave_session TEXT DEFAULT 'all_day',
+  total_days NUMERIC DEFAULT 1,
   type TEXT NOT NULL DEFAULT 'annual', -- 'annual', 'unpaid', 'compensatory', 'special'
   status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'approved_level_1', 'approved_final', 'rejected'
   reason TEXT NOT NULL,
-  handover_user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
-  level_1_approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  handover_user_id UUID,
+  handover_user_name TEXT,
+  level_1_approved_by UUID,
+  level_1_approved_name TEXT,
   level_1_approved_at TIMESTAMPTZ,
-  final_approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  final_approved_by UUID,
+  final_approved_name TEXT,
   final_approved_at TIMESTAMPTZ,
   reject_reason TEXT,
+  rejection_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Bổ sung các cột mở rộng cho leave_requests (nếu bảng đã tồn tại từ trước)
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS user_name TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS user_email TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS user_role TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS leave_session TEXT DEFAULT 'all_day';
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS total_days NUMERIC DEFAULT 1;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS handover_user_name TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS level_1_approved_name TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS final_approved_name TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS reject_reason TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 
 ALTER TABLE leave_requests ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow access to leave_requests" ON leave_requests;

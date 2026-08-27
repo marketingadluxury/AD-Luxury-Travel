@@ -63,7 +63,6 @@ const roleOptions = [
   { value: 'marketing', label: 'Nhân viên Marketing', icon: <BarChart3 className="w-4 h-4 text-pink-500" /> },
 ];
 import { FeedbackModal } from './FeedbackModal';
-import { ERPCopilotModal } from './chat/ERPCopilotModal';
 
 export interface NavItem {
   name: string;
@@ -1188,9 +1187,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         onClose={() => setIsHdvQuickLinkOpen(false)}
         tours={useCRM().tours}
       />
-
-      {/* Chatbot Trợ lý AI Hướng Dẫn ERP (Gemini Copilot) */}
-      <ERPCopilotModal />
     </div>
   );
 }

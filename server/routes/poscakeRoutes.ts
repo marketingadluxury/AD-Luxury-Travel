@@ -11,11 +11,19 @@ const router = express.Router();
 const POSCAKE_DEFAULT_SHOP_ID = '1021979794';
 const POSCAKE_DEFAULT_WEBHOOK_URL = 'https://booking.adluxury.net/api/webhooks/poscake';
 
+// Danh sách các URL webhook mà POS Cake / Pancake / Botcake có thể gửi đến
+const ALL_POSCAKE_WEBHOOK_PATHS = [
+  '/api/webhooks/poscake',
+  '/api/poscake/webhook',
+  '/api/pancake/webhook',
+  '/api/pos/webhook'
+];
+
 /**
  * 1. Webhook Handshake Verification (GET)
  * Endpoint xác thực Webhook cho Pancake / POS Cake / Botcake
  */
-router.get(['/api/webhooks/poscake', '/api/poscake/webhook'], (req, res) => {
+router.get(ALL_POSCAKE_WEBHOOK_PATHS, (req, res) => {
   const challenge = req.query['hub.challenge'] || req.query['challenge'] || 'ok';
   res.status(200).send(challenge);
 });
@@ -26,9 +34,9 @@ router.get(['/api/webhooks/poscake', '/api/poscake/webhook'], (req, res) => {
  * Yêu cầu: Trả về res.status(200).json({ success: true }) ngay lập tức để tránh timeout,
  * toàn bộ tác vụ xử lý Database chạy ngầm (async) bọc trong try-catch.
  */
-router.post(['/api/webhooks/poscake', '/api/poscake/webhook'], (req, res) => {
+router.post(ALL_POSCAKE_WEBHOOK_PATHS, (req, res) => {
   const receiveTime = formatDateTimeVi();
-  console.log(`\n📥 [POSCAKE WEBHOOK NHẬN ĐƯỢC LÚC ${receiveTime}]`);
+  console.log(`\n📥 [POSCAKE WEBHOOK NHẬN ĐƯỢC LÚC ${receiveTime}] PATH: ${req.originalUrl || req.url}`);
 
   // Phản hồi 200 OK ngay lập tức cho POS Cake
   res.status(200).json({
@@ -122,6 +130,7 @@ const handleRegisterWebhook = async (req: express.Request, res: express.Response
   }
 };
 
+router.get('/api/poscake/register-webhook', handleRegisterWebhook);
 router.put('/api/poscake/register-webhook', handleRegisterWebhook);
 router.post('/api/poscake/register-webhook', handleRegisterWebhook);
 

@@ -156,22 +156,6 @@ export async function sendInternalSystemNotification(params: {
   } catch (chatErr: any) {
     console.warn('[Chat Hub] Ghi chat_messages:', chatErr.message);
   }
-
-  // 3. Gửi Google Chat Webhook nếu có cấu hình webhook
-  try {
-    const googleChatUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
-    if (googleChatUrl) {
-      await fetch(googleChatUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: `[${spaceName}] ${message}\n⏰ Thời gian: ${timeFormatted}`
-        })
-      });
-    }
-  } catch (gChatErr: any) {
-    console.warn('[Google Chat] Gửi thông báo thất bại:', gChatErr.message);
-  }
 }
 
 /**
@@ -234,7 +218,9 @@ export async function processPosCakeWebhookAsync(rawPayload: any): Promise<void>
       payload?.sdt,
       payload?.so_dien_thoai,
       payload?.custom_fields?.phone,
-      payload?.custom_fields?.sdt
+      payload?.custom_fields?.sdt,
+      payload?.data?.phone,
+      payload?.data?.phone_number
     ];
 
     let rawFoundPhone: string | null = null;
@@ -251,6 +237,47 @@ export async function processPosCakeWebhookAsync(rawPayload: any): Promise<void>
     const { e164: phoneE164, local: phoneLocal } = normalizePhoneToE164(rawFoundPhone);
     const finalPhone = phoneE164 || (rawFoundPhone ? String(rawFoundPhone).trim() : '84000000000');
     const displayPhone = phoneE164 || phoneLocal || 'Chưa cung cấp';
+
+    // Trích xuất giới tính
+    let custGender: string | null = null;
+    const rawGender = customer?.gender || partner?.gender || payload?.gender || payload?.data?.gender;
+    if (rawGender) {
+      const g = String(rawGender).toLowerCase().trim();
+      if (g === 'male' || g === 'nam' || g === '1') custGender = 'Nam';
+      else if (g === 'female' || g === 'nu' || g === 'nữ' || g === '2') custGender = 'Nữ';
+      else custGender = String(rawGender);
+    }
+
+    // Trích xuất ngày sinh
+    let custBirthday = customer?.birthday || customer?.dob || customer?.date_of_birth || partner?.birthday || partner?.dob || payload?.birthday || payload?.dob || null;
+    if (custBirthday && String(custBirthday).includes('{{')) custBirthday = null;
+
+    // Trích xuất Facebook ID / PSID
+    const custFbId = String(
+      customer?.fb_id || 
+      customer?.facebook_id || 
+      customer?.psid || 
+      customer?.recipient_id || 
+      partner?.fb_id || 
+      partner?.facebook_id || 
+      payload?.fb_id || 
+      payload?.facebook_id || 
+      payload?.psid || 
+      ''
+    ).trim();
+
+    // Trích xuất dữ liệu quảng cáo (Meta Ads)
+    const adId = order?.ad_id || customer?.ad_id || payload?.ad_id || payload?.adId || payload?.fb_ad_id || null;
+    const adName = order?.ad_name || customer?.ad_name || payload?.ad_name || payload?.adName || null;
+    const campaignId = order?.campaign_id || customer?.campaign_id || payload?.campaign_id || payload?.campaignId || null;
+    const campaignName = order?.campaign_name || customer?.campaign_name || payload?.campaign_name || payload?.campaign || payload?.utm_campaign || null;
+    const adsetId = order?.adset_id || customer?.adset_id || payload?.adset_id || payload?.adsetId || null;
+    const adsetName = order?.adset_name || customer?.adset_name || payload?.adset_name || payload?.adsetName || null;
+    const utmSource = order?.utm_source || customer?.utm_source || payload?.utm_source || 'poscake_webhook';
+    const utmMedium = order?.utm_medium || customer?.utm_medium || payload?.utm_medium || null;
+    const utmContent = order?.utm_content || customer?.utm_content || payload?.utm_content || null;
+    const pageId = order?.page_id || customer?.page_id || payload?.page_id || null;
+    const pageName = order?.page_name || customer?.page_name || payload?.page_name || null;
 
     // 4. Trích xuất giá trị tiền đơn hàng & số tiền đã thanh toán
     const totalAmount = Number(
@@ -333,6 +360,12 @@ export async function processPosCakeWebhookAsync(rawPayload: any): Promise<void>
 
         if (custData) {
           customerId = custData.id;
+          await supabase.from('customers').update({
+            name: customerName || custData.name,
+            gender: custGender || undefined,
+            birthday: custBirthday || undefined,
+            facebook_id: custFbId || undefined
+          }).eq('id', custData.id);
         } else {
           const { data: newCust } = await supabase
             .from('customers')
@@ -341,6 +374,9 @@ export async function processPosCakeWebhookAsync(rawPayload: any): Promise<void>
               phone: finalPhone,
               email: email,
               address: address,
+              gender: custGender,
+              birthday: custBirthday,
+              facebook_id: custFbId || null,
               type: 'individual',
               created_at: createdAt
             })
@@ -397,10 +433,25 @@ export async function processPosCakeWebhookAsync(rawPayload: any): Promise<void>
           customer_name: customerName,
           customer_phone: finalPhone,
           customer_email: email,
-          source_channel: 'pos_cake_webhook',
+          gender: custGender,
+          birthday: custBirthday,
+          facebook_id: custFbId || null,
+          ad_id: adId,
+          ad_name: adName,
+          campaign_id: campaignId,
+          campaign_name: campaignName,
+          adset_id: adsetId,
+          adset_name: adsetName,
+          utm_source: utmSource,
+          utm_medium: utmMedium,
+          utm_content: utmContent,
+          page_id: pageId,
+          page_name: pageName,
+          source_channel: adId ? `Ad ID: ${adId}` : 'pos_cake_webhook',
           status: totalAmount > 0 ? 'order_created' : 'lead_captured',
-          message_text: `Đơn hàng POS Cake #${orderCode} - Giá trị: ${formattedTotalAmount}`,
+          message_text: `Khách hàng từ POS Cake (Mã: #${orderCode}) - Giá trị: ${formattedTotalAmount}`,
           notes: `Tự động tiếp nhận từ Poscake Webhook (Mã: #${orderCode})`,
+          raw_webhook_payload: rawPayload,
           created_at: createdAt,
           last_message_at: createdAt
         }, { onConflict: 'customer_phone' });

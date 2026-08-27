@@ -1068,6 +1068,42 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
      - Bảng danh sách đơn nghỉ hiển thị trực quan badge thời lượng (`☀️ Buổi sáng` / `🌅 Buổi chiều`) kèm số ngày công chính xác (`0.5 ngày công`).
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
 
+### 1.105 Loại Bỏ Triệt Để Code Google Chat & Ẩn Mục Trợ Lý Hướng Dẫn
+- **Mô tả yêu cầu / Vấn đề:**
+  - Kiểm tra và loại bỏ toàn bộ mã nguồn liên quan đến Google Chat trong hệ thống.
+  - Ẩn mục Trợ lý hướng dẫn (Copilot AI hướng dẫn ERP) trên giao diện.
+- **Giải pháp:**
+  1. **Google Chat:**
+     - Xóa bỏ file route `server/routes/googleChatRoutes.ts`.
+     - Gỡ bỏ import và middleware `googleChatRoutes` trong `app.ts`.
+     - Gỡ bỏ đoạn gọi webhook Google Chat trong `server/services/poscakeWebhookService.ts`.
+     - Xóa cấu hình `GOOGLE_CHAT_WEBHOOK_URL` trong `.env.example`.
+  2. **Trợ Lý Hướng Dẫn:**
+     - Gỡ bỏ component `<ERPCopilotModal />` và import tương ứng khỏi `src/components/Layout.tsx`, giúp ẩn hoàn toàn nút nổi và hộp thoại Trợ lý hướng dẫn khỏi giao diện ứng dụng.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.106 Khắc Phục Đồng Bộ & Hiển Thị Đơn Nghỉ Phép Lên Database Supabase
+- **Mô tả yêu cầu / Vấn đề:**
+  - Người dùng thao tác gửi đơn nghỉ phép trên giao diện nhưng đơn không lưu hoặc không hiển thị trên Database Supabase và các tài khoản khác.
+- **Nguyên nhân:**
+  1. Thiếu các trường thông tin mở rộng (`user_name`, `user_email`, `user_role`, `leave_session`, `total_days`, `handover_user_name`, `level_1_approved_name`, `final_approved_name`, `rejection_reason`) trong schema `leave_requests` của Supabase dẫn đến lỗi từ chối insert.
+  2. Hàm `fetchLeaveRequests` chưa làm giàu thông tin tên nhân viên/người bàn giao từ `profilesList` khi đọc từ DB về.
+  3. Chưa thiết lập kênh Realtime đồng bộ tự động `leave_requests` và `leave_balances` khi có đơn mới phát sinh.
+- **Giải pháp:**
+  1. **Schema & Migration SQL (`supabase-schema.sql`):** Bổ sung đầy đủ các lệnh `ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS ...` cho tất cả các trường dữ liệu mới, cập nhật chính sách RLS và kích hoạt Realtime Publication cho bảng `leave_requests` & `leave_balances`.
+  2. **Dữ liệu & Fallback (`CRMContext.tsx`):**
+     - Lưu đầy đủ toàn bộ siêu dữ liệu (`user_name`, `user_email`, `user_role`, `leave_session`, `total_days`, `handover_user_name`) khi chèn đơn lên Supabase kèm cơ chế fallback thông minh.
+     - Hàm `fetchLeaveRequests` tự động đối soát và điền tên nhân viên (`user_name`), thông tin người bàn giao từ `profilesList` nếu bản ghi cơ sở dữ liệu chưa có.
+     - Thiết lập kênh lắng nghe thay đổi Realtime (`leave_management_realtime`) trên Supabase để tự động đồng bộ tức thì cho tất cả các tài khoản đang đăng nhập.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.107 Chuyển Mục Người Nhận Bàn Giao Thành Ô Nhập Text
+- **Mô tả yêu cầu / Vấn đề:**
+  - Mục "Người nhận bàn giao công việc" trong popup tạo đơn xin nghỉ phép đang dùng dropdown chọn danh sách thành viên, cần chuyển sang dạng ô nhập văn bản (text input) để linh hoạt ghi tên người hoặc bộ phận bàn giao.
+- **Giải pháp:**
+  - Cập nhật `src/components/LeaveRequestModal.tsx`: thay thế `CustomSelect` bằng ô nhập `input type="text"`, cho phép người dùng tự do nhập tên đồng nghiệp hoặc nội dung bàn giao công việc mà không bị giới hạn bởi danh sách tài khoản.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

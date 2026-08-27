@@ -29,7 +29,7 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
   const [leaveSession, setLeaveSession] = useState<LeaveSession>('all_day');
   const [leaveType, setLeaveType] = useState<LeaveType>('annual');
   const [reason, setReason] = useState('');
-  const [handoverUserId, setHandoverUserId] = useState('');
+  const [handoverNote, setHandoverNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Kiểm tra xem có phải đơn xin nghỉ trong 1 ngày không (để cho phép chọn Buổi sáng / Buổi chiều / Cả ngày)
@@ -68,7 +68,6 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
 
     setIsSubmitting(true);
     try {
-      const handoverUser = profilesList.find((p) => p.id === handoverUserId);
       const sessionToSave: LeaveSession = isSingleDay ? leaveSession : 'all_day';
 
       await createLeaveRequest({
@@ -82,8 +81,8 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
         total_days: requestedWorkdays,
         type: leaveType,
         reason: reason.trim(),
-        handover_user_id: handoverUserId || null,
-        handover_user_name: handoverUser?.full_name || null,
+        handover_user_id: null,
+        handover_user_name: handoverNote.trim() || null,
       });
 
       onClose();
@@ -92,7 +91,7 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
       setEndDate('');
       setLeaveSession('all_day');
       setReason('');
-      setHandoverUserId('');
+      setHandoverNote('');
       setLeaveType('annual');
     } catch (err) {
       console.error('Lỗi khi tạo đơn nghỉ phép:', err);
@@ -337,24 +336,18 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
 
           {/* Người nhận bàn giao công việc */}
           <div>
-            <CustomSelect
-              label="Người nhận bàn giao công việc"
-              value={handoverUserId}
-              onChange={(val) => setHandoverUserId(val)}
-              placeholder="-- Chọn đồng nghiệp nhận bàn giao --"
-              options={[
-                { value: '', label: '-- Chọn đồng nghiệp nhận bàn giao --' },
-                ...profilesList
-                  .filter((p) => p.id !== currentUserId && p.status !== 'inactive' && p.role !== 'admin' && p.role !== 'agent' && p.role !== 'CTV')
-                  .map((p) => ({
-                    value: p.id,
-                    label: `${p.full_name || p.email} (${p.role ? p.role.toUpperCase() : 'Nhân viên'})`,
-                  })),
-              ]}
-              icon={<UserCheck className="w-4 h-4 text-slate-500" />}
-              className="w-full"
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <UserCheck className="w-4 h-4 text-slate-500" />
+              <span>Người nhận bàn giao công việc</span>
+            </label>
+            <input
+              type="text"
+              value={handoverNote}
+              onChange={(e) => setHandoverNote(e.target.value)}
+              placeholder="Nhập tên người nhận bàn giao (Ví dụ: Băng Băng, Y Bình, Duyên Huỳnh...)"
+              className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
             />
-            <p className="text-[11px] text-slate-400 mt-1">Đồng nghiệp sẽ thay bạn xử lý các booking & khách hàng phát sinh trong kỳ nghỉ</p>
+            <p className="text-[11px] text-slate-400 mt-1">Ghi tên đồng nghiệp hoặc bộ phận sẽ hỗ trợ xử lý công việc trong thời gian nghỉ</p>
           </div>
 
           {/* Lý do xin nghỉ */}

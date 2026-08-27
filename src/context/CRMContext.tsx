@@ -913,8 +913,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     try {
       const { data, error } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
       if (!error && data) {
-        setLeaveRequests(data as LeaveRequest[]);
-        localStorage.setItem('crm_leave_requests', JSON.stringify(data));
+        const enriched = data.map((item: any) => {
+          const userProf = profilesList.find(p => p.id === item.user_id);
+          const handoverProf = profilesList.find(p => p.id === item.handover_user_id);
+          return {
+            ...item,
+            user_name: item.user_name || userProf?.full_name || 'Nhân viên',
+            user_email: item.user_email || userProf?.email || '',
+            user_role: item.user_role || userProf?.role || 'sale',
+            handover_user_name: item.handover_user_name || handoverProf?.full_name || null,
+            total_days: item.total_days !== undefined && item.total_days !== null ? Number(item.total_days) : 1,
+            leave_session: item.leave_session || 'all_day'
+          };
+        });
+        setLeaveRequests(enriched as LeaveRequest[]);
+        localStorage.setItem('crm_leave_requests', JSON.stringify(enriched));
+      } else if (error) {
+        console.warn('Lỗi fetch leave_requests từ Supabase:', error.message);
       }
     } catch (e) {
       console.warn('Lỗi fetch leave_requests:', e);
@@ -938,7 +953,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         });
         localStorage.setItem('crm_leave_balances', JSON.stringify(data));
       } else if (error) {
-        console.warn('Lỗi fetch leave_balances:', error);
+        console.warn('Lỗi fetch leave_balances:', error.message);
       }
     } catch (e) {
       console.warn('Lỗi fetch leave_balances:', e);
@@ -949,7 +964,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     fetchHolidays();
     fetchLeaveRequests();
     fetchLeaveBalances();
-  }, []);
+
+    if (isSupabaseConfigured()) {
+      const channel = supabase
+        .channel('leave_management_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => {
+          fetchLeaveRequests();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_balances' }, () => {
+          fetchLeaveBalances();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [profilesList]);
 
   const addHoliday = async (holidayData: Omit<Holiday, 'id' | 'created_at'>): Promise<Holiday> => {
     const newId = generateSafeUUID();
@@ -1096,22 +1127,28 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('leave_requests').insert([{
+        const fullPayload = {
           id: newId,
           user_id: requestData.user_id,
+          user_name: requestData.user_name || null,
+          user_email: requestData.user_email || null,
+          user_role: requestData.user_role || null,
           start_date: requestData.start_date,
           end_date: requestData.end_date,
           leave_session: requestData.leave_session || 'all_day',
-          total_days: requestData.total_days,
+          total_days: requestData.total_days || 1,
           type: requestData.type,
           status: 'pending',
           reason: requestData.reason,
-          handover_user_id: requestData.handover_user_id || null
-        }]);
-      } catch (err) {
-        console.warn('Lỗi insert leave_requests lên Supabase (thử fallback nếu cột mới chưa có):', err);
-        try {
-          await supabase.from('leave_requests').insert([{
+          handover_user_id: requestData.handover_user_id || null,
+          handover_user_name: requestData.handover_user_name || null,
+          created_at: newReq.created_at
+        };
+
+        const { error: insertErr } = await supabase.from('leave_requests').insert([fullPayload]);
+        if (insertErr) {
+          console.warn('Lỗi insert leave_requests đầy đủ (thử fallback):', insertErr.message);
+          const fallbackPayload = {
             id: newId,
             user_id: requestData.user_id,
             start_date: requestData.start_date,
@@ -1120,10 +1157,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             status: 'pending',
             reason: `${requestData.leave_session && requestData.leave_session !== 'all_day' ? `[Nghỉ ${requestData.leave_session === 'morning' ? 'Buổi sáng (0.5 ngày)' : 'Buổi chiều (0.5 ngày)'}] ` : ''}${requestData.reason}`,
             handover_user_id: requestData.handover_user_id || null
-          }]);
-        } catch (fallbackErr) {
-          console.warn('Lỗi fallback insert leave_requests:', fallbackErr);
+          };
+          const { error: fbErr } = await supabase.from('leave_requests').insert([fallbackPayload]);
+          if (fbErr) {
+            console.error('Lỗi fallback insert leave_requests:', fbErr.message);
+          }
         }
+      } catch (err: any) {
+        console.warn('Exception khi insert leave_requests lên Supabase:', err?.message || err);
       }
     }
 
@@ -1168,12 +1209,21 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('leave_requests').update({
+        const { error } = await supabase.from('leave_requests').update({
           status: 'approved_level_1',
-          approver_level_1_id: currentUserId
+          level_1_approved_by: currentUserId,
+          level_1_approved_name: approverName,
+          level_1_approved_at: new Date().toISOString()
         }).eq('id', id);
-      } catch (err) {
-        console.warn('Lỗi approve cấp 1 leave_requests:', err);
+
+        if (error) {
+          await supabase.from('leave_requests').update({
+            status: 'approved_level_1',
+            level_1_approved_by: currentUserId
+          }).eq('id', id);
+        }
+      } catch (err: any) {
+        console.warn('Lỗi approve cấp 1 leave_requests:', err?.message || err);
       }
     }
 
@@ -1241,20 +1291,29 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           };
 
           await supabase.from('leave_balances').upsert([payload], { onConflict: 'user_id,year' });
-        } catch (err) {
-          console.warn('Lỗi cập nhật quỹ phép trên Supabase:', err);
+        } catch (err: any) {
+          console.warn('Lỗi cập nhật quỹ phép trên Supabase:', err?.message || err);
         }
       }
     }
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('leave_requests').update({
+        const { error } = await supabase.from('leave_requests').update({
           status: 'approved_final',
-          approver_final_id: currentUserId
+          final_approved_by: currentUserId,
+          final_approved_name: approverName,
+          final_approved_at: new Date().toISOString()
         }).eq('id', id);
-      } catch (err) {
-        console.warn('Lỗi approve final leave_requests:', err);
+
+        if (error) {
+          await supabase.from('leave_requests').update({
+            status: 'approved_final',
+            final_approved_by: currentUserId
+          }).eq('id', id);
+        }
+      } catch (err: any) {
+        console.warn('Lỗi approve final leave_requests:', err?.message || err);
       }
     }
 
@@ -1274,12 +1333,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('leave_requests').update({
+        const { error } = await supabase.from('leave_requests').update({
           status: 'rejected',
+          reject_reason: reason,
           rejection_reason: reason
         }).eq('id', id);
-      } catch (err) {
-        console.warn('Lỗi reject leave_requests:', err);
+
+        if (error) {
+          await supabase.from('leave_requests').update({
+            status: 'rejected',
+            reason: reason
+          }).eq('id', id);
+        }
+      } catch (err: any) {
+        console.warn('Lỗi reject leave_requests:', err?.message || err);
       }
     }
 
