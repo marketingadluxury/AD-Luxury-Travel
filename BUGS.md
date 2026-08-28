@@ -1112,6 +1112,17 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   - HR có thể bấm nút "Duyệt Cuối" trực tiếp hoặc qua tab "Duyệt Cấp Cuối" đối với bất kỳ đơn nghỉ phép nào của nhân sự trong công ty.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
 
+### 1.109 Chuẩn Hóa Phân Quyền Duyệt Nghỉ Phép (Bỏ Điều Hành Khỏi Cấp 1 & Bỏ Kế Toán Khỏi Cấp Cuối)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Điều hành là nhân viên mang chức danh điều hành tour (chuyên môn nghiệp vụ tour), không phải điều hành công ty nên không có thẩm quyền duyệt đơn nghỉ phép cấp 1.
+  - Kế toán không có quyền duyệt cấp cuối đơn nghỉ phép. Quyền duyệt cấp cuối chỉ thuộc về HR, BOD và Admin.
+- **Giải pháp:**
+  - Cập nhật logic phân quyền trong `src/pages/LeaveRequestsPage.tsx` và `src/components/LeaveManagementTab.tsx`:
+    - `isLeader` / `canApproveLevel1`: Giữ lại `sale_leader`, `marketing_leader`, `admin`, `bod`, `hr` (loại bỏ `operator` và `accounting`).
+    - `isHRorBODorAdmin` / `canApproveFinal`: Giữ lại `hr`, `bod`, `admin` (loại bỏ `accounting`).
+  - Ghi nhận quy chuẩn vào `AGENTS.md`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)

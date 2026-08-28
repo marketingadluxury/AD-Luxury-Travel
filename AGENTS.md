@@ -183,6 +183,9 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
   - **Nhân viên mới:** Nếu nhân viên mới vào làm trong năm, quỹ phép sẽ được tính từ tháng bắt đầu làm việc đến thời điểm hiện tại.
   - **Ưu tiên điều chỉnh thủ công của HR:** Mọi điều chỉnh thủ công từ bộ phận HR (trong bảng `leave_balances` / Quản lý quỹ phép) luôn được ưu tiên áp dụng tuyệt đối hơn công thức tích lũy tự động.
   - **Vị Trí Tab Quản Lý Quỹ Phép:** Tính năng Quản lý Quỹ phép năm nhân viên nằm tập trung duy nhất tại trang **Hành chính nhân sự** (`/leave-requests`), hoàn toàn loại bỏ khỏi Cài đặt hệ thống (`/settings`).
+  - **Quy Trình Phân Quyền Duyệt Đơn Nghỉ Phép (2 Cấp Chuẩn Hóa):**
+    - **Cấp 1 (Quản lý trực tiếp):** Trưởng nhóm Sale (`sale_leader`), Trưởng nhóm Marketing (`marketing_leader`), Nhân sự (`hr`), Quản trị viên (`admin`), Ban Giám Đốc (`bod`). *Lưu ý: Vai trò Điều hành tour (`operator`) là nhân viên điều hành tour, không có quyền duyệt cấp 1 đơn nghỉ phép*.
+    - **Cấp 2 (Duyệt Cấp Cuối & Trừ Phép):** Chỉ có **Nhân sự (`hr`)**, **Ban Giám Đốc (`bod`)** và **Quản trị viên (`admin`)** mới có quyền duyệt cấp cuối. *Lưu ý: Kế toán (`accounting`) không có quyền duyệt cấp cuối*.
   - **Cấu Trúc Tab Quản Lý Người Dùng & Phân Quyền (`UserManagement.tsx`):**
     - Trang Quản lý người dùng trong Cài đặt hệ thống được phân tách thành **3 tab** chuyên biệt:
       1. **🏢 Quản lý Nhân sự Công ty (`company`):** Quản lý tất cả tài khoản nội bộ công ty (Admin, BOD, Sale Leader, Sale, Điều hành, Visa, Kế toán, HDV, HR, Marketing).
