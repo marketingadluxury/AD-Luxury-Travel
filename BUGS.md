@@ -6,6 +6,16 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Loại Bỏ 3 Mục (Báo Cáo Tour, Bảng Chấm Công, Quản Lý Nghỉ Phép) Khỏi Trang Kế Toán
+- **Mô tả yêu cầu:**
+  - Loại bỏ hoàn toàn 3 mục/tab: **"Báo cáo tour"**, **"📊 Bảng chấm công"** và **"🌴 Quản lý nghỉ phép"** khỏi trang Kế toán & Hóa đơn (`AccountingInvoice.tsx`).
+- **Giải pháp thực hiện:**
+  1. Thu gọn `activeTab` trong `AccountingInvoice.tsx` chỉ còn 3 tab nghiệp vụ kế toán trọng tâm: **Phiếu thu**, **Yêu cầu xuất VAT** và **Phiếu chi / Hoàn tiền** (`'receipts' | 'vat' | 'payments'`).
+  2. Xóa bỏ 3 nút bấm chuyển tab khỏi thanh điều hướng trên cùng của trang Kế toán.
+  3. Xóa bỏ toàn bộ các khối render và state/hàm phụ trợ không còn sử dụng liên quan đến 3 mục trên (Thư mục tour, hợp đồng, TimesheetManagement, LeaveManagementTab) giúp mã nguồn gọn gàng, giảm dung lượng và tối ưu hiệu suất tải trang.
+  4. Nghiệp vụ Chấm công và Quản lý Nghỉ phép được tập trung chuyên trách tại trang Hành chính nhân sự (`/leave-requests`), còn Báo cáo chi phí/lãi lỗ tour được quản lý tại trang Báo cáo & Lịch khởi hành.
+- **Trạng thái:** Đã hoàn thành, kiểm tra lint và build thành công 100%.
+
 ### 1.0 Khắc Phục Lỗi Cuộn Ngang & Tối Ưu Hiển Thị Responsive Cho Toàn Bộ Màn Hình Lớn
 - **Mô tả yêu cầu & vấn đề:**
   - Trên các màn hình máy tính có độ phân giải lớn, màn hình bên phải (khu vực nội dung chính của hệ thống) bị hiện tượng xuất hiện thanh cuộn ngang (horizontal scrollbar) do một số container/grid/flexbox bị vượt quá chiều rộng viewport hoặc container thẻ `<main>` chưa khóa cuộn ngang.
