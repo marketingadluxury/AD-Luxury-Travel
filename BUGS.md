@@ -6,6 +6,109 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Khắc Phục Lỗi Cuộn Ngang & Tối Ưu Hiển Thị Responsive Cho Toàn Bộ Màn Hình Lớn
+- **Mô tả yêu cầu & vấn đề:**
+  - Trên các màn hình máy tính có độ phân giải lớn, màn hình bên phải (khu vực nội dung chính của hệ thống) bị hiện tượng xuất hiện thanh cuộn ngang (horizontal scrollbar) do một số container/grid/flexbox bị vượt quá chiều rộng viewport hoặc container thẻ `<main>` chưa khóa cuộn ngang.
+- **Giải pháp thực hiện:**
+  1. **Khóa tràn khung chính tại Layout:** Cập nhật thẻ `<main>` trong `Layout.tsx` với các thuộc tính `overflow-x-hidden min-w-0 w-full`, ngăn ngừa hoàn toàn thanh cuộn ngang ở cấp độ toàn trang. Bất kỳ bảng dữ liệu lớn nào có nhu cầu xem chi tiết sẽ cuộn nội bộ trong container `overflow-x-auto` riêng của bảng đó mà không kéo trượt toàn bộ khung làm việc của người dùng.
+  2. **Tối ưu Responsive Header & Tabs Dashboard:**
+     - Thiết lập `min-w-0 flex flex-col xl:flex-row xl:items-center justify-between gap-4` cho khối Header Bảng điều khiển.
+     - Thêm `max-w-full overflow-x-auto` và `shrink-0` cho các nút tab điều hướng con, giúp thanh điều hướng tự co giãn linh hoạt và không bao giờ đẩy bung chiều rộng trang.
+     - Khối nút hành động bên phải (Bộ lọc, Xuất báo cáo, Trợ giúp) được thiết lập `flex-wrap shrink-0` để thích ứng hoàn hảo trên mọi kích thước màn hình từ tablet, laptop 13-14 inch, màn hình 1080p đến màn hình 2K/4K.
+  3. **Tối ưu Grid & Min-Width Các Thẻ KPI / Biểu Đồ:** Thêm `min-w-0` trên các thẻ thống kê KPI, biểu đồ và container bảng để lưới CSS Grid luôn tính toán chuẩn xác tỷ lệ co giãn, đảm bảo toàn bộ nội dung nằm trọn vẹn trong 1 màn hình mà không cần kéo thanh cuộn ngang.
+- **Trạng thái:** Đã hoàn thành, kiểm tra lint và build thành công 100%.
+
+### 1.0 Loại Bỏ Tab Cấu Hình Meta Conversions API Khỏi Cài Đặt Hệ Thống
+- **Mô tả yêu cầu:**
+  - Loại bỏ hoàn toàn tab và thành phần giao diện *Cấu hình Meta Conversions API (CAPI)* khỏi trang Cài đặt hệ thống (`Settings.tsx`).
+- **Giải pháp thực hiện:**
+  1. Loại bỏ tab `meta_capi` khỏi state và thanh điều hướng tabs của trang `Settings.tsx`.
+  2. Trang Cài đặt hệ thống hiện tại chỉ tập trung vào 2 phần chức năng cốt lõi: **Hạng thành viên** và **Quản lý người dùng & phân quyền**.
+- **Trạng thái:** Đã hoàn thành, kiểm tra build và lint thành công 100%.
+
+### 1.0 Khắc Phục Lỗi Double Icon Trên Nút Dropdown Chọn Giá Trị (CustomSelect)
+- **Mô tả vấn đề:**
+  - Ở dropdown chọn *Thị trường / Điểm đến* (và các dropdown khác), khi người dùng chọn một mục, trên nút bấm hiển thị lặp 2 icon cạnh nhau (ví dụ: `📍 📍 Nha Trang`).
+  - Nguyên nhân do component `CustomSelect` vừa render prop `icon` chung của component, vừa render thêm `selectedOption.icon` của mục được chọn.
+- **Giải pháp thực hiện:**
+  1. Hợp nhất logic hiển thị icon tại `CustomSelect`: `const displayIcon = selectedOption?.icon || icon;`, ưu tiên icon riêng của option được chọn và fallback về icon chung của select.
+  2. Đảm bảo nút button của `CustomSelect` luôn luôn chỉ hiển thị duy nhất 1 icon đại diện, loại bỏ hoàn toàn hiện tượng trùng lặp/double icon trên toàn hệ thống.
+  3. Rà soát toàn bộ các button và dropdown khác, đảm bảo tuân thủ nghiêm ngặt quy tắc tránh lặp icon và text biểu tượng.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch thành công 100%.
+
+### 1.0 Chuẩn Hóa Căn Lề & Bố Cục Thẳng Hàng Danh Sách Xử Lý Hồ Sơ Visa
+- **Mô tả vấn đề:**
+  - Ở chế độ xem Dạng danh sách (`viewMode === 'list'`) của trang *Xử lý & Cấp duyệt Visa*, các cột của thẻ hồ sơ bị lệch dọc và lệch ngang giữa các thẻ:
+    1. Container sử dụng `items-center` khiến cho các thẻ không có hộp "Nội dung giải trình" (như thẻ của khách Nguyễn Ngọc Khánh Băng) bị đẩy dropdown "Cập nhật trạng thái" trôi nổi lơ lửng ở giữa chiều cao thẻ thay vì căn đầu mép trên cùng.
+    2. Chiều rộng cột giấy tờ và cột trạng thái sử dụng `min-w` và `max-w` động khiến vị trí các cột giữa các thẻ không thẳng hàng theo cột dọc.
+- **Giải pháp thực hiện:**
+  1. **Căn lề trên (Top Alignment):** Đổi từ `items-center` sang `items-start` trên toàn bộ container thẻ để tất cả tiêu đề cột ("Thông tin hành khách", "Giấy tờ Sale đã upload", "Cập nhật trạng thái") luôn xuất phát cùng một dòng độ cao `h-5` trên cùng.
+  2. **Cột cố định chuẩn hóa (Fixed Column Gutters):**
+     - Cột Thông tin hành khách: `flex-1 min-w-0`
+     - Cột Giấy tờ upload: `w-full lg:w-[320px] shrink-0`
+     - Cột Cập nhật trạng thái: `w-full lg:w-[250px] shrink-0`
+  3. Tất cả các thẻ trong danh sách giờ đây hiển thị thẳng tắp theo 3 cột chuẩn mực, các tiêu đề và bộ điều khiển thẳng hàng ngang và thẳng hàng dọc tuyệt đối.
+- **Trạng thái:** Đã hoàn thành, kiểm tra build và lint thành công 100%.
+
+### 1.0 Căn Chỉnh Đồng Bộ Chiều Cao & Giao Diện Thanh Bộ Lọc Trang Xử Lý Visa & Dịch Vụ Visa
+- **Mô tả vấn đề:**
+  - Trên thanh lọc của trang *Xử lý & Cấp duyệt Visa* và *Dịch vụ Visa*, 3 thành phần (Ô tìm kiếm, Bộ lọc thời gian `TimeRangeFilter`, Dropdown sắp xếp `CustomSelect`) bị lệch chiều cao và font chữ do `TimeRangeFilter` bị gán cứng `h-[38px]`, ô tìm kiếm thiếu chiều cao chuẩn `h-9` và font size khác biệt.
+- **Giải pháp thực hiện:**
+  1. **Chuẩn hóa TimeRangeFilter:** Gỡ bỏ chiều cao cứng `h-[38px]`, thiết lập chiều cao chuẩn `h-9 px-3 py-1.5`, border `border-slate-300 rounded-lg text-xs font-semibold text-slate-800`.
+  2. **Đồng bộ Ô Tìm kiếm:** Cập nhật cả ở trang `VisaProcessing` và `VisaServices` với chiều cao `h-9 pl-9 pr-3 py-1.5`, bo góc `rounded-lg text-xs font-semibold text-slate-800`.
+  3. **Căn lề Grid Layout:** Thiết lập `items-center` và `w-full` cho các cột trên hàng lọc giúp 3 phần tử thẳng hàng tuyệt đối, phẳng và cân đối 100%.
+- **Trạng thái:** Đã hoàn thành, vượt qua toàn bộ các bài kiểm tra Linter (`npm run lint`) và Biên dịch (`npm run build`) thành công 100%.
+
+### 1.0 Sửa Lỗi Tính Toán Ngày Khởi Hành "Sắp Khởi Hành" & Đồng Bộ Toàn Bộ Dropdown Hệ Thống
+- **Mô tả vấn đề & yêu cầu:**
+  1. **Lỗi ngày khởi hành:** Tour khởi hành ngày hôm qua (ví dụ: 27/08) vẫn xuất hiện ở mục "Sắp khởi hành" do hàm `differenceInDays` bị phụ thuộc vào giờ/múi giờ (UTC vs Local) dẫn đến chênh lệch không âm.
+  2. **Đồng bộ Dropdown:** Rà soát và chuyển đổi tất cả các thẻ `<select>` mặc định của HTML sang component `CustomSelect` trên các trang Quản lý Tour, Hạch toán chi phí Tour, Lịch khởi hành và Quản lý Đối tác/Đại lý/CTV để đồng nhất 100% giao diện, phong cách, hiệu ứng và trải nghiệm.
+- **Giải pháp thực hiện:**
+  1. **Cập nhật Logic Ngày:** Chuyển đổi từ `differenceInDays` sang `differenceInCalendarDays` trong `DashboardOperator.tsx` cho tất cả các bộ lọc danh sách (Tour sắp khởi hành, Hạn xuất vé, Hạn visa, Tour đã khởi hành). Qua đó, bất kỳ tour nào có ngày khởi hành trước ngày hôm nay (dựa trên ngày lịch thuần túy) đều được chuyển chính xác sang danh sách "Đã khởi hành" (`departedTours`).
+  2. **Đồng bộ CustomSelect:**
+     - `ToursManagement.tsx`: Chuyển đổi dropdown Tháng khởi hành, Danh mục thị trường, Số phần tử hiển thị phân trang, Loại hình sản phẩm (Loại tour), Trạng thái mở bán và Chọn danh mục sản phẩm trong form tạo/sửa tour.
+     - `TourCostsManagement.tsx`: Chuyển đổi dropdown Loại tour, Trạng thái khởi hành, Tháng khởi hành, Danh mục, Trạng thái lãi/lỗ và Phương thức thanh toán từng đợt.
+     - `DepartureCalendar.tsx`: Chuyển đổi dropdown Thông tin ghép phòng (Lẻ nam / Lẻ nữ).
+     - `CustomersManagement.tsx`: Chuyển đổi dropdown Sắp xếp, Sale phụ trách, Hạng đối tác (Tier), Ngân hàng và Trạng thái hoạt động.
+- **Trạng thái:** Đã hoàn thành, vượt qua toàn bộ các bài kiểm tra Linter (`npm run lint`) và Biên dịch (`npm run build`) thành công 100%.
+
+### 1.0 Khắc Phục Lỗi Dropdown Bị Che Khuất Bởi Lớp Bọc Thẻ Bảng (Dropdown Clipping Issue Fix)
+- **Mô tả vấn đề:**
+  - Khi mở dropdown sắp xếp (`CustomSelect`) tại thanh tiêu đề của *Bảng Chi Tiết Doanh Số Kinh Doanh* trên Dashboard, menu lựa chọn bị che khuất và cắt ngang ở mép dưới bởi thuộc tính `overflow-hidden` từ thẻ card cha chứa bảng dữ liệu.
+- **Giải pháp thực hiện:**
+  1. Loại bỏ lớp `overflow-hidden` ở thẻ container cha của *Bảng Chi Tiết Doanh Số Kinh Doanh*, cho phép menu popup của `CustomSelect` hiển thị nổi hoàn toàn bên trên các phần tử khác.
+  2. Bổ sung `rounded-b-xl` trực tiếp vào khối cuộn bảng dữ liệu `overflow-x-auto` bên trong để duy trì bo góc mềm mại, thẩm mỹ và không gây tràn giao diện.
+  3. Rà soát và kiểm tra toàn bộ các khối dropdown khác trên Dashboard để đảm bảo không có thành phần nào bị cắt hay che khuất.
+- **Trạng thái:** Đã hoàn thành, vượt qua toàn bộ các bài kiểm tra Linter (`npm run lint`) và Biên dịch (`npm run build`) thành công 100%.
+
+### 1.0 Đồng Bộ Giao Diện Dropdown Trên Toàn Bộ Trang Bảng Điều Khiển (Dashboard CustomSelect Migration)
+- **Mô tả yêu cầu:**
+  - Thay thế toàn bộ các thẻ `<select>` mặc định của trình duyệt tại trang Bảng Điều Khiển (`Dashboard.tsx`) bằng component `CustomSelect` chuẩn hóa của hệ thống để đồng bộ 100% về giao diện, bo góc, hiệu ứng tương tác, màu sắc, font chữ và trải nghiệm người dùng.
+- **Giải pháp thực hiện:**
+  1. Tích hợp `CustomSelect` vào tất cả các vị trí bộ lọc và lựa chọn trên Dashboard:
+     - **Bộ Lọc Nâng Cao (Modal Bộ Lọc):** Dropdown Đội nhóm kinh doanh, Nhân viên Sale phụ trách, Kênh bán / Nguồn khách, Loại sản phẩm / Tour, và Trạng thái đơn hàng.
+     - **Biểu đồ Dự Báo Doanh Thu:** Dropdown chọn chu kỳ dự báo (Theo tháng / Theo quý).
+     - **Khối Cơ Cấu Kênh Bán:** Dropdown lọc nhanh theo từng Đội nhóm kinh doanh.
+     - **Bảng Chi Tiết Doanh Số Kinh Doanh:** Dropdown sắp xếp đa chiều (Doanh số giảm/tăng, Số lượng Pax giảm, Tên nhân viên A-Z).
+  2. Khởi tạo danh sách các tùy chọn (`options`) chuẩn hóa cho `CustomSelect` kết hợp `useMemo` để tối ưu hiệu năng render.
+  3. Cập nhật `CustomSelect.tsx` để hỗ trợ ghi đè `buttonClassName` linh hoạt và quản lý trạng thái đóng/mở menu chuẩn xác.
+- **Trạng thái:** Đã hoàn thành, vượt qua toàn bộ các bài kiểm tra Linter (`npm run lint`) và Biên dịch (`npm run build`) thành công 100%.
+
+### 1.0 Nâng Cấp Xuất Báo Cáo Excel (.xlsx) Đa Sheet & Tối Ưu Tương Tác Bảng Điều Khiển (Dashboard)
+- **Mô tả yêu cầu:**
+  1. Loại bỏ phần Bảng điều khiển hiệu suất Meta Ads khỏi Dashboard.
+  2. Nâng cấp tính năng xuất báo cáo từ định dạng CSV sang định dạng chuẩn Excel (.xlsx) với đầy đủ định dạng cột và nhiều Sheet phân tích chuyên sâu.
+  3. Kích hoạt và gán chức năng trực quan cho các nút bấm điều hướng (Nút "Xem chi tiết danh sách đơn" tại khối Cơ cấu kênh bán chuyển sang Tab Quản lý đơn hàng; Nút "Xem đơn" tại bảng doanh số Sale lọc tự động đơn hàng của Sale đó; Nút "Xuất Excel Lãi/Lỗ" tại tab Báo cáo tài chính).
+- **Giải pháp thực hiện:**
+  1. Sử dụng thư viện `xlsx` để khởi tạo Workbook chứa 4 Sheet dữ liệu hoàn chỉnh:
+     - `Danh_Sach_Don_Hang`: Danh sách chi tiết các đơn hàng kinh doanh (Mã đơn, Khách hàng, SĐT, Tour, Pax, Doanh thu, Trạng thái, Kênh bán, Người tạo, Thời gian).
+     - `Doanh_So_Sale`: Bảng xếp hạng và chi tiết doanh số, số đơn, lượt khách Pax, tiến độ KPI và lợi nhuận gộp theo từng chuyên viên Sale.
+     - `Hieu_Qua_Team`: Báo cáo hiệu quả kinh doanh theo từng Đội nhóm (Team) kèm Leader và tỷ lệ đạt KPI.
+     - `Lai_Lo_Tour`: Báo cáo hạch toán doanh thu, giá vốn, lãi gộp và biên lợi nhuận (%) từng Tour du lịch.
+  2. Bổ sung cấu hình độ rộng cột (`!cols`) cho tất cả các Sheet để file Excel mở lên luôn ngay ngắn, chuyên nghiệp.
+  3. Gán sự kiện `onClick` cho nút Xem chi tiết trong khối Cơ cấu kênh bán và nút Xem đơn của từng nhân viên Sale trong Bảng chi tiết doanh số.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch thành công 100%.
+
 ### 1.0 Chuẩn Hóa & Điều Hướng Chính Xác Toàn Bộ Hệ Thống Thông Báo (Notification Routing & Filtering)
 - **Mô tả yêu cầu & vấn đề:**
   1. Khi người dùng bấm vào các mục thông báo trên thanh chuông thông báo (`Layout.tsx`), hệ thống điều hướng sai trang hoặc chuyển nhầm về Đơn hàng Tour thay vì trang chức năng tương ứng (ví dụ: thông báo duyệt nghỉ phép chuyển về Đơn hàng thay vì Quản lý Nghỉ phép & Chấm công; thông báo hóa đơn, duyệt chi chuyển không đúng tab Kế toán; thông báo Visa và Ảnh đoàn không tự động lọc dữ liệu đích).

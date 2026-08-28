@@ -35,6 +35,7 @@ import EditPassengerModal from '../components/EditPassengerModal';
 import { PassengerDocumentList } from '../components/PassengerDocumentList';
 import ActionModal from '../components/ActionModal';
 import { PotentialLeadsTab } from '../components/PotentialLeadsTab';
+import { CustomSelect } from '../components/CustomSelect';
 import { useNavigate } from 'react-router-dom';
 
 interface BookingInfo {
@@ -627,49 +628,54 @@ export default function PassengersManagement() {
 
           {/* Membership Tier Filter */}
           <div className="w-full">
-            <select
+            <CustomSelect
+              options={[
+                { value: 'all', label: 'Mọi Hạng thành viên' },
+                { value: 'Hạng Đồng', label: 'Hạng Đồng' },
+                { value: 'Hạng Bạc', label: 'Hạng Bạc' },
+                { value: 'Hạng Vàng', label: 'Hạng Vàng' },
+                { value: 'Hạng Kim Cương', label: 'Hạng Kim Cương' },
+              ]}
               value={selectedTier}
-              onChange={e => setSelectedTier(e.target.value)}
-              className="w-full h-10 pl-3 pr-8 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
-            >
-              <option value="all">Mọi Hạng thành viên</option>
-              <option value="Hạng Đồng">Hạng Đồng</option>
-              <option value="Hạng Bạc">Hạng Bạc</option>
-              <option value="Hạng Vàng">Hạng Vàng</option>
-              <option value="Hạng Kim Cương">Hạng Kim Cương</option>
-            </select>
+              onChange={setSelectedTier}
+              className="w-full"
+              buttonClassName="w-full h-10 px-3 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+            />
           </div>
 
           {/* Visa Status Filter */}
           <div className="w-full">
-            <select
+            <CustomSelect
+              options={[
+                { value: 'all', label: 'Mọi trạng thái Visa (Mới nhất)' },
+                { value: 'pending', label: 'Chờ nộp hồ sơ' },
+                { value: 'processing', label: 'Đang xử lý' },
+                { value: 'approved', label: 'Đã có Visa' },
+                { value: 'rejected', label: 'Bị từ chối' },
+                { value: 'not_required', label: 'Có sẵn Visa' },
+              ]}
               value={selectedVisaStatus}
-              onChange={e => setSelectedVisaStatus(e.target.value)}
-              className="w-full h-10 pl-3 pr-8 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
-            >
-              <option value="all">Mọi trạng thái Visa (Mới nhất)</option>
-              <option value="pending">Chờ nộp hồ sơ</option>
-              <option value="processing">Đang xử lý</option>
-              <option value="approved">Đã có Visa</option>
-              <option value="rejected">Bị từ chối</option>
-              <option value="not_required">Có sẵn Visa</option>
-            </select>
+              onChange={setSelectedVisaStatus}
+              className="w-full"
+              buttonClassName="w-full h-10 px-3 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+            />
           </div>
 
           {/* Tour Selection Filter */}
           <div className="w-full">
-            <select
+            <CustomSelect
+              options={[
+                { value: 'all', label: 'Khách từng đi bất kỳ Tour nào' },
+                ...tours.map(t => ({
+                  value: t.id,
+                  label: `[${t.code}] ${t.name.length > 22 ? t.name.substring(0, 22) + '...' : t.name}`
+                }))
+              ]}
               value={selectedTourId}
-              onChange={e => setSelectedTourId(e.target.value)}
-              className="w-full h-10 pl-3 pr-8 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs truncate"
-            >
-              <option value="all">Khách từng đi bất kỳ Tour nào</option>
-              {tours.map(t => (
-                <option key={t.id} value={t.id}>
-                  [{t.code}] {t.name.length > 22 ? t.name.substring(0, 22) + '...' : t.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedTourId}
+              className="w-full"
+              buttonClassName="w-full h-10 px-3 py-2 border border-slate-200/90 rounded-xl text-xs font-semibold bg-slate-50/50 hover:bg-slate-100/80 text-slate-800 outline-none cursor-pointer focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs truncate"
+            />
           </div>
         </div>
 

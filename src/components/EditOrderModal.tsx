@@ -4,6 +4,7 @@ import { X, Bed, Percent, Info, RefreshCw, Lock, Copy, Coins, Plus, Trash2, Tag 
 import { Order, SurchargeItem } from '../types';
 import { useCRM, canUnlockOrder, isOrderLocked } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
+import { CustomSelect } from './CustomSelect';
 import { formatNumber, parseNumber, calculateOrderFinancials } from '@/lib/utils';
 
 interface EditOrderModalProps {
@@ -379,19 +380,20 @@ export default function EditOrderModal({
                         </span>
                       </div>
                     ) : (
-                      <select
+                      <CustomSelect
                         disabled={!canEditFinancials}
+                        options={[
+                          { value: '', label: '-- Chọn Đại lý đối tác --' },
+                          ...profilesList.filter(p => p.role === 'agent' || p.company_name).map(p => ({
+                            value: p.id,
+                            label: p.company_name ? `${p.company_name} (${p.full_name})` : p.full_name
+                          }))
+                        ]}
                         value={partnerId}
-                        onChange={(e) => setPartnerId(e.target.value)}
-                        className="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      >
-                        <option value="">-- Chọn Đại lý đối tác --</option>
-                        {profilesList.filter(p => p.role === 'agent' || p.company_name).map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.company_name ? `${p.company_name} (${p.full_name})` : p.full_name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setPartnerId}
+                        className="w-full"
+                        buttonClassName="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
                     )}
                   </div>
 
@@ -462,19 +464,21 @@ export default function EditOrderModal({
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Hoá đơn VAT (10%)
               </label>
-              <select
+              <CustomSelect
                 disabled={!canEditFinancials}
+                options={[
+                  { value: 'Không xuất VAT', label: 'Không xuất VAT' },
+                  { value: 'Xuất VAT', label: 'Xuất VAT (10%)' },
+                ]}
                 value={vatOption}
-                onChange={(e) => setVatOption(e.target.value)}
-                className={`w-full h-9 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                onChange={setVatOption}
+                className="w-full"
+                buttonClassName={`w-full h-9 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
                   !canEditFinancials
                     ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
                     : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 cursor-pointer'
                 }`}
-              >
-                <option value="Không xuất VAT">Không xuất VAT</option>
-                <option value="Xuất VAT">Xuất VAT (10%)</option>
-              </select>
+              />
               {vatOption === 'Xuất VAT' && (
                 <p className="text-[10px] text-emerald-600 font-medium">
                   Hệ thống sẽ tự động cộng thêm 10% thuế VAT
@@ -662,19 +666,21 @@ export default function EditOrderModal({
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                   Loại giảm giá
                 </label>
-                <select
+                <CustomSelect
                   disabled={!canEditFinancials}
+                  options={[
+                    { value: 'amount', label: 'Số tiền (đ)' },
+                    { value: 'percent', label: 'Phần trăm (%)' },
+                  ]}
                   value={discountType}
-                  onChange={(e) => setDiscountType(e.target.value as 'percent' | 'amount')}
-                  className={`w-full h-9 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                  onChange={val => setDiscountType(val as 'percent' | 'amount')}
+                  className="w-full"
+                  buttonClassName={`w-full h-9 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
                     !canEditFinancials
                       ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
                       : 'border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 cursor-pointer'
                   }`}
-                >
-                  <option value="amount">Số tiền (đ)</option>
-                  <option value="percent">Phần trăm (%)</option>
-                </select>
+                />
               </div>
               <div className="space-y-1">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">

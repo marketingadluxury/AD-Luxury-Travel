@@ -104,9 +104,9 @@ export const TimeRangeFilter: React.FC<TimeRangeFilterProps> = ({
             setIsDropdownOpen(!isDropdownOpen);
             if (isCustomOpen) setIsCustomOpen(false);
           }}
-          className={`flex items-center justify-between gap-2 text-left whitespace-nowrap transition-all cursor-pointer h-[38px] ${
+          className={`flex items-center justify-between gap-2 text-left whitespace-nowrap transition-all cursor-pointer ${
             selectClassName ||
-            'w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-gray-50/50 hover:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-slate-800 shadow-2xs'
+            'w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white hover:bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-slate-800'
           }`}
         >
           <span className="truncate flex items-center gap-1.5 min-w-0">

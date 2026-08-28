@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { useCRM } from '../context/CRMContext';
-import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Sliders } from 'lucide-react';
+import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
-import { MetaCapiSettingsSection } from '../components/MetaCapiSettingsSection';
 
 export default function Settings() {
   const { currentRole, membershipSettings, updateMembershipSettings } = useCRM();
-  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'meta_capi'>('membership');
+  const [activeTab, setActiveTab] = useState<'membership' | 'users'>('membership');
   
   const [silver, setSilver] = useState(membershipSettings?.silverMin || 20000000);
   const [gold, setGold] = useState(membershipSettings?.goldMin || 50000000);
@@ -82,17 +81,6 @@ export default function Settings() {
         >
           <Users className="w-4 h-4" />
           <span>Quản lý người dùng & phân quyền</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('meta_capi')}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-            activeTab === 'meta_capi'
-              ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
-          }`}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>Cấu hình Meta Conversions API (CAPI)</span>
         </button>
       </div>
 
@@ -243,7 +231,6 @@ export default function Settings() {
       )}
 
       {activeTab === 'users' && <UserManagement />}
-      {activeTab === 'meta_capi' && <MetaCapiSettingsSection />}
     </div>
   );
 }

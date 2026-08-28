@@ -7,6 +7,7 @@ import { FileText, Check, AlertCircle, Search, Copy, Pencil, LayoutGrid, List, U
 import { format } from 'date-fns';
 import { PassengerDocumentList } from '@/components/PassengerDocumentList';
 import { TimeRangeFilter } from '@/components/TimeRangeFilter';
+import { CustomSelect } from '@/components/CustomSelect';
 import { isDateInTimeRange } from '@/lib/dateUtils';
 
 interface DisqualifiedReasonInputProps {
@@ -329,9 +330,9 @@ export default function VisaProcessing() {
         )}
 
         {/* Hàng 2: Tìm kiếm, lọc thời gian và sắp xếp */}
-        <div className={`p-4 bg-slate-50 grid grid-cols-1 md:grid-cols-3 gap-3 ${viewMode === 'kanban' ? 'rounded-2xl' : 'rounded-b-2xl border-t border-slate-100'}`}>
+        <div className={`p-4 bg-slate-50 grid grid-cols-1 md:grid-cols-3 gap-3 items-center ${viewMode === 'kanban' ? 'rounded-2xl' : 'rounded-b-2xl border-t border-slate-100'}`}>
           {/* Ô tìm kiếm */}
-          <div className="relative">
+          <div className="relative w-full">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-slate-400" />
             </span>
@@ -340,33 +341,40 @@ export default function VisaProcessing() {
               placeholder="Tìm tên khách, hộ chiếu, tour..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-slate-800"
+              className="w-full h-9 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
             />
           </div>
 
           {/* Lọc thời gian nộp */}
-          <TimeRangeFilter
-            value={filterTimeRange}
-            onChange={setFilterTimeRange}
-            startDate={filterStartDate}
-            onChangeStartDate={setFilterStartDate}
-            endDate={filterEndDate}
-            onChangeEndDate={setFilterEndDate}
-            prefixText="Nộp/Tạo"
-            selectClassName="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-          />
+          <div className="w-full">
+            <TimeRangeFilter
+              value={filterTimeRange}
+              onChange={setFilterTimeRange}
+              startDate={filterStartDate}
+              onChangeStartDate={setFilterStartDate}
+              endDate={filterEndDate}
+              onChangeEndDate={setFilterEndDate}
+              prefixText="Nộp/Tạo"
+              className="w-full"
+              selectClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-none cursor-pointer"
+            />
+          </div>
 
           {/* Sắp xếp */}
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value)}
-            className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-semibold cursor-pointer"
-          >
-            <option value="newest_created">Sắp xếp: Khách mới nhất</option>
-            <option value="oldest_created">Sắp xếp: Khách cũ nhất</option>
-            <option value="newest_submitted">Sắp xếp: Ngày nộp mới nhất</option>
-            <option value="deadline_asc">Sắp xếp: Hạn nộp Visa gần nhất</option>
-          </select>
+          <div className="w-full">
+            <CustomSelect
+              options={[
+                { value: 'newest_created', label: 'Sắp xếp: Khách mới nhất' },
+                { value: 'oldest_created', label: 'Sắp xếp: Khách cũ nhất' },
+                { value: 'newest_submitted', label: 'Sắp xếp: Ngày nộp mới nhất' },
+                { value: 'deadline_asc', label: 'Sắp xếp: Hạn nộp Visa gần nhất' },
+              ]}
+              value={sortBy}
+              onChange={setSortBy}
+              className="w-full"
+              buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-semibold cursor-pointer"
+            />
+          </div>
         </div>
       </div>
 
@@ -492,10 +500,10 @@ export default function VisaProcessing() {
 
               return (
                 <div key={passenger.id} className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                  <div className="p-6 flex flex-col lg:flex-row items-start gap-6">
                     {/* Left block: Passenger info & Tour */}
-                    <div className="flex-1 space-y-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2.5">
                         <h3 className="text-lg font-bold text-slate-900">{passenger.full_name}</h3>
                         {passenger.is_payer && (
                           <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-700 uppercase">Trưởng đoàn</span>
@@ -503,7 +511,7 @@ export default function VisaProcessing() {
                         {getStatusBadge(passenger.visa_status, passenger.visa_disqualified_reason)}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-slate-600">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-slate-600">
                         <div>
                           <span className="text-slate-400">Mã đơn:</span>{' '}
                           <span 
@@ -568,8 +576,8 @@ export default function VisaProcessing() {
                     </div>
 
                     {/* Middle block: Documents list */}
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 w-full md:w-auto md:min-w-[280px] md:max-w-[340px]">
-                      <div className="flex items-center justify-between mb-1">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 w-full lg:w-[320px] shrink-0">
+                      <div className="flex items-center justify-between mb-1 h-5">
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Giấy tờ Sale đã upload</span>
                         {passenger.passport_url && (
                           <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
@@ -587,26 +595,30 @@ export default function VisaProcessing() {
                     </div>
 
                     {/* Right block: Actions to update state */}
-                    <div className="flex flex-col gap-2 w-full md:w-auto md:min-w-[180px]">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1">Cập nhật trạng thái</span>
-                      <select
-                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-semibold text-slate-800 cursor-pointer"
-                        value={passenger.visa_status}
-                        onChange={e => {
-                          const newStatus = e.target.value as Passenger['visa_status'];
+                    <div className="flex flex-col gap-2 w-full lg:w-[250px] shrink-0">
+                      <div className="flex items-center justify-between mb-1 h-5">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cập nhật trạng thái</span>
+                      </div>
+                      <CustomSelect
+                        options={[
+                          { value: 'pending', label: 'Chờ tiếp nhận' },
+                          { value: 'processing', label: 'Đang nộp hồ sơ' },
+                          { value: 'approved', label: 'Đã duyệt (Có Visa)' },
+                          { value: 'rejected', label: 'Bị từ chối' },
+                          { value: 'disqualified', label: 'Hồ sơ chưa đạt' },
+                        ]}
+                        value={passenger.visa_status || 'pending'}
+                        onChange={val => {
+                          const newStatus = val as Passenger['visa_status'];
                           if (newStatus === 'disqualified') {
                             updateVisaStatus(passenger.id, newStatus, passenger.visa_disqualified_reason || '');
                           } else {
                             updateVisaStatus(passenger.id, newStatus);
                           }
                         }}
-                      >
-                        <option value="pending">Chờ tiếp nhận</option>
-                        <option value="processing">Đang nộp hồ sơ</option>
-                        <option value="approved">Đã duyệt (Có Visa)</option>
-                        <option value="rejected">Bị từ chối</option>
-                        <option value="disqualified">Hồ sơ chưa đạt</option>
-                      </select>
+                        className="w-full"
+                        buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-semibold text-slate-800 cursor-pointer"
+                      />
 
                       {passenger.visa_status === 'disqualified' && (
                         <div className="mt-2.5 p-3.5 bg-rose-50/40 border border-rose-100 rounded-lg">
@@ -721,24 +733,26 @@ export default function VisaProcessing() {
                     <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                       ⚙️ Cập nhật Trạng Thái Visa
                     </h4>
-                    <select
-                      className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-bold text-slate-800 cursor-pointer"
-                      value={p.visa_status}
-                      onChange={e => {
-                        const newStatus = e.target.value as Passenger['visa_status'];
+                    <CustomSelect
+                      options={[
+                        { value: 'pending', label: '⏳ 1. Chờ tiếp nhận hồ sơ' },
+                        { value: 'processing', label: '🔄 2. Đang nộp / Xử lý LSQ' },
+                        { value: 'approved', label: '✅ 3. Đã duyệt (Có Visa)' },
+                        { value: 'disqualified', label: '⚠️ 3. Hồ sơ chưa đạt' },
+                        { value: 'rejected', label: '❌ 3. Bị từ chối (Trượt)' },
+                      ]}
+                      value={p.visa_status || 'pending'}
+                      onChange={val => {
+                        const newStatus = val as Passenger['visa_status'];
                         if (newStatus === 'disqualified') {
                           updateVisaStatus(p.id, newStatus, p.visa_disqualified_reason || '');
                         } else {
                           updateVisaStatus(p.id, newStatus);
                         }
                       }}
-                    >
-                      <option value="pending">⏳ 1. Chờ tiếp nhận hồ sơ</option>
-                      <option value="processing">🔄 2. Đang nộp / Xử lý LSQ</option>
-                      <option value="approved">✅ 3. Đã duyệt (Có Visa)</option>
-                      <option value="disqualified">⚠️ 3. Hồ sơ chưa đạt</option>
-                      <option value="rejected">❌ 3. Bị từ chối (Trượt)</option>
-                    </select>
+                      className="w-full"
+                      buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-bold text-slate-800 cursor-pointer"
+                    />
 
                     {p.visa_status === 'disqualified' && (
                       <div className="pt-2">

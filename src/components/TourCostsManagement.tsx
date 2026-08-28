@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Tour, LandtourCost, PartnerPayment, PartnerPaymentInstallment } from '@/types';
 import { formatDateVi } from '@/lib/utils';
 import { DatePicker } from '@/components/DatePicker';
+import { CustomSelect } from '@/components/CustomSelect';
 import {
   Plus,
   Trash2,
@@ -1481,73 +1482,79 @@ export default function TourCostsManagement() {
 
               {/* 2. Tour Type Filter */}
               <div>
-                <select
+                <CustomSelect
+                  options={[
+                    { value: 'all', label: 'Tất cả loại tour' },
+                    { value: 'internal', label: 'Tour tự vận hành' },
+                    { value: 'partner', label: 'Tour gửi đối tác (F2)' },
+                    { value: 'private', label: 'Tour đoàn riêng' },
+                  ]}
                   value={filterTourType}
-                  onChange={(e) => setFilterTourType(e.target.value)}
-                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
-                >
-                  <option value="all">Tất cả loại tour</option>
-                  <option value="internal">Tour tự vận hành</option>
-                  <option value="partner">Tour gửi đối tác (F2)</option>
-                  <option value="private">Tour đoàn riêng</option>
-                </select>
+                  onChange={setFilterTourType}
+                  className="w-full"
+                  buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
+                />
               </div>
 
               {/* 3. Departure Status Filter */}
               <div>
-                <select
+                <CustomSelect
+                  options={[
+                    { value: 'all', label: 'Tất cả trạng thái' },
+                    { value: 'upcoming', label: 'Sắp khởi hành' },
+                    { value: 'active', label: 'Đang chạy' },
+                    { value: 'departed', label: 'Đã hoàn thành / Khởi hành' },
+                    { value: 'cancelled', label: 'Đã hủy' },
+                  ]}
                   value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
-                >
-                  <option value="all">Tất cả trạng thái</option>
-                  <option value="upcoming">Sắp khởi hành</option>
-                  <option value="active">Đang chạy</option>
-                  <option value="departed">Đã hoàn thành / Khởi hành</option>
-                  <option value="cancelled">Đã hủy</option>
-                </select>
+                  onChange={setFilterStatus}
+                  className="w-full"
+                  buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
+                />
               </div>
 
               {/* 4. Month Filter */}
               <div>
-                <select
+                <CustomSelect
+                  options={[
+                    { value: 'all', label: 'Tất cả tháng khởi hành' },
+                    ...availableMonths.map(m => ({ value: m, label: `Tháng ${m}` }))
+                  ]}
                   value={filterMonth}
-                  onChange={(e) => setFilterMonth(e.target.value)}
-                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
-                >
-                  <option value="all">Tất cả tháng khởi hành</option>
-                  {availableMonths.map(m => (
-                    <option key={m} value={m}>Tháng {m}</option>
-                  ))}
-                </select>
+                  onChange={setFilterMonth}
+                  className="w-full"
+                  buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
+                />
               </div>
 
               {/* 5. Category Filter */}
               <div>
-                <select
+                <CustomSelect
+                  options={[
+                    { value: 'all', label: 'Tất cả danh mục' },
+                    ...categories.map(cat => ({ value: cat, label: cat }))
+                  ]}
                   value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
-                >
-                  <option value="all">Tất cả danh mục</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                  onChange={setFilterCategory}
+                  className="w-full"
+                  buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
+                />
               </div>
 
               {/* 6. Profit / Loss Status Filter */}
               <div>
-                <select
+                <CustomSelect
+                  options={[
+                    { value: 'all', label: 'Tất cả hạch toán' },
+                    { value: 'profit', label: 'Có lãi (Lợi nhuận > 0)' },
+                    { value: 'loss', label: 'Bị lỗ (Lợi nhuận < 0)' },
+                    { value: 'even', label: 'Hòa vốn / Chưa hạch toán' },
+                  ]}
                   value={filterProfit}
-                  onChange={(e) => setFilterProfit(e.target.value)}
-                  className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
-                >
-                  <option value="all">Tất cả hạch toán</option>
-                  <option value="profit">Có lãi (Lợi nhuận &gt; 0)</option>
-                  <option value="loss">Bị lỗ (Lợi nhuận &lt; 0)</option>
-                  <option value="even">Hòa vốn / Chưa hạch toán</option>
-                </select>
+                  onChange={setFilterProfit}
+                  className="w-full"
+                  buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
+                />
               </div>
             </div>
 
@@ -2558,15 +2565,17 @@ export default function TourCostsManagement() {
 
                                   <div className="space-y-1">
                                     <label className="block text-[10px] font-bold text-slate-500">Phương thức</label>
-                                    <select
-                                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-medium text-slate-800 outline-none transition-all cursor-pointer"
+                                    <CustomSelect
+                                      options={[
+                                        { value: 'Chuyển khoản', label: 'Chuyển khoản' },
+                                        { value: 'Tiền mặt', label: 'Tiền mặt' },
+                                        { value: 'Thẻ tín dụng', label: 'Thẻ tín dụng' },
+                                      ]}
                                       value={instMethodMap[item.id] || 'Chuyển khoản'}
-                                      onChange={e => setInstMethodMap(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                    >
-                                      <option value="Chuyển khoản">Chuyển khoản</option>
-                                      <option value="Tiền mặt">Tiền mặt</option>
-                                      <option value="Thẻ tín dụng">Thẻ tín dụng</option>
-                                    </select>
+                                      onChange={val => setInstMethodMap(prev => ({ ...prev, [item.id]: val }))}
+                                      className="w-full"
+                                      buttonClassName="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white font-medium text-slate-800 outline-none transition-all cursor-pointer"
+                                    />
                                   </div>
 
                                   <div className="space-y-1">

@@ -58,6 +58,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { CustomSelect } from '@/components/CustomSelect';
 import DashboardOperator from '@/components/DashboardOperator';
 import TourCostsManagement from '@/components/TourCostsManagement';
 
@@ -2075,15 +2076,17 @@ export default function ToursManagement() {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Loại hình sản phẩm *</label>
-                      <select
-                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                      <CustomSelect
+                        options={[
+                          ...(currentRole !== 'sale_leader' ? [{ value: 'internal', label: 'AD Tự vận hành' }] : []),
+                          { value: 'outsourced', label: 'Gửi khách đối tác-F2' },
+                          { value: 'private', label: 'Tour đoàn riêng' },
+                        ]}
                         value={tourType}
-                        onChange={e => setTourType(e.target.value as any)}
-                      >
-                        {currentRole !== 'sale_leader' && <option value="internal">AD Tự vận hành</option>}
-                        <option value="outsourced">Gửi khách đối tác-F2</option>
-                        <option value="private">Tour đoàn riêng</option>
-                      </select>
+                        onChange={val => setTourType(val as any)}
+                        className="w-full"
+                        buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                      />
                     </div>
                   </div>
 
@@ -2452,26 +2455,23 @@ export default function ToursManagement() {
                         </div>
                       ) : (
                         <div className="relative">
-                          <select 
-                            required
-                            className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                          <CustomSelect 
+                            options={[
+                              ...categories.map(cat => ({ value: cat, label: cat })),
+                              { value: '__ADD_NEW_CAT__', label: '+ Tạo danh mục mới...' }
+                            ]}
                             value={category}
-                            onChange={e => {
-                              if (e.target.value === '__ADD_NEW_CAT__') {
+                            onChange={val => {
+                              if (val === '__ADD_NEW_CAT__') {
                                 setShowInlineCatForm(true);
                                 setInlineCatName('');
                               } else {
-                                setCategory(e.target.value);
+                                setCategory(val);
                               }
                             }}
-                          >
-                            {categories.map(cat => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                            <option value="__ADD_NEW_CAT__" className="font-bold text-blue-600 bg-blue-50">
-                              + Tạo danh mục mới...
-                            </option>
-                          </select>
+                            className="w-full"
+                            buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                          />
                         </div>
                       )}
                     </div>
@@ -2710,18 +2710,20 @@ export default function ToursManagement() {
                     />
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Trạng thái mở bán</label>
-                      <select 
-                        className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                      <CustomSelect
+                        options={[
+                          { value: 'available', label: 'Còn chỗ' },
+                          { value: 'noshop', label: 'No shop' },
+                          { value: 'last_minute', label: 'Giờ chót' },
+                          { value: 'holiday', label: 'Lễ Tết' },
+                          { value: 'on_sale', label: 'Đang giảm giá' },
+                          { value: 'full', label: 'Kín chỗ' },
+                        ]}
                         value={tourStatus}
-                        onChange={e => setTourStatus(e.target.value as TourStatus)}
-                      >
-                        <option value="available">Còn chỗ</option>
-                        <option value="noshop">No shop</option>
-                        <option value="last_minute">Giờ chót</option>
-                        <option value="holiday">Lễ Tết</option>
-                        <option value="on_sale">Đang giảm giá</option>
-                        <option value="full">Kín chỗ</option>
-                      </select>
+                        onChange={val => setTourStatus(val as TourStatus)}
+                        className="w-full"
+                        buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                      />
                     </div>
                   </div>
                 </div>
@@ -3156,43 +3158,41 @@ export default function ToursManagement() {
 
               {/* Month filter dropdown - 3 cols */}
               <div className="relative lg:col-span-3">
-                <div className="relative flex items-center">
-                  <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <select
-                    value={filterMonth}
-                    onChange={e => setFilterMonth(e.target.value)}
-                    className="w-full h-9.5 pl-8.5 pr-8 py-1.5 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="all">Tất cả tháng khởi hành</option>
-                    {availableMonths.map(m => {
+                <CustomSelect
+                  options={[
+                    { value: 'all', label: 'Tất cả tháng khởi hành' },
+                    ...availableMonths.map(m => {
                       const [year, month] = m.split('-');
-                      return (
-                        <option key={m} value={m}>
-                          Tháng {month}/{year}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
+                      return {
+                        value: m,
+                        label: `Tháng ${month}/${year}`
+                      };
+                    })
+                  ]}
+                  value={filterMonth}
+                  onChange={setFilterMonth}
+                  icon={<Calendar className="w-3.5 h-3.5" />}
+                  className="w-full"
+                  buttonClassName="w-full h-9.5 px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
+                />
               </div>
 
               {/* Category filter dropdown - 3 cols (or span-2 if reset active) */}
               <div className={`relative ${searchTerm || filterMonth !== 'all' || filterCategory !== 'all' || filterTimeStatus !== 'upcoming' || filterTourType !== 'all' ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-                <div className="relative flex items-center">
-                  <Tag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <select
-                    value={filterCategory}
-                    onChange={e => setFilterCategory(e.target.value)}
-                    className="w-full h-9.5 pl-8.5 pr-8 py-1.5 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="all">Tất cả danh mục thị trường</option>
-                    {categories.map(c => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <CustomSelect
+                  options={[
+                    { value: 'all', label: 'Tất cả danh mục thị trường' },
+                    ...categories.map(c => ({
+                      value: c,
+                      label: c
+                    }))
+                  ]}
+                  value={filterCategory}
+                  onChange={setFilterCategory}
+                  icon={<Tag className="w-3.5 h-3.5" />}
+                  className="w-full"
+                  buttonClassName="w-full h-9.5 px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
+                />
               </div>
 
               {/* Reset filters button if any filter is active */}
@@ -3745,19 +3745,21 @@ export default function ToursManagement() {
               <div className="text-xs text-slate-500 font-medium flex flex-wrap items-center gap-2">
                 <span>Hiển thị</span>
                 <div className="inline-block">
-                  <select
-                    value={itemsPerPage}
-                    onChange={e => {
-                      setItemsPerPage(Number(e.target.value));
+                  <CustomSelect
+                    options={[
+                      { value: '5', label: '5 phần tử / trang' },
+                      { value: '10', label: '10 phần tử / trang' },
+                      { value: '20', label: '20 phần tử / trang' },
+                      { value: '50', label: '50 phần tử / trang' },
+                    ]}
+                    value={String(itemsPerPage)}
+                    onChange={val => {
+                      setItemsPerPage(Number(val));
                       setCurrentPage(1);
                     }}
-                    className="h-8 px-2.5 py-1 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value={5}>5 phần tử / trang</option>
-                    <option value={10}>10 phần tử / trang</option>
-                    <option value={20}>20 phần tử / trang</option>
-                    <option value={50}>50 phần tử / trang</option>
-                  </select>
+                    className="w-36"
+                    buttonClassName="w-full h-8 px-2.5 py-1 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
+                  />
                 </div>
                 <span>
                   {viewMode === 'grouped'

@@ -36,6 +36,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value);
+  const displayIcon = selectedOption?.icon || icon;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -60,19 +61,19 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         className={`flex items-center justify-between gap-2 text-left whitespace-nowrap transition-all cursor-pointer ${
-          buttonClassName ||
-          `w-full h-10 px-3 py-2 border rounded-xl text-xs font-semibold shadow-2xs ${
-            disabled
-              ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-              : isOpen
-              ? 'bg-white border-blue-500 ring-2 ring-blue-500/20 text-slate-900'
-              : 'bg-white hover:bg-slate-50 border-gray-200 text-slate-800'
-          }`
+          buttonClassName
+            ? `${buttonClassName} ${isOpen ? 'ring-2 ring-blue-500/20 !border-blue-500 !bg-white text-slate-900' : ''} ${disabled ? '!opacity-60 !cursor-not-allowed' : ''}`
+            : `w-full h-10 px-3 py-2 border rounded-xl text-xs font-semibold shadow-2xs ${
+                disabled
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                  : isOpen
+                  ? 'bg-white border-blue-500 ring-2 ring-blue-500/20 text-slate-900'
+                  : 'bg-white hover:bg-slate-50 border-gray-200 text-slate-800'
+              }`
         }`}
       >
         <span className="truncate flex items-center gap-2 min-w-0">
-          {icon && <span className="text-slate-500 shrink-0">{icon}</span>}
-          {selectedOption?.icon && <span className="shrink-0">{selectedOption.icon}</span>}
+          {displayIcon && <span className="text-slate-500 shrink-0">{displayIcon}</span>}
           <span className="truncate" title={selectedOption ? selectedOption.label : placeholder}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>

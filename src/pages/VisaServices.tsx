@@ -4,6 +4,7 @@ import ActionModal from '@/components/ActionModal';
 import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Tour, TourStatus } from '@/types';
+import { CustomSelect } from '@/components/CustomSelect';
 import {
   Plus,
   User,
@@ -1664,14 +1665,16 @@ export default function VisaServices() {
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-slate-700 mb-1">Độ khẩn *</label>
-                            <select
-                              className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+                            <CustomSelect
+                              options={[
+                                { value: 'standard', label: '⏳ Thường' },
+                                { value: 'urgent', label: '⚡ Khẩn' },
+                              ]}
                               value={visaSpeed}
-                              onChange={e => setVisaSpeed(e.target.value as any)}
-                            >
-                              <option value="standard">⏳ Thường</option>
-                              <option value="urgent">⚡ Khẩn</option>
-                            </select>
+                              onChange={val => setVisaSpeed(val as any)}
+                              className="w-full"
+                              buttonClassName="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+                            />
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-slate-700 mb-1">Yêu cầu hồ sơ đính kèm (Hoặc lưu ý cần chuẩn bị)</label>
@@ -2083,18 +2086,20 @@ export default function VisaServices() {
                     />
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái mở bán</label>
-                      <select 
-                        className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+                      <CustomSelect
+                        options={[
+                          { value: 'available', label: 'Còn chỗ' },
+                          { value: 'noshop', label: 'No shop' },
+                          { value: 'last_minute', label: 'Giờ chót' },
+                          { value: 'holiday', label: 'Lễ Tết' },
+                          { value: 'on_sale', label: 'Đang giảm giá' },
+                          { value: 'full', label: 'Kín chỗ' },
+                        ]}
                         value={tourStatus}
-                        onChange={e => setTourStatus(e.target.value as TourStatus)}
-                      >
-                        <option value="available">Còn chỗ</option>
-                        <option value="noshop">No shop</option>
-                        <option value="last_minute">Giờ chót</option>
-                        <option value="holiday">Lễ Tết</option>
-                        <option value="on_sale">Đang giảm giá</option>
-                        <option value="full">Kín chỗ</option>
-                      </select>
+                        onChange={val => setTourStatus(val as TourStatus)}
+                        className="w-full"
+                        buttonClassName="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+                      />
                     </div>
                   </div>
                 </div>
@@ -2394,40 +2399,42 @@ export default function VisaServices() {
               {/* Ô tìm kiếm */}
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
+                  <Search className="h-4 w-4 text-slate-400" />
                 </span>
                 <input
                   type="text"
                   placeholder="Tìm mã, tên dịch vụ..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full h-9 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
 
               {/* Lọc quốc gia */}
-              <select
+              <CustomSelect
+                options={[
+                  { value: 'all', label: 'Tất cả quốc gia' },
+                  ...visaCountries.map(c => ({ value: c, label: c }))
+                ]}
                 value={filterCountry}
-                onChange={e => setFilterCountry(e.target.value)}
-                className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-              >
-                <option value="all">Tất cả quốc gia</option>
-                {visaCountries.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+                onChange={setFilterCountry}
+                className="w-full"
+                buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+              />
 
               {/* Sắp xếp */}
-              <select
+              <CustomSelect
+                options={[
+                  { value: 'newest', label: 'Sắp xếp: Mới nhất' },
+                  { value: 'oldest', label: 'Sắp xếp: Cũ nhất' },
+                  { value: 'highest_price', label: 'Sắp xếp: Phí dịch vụ giảm dần' },
+                  { value: 'lowest_price', label: 'Sắp xếp: Phí dịch vụ tăng dần' },
+                ]}
                 value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-                className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-              >
-                <option value="newest">Sắp xếp: Mới nhất</option>
-                <option value="oldest">Sắp xếp: Cũ nhất</option>
-                <option value="highest_price">Sắp xếp: Phí dịch vụ giảm dần</option>
-                <option value="lowest_price">Sắp xếp: Phí dịch vụ tăng dần</option>
-              </select>
+                onChange={setSortBy}
+                className="w-full"
+                buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+              />
             </div>
 
             {viewMode === 'grouped' ? (

@@ -943,7 +943,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Main scrollable view */}
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-3 sm:p-6 md:p-8 pb-20 md:pb-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 p-3 sm:p-6 md:p-8 pb-20 md:pb-8 min-w-0 w-full">
           {hasAccess ? children : <AccessDeniedView />}
         </main>
 

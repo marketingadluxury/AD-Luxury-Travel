@@ -47,6 +47,7 @@ import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DatePicker } from '../components/DatePicker';
+import { CustomSelect } from '../components/CustomSelect';
 import {
   ResponsiveContainer,
   BarChart,
@@ -62,9 +63,8 @@ import {
   Cell,
   Legend
 } from 'recharts';
-import { Role, Team, TeamPerformanceSummary, SalePerformanceSummary, MetaLead, MetaConversionLog } from '../types';
-import { fetchMetaLeads, fetchMetaConversionLogs } from '../lib/metaCapiService';
-import { MetaAdsPerformanceDashboard } from '../components/MetaAdsPerformanceDashboard';
+import * as XLSX from 'xlsx';
+import { Role, Team, TeamPerformanceSummary, SalePerformanceSummary } from '../types';
 
 // Palette màu sắc thiết kế hiện đại đồng bộ hệ thống
 const PIE_COLORS = ['#2563eb', '#1e293b', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6'];
@@ -201,9 +201,6 @@ export default function Dashboard() {
 
   // Tải danh sách Teams động từ Database Supabase và API
   const [dbTeams, setDbTeams] = useState<Team[]>([]);
-  const [dashboardMetaLeads, setDashboardMetaLeads] = useState<MetaLead[]>([]);
-  const [dashboardMetaLogs, setDashboardMetaLogs] = useState<MetaConversionLog[]>([]);
-  const [isLoadingMetaAds, setIsLoadingMetaAds] = useState(false);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -234,26 +231,7 @@ export default function Dashboard() {
       }
     };
 
-    const fetchMetaAdsData = async () => {
-      try {
-        setIsLoadingMetaAds(true);
-        const [leadsData, logsData] = await Promise.all([
-          fetchMetaLeads(),
-          fetchMetaConversionLogs()
-        ]);
-        if (isMounted) {
-          setDashboardMetaLeads(leadsData || []);
-          setDashboardMetaLogs(logsData || []);
-        }
-      } catch (err) {
-        console.warn('Lỗi khi tải dữ liệu Meta Ads cho Dashboard:', err);
-      } finally {
-        if (isMounted) setIsLoadingMetaAds(false);
-      }
-    };
-
     fetchTeamsList();
-    fetchMetaAdsData();
     return () => { isMounted = false; };
   }, []);
 
@@ -916,6 +894,54 @@ export default function Dashboard() {
     .sort((a, b) => b.revenue - a.revenue);
   }, [tours, filteredOrders, tourCosts]);
 
+  // Các danh sách tùy chọn cho CustomSelect đồng bộ toàn hệ thống
+  const teamFilterOptions = useMemo(() => [
+    { value: 'all', label: 'Tất cả đội nhóm' },
+    ...activeTeams.map(t => ({ value: t.id, label: t.name }))
+  ], [activeTeams]);
+
+  const saleFilterOptions = useMemo(() => [
+    { value: 'all', label: 'Tất cả nhân viên' },
+    ...salesProfiles.map(s => ({
+      value: s.id,
+      label: `${s.full_name} (${s.role === 'sale_leader' ? 'Leader' : s.role === 'sale' ? 'Sale' : 'Quản lý'})`
+    }))
+  ], [salesProfiles]);
+
+  const channelFilterOptions = useMemo(() => [
+    { value: 'all', label: 'Tất cả kênh bán' },
+    { value: 'direct', label: 'Khách lẻ trực tiếp' },
+    { value: 'agent', label: 'Đại lý đối tác (F2)' },
+    { value: 'ctv', label: 'CTV (Bán chênh giá)' },
+    { value: 'referral', label: 'Khách đoàn riêng / Giới thiệu' }
+  ], []);
+
+  const tourTypeFilterOptions = useMemo(() => [
+    { value: 'all', label: 'Tất cả loại tour' },
+    { value: 'internal', label: 'AD Tự vận hành' },
+    { value: 'partner', label: 'Gửi đối tác / Đoàn riêng' },
+    { value: 'visa', label: 'Dịch vụ Visa' }
+  ], []);
+
+  const statusFilterOptions = useMemo(() => [
+    { value: 'all', label: 'Tất cả trạng thái' },
+    { value: 'sure', label: 'Đã cọc / Chốt (Sure/Paid)' },
+    { value: 'hold', label: 'Đang giữ chỗ (Hold)' },
+    { value: 'expiring', label: 'Sắp hết hạn giữ chỗ (< 24h)' }
+  ], []);
+
+  const forecastPeriodOptions = useMemo(() => [
+    { value: 'monthly', label: 'Theo tháng' },
+    { value: 'quarterly', label: 'Theo quý' }
+  ], []);
+
+  const tableSortOptions = useMemo(() => [
+    { value: 'revenue-desc', label: 'Sắp xếp: Doanh số ↓' },
+    { value: 'revenue-asc', label: 'Sắp xếp: Doanh số ↑' },
+    { value: 'pax-desc', label: 'Sắp xếp: Số lượng Pax ↓' },
+    { value: 'name-asc', label: 'Sắp xếp: Tên A-Z' }
+  ], []);
+
   const handleSelectAllRows = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
       setSelectedRows(processedSaleList.map(s => s.sale_id));
@@ -930,42 +956,102 @@ export default function Dashboard() {
     );
   };
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     try {
-      const headers = ['Mã Đơn', 'Khách Hàng', 'Số Điện Thoại', 'Tour Du Lịch', 'Số Pax', 'Tổng Tiền (VNĐ)', 'Trạng Thái', 'Người Tạo / Sale', 'Thời Gian Tạo'];
-      const rows = filteredOrders.map(o => {
+      // Sheet 1: Danh sách Đơn hàng kinh doanh
+      const orderRows = filteredOrders.map((o, idx) => {
         const tour = tours.find(t => t.id === o.tour_id);
         const pax = (o.adult_count || 0) + (o.child_count || 0) + (o.infant_count || 0) || 1;
         const statusText = o.status === 'sure' || o.status === 'paid' ? 'Đã cọc / Chốt' : o.status === 'hold' ? 'Đang giữ chỗ' : 'Chờ xử lý';
-        return [
-          `"${o.id?.slice(0, 8) || ''}"`,
-          `"${(o.customer_name || 'Khách lẻ').replace(/"/g, '""')}"`,
-          `"${o.customer_phone || ''}"`,
-          `"${(tour?.name || 'Tour Du Lịch').replace(/"/g, '""')}"`,
-          pax,
-          o.total_price || 0,
-          `"${statusText}"`,
-          `"${(o.created_by || '').replace(/"/g, '""')}"`,
-          `"${formatDateTimeStr(o.created_at)}"`
-        ];
+        return {
+          'STT': idx + 1,
+          'Mã Đơn': o.id?.slice(0, 8) || '',
+          'Khách Hàng': o.customer_name || 'Khách lẻ',
+          'Số Điện Thoại': o.customer_phone || '',
+          'Tour Du Lịch': tour?.name || 'Tour Du Lịch',
+          'Mã Tour': tour?.code || '',
+          'Số Khách (Pax)': pax,
+          'Tổng Giá Trị (VNĐ)': o.total_price || 0,
+          'Trạng Thái Đơn': statusText,
+          'Người Tạo / Sale': o.created_by || '',
+          'Kênh Bán': o.ctv_info ? `CTV (${typeof o.ctv_info === 'string' ? o.ctv_info : (o.ctv_info as any)?.name || ''})` : o.seller_type === 'agent' ? 'Đại lý đối tác' : 'Trực tiếp',
+          'Thời Gian Tạo': formatDateTimeStr(o.created_at)
+        };
       });
 
-      const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Bao_Cao_Kinh_Doanh_AD_Luxury_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Sheet 2: Báo cáo Doanh số Nhân viên
+      const saleRows = processedSaleList.map((s, idx) => ({
+        'Hạng': idx + 1,
+        'Nhân Viên Sale': s.sale_name,
+        'Đội Nhóm (Team)': s.team_name,
+        'Số Đơn Chốt': s.total_orders,
+        'Tổng Lượt Pax': s.pax_count,
+        'Doanh Số Chốt (VNĐ)': s.revenue,
+        'Chỉ Tiêu KPI (VNĐ)': s.kpi_target || 0,
+        'Tiến Độ KPI (%)': `${s.kpi_percentage.toFixed(1)}%`,
+        'Lợi Nhuận Gộp AD (VNĐ)': s.net_profit,
+        'Đánh Giá': s.kpi_percentage >= 100 ? 'Đạt KPI (Xuất sắc)' : 'Đang thực hiện'
+      }));
 
-      setExportNotice('Đã xuất file báo cáo kinh doanh (Excel/CSV) thành công!');
+      // Sheet 3: Báo cáo Hiệu quả Đội nhóm (Team)
+      const teamRows = executiveData.teamPerformanceList.map((t, idx) => ({
+        'STT': idx + 1,
+        'Tên Team': t.team_name,
+        'Trưởng Nhóm (Leader)': t.leader_name,
+        'Số Đơn Chốt': t.total_orders,
+        'Tổng Khách Pax': t.pax_count,
+        'Doanh Số Thực Hiện (VNĐ)': t.revenue,
+        'Chỉ Tiêu KPI (VNĐ)': t.kpi_target,
+        'Tiến Độ Đạt KPI (%)': `${t.kpi_percentage.toFixed(1)}%`
+      }));
+
+      // Sheet 4: Báo cáo Lãi / Lỗ Tour Du Lịch
+      const tourReportRows = tourReportList.map((tr, idx) => ({
+        'STT': idx + 1,
+        'Mã Tour': tr.code,
+        'Tên Tour Du Lịch': tr.name,
+        'Phân Loại Tour': tr.tour_type === 'internal' ? 'AD Tự Vận Hành' : tr.tour_type === 'partner' ? `Gửi Đối Tác (${tr.partner_name || 'F2'})` : 'Tour Đoàn Riêng',
+        'Số Chỗ Đã Bán': `${tr.sold_seats}/${tr.total_seats || 30}`,
+        'Doanh Thu Chốt (VNĐ)': tr.revenue,
+        'Chi Phí Vốn Tour (VNĐ)': tr.cost,
+        'Lợi Nhuận Gộp (VNĐ)': tr.profit,
+        'Biên Lợi Nhuận (%)': `${tr.margin.toFixed(1)}%`
+      }));
+
+      // Tạo Workbook và gắn các Sheets
+      const workbook = XLSX.utils.book_new();
+
+      const wsOrders = XLSX.utils.json_to_sheet(orderRows);
+      wsOrders['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 16 }, { wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 22 }];
+      XLSX.utils.book_append_sheet(workbook, wsOrders, 'Danh_Sach_Don_Hang');
+
+      if (saleRows.length > 0) {
+        const wsSales = XLSX.utils.json_to_sheet(saleRows);
+        wsSales['!cols'] = [{ wch: 6 }, { wch: 22 }, { wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 22 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsSales, 'Doanh_So_Sale');
+      }
+
+      if (teamRows.length > 0) {
+        const wsTeams = XLSX.utils.json_to_sheet(teamRows);
+        wsTeams['!cols'] = [{ wch: 6 }, { wch: 22 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 20 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(workbook, wsTeams, 'Hieu_Qua_Team');
+      }
+
+      if (tourReportRows.length > 0) {
+        const wsTours = XLSX.utils.json_to_sheet(tourReportRows);
+        wsTours['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 32 }, { wch: 24 }, { wch: 16 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(workbook, wsTours, 'Lai_Lo_Tour');
+      }
+
+      const fileName = `Bao_Cao_Kinh_Doanh_AD_Luxury_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+
+      setExportNotice('Đã xuất file báo cáo kinh doanh định dạng Excel (.xlsx) thành công!');
       setTimeout(() => setExportNotice(null), 3500);
     } catch (err) {
-      console.error('Lỗi xuất file:', err);
-      setExportNotice('Đã xuất file báo cáo kinh doanh thành công!');
-      setTimeout(() => setExportNotice(null), 3000);
+      console.error('Lỗi xuất file Excel:', err);
+      setExportNotice('Lỗi khi xuất file Excel. Vui lòng thử lại!');
+      setTimeout(() => setExportNotice(null), 3500);
     }
   };
 
@@ -982,10 +1068,10 @@ export default function Dashboard() {
       {/* ========================================================================= */}
       {/* HEADER BẢNG ĐIỀU KHIỂN & SUB-NAVIGATION BAR (100% VIETNAMESE) */}
       {/* ========================================================================= */}
-      <div className="bg-white rounded-xl p-4 md:p-5 border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl p-4 md:p-5 border border-slate-200 shadow-2xs flex flex-col xl:flex-row xl:items-center justify-between gap-4 min-w-0">
         {/* Tiêu đề & Sub-nav Tabs */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
+        <div className="space-y-3 min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Bảng Điều Khiển</h1>
             <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-200 flex items-center gap-1">
               <Zap className="w-3.5 h-3.5 text-blue-600" />
@@ -996,10 +1082,10 @@ export default function Dashboard() {
           </div>
 
           {/* Sub-Navigation Tabs */}
-          <div className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600">
+          <div className="inline-flex max-w-full overflow-x-auto p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`px-3.5 py-1.5 rounded-md transition-all ${
+              className={`px-3.5 py-1.5 rounded-md transition-all shrink-0 ${
                 activeTab === 'overview' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'hover:text-slate-900'
               }`}
             >
@@ -1007,7 +1093,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('sales')}
-              className={`px-3.5 py-1.5 rounded-md transition-all ${
+              className={`px-3.5 py-1.5 rounded-md transition-all shrink-0 ${
                 activeTab === 'sales' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'hover:text-slate-900'
               }`}
             >
@@ -1015,7 +1101,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('order')}
-              className={`px-3.5 py-1.5 rounded-md transition-all ${
+              className={`px-3.5 py-1.5 rounded-md transition-all shrink-0 ${
                 activeTab === 'order' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'hover:text-slate-900'
               }`}
             >
@@ -1023,7 +1109,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('report')}
-              className={`px-3.5 py-1.5 rounded-md transition-all ${
+              className={`px-3.5 py-1.5 rounded-md transition-all shrink-0 ${
                 activeTab === 'report' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'hover:text-slate-900'
               }`}
             >
@@ -1033,7 +1119,7 @@ export default function Dashboard() {
         </div>
 
         {/* Action Controls Top Right: Filter, Export, Need Help */}
-        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start xl:self-auto shrink-0">
           {/* Trợ giúp badge */}
           <div className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
             <HelpCircle className="w-4 h-4 text-slate-400" />
@@ -1084,7 +1170,7 @@ export default function Dashboard() {
           {/* Nút Xuất Báo Cáo */}
           <button
             type="button"
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition-all shadow-2xs active:scale-95"
           >
             <Download className="w-3.5 h-3.5" />
@@ -1282,36 +1368,26 @@ export default function Dashboard() {
                   <label className="block text-xs font-bold uppercase text-slate-600 tracking-wider mb-1.5">
                     Đội Nhóm Kinh Doanh
                   </label>
-                  <select
+                  <CustomSelect
                     value={selectedTeamFilter}
-                    onChange={e => setSelectedTeamFilter(e.target.value)}
-                    className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs transition-all"
-                  >
-                    <option value="all">Tất cả đội nhóm</option>
-                    {activeTeams.map(team => (
-                      <option key={team.id} value={team.id}>
-                        {team.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedTeamFilter}
+                    options={teamFilterOptions}
+                    className="w-full"
+                    buttonClassName="w-full h-10 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-800 shadow-2xs"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-600 tracking-wider mb-1.5">
                     Nhân Viên Sale Phụ Trách
                   </label>
-                  <select
+                  <CustomSelect
                     value={selectedSaleFilter}
-                    onChange={e => setSelectedSaleFilter(e.target.value)}
-                    className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs transition-all"
-                  >
-                    <option value="all">Tất cả nhân viên</option>
-                    {salesProfiles.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.full_name} ({s.role === 'sale_leader' ? 'Leader' : s.role === 'sale' ? 'Sale' : 'Quản lý'})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedSaleFilter}
+                    options={saleFilterOptions}
+                    className="w-full"
+                    buttonClassName="w-full h-10 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-800 shadow-2xs"
+                  />
                 </div>
               </div>
 
@@ -1321,49 +1397,39 @@ export default function Dashboard() {
                   <label className="block text-xs font-bold uppercase text-slate-600 tracking-wider mb-1.5">
                     Kênh Bán / Nguồn Khách
                   </label>
-                  <select
+                  <CustomSelect
                     value={selectedChannelFilter}
-                    onChange={e => setSelectedChannelFilter(e.target.value)}
-                    className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs transition-all"
-                  >
-                    <option value="all">Tất cả kênh bán</option>
-                    <option value="direct">Khách lẻ trực tiếp</option>
-                    <option value="agent">Đại lý đối tác (F2)</option>
-                    <option value="ctv">CTV (Bán chênh giá)</option>
-                    <option value="referral">Khách đoàn riêng / Giới thiệu</option>
-                  </select>
+                    onChange={setSelectedChannelFilter}
+                    options={channelFilterOptions}
+                    className="w-full"
+                    buttonClassName="w-full h-10 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-800 shadow-2xs"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-600 tracking-wider mb-1.5">
                     Loại Sản Phẩm / Tour
                   </label>
-                  <select
+                  <CustomSelect
                     value={selectedTourTypeFilter}
-                    onChange={e => setSelectedTourTypeFilter(e.target.value)}
-                    className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs transition-all"
-                  >
-                    <option value="all">Tất cả loại tour</option>
-                    <option value="internal">AD Tự vận hành</option>
-                    <option value="partner">Gửi đối tác / Đoàn riêng</option>
-                    <option value="visa">Dịch vụ Visa</option>
-                  </select>
+                    onChange={setSelectedTourTypeFilter}
+                    options={tourTypeFilterOptions}
+                    className="w-full"
+                    buttonClassName="w-full h-10 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-800 shadow-2xs"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase text-slate-600 tracking-wider mb-1.5">
                     Trạng Thái Đơn Hàng
                   </label>
-                  <select
+                  <CustomSelect
                     value={selectedStatusFilter}
-                    onChange={e => setSelectedStatusFilter(e.target.value)}
-                    className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs transition-all"
-                  >
-                    <option value="all">Tất cả trạng thái</option>
-                    <option value="sure">Đã cọc / Chốt (Sure/Paid)</option>
-                    <option value="hold">Đang giữ chỗ (Hold)</option>
-                    <option value="expiring">Sắp hết hạn giữ chỗ (&lt; 24h)</option>
-                  </select>
+                    onChange={setSelectedStatusFilter}
+                    options={statusFilterOptions}
+                    className="w-full"
+                    buttonClassName="w-full h-10 px-3 py-2 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-800 shadow-2xs"
+                  />
                 </div>
               </div>
             </div>
@@ -1483,14 +1549,13 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-700 font-bold">Báo cáo dự báo & tăng trưởng doanh thu theo tháng</p>
                 </div>
 
-                <select
+                <CustomSelect
                   value={forecastPeriod}
-                  onChange={(e: any) => setForecastPeriod(e.target.value)}
-                  className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-1.5 text-xs font-semibold text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs"
-                >
-                  <option value="monthly">Theo tháng</option>
-                  <option value="quarterly">Theo quý</option>
-                </select>
+                  onChange={(val) => setForecastPeriod(val as 'monthly' | 'quarterly')}
+                  options={forecastPeriodOptions}
+                  align="right"
+                  buttonClassName="h-8 px-3 py-1.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-2xs"
+                />
               </div>
 
               <div className="h-72 w-full pt-2">
@@ -1539,16 +1604,14 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-700 font-bold">Phân bổ nguồn khách hàng & kênh kinh doanh</p>
                 </div>
 
-                <select
+                <CustomSelect
                   value={selectedTeamFilter}
-                  onChange={e => setSelectedTeamFilter(e.target.value)}
-                  className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-1.5 text-xs font-semibold text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all max-w-[180px] truncate shadow-2xs"
-                >
-                  <option value="all">Tất cả đội nhóm</option>
-                  {activeTeams.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                  onChange={setSelectedTeamFilter}
+                  options={teamFilterOptions}
+                  align="right"
+                  className="max-w-[200px]"
+                  buttonClassName="h-8 px-3 py-1.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-700 truncate shadow-2xs"
+                />
               </div>
 
               <div>
@@ -1590,15 +1653,17 @@ export default function Dashboard() {
 
               <button
                 type="button"
-                className="w-full py-2 text-center text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all active:scale-[0.99]"
+                onClick={() => setActiveTab('order')}
+                className="w-full py-2 text-center text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50/50 hover:bg-blue-50 rounded-lg border border-blue-200 transition-all active:scale-[0.99] flex items-center justify-center gap-1"
               >
-                Xem chi tiết
+                <span>Xem chi tiết danh sách đơn</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Table Data Sales Section */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
             <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 tracking-tight">Bảng Chi Tiết Doanh Số Kinh Doanh</h2>
@@ -1617,16 +1682,14 @@ export default function Dashboard() {
                   />
                 </div>
 
-                <select
+                <CustomSelect
                   value={tableSortBy}
-                  onChange={(e: any) => setTableSortBy(e.target.value)}
-                  className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-lg pl-3 pr-8 py-1.5 text-xs font-semibold text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all h-9 shadow-2xs"
-                >
-                  <option value="revenue-desc">Sắp xếp: Doanh số ↓</option>
-                  <option value="revenue-asc">Sắp xếp: Doanh số ↑</option>
-                  <option value="pax-desc">Sắp xếp: Số lượng Pax ↓</option>
-                  <option value="name-asc">Sắp xếp: Tên A-Z</option>
-                </select>
+                  onChange={(val) => setTableSortBy(val as any)}
+                  options={tableSortOptions}
+                  align="right"
+                  className="w-44 sm:w-48"
+                  buttonClassName="h-9 px-3 py-1.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-2xs"
+                />
 
                 <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
                   <button
@@ -1666,7 +1729,7 @@ export default function Dashboard() {
             </div>
 
             {saleViewMode === 'table' && (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-b-xl">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase border-b border-slate-200/80">
                     <tr>
@@ -1763,8 +1826,17 @@ export default function Dashboard() {
                               </span>
                             </td>
                             <td className="px-4 py-3.5 text-right">
-                              <button className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
-                                <MoreVertical className="w-4 h-4" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSaleFilter(sale.sale_id);
+                                  setActiveTab('order');
+                                }}
+                                title="Xem đơn hàng của nhân viên này"
+                                className="px-2.5 py-1 text-slate-600 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-xs font-semibold inline-flex items-center gap-1 border border-slate-200 hover:border-blue-200"
+                              >
+                                <span>Xem đơn</span>
+                                <ChevronRight className="w-3 h-3" />
                               </button>
                             </td>
                           </tr>
@@ -1843,31 +1915,6 @@ export default function Dashboard() {
                 )}
               </div>
             )}
-          </div>
-
-          {/* Widget Báo Cáo Hiệu Quả Quảng Cáo Meta Ads & CAPI */}
-          <div className="pt-2">
-            <MetaAdsPerformanceDashboard
-              leads={dashboardMetaLeads}
-              orders={orders}
-              conversionLogs={dashboardMetaLogs}
-              isLoading={isLoadingMetaAds}
-              onRefresh={async () => {
-                try {
-                  setIsLoadingMetaAds(true);
-                  const [leadsData, logsData] = await Promise.all([
-                    fetchMetaLeads(),
-                    fetchMetaConversionLogs()
-                  ]);
-                  setDashboardMetaLeads(leadsData || []);
-                  setDashboardMetaLogs(logsData || []);
-                } catch (err) {
-                  console.error(err);
-                } finally {
-                  setIsLoadingMetaAds(false);
-                }
-              }}
-            />
           </div>
         </div>
       )}
@@ -2336,7 +2383,8 @@ export default function Dashboard() {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleExportCSV}
+                  type="button"
+                  onClick={handleExportExcel}
                   className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-2xs"
                 >
                   <Download className="w-3.5 h-3.5" /> Xuất Excel Lãi/Lỗ

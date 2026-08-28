@@ -32,6 +32,7 @@ import toast from 'react-hot-toast';
 import { useCRM } from '../context/CRMContext';
 import { useAuth, UserProfile } from '../context/AuthContext';
 import { Order, Role } from '../types';
+import { CustomSelect } from '../components/CustomSelect';
 
 // Standard Vietnamese Banks for Dropdown
 const VN_BANKS = [
@@ -672,17 +673,19 @@ export default function CustomersManagement() {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 font-semibold hidden sm:inline">Sắp xếp:</span>
-              <select
+              <CustomSelect
+                options={[
+                  { value: 'revenue', label: 'Doanh số cao nhất' },
+                  { value: 'bookings', label: 'Số đơn booking nhiều nhất' },
+                  { value: 'pax', label: 'Số lượng Pax nhiều nhất' },
+                  { value: 'commission', label: 'Hoa hồng phát sinh nhiều nhất' },
+                  { value: 'newest', label: 'Ngày gia nhập mới nhất' },
+                ]}
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
-              >
-                <option value="revenue">Doanh số cao nhất</option>
-                <option value="bookings">Số đơn booking nhiều nhất</option>
-                <option value="pax">Số lượng Pax nhiều nhất</option>
-                <option value="commission">Hoa hồng phát sinh nhiều nhất</option>
-                <option value="newest">Ngày gia nhập mới nhất</option>
-              </select>
+                onChange={val => setSortBy(val as any)}
+                className="w-52"
+                buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+              />
             </div>
 
             <div className="flex items-center border border-slate-200 rounded-lg p-0.5 bg-slate-50 shrink-0">
@@ -732,31 +735,36 @@ export default function CustomersManagement() {
 
           {/* Sale/Leader filter */}
           <div>
-            <select
+            <CustomSelect
+              options={[
+                { value: 'all', label: 'Tất cả Sale phụ trách' },
+                ...leaderOptions.map(l => ({
+                  value: l.id,
+                  label: `${l.full_name} (${l.role})`
+                }))
+              ]}
               value={filterLeaderId}
-              onChange={(e) => setFilterLeaderId(e.target.value)}
-              className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
-            >
-              <option value="all">Tất cả Sale phụ trách</option>
-              {leaderOptions.map(l => (
-                <option key={l.id} value={l.id}>{l.full_name} ({l.role})</option>
-              ))}
-            </select>
+              onChange={setFilterLeaderId}
+              className="w-full"
+              buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
+            />
           </div>
 
           {/* Tier filter */}
           <div>
-            <select
+            <CustomSelect
+              options={[
+                { value: 'all', label: 'Tất cả Hạng đối tác' },
+                { value: 'platinum', label: 'Platinum Partner' },
+                { value: 'gold', label: 'Gold Partner' },
+                { value: 'silver', label: 'Silver Partner' },
+                { value: 'standard', label: 'Standard Partner' },
+              ]}
               value={filterTier}
-              onChange={(e) => setFilterTier(e.target.value)}
-              className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
-            >
-              <option value="all">Tất cả Hạng đối tác</option>
-              <option value="platinum">Platinum Partner</option>
-              <option value="gold">Gold Partner</option>
-              <option value="silver">Silver Partner</option>
-              <option value="standard">Standard Partner</option>
-            </select>
+              onChange={setFilterTier}
+              className="w-full"
+              buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-800 font-semibold cursor-pointer transition-all"
+            />
           </div>
         </div>
 
@@ -1254,32 +1262,37 @@ export default function CustomersManagement() {
                   <label className="block text-xs font-bold text-gray-700 mb-1">
                     Sale / Leader phụ trách
                   </label>
-                  <select
+                  <CustomSelect
+                    options={[
+                      { value: '', label: '-- Chọn Nhân viên Sale / Leader --' },
+                      ...leaderOptions.map(l => ({
+                        value: l.id,
+                        label: `${l.full_name} (${l.role})`
+                      }))
+                    ]}
                     value={formData.leader_id}
-                    onChange={(e) => setFormData({ ...formData, leader_id: e.target.value })}
-                    className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
-                  >
-                    <option value="">-- Chọn Nhân viên Sale / Leader --</option>
-                    {leaderOptions.map(l => (
-                      <option key={l.id} value={l.id}>{l.full_name} ({l.role})</option>
-                    ))}
-                  </select>
+                    onChange={val => setFormData({ ...formData, leader_id: val })}
+                    className="w-full"
+                    buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">
                     Hạng đối tác (Tier)
                   </label>
-                  <select
+                  <CustomSelect
+                    options={[
+                      { value: 'Standard', label: 'Standard Partner (Mặc định)' },
+                      { value: 'Silver Partner', label: 'Silver Partner (Hạng Bạc)' },
+                      { value: 'Gold Partner', label: 'Gold Partner (Hạng Vàng)' },
+                      { value: 'Platinum Partner', label: 'Platinum Partner (Hạng Bạch kim)' },
+                    ]}
                     value={formData.tier}
-                    onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
-                    className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
-                  >
-                    <option value="Standard">Standard Partner (Mặc định)</option>
-                    <option value="Silver Partner">Silver Partner (Hạng Bạc)</option>
-                    <option value="Gold Partner">Gold Partner (Hạng Vàng)</option>
-                    <option value="Platinum Partner">Platinum Partner (Hạng Bạch kim)</option>
-                  </select>
+                    onChange={val => setFormData({ ...formData, tier: val })}
+                    className="w-full"
+                    buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
+                  />
                 </div>
               </div>
 
@@ -1293,15 +1306,13 @@ export default function CustomersManagement() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div>
                     <label className="block text-[11px] font-bold text-gray-700 mb-1">Ngân hàng</label>
-                    <select
+                    <CustomSelect
+                      options={VN_BANKS.map(b => ({ value: b, label: b }))}
                       value={formData.bank_name}
-                      onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                      className="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none cursor-pointer transition-all"
-                    >
-                      {VN_BANKS.map(b => (
-                        <option key={b} value={b}>{b}</option>
-                      ))}
-                    </select>
+                      onChange={val => setFormData({ ...formData, bank_name: val })}
+                      className="w-full"
+                      buttonClassName="w-full h-9 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none cursor-pointer transition-all"
+                    />
                   </div>
 
                   <div>
@@ -1343,14 +1354,16 @@ export default function CustomersManagement() {
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái</label>
-                  <select
+                  <CustomSelect
+                    options={[
+                      { value: 'active', label: 'Đang hoạt động' },
+                      { value: 'inactive', label: 'Tạm dừng kết nối' },
+                    ]}
                     value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
-                  >
-                    <option value="active">Đang hoạt động</option>
-                    <option value="inactive">Tạm dừng kết nối</option>
-                  </select>
+                    onChange={val => setFormData({ ...formData, status: val as any })}
+                    className="w-full"
+                    buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all"
+                  />
                 </div>
               </div>
 

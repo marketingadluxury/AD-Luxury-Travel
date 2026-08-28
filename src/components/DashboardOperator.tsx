@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { isOrderInLeaderTeam } from '../lib/utils';
-import { format, differenceInDays, differenceInMinutes } from 'date-fns';
+import { format, differenceInDays, differenceInCalendarDays, differenceInMinutes } from 'date-fns';
 import {
   PlaneTakeoff,
   Ticket,
@@ -469,7 +469,7 @@ export default function DashboardOperator() {
       if (!matchesFilters(t)) return false;
       const start = getTourDate(t);
       if (!start) return false;
-      const diff = differenceInDays(start, today);
+      const diff = differenceInCalendarDays(start, today);
       return diff >= 0 && (daysFilter === 99999 || diff <= daysFilter);
     }).sort((a, b) => {
       const dA = getTourDate(a);
@@ -481,11 +481,11 @@ export default function DashboardOperator() {
       if (!matchesFilters(t)) return false;
       const start = getTourDate(t);
       if (!start) return false;
-      const tourStartDiff = differenceInDays(start, today);
+      const tourStartDiff = differenceInCalendarDays(start, today);
       if (tourStartDiff < 0) return false; // Exclude already departed tours
 
       const deadline = t.ticket_deadline ? new Date(t.ticket_deadline) : start;
-      const diff = differenceInDays(deadline, today);
+      const diff = differenceInCalendarDays(deadline, today);
 
       return (t.ticket_status === 'CHỜ XUẤT VÉ' || !t.ticket_status) && (daysFilter === 99999 || diff <= daysFilter);
     }).sort((a, b) => {
@@ -498,9 +498,9 @@ export default function DashboardOperator() {
       if (!matchesFilters(t)) return false;
       if (!t.visa_deadline) return false;
       const deadline = new Date(t.visa_deadline);
-      const diff = differenceInDays(deadline, today);
+      const diff = differenceInCalendarDays(deadline, today);
       const start = getTourDate(t) || new Date();
-      const tourStartDiff = differenceInDays(start, today);
+      const tourStartDiff = differenceInCalendarDays(start, today);
       return tourStartDiff >= 0 && (daysFilter === 99999 || diff <= daysFilter); 
     }).sort((a, b) => new Date(a.visa_deadline!).getTime() - new Date(b.visa_deadline!).getTime());
 
@@ -508,7 +508,7 @@ export default function DashboardOperator() {
       if (!matchesFilters(t)) return false;
       const start = getTourDate(t);
       if (!start) return false;
-      const diff = differenceInDays(start, today);
+      const diff = differenceInCalendarDays(start, today);
       return diff < 0 && (daysFilter === 99999 || Math.abs(diff) <= daysFilter);
     }).sort((a, b) => {
       const dA = getTourDate(a);
