@@ -475,7 +475,16 @@ export default function ToursManagement() {
   } = useCRM();
 
   // Navigation tabs: 'tours' | 'categories' | 'costs'
-  const [activeTab, setActiveTab] = useState<'tours' | 'categories' | 'costs'>('tours');
+  const [activeTab, setActiveTab] = useState<'tours' | 'categories' | 'costs'>(
+    currentRole === 'accounting' ? 'costs' : 'tours'
+  );
+
+  // Synchronize activeTab if currentRole changes
+  useEffect(() => {
+    if (currentRole === 'accounting') {
+      setActiveTab('costs');
+    }
+  }, [currentRole]);
 
   // View mode for tour listing: 'grouped' (default) | 'flat'
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
@@ -1825,71 +1834,79 @@ export default function ToursManagement() {
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Quản lý & Điều hành Tour</h2>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              {currentRole === 'accounting' ? 'Hạch toán Chi phí – Lãi lỗ Tour' : 'Quản lý & Điều hành Tour'}
+            </h2>
             <span className="text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
               {tours.filter(t => t.tour_type !== 'visa').length} tour
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">Quản lý lịch khởi hành, điều phối quỹ chỗ, dự toán chi phí và theo dõi tiến độ đoàn.</p>
+          <p className="text-xs text-slate-500 mt-1">
+            {currentRole === 'accounting'
+              ? 'Theo dõi doanh thu, định mức chi phí thực tế, công nợ đối tác và tỷ suất lợi nhuận lãi/lỗ của từng tour.'
+              : 'Quản lý lịch khởi hành, điều phối quỹ chỗ, dự toán chi phí và theo dõi tiến độ đoàn.'}
+          </p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2.5 self-stretch md:self-auto shrink-0">
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 flex-1 md:flex-initial">
-            <button
-              onClick={() => setActiveTab('tours')}
-              className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'tours' 
-                  ? 'bg-white text-blue-700 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Danh sách Tour</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('costs')}
-              className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'costs' 
-                  ? 'bg-white text-blue-700 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>Hạch toán Chi phí – Lãi lỗ</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('categories')}
-              className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'categories' 
-                  ? 'bg-white text-blue-700 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Tag className="w-3.5 h-3.5" />
-              <span>Tuyến / Danh mục ({categories.length})</span>
-            </button>
-          </div>
+        {currentRole !== 'accounting' && (
+          <div className="flex flex-wrap items-center gap-2.5 self-stretch md:self-auto shrink-0">
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 flex-1 md:flex-initial">
+              <button
+                onClick={() => setActiveTab('tours')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'tours' 
+                    ? 'bg-white text-blue-700 shadow-sm' 
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Danh sách Tour</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('costs')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'costs' 
+                    ? 'bg-white text-blue-700 shadow-sm' 
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Hạch toán Chi phí – Lãi lỗ</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('categories')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'categories' 
+                    ? 'bg-white text-blue-700 shadow-sm' 
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Tag className="w-3.5 h-3.5" />
+                <span>Tuyến / Danh mục ({categories.length})</span>
+              </button>
+            </div>
 
-          {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
-            <button
-              onClick={() => {
-                resetForm();
-                if (filterTourType === 'outsourced') {
-                  setTourType('outsourced');
-                } else if (filterTourType === 'private') {
-                  setTourType('private');
-                } else {
-                  setTourType('internal');
-                }
-                setShowAddForm(true);
-              }}
-              className="inline-flex items-center h-9 px-4 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 shadow-sm transition-all cursor-pointer whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4 mr-1.5" />
-              Tạo Tour Mới
-            </button>
-          )}
-        </div>
+            {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
+              <button
+                onClick={() => {
+                  resetForm();
+                  if (filterTourType === 'outsourced') {
+                    setTourType('outsourced');
+                  } else if (filterTourType === 'private') {
+                    setTourType('private');
+                  } else {
+                    setTourType('internal');
+                  }
+                  setShowAddForm(true);
+                }}
+                className="inline-flex items-center h-9 px-4 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 shadow-sm transition-all cursor-pointer whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4 mr-1.5" />
+                Tạo Tour Mới
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {activeTab === 'categories' ? (

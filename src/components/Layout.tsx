@@ -84,7 +84,7 @@ export const navigationTree: NavGroup[] = [
     groupName: 'Quản lý tour',
     icon: Map,
     items: [
-      { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide'] },
+      { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'accounting'] },
       { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
     ]
   },
@@ -167,7 +167,7 @@ export const mainSidebarNav: MainTabItem[] = [
 const allNavItems: NavItem[] = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
   { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
-  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide'] },
+  { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'accounting'] },
   { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
   { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin'] },
   { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },

@@ -6,6 +6,15 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Tối Ưu Giao Diện Quản Lý Tour Cho Vai Trò Kế Toán (Chỉ Hiển Thị Hạch Toán Chi Phí - Lãi Lỗ)
+- **Mô tả yêu cầu:**
+  - Khi tài khoản Kế toán (`accounting`) truy cập vào trang Quản lý Tour, hệ thống chỉ hiển thị duy nhất phần **Hạch toán Chi phí – Lãi lỗ**, không hiển thị các tab/nút điều hành khác (Danh sách Tour, Tuyến/Danh mục, Tạo Tour Mới).
+- **Giải pháp thực hiện:**
+  1. Thiết lập trạng thái mặc định của `activeTab` là `'costs'` khi vai trò là `accounting`, đồng thời có `useEffect` đồng bộ trạng thái này khi chuyển đổi vai trò.
+  2. Ẩn thanh chuyển đổi tab (Danh sách tour, Danh mục) và nút "Tạo Tour Mới" đối với vai trò Kế toán, chỉ giữ lại phần tiêu đề hạch toán chi phí rõ ràng.
+  3. Hiển thị trực tiếp toàn bộ giao diện Hạch toán Chi phí – Lãi lỗ (`<TourCostsManagement />`), cho phép kế toán tra cứu tức thì doanh thu thực thu từ khách, chi phí định mức đoàn, các đợt thanh toán đối tác và lợi nhuận ròng.
+- **Trạng thái:** Đã hoàn thành, kiểm tra lint và build thành công 100%.
+
 ### 1.0 Loại Bỏ 3 Mục (Báo Cáo Tour, Bảng Chấm Công, Quản Lý Nghỉ Phép) Khỏi Trang Kế Toán
 - **Mô tả yêu cầu:**
   - Loại bỏ hoàn toàn 3 mục/tab: **"Báo cáo tour"**, **"📊 Bảng chấm công"** và **"🌴 Quản lý nghỉ phép"** khỏi trang Kế toán & Hóa đơn (`AccountingInvoice.tsx`).
