@@ -191,6 +191,13 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
       1. **🏢 Quản lý Nhân sự Công ty (`company`):** Quản lý tất cả tài khoản nội bộ công ty (Admin, BOD, Sale Leader, Sale, Điều hành, Visa, Kế toán, HDV, HR, Marketing).
       2. **🤝 Tài khoản Đại lý & CTV (`agents`):** Chuyên quản lý danh sách tài khoản đối tác ngoài (Đại lý, CTV).
       3. **🏛️ Quản lý Team Kinh doanh (`teams`):** Quản lý cấu trúc nhóm kinh doanh, Gán Leader, KPI và thành viên.
+  - **Cơ Chế Giữ Ấm Cơ Sở Dữ Liệu Supabase 24/7 (Chống Tự Động Tạm Dừng Sau 7 Ngày):**
+    - **Chính sách Supabase:** Gói Free của Supabase tự động pause dự án nếu không có truy vấn nào sau 7 ngày.
+    - **Kiến trúc 3 Tầng Giữ Ấm:**
+      1. **Tầng 1 (Worker Server CRM):** Server Express tự động ping nhẹ (`profiles` select 1 row) sau 5 giây khởi động và lặp lại mỗi 24 giờ một lần ngầm trong hệ thống (`server/services/keepAliveService.ts`).
+      2. **Tầng 2 (API Webhook):** Cung cấp các endpoint `GET /api/keep-alive` và `GET /api/supabase-keepalive` cho các dịch vụ miễn phí như Cron-job.org hoặc UptimeRobot gọi định kỳ 1 - 2 ngày/lần.
+      3. **Tầng 3 (GitHub Actions CI/CD):** Tự động chạy file workflow `.github/workflows/supabase-keep-alive.yml` vào 11:00 AM mỗi 2 ngày một lần trên hạ tầng GitHub Cloud để ping trực tiếp tới REST API của Supabase.
+    - **Giao diện Quản trị (`Settings.tsx`):** Tab "Cơ sở dữ liệu & Tự động giữ ấm" giúp Quản trị viên xem tình trạng kết nối, độ trễ phản hồi (latency ms), nút ping trực tiếp và sao chép nhanh URL webhook.
 
 ---
 

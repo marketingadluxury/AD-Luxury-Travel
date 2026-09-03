@@ -16,7 +16,13 @@ import {
   UserCheck,
   AlertCircle,
   History,
-  RotateCcw
+  RotateCcw,
+  Plane,
+  Target,
+  CheckCircle2,
+  CircleDot,
+  Phone,
+  Calendar
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CustomSelect } from './CustomSelect';
@@ -790,14 +796,34 @@ export default function DashboardOperator() {
                   <span className="text-sm text-blue-100 font-medium">| Lịch khởi hành: {selectedTour.start_date ? format(new Date(selectedTour.start_date), 'dd/MM/yyyy') : 'N/A'}</span>
                 </div>
                 <h3 className="text-lg md:text-xl font-bold tracking-tight text-white line-clamp-1">{selectedTour.name}</h3>
-                <p className="text-xs text-blue-100 mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                  {selectedTour.airline && <span>✈️ Hãng bay: <strong className="text-white">{selectedTour.airline}</strong></span>}
-                  <span>🎯 Mở bán (+OB): <strong className="text-white">{selectedTour.total_seats}{selectedTour.overbook_limit ? ` (+${selectedTour.overbook_limit} OB)` : ''}</strong></span>
-                  <span>👥 Cho phép giữ/bán: <strong className="text-white">{(selectedTour.total_seats || 0) + (selectedTour.overbook_limit || 0)}</strong></span>
-                  <span>✅ Đã bán: <strong className="text-emerald-300 font-bold">{selectedTour.sold_seats}</strong></span>
-                  <span>⏳ Đang giữ (Hold): <strong className="text-amber-300 font-bold">{selectedTour.hold_seats || 0}</strong></span>
-                  <span>🟢 Chỗ còn lại: <strong className="text-cyan-300 font-bold">{selectedTour.available_seats !== undefined ? selectedTour.available_seats : Math.max(0, (selectedTour.total_seats || 0) + (selectedTour.overbook_limit || 0) - (selectedTour.sold_seats || 0) - (selectedTour.hold_seats || 0))}</strong></span>
-                </p>
+                <div className="text-xs text-blue-100 mt-2 flex flex-wrap items-center gap-2">
+                  {selectedTour.airline && (
+                    <span className="inline-flex items-center gap-1.5 bg-blue-900/40 border border-blue-400/20 px-2.5 py-1 rounded-lg">
+                      <Plane className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                      <span>Hãng bay: <strong className="text-white font-semibold">{selectedTour.airline}</strong></span>
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 bg-blue-900/40 border border-blue-400/20 px-2.5 py-1 rounded-lg">
+                    <Target className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+                    <span>Mở bán (+OB): <strong className="text-white font-semibold">{selectedTour.total_seats}{selectedTour.overbook_limit ? ` (+${selectedTour.overbook_limit} OB)` : ''}</strong></span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 bg-blue-900/40 border border-blue-400/20 px-2.5 py-1 rounded-lg">
+                    <Users className="w-3.5 h-3.5 text-sky-300 shrink-0" />
+                    <span>Cho phép giữ/bán: <strong className="text-white font-semibold">{(selectedTour.total_seats || 0) + (selectedTour.overbook_limit || 0)}</strong></span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-400/30 px-2.5 py-1 rounded-lg">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Đã bán: <strong className="text-emerald-300 font-bold">{selectedTour.sold_seats}</strong></span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 bg-amber-950/40 border border-amber-400/30 px-2.5 py-1 rounded-lg">
+                    <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Đang giữ (Hold): <strong className="text-amber-300 font-bold">{selectedTour.hold_seats || 0}</strong></span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 bg-cyan-950/40 border border-cyan-400/30 px-2.5 py-1 rounded-lg">
+                    <CircleDot className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span>Chỗ còn lại: <strong className="text-cyan-300 font-bold">{selectedTour.available_seats !== undefined ? selectedTour.available_seats : Math.max(0, (selectedTour.total_seats || 0) + (selectedTour.overbook_limit || 0) - (selectedTour.sold_seats || 0) - (selectedTour.hold_seats || 0))}</strong></span>
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2.5 self-stretch md:self-auto shrink-0">
@@ -968,12 +994,20 @@ export default function DashboardOperator() {
                                 <div className="font-bold text-gray-950 uppercase tracking-tight">
                                   {passenger?.full_name || order.booker_name || 'Khách đại diện'}
                                 </div>
-                                {passenger?.phone && (
-                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5">📞 {passenger.phone}</div>
-                                )}
-                                {passenger?.dob && (
-                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5">🎂 {format(new Date(passenger.dob), 'dd/MM/yyyy')}</div>
-                                )}
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                                  {passenger?.phone && (
+                                    <div className="flex items-center gap-1 text-[11px] text-gray-500 font-mono">
+                                      <Phone className="w-3 h-3 text-gray-400 shrink-0" />
+                                      <span>{passenger.phone}</span>
+                                    </div>
+                                  )}
+                                  {passenger?.dob && (
+                                    <div className="flex items-center gap-1 text-[11px] text-gray-500 font-mono">
+                                      <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                                      <span>{format(new Date(passenger.dob), 'dd/MM/yyyy')}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3 px-4 border-r border-gray-200/50">
                                 <span className="font-mono bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[11px] border border-blue-100 font-bold">
@@ -1062,7 +1096,10 @@ export default function DashboardOperator() {
                                   {order.customer_name || order.booker_name || 'Khách đại diện'}
                                 </div>
                                 {(order.customer_phone || order.booker_phone) && (
-                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5">📞 {order.customer_phone || order.booker_phone}</div>
+                                  <div className="flex items-center gap-1 text-[11px] text-gray-500 font-mono mt-1">
+                                    <Phone className="w-3 h-3 text-gray-400 shrink-0" />
+                                    <span>{order.customer_phone || order.booker_phone}</span>
+                                  </div>
                                 )}
                               </td>
                               <td className="py-3 px-3 text-center border-r border-gray-200/50 font-bold text-amber-800">

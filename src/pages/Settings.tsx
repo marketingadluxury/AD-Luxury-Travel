@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useCRM } from '../context/CRMContext';
-import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users } from 'lucide-react';
+import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
+import DatabaseKeepAliveSettings from '../components/DatabaseKeepAliveSettings';
 
 export default function Settings() {
   const { currentRole, membershipSettings, updateMembershipSettings } = useCRM();
-  const [activeTab, setActiveTab] = useState<'membership' | 'users'>('membership');
+  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database'>('membership');
   
   const [silver, setSilver] = useState(membershipSettings?.silverMin || 20000000);
   const [gold, setGold] = useState(membershipSettings?.goldMin || 50000000);
@@ -81,6 +82,17 @@ export default function Settings() {
         >
           <Users className="w-4 h-4" />
           <span>Quản lý người dùng & phân quyền</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('database')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            activeTab === 'database'
+              ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Cơ sở dữ liệu & Tự động giữ ấm</span>
         </button>
       </div>
 
@@ -231,6 +243,7 @@ export default function Settings() {
       )}
 
       {activeTab === 'users' && <UserManagement />}
+      {activeTab === 'database' && <DatabaseKeepAliveSettings />}
     </div>
   );
 }

@@ -6,6 +6,38 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Giải Pháp Giữ Ấm Cơ Sở Dữ Liệu Supabase 24/7 (Chống Auto-Pause Sau 7 Ngày)
+- **Mô tả yêu cầu:**
+  - Supabase gói miễn phí có chính sách tự động tạm dừng (pause) dự án nếu sau 7 ngày liên tục không ghi nhận lượt truy vấn nào. Nghiên cứu, đề xuất và triển khai giải pháp kỹ thuật triệt để để giữ ấm database liên tục.
+- **Giải pháp thực hiện (Kiến trúc bảo vệ 3 tầng):**
+  1. **Tầng 1 - Worker nội bộ trong Server CRM:**
+     - Tạo `server/services/keepAliveService.ts` tích hợp hàm `pingSupabaseDatabase()` và `initSupabaseKeepAlive()`.
+     - Server backend tự động thực hiện truy vấn nhẹ đọc 1 dòng từ bảng `profiles` sau 5 giây khởi động và lặp lại định kỳ mỗi 24 giờ một lần ngầm trong hệ thống.
+  2. **Tầng 2 - Endpoint API cho Webhook / Cron-Job ngoài:**
+     - Tạo endpoint `GET /api/keep-alive` và `GET /api/supabase-keepalive` kèm kiểm tra trạng thái tại `GET /api/keep-alive/status`.
+     - Cho phép các dịch vụ giám sát miễn phí (như Cron-job.org hoặc UptimeRobot) ping định kỳ 1 - 2 ngày một lần hoàn toàn độc lập với server.
+  3. **Tầng 3 - GitHub Actions Workflow Tự Động:**
+     - Tạo file `.github/workflows/supabase-keep-alive.yml` chạy tự động vào 11:00 AM mỗi 2 ngày một lần (`0 4 */2 * *`) trên hạ tầng GitHub Cloud để gửi request giữ ấm trực tiếp tới REST API của Supabase hoặc qua app API.
+  4. **Giao diện Quản trị tại Cài đặt Hệ thống (`Settings.tsx`):**
+     - Bổ sung tab **"Cơ sở dữ liệu & Tự động giữ ấm"** trong trang Cài đặt (dành cho Admin).
+     - Hiển thị thông số kết nối, thời gian phản hồi (latency ms), trạng thái anon key, nút **"Kiểm tra kết nối & Ping giữ ấm ngay"**, và hướng dẫn trực quan 3 tầng giữ ấm.
+- **Trạng thái:** Đã hoàn thành, kiểm tra API phản hồi 200 (Active, latency ~900ms), lint và build pass 100%.
+
+### 1.0 Chuẩn Hóa UI Bảng Danh Sách Đoàn & Loại Bỏ Hoàn Toàn Emoji (Modal Hành Khách & Giữ Chỗ)
+- **Mô tả yêu cầu:**
+  - Chỉnh lại toàn bộ giao diện của bảng chi tiết đoàn tour (Modal Danh sách Hành khách & Giữ chỗ), loại bỏ tất cả các biểu tượng cảm xúc (emoji), thay thế đồng bộ 100% bằng hệ thống icon chuẩn từ thư viện `lucide-react`.
+- **Giải pháp thực hiện:**
+  1. **Khối Header thông số đoàn:**
+     - Thay thế toàn bộ emoji (✈️, 🎯, 👥, ✅, ⏳, 🟢) bằng các icon chuẩn: `Plane` (Hãng bay), `Target` (Mở bán +OB), `Users` (Cho phép giữ/bán), `CheckCircle2` (Đã bán), `Clock` (Đang giữ Hold), `CircleDot` (Chỗ còn lại).
+     - Thiết kế lại các thông số dạng chip/badge bán trong suốt tinh tế, đồng bộ màu sắc phân định trạng thái.
+  2. **Bảng Danh sách Khách đã bán:**
+     - Cột Thông tin hành khách: Thay thế emoji 📞 bằng icon `Phone` và emoji 🎂 bằng icon `Calendar` nhỏ gọn, tinh tế đi kèm số điện thoại và ngày sinh.
+     - Căn chỉnh bố cục các cột (STT, Giới tính, Tên khách, Mã booking, Sale/Đại lý, Phòng đơn, Ghi chú, Tình trạng visa) cân đối và sắc nét.
+  3. **Bảng Danh sách Giữ chỗ (Hold):**
+     - Thay thế emoji 📞 tại cột Khách hàng đại diện bằng icon `Phone`.
+     - Chuẩn hóa hiển thị hạn giữ chỗ và số lượng chỗ giữ.
+- **Trạng thái:** Đã hoàn thành, kiểm tra lint và build thành công 100%.
+
 ### 1.0 Tối Ưu Giao Diện Quản Lý Tour Cho Vai Trò Kế Toán (Chỉ Hiển Thị Hạch Toán Chi Phí - Lãi Lỗ)
 - **Mô tả yêu cầu:**
   - Khi tài khoản Kế toán (`accounting`) truy cập vào trang Quản lý Tour, hệ thống chỉ hiển thị duy nhất phần **Hạch toán Chi phí – Lãi lỗ**, không hiển thị các tab/nút điều hành khác (Danh sách Tour, Tuyến/Danh mục, Tạo Tour Mới).

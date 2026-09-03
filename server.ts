@@ -2,10 +2,18 @@ import app from './app.js';
 import path from 'path';
 import express from 'express';
 import { startPancakeAutoSyncWorker } from './server/services/pancakeService.js';
+import { initSupabaseKeepAlive } from './server/services/keepAliveService.js';
 
 const PORT = 3000;
 
 async function startServer() {
+  // Khởi động bộ tự động giữ ấm Supabase (chống auto-pause sau 7 ngày)
+  try {
+    initSupabaseKeepAlive();
+  } catch (e) {
+    console.warn('[Server] Không thể khởi động KeepAlive Supabase:', e);
+  }
+
   // Tạm thời dừng bộ tự động quét ngầm Pancake (Polling) theo yêu cầu
   // try {
   //   startPancakeAutoSyncWorker(30000);
