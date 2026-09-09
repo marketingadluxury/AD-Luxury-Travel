@@ -144,11 +144,15 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
    ```
 3. **Cập nhật và Phát triển:** 
    - Kiểm tra phân quyền phân vai trò người dùng trong `CRMContext.tsx`.
-   - Luôn tuân thủ quy trình kiểm tra linter (`npm run lint`) và xây dựng (`npm run build`) trước khi commit code.
+   - Luôn tuân thủ quy trình kiểm tra linter (`npm run lint`), kiểm thử tự động (`npm test`, `npm run test:simulation`) và xây dựng (`npm run build`) trước khi hoàn thành công việc.
+   - **Hệ thống Automation Test (Vitest & Simulation):** Đã được tích hợp sẵn sàng trong dự án với 2 lệnh:
+     + `npm test`: Chạy toàn bộ Unit Tests kiểm tra tính toán tài chính, phân quyền vai trò và tích lũy phép năm.
+     + `npm run test:simulation`: Kịch bản kiểm thử độc lập mô phỏng hành vi người dùng, kiểm tra phân quyền và toàn vẹn dữ liệu cho 4 vai trò: Sale, Bộ phận Visa, Điều hành Tour, và Kế toán.
 
 ---
 
 ## 7. Quy Tắc Phân Quyền & Tính Năng Đặc Biệt (Cập Nhật Mới)
+- **Phân Quyền Tab Hành Chính Nhân Sự (Không Áp Dụng Cho Đại Lý / CTV):** Tab "Hành chính nhân sự" (bao gồm Đề nghị thanh toán `/payment-proposals` và Nghỉ phép & Chấm công `/leave-requests`) chỉ áp dụng cho cán bộ công nhân viên chính thức thuộc công ty. Tài khoản đối tác ngoài (Đại lý & CTV - `role === 'agent'`) bị ẩn hoàn toàn mục này trên thanh Sidebar và menu Profile, đồng thời được thiết lập lớp bảo vệ (Permission Guard) chặn trực tiếp tại trang nếu truy cập qua đường dẫn URL.
 - **Quyền tạo Tour:** Chỉ có vai trò **Điều hành Tour (`operator`)** và **Quản trị viên (`admin`)** mới có quyền nhìn thấy và sử dụng tính năng **Tạo Tour mới**. Các vai trò khác (như Sale, CTV, Đại lý, Visa, Kế toán) sẽ không có quyền này.
 - **Nâng Cấp Trang Bảng Điều Khiển (Dashboard) Tùy Biến Theo 3 Nhóm Vai Trò:**
   - **Sale Công Ty (`role === 'sale'`):** Ẩn hoàn toàn ô "Hoa hồng tạm tính", chỉ xem đơn hàng cá nhân, hiển thị 4 thẻ chỉ số (Doanh số chốt, Tiến độ KPI %, Số lượt khách Pax, Đặt chỗ sắp hết hạn Hold) cùng 2 bảng chi tiết (Đơn hàng & cảnh báo cọc, Đơn hỗ trợ nhập hộ cho CTV/Đại lý ngoài).
@@ -164,6 +168,11 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - **Giao Diện & Tính Năng Dành Cho Hướng Dẫn Viên (HDV / `tour_guide`) & Ảnh Khách Đoàn:**
   - **Trang & Tab Riêng "Ảnh khách đoàn" (`/tour-media`):** Được hiển thị trên thanh Sidebar cho người dùng công ty (Admin, Operator, Sale, Visa, Kế toán, BOD, HDV) và **ẩn đối với Cộng Tác Viên (`CTV`)**. Trang này chứa danh sách đoàn tour kèm nút duy nhất **"📂 Mở Thư Mục Google Drive"** để truy cập thẳng thư mục `AD Luxury Travel > Tour > {MÃ_TOUR} > Ảnh đoàn`.
   - **Phân Quyền Thao Tác Upload & Link HDV:** Chỉ có vai trò **Điều hành (`operator`)**, **HDV (`tour_guide`)** và **Quản trị viên (`admin`)** mới có quyền thao tác các nút **"📸 Upload Ảnh Đoàn"** và **"🔗 Link HDV Freelance"**. Các vai trò khác (Sale, Kế toán, Visa, BOD) chỉ xem và mở thư mục Drive.
+  - **Giới Hạn Quyền HDV Trong Quản Lý Tour (`/tours`):** Hướng dẫn viên chỉ có quyền xem danh sách tour và bấm nút **"Xem chi tiết & Quản lý chỗ"** (Icon Info) để tra cứu lịch trình, khách sạn, chuyến bay và danh sách khách. HDV **bị chặn và ẩn hoàn toàn**:
+    1. Tab **"Hạch toán Chi phí – Lãi lỗ"** (ẩn doanh thu, tiền thu, công nợ, chi phí và lợi nhuận) và tab **"Tuyến / Danh mục"**.
+    2. Các nút **"Thêm ngày đi mới"**, **"Tạo hàng loạt (Series)"** và **"Sao chép ngày khởi hành"** (không được mở form thêm ngày khởi hành).
+    3. Các nút **"Sửa chi tiết"** (trong bảng và nút chân trang Drawer) cũng như nút **"Xóa"** tour (chặn cả ở giao diện lẫn tầng logic).
+    4. Ẩn thông tin **"Hoa hồng / Khách"** trong Drawer xem chi tiết tour.
 - **Nhiều Khoản Phụ Thu & Tiền Tour Chênh Lệch CTV:**
   - **Quản lý Nhiều Phụ Thu:** Hỗ trợ tạo, chỉnh sửa và xóa danh sách nhiều khoản phụ thu linh hoạt (`surcharges`) cho từng đơn hàng (thay vì chỉ 1 khoản đơn lẻ). Tự động cộng tổng các khoản phụ thu vào tổng giá trị đơn hàng. **Lưu ý quan trọng:** Các khoản phụ thu (nâng hạng ghế, vé tham quan, phụ thu phòng đơn, v.v.) chỉ tính vào tổng tiền đơn hàng, **hoàn toàn không được cộng vào hoa hồng thực nhận** của CTV/Đại lý.
   - **Tiền Tour Chênh Lệch CTV & Phí Công Ty:** Khi tạo đơn cho CTV, cho phép nhập cố định khoản Tiền tour chênh lệch (`price_markup`) khi CTV bán giá cao hơn cho khách. Hệ thống tự động tính phí công ty thu trên chênh lệch (mặc định 25%, có thể tự điều chỉnh 0-100%) và tính toán chính xác hoa hồng thực nhận còn lại cho CTV.

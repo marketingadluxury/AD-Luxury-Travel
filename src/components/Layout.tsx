@@ -38,7 +38,8 @@ import {
   Key,
   Megaphone,
   BarChart3,
-  Palmtree
+  Palmtree,
+  BookOpen
 } from 'lucide-react';
 import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -102,7 +103,7 @@ export const navigationTree: NavGroup[] = [
     icon: FileCheck,
     items: [
       { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
-      { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+      { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
     ]
   },
   {
@@ -148,7 +149,7 @@ export const mainSidebarNav: MainTabItem[] = [
     name: 'Hành chính nhân sự',
     href: '/leave-requests',
     icon: FileCheck,
-    roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'],
+    roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'],
     matchPaths: ['/payment-proposals', '/leave-requests'],
     groupRef: navigationTree[2]
   },
@@ -174,11 +175,12 @@ const allNavItems: NavItem[] = [
   { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
   { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
-  { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+  { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
   { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
   { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
+  { name: 'Tài liệu & Hướng dẫn', href: '/docs', icon: BookOpen, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Cài đặt hệ thống', href: '/settings', icon: Settings, roleAccess: ['admin', 'hr'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
@@ -662,6 +664,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     </div>
   );
 
+  // Trang riêng full màn hình cho Tài liệu & Hướng dẫn (/docs)
+  if (location.pathname === '/docs') {
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       {/* Desktop Sidebar */}
@@ -795,6 +802,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+            {/* Quick Docs Link */}
+            <Link
+              to="/docs"
+              title="Tài liệu & Hướng dẫn sử dụng (Ctrl + K)"
+              className="text-gray-500 hover:text-blue-600 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl hover:bg-blue-50 transition-colors flex items-center gap-1.5 active:scale-95 border border-slate-200/80 bg-slate-50/60"
+            >
+              <BookOpen className="h-4 w-4 text-blue-600" />
+              <span className="hidden sm:inline text-xs font-bold text-slate-700 hover:text-blue-600">Hướng dẫn</span>
+            </Link>
+
             {/* Notification Dropdown */}
             <div className="relative">
               <button 
@@ -890,12 +907,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                    <User className="h-4 w-4 mr-2 text-slate-400" />
                    Thông tin cá nhân
                  </Link>
+                 {currentRole !== 'agent' && (
+                   <Link 
+                     to="/leave-requests"
+                     className="w-full flex items-center px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                   >
+                     <Palmtree className="h-4 w-4 mr-2 text-emerald-600" />
+                     Nghỉ phép & Chấm công
+                   </Link>
+                 )}
                  <Link 
-                   to="/leave-requests"
+                   to="/docs"
                    className="w-full flex items-center px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                  >
-                   <Palmtree className="h-4 w-4 mr-2 text-emerald-600" />
-                   Nghỉ phép & Chấm công
+                   <BookOpen className="h-4 w-4 mr-2 text-blue-600" />
+                   Tài liệu & Hướng dẫn
                  </Link>
                  <button 
                    onClick={() => signOut()}

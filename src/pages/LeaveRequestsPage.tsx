@@ -320,6 +320,30 @@ export default function LeaveRequestsPage() {
     }
   };
 
+  // Quyền truy cập hạn chế đối với Đại lý / CTV (không áp dụng nhân sự nội bộ)
+  if (effectiveRole === 'agent') {
+    return (
+      <div className="max-w-4xl mx-auto py-12 px-4 text-center font-sans">
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-xs max-w-lg mx-auto">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mx-auto mb-4">
+            <Palmtree className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Quyền truy cập hạn chế</h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-6">
+            Chức năng <strong>Nghỉ phép & Chấm công</strong> chỉ áp dụng cho cán bộ công nhân viên chính thức thuộc công ty.
+            Tài khoản Đại lý / Cộng tác viên không áp dụng nghiệp vụ này.
+          </p>
+          <a
+            href="/"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+          >
+            Quay về Lịch khởi hành
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* Header chính */}

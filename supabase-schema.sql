@@ -1073,6 +1073,62 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS birthday TEXT;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS fb_id TEXT;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS gender TEXT;
 
+-- 10. Bảng system_docs (Trung tâm Hướng dẫn & Tài liệu Quy trình hệ thống)
+CREATE TABLE IF NOT EXISTS system_docs (
+  id UUID NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'overview',
+  order_index INTEGER NOT NULL DEFAULT 1,
+  target_roles TEXT[] DEFAULT ARRAY['all']::TEXT[],
+  badge TEXT,
+  summary TEXT,
+  content TEXT NOT NULL,
+  author TEXT DEFAULT 'Ban Quản Trị',
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- Index tìm kiếm tài liệu
+CREATE INDEX IF NOT EXISTS idx_system_docs_slug ON system_docs (slug);
+CREATE INDEX IF NOT EXISTS idx_system_docs_category ON system_docs (category);
+CREATE INDEX IF NOT EXISTS idx_system_docs_order ON system_docs (order_index);
+
+-- Bật Row Level Security (RLS) cho system_docs
+ALTER TABLE system_docs ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'system_docs' AND policyname = 'Cho phép tất cả đọc tài liệu hướng dẫn'
+  ) THEN
+    CREATE POLICY "Cho phép tất cả đọc tài liệu hướng dẫn" 
+    ON system_docs FOR SELECT 
+    USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'system_docs' AND policyname = 'Cho phép người dùng đã đăng nhập quản lý tài liệu'
+  ) THEN
+    CREATE POLICY "Cho phép người dùng đã đăng nhập quản lý tài liệu" 
+    ON system_docs FOR ALL 
+    USING (auth.role() = 'authenticated')
+    WITH CHECK (auth.role() = 'authenticated');
+  END IF;
+END $$;
+
+-- Kích hoạt Realtime cho bảng system_docs
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE system_docs;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+  END IF;
+END $$;
+
+
 
 
 

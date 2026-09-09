@@ -20,6 +20,7 @@ import TourMediaManagement from './pages/TourMediaManagement';
 import { GuestPhotoUploadPage } from './pages/GuestPhotoUploadPage';
 import MetaAdsAnalytics from './pages/MetaAdsAnalytics';
 import LeaveRequestsPage from './pages/LeaveRequestsPage';
+import DocsPage from './pages/DocsPage';
 import { CRMProvider } from './context/CRMContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -73,6 +74,7 @@ function AppContent() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/meta-ads" element={<MetaAdsAnalytics />} />
             <Route path="/leave-requests" element={<LeaveRequestsPage />} />
+            <Route path="/docs" element={<DocsPage />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
           </Routes>

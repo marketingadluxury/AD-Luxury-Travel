@@ -6,6 +6,155 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Xây Dựng & Chạy Script Kiểm Thử Tự Động Độc Lập Cho 4 Vai Trò (Simulation Test)
+- **Mô tả yêu cầu & phạm vi kiểm thử:**
+  - Tạo script kiểm thử tự động độc lập bằng TypeScript/Node.js (`scripts/simulationTest.ts`) chạy qua lệnh `npm run test:simulation`.
+  - Giả lập toàn diện các thao tác, hành vi người dùng, kiểm tra phân quyền và xác nhận tính toàn vẹn của dữ liệu trên 4 vai trò:
+    1. **Nhân viên Sale (`sale`):** Chặn quyền tạo/sửa/xóa tour, bảo mật tab hạch toán lãi lỗ, ẩn thẻ đối tác F2; kiểm tra tính toán đơn hàng đa dịch vụ (nhiều khách người lớn, trẻ em, trẻ nhỏ, phụ thu phòng đơn, nâng hạng, bảo hiểm, chiết khấu, VAT 10%); đảm bảo phụ thu không cộng vào hoa hồng; kiểm tra phân quyền hành chính (không có quyền duyệt phép).
+    2. **Bộ phận Visa (`visa`):** Chặn quyền quản lý tour và hạch toán; phân loại tách biệt dịch vụ visa lẻ khỏi tour du lịch và album ảnh đoàn; quy trình cập nhật trạng thái hồ sơ visa ('none' -> 'applied' -> 'approved') và lưu trữ link an toàn trên Supabase Storage; chặn quyền duyệt nghỉ phép.
+    3. **Điều hành Tour (`operator`):** Toàn quyền tạo, sửa, xóa, sao chép tour và tạo series; quản lý cả tour tự vận hành lẫn tour gửi khách; xem bảng kê chi phí và thẻ đối tác F2; tạo danh mục mới trực tiếp trên form và tự động đồng bộ sang bộ lọc lịch khởi hành; tuân thủ quy chuẩn không có quyền duyệt cấp 1 đơn nghỉ phép.
+    4. **Kế toán (`accounting`):** Chặn thay đổi lịch trình tour; toàn quyền hạch toán Doanh thu, Chi phí & Lãi lỗ; kiểm tra cơ chế tự động kết chuyển tổng hoa hồng từ danh sách booking vào chi phí tour (chỉ đọc - read-only); quy trình ghi nhận phiếu thu (receipt), theo dõi công nợ và chuyển đổi trạng thái thanh toán ('unpaid' -> 'partially_paid' -> 'paid').
+- **Kết quả kiểm thử:**
+  - **21/21 kịch bản kiểm thử độc lập thành công 100% (0 lỗi, 0 thất bại).**
+  - Đảm bảo tính toán tài chính chuẩn xác từng con số và tuân thủ tuyệt đối quy định phân quyền của công ty.
+- **Trạng thái:** Đã hoàn thành và lưu thông tin vào hệ thống.
+
+### 1.0 Thiết Lập & Chạy Hệ Thống Automation Test Toàn Diện (Phần 1 & Phần 2)
+- **Mô tả yêu cầu & phạm vi kiểm thử:**
+  - Thực hiện kiểm thử tự động tuần tự cả 2 phần:
+    1. **Phần 1 (Kiểm thử hệ thống tĩnh & đóng gói):** Kiểm tra Type Safety, Linting (`tsc --noEmit`) và Biên dịch Production Bundle (`npm run build`).
+    2. **Phần 2 (Kiểm thử tự động logic nghiệp vụ sâu với Vitest):** Thiết lập bộ Unit & Logic Automation Test cho các quy tắc cốt lõi: Phân quyền theo vai trò (Permissions), Tính toán tổng tiền & hoa hồng CTV/phí công ty (OrderCalculations), và Tính tích lũy quỹ phép năm (PayrollUtils).
+- **Kết quả thực hiện:**
+  - **Phần 1 - Type Checking & Build:**
+    - `tsc --noEmit`: 100% không có lỗi cú pháp hay kiểu dữ liệu.
+    - `npm run build`: Đóng gói production thành công 100%, không phát sinh lỗi bundle.
+  - **Phần 2 - Logic Automation Suite (Vitest):**
+    - `src/utils/__tests__/permissionUtils.test.ts`: 13 tests passed (Phân quyền HDV, Sale Leader, Điều hành, Đại lý/CTV, Duyệt nghỉ phép 2 cấp).
+    - `src/utils/__tests__/orderCalculations.test.ts`: 6 tests passed (Tính tiền tour người lớn, trẻ em, trẻ nhỏ, phụ thu phòng đơn, phụ thu khác, VAT 10%, chiết khấu, hoa hồng CTV, phí công ty 25%).
+    - `src/lib/__tests__/payrollUtils.test.ts`: 5 tests passed (Công thức tích lũy quỹ phép 1 ngày/tháng, năm quá khứ 12 ngày, năm tương lai 0 ngày, nhân viên mới vào làm).
+    - Tổng cộng: **24/24 tests passed** (100% thành công).
+- **Trạng thái:** Đã hoàn thành và xác thực thành công.
+
+### 1.0 Siết Chặt Phân Quyền Hướng Dẫn Viên (HDV - tour_guide) Trong Quản Lý Tour
+- **Mô tả yêu cầu & hiện tượng:**
+  - Tài khoản Hướng dẫn viên (`role === 'tour_guide'`) trước đây có quyền quá cao trong trang Quản lý Tour (`/tours`):
+    1. Xem được tab "Hạch toán Chi phí – Lãi lỗ", thấy toàn bộ doanh thu, tiền thu, công nợ và chi phí lợi nhuận của từng tour.
+    2. Nhìn thấy các nút "Thêm ngày đi mới" / "Tạo hàng loạt (Series)" và các nút "Sao chép ngày khởi hành" trong bảng danh sách, mở được form thêm ngày khởi hành mới.
+    3. Nhìn thấy và bấm được các nút "Sửa chi tiết" (trong bảng và trong Drawer xem chi tiết) cũng như nút "Xóa tour".
+- **Nguyên nhân kỹ thuật:**
+  - Trong `src/pages/ToursManagement.tsx`, các nút Thao tác (Copy, Edit, Delete) và nút thêm ngày khởi hành trong nhóm accordion chưa được bọc điều kiện kiểm tra phân quyền `canManageTours`.
+  - Tab "Hạch toán Chi phí – Lãi lỗ" và tab "Tuyến / Danh mục" chưa có điều kiện ẩn đối với vai trò `tour_guide`.
+  - Các hàm logic `startEdit`, `handleCloneTour`, `handleAddDepartureQuick`, `handleOpenBulkModal`, `handleSubmit`, `handleDeleteTourClick` chưa có chốt chặn kiểm tra quyền cho vai trò HDV.
+  - Trong Drawer xem chi tiết tour, nút "Chỉnh sửa Tour" ở chân trang và mục "Hoa hồng / Khách" chưa được ẩn với HDV.
+- **Giải pháp xử lý triệt để:**
+  1. **Tạo biến phân quyền chuẩn hóa:**
+     - `canAccessCosts = ['admin', 'bod', 'operator', 'accounting', 'sale_leader'].includes(currentRole)`
+     - `canAccessCategories = ['admin', 'bod', 'operator', 'sale_leader'].includes(currentRole)`
+     - `canManageTours = ['admin', 'operator', 'sale_leader'].includes(currentRole)`
+  2. **Khóa & Ẩn tab "Hạch toán Chi phí – Lãi lỗ" & "Tuyến / Danh mục":**
+     - Ẩn 2 tab này trên thanh điều hướng với HDV.
+     - Trong `useEffect`, tự động đồng bộ chuyển `activeTab` về `'tours'` nếu vai trò là `tour_guide`.
+     - Chặn render `<TourCostsManagement />` bằng `activeTab === 'costs' && canAccessCosts`.
+  3. **Ẩn toàn bộ nút Sửa, Sao chép (Thêm ngày khởi hành) và Xóa tour:**
+     - Cả 2 chế độ hiển thị (Gom nhóm `grouped` và Danh sách phẳng `flat`): Chỉ hiển thị các nút Sao chép, Sửa, Xóa khi `canManageTours === true`. Đối với HDV, chỉ hiển thị duy nhất nút "Xem chi tiết & Quản lý chỗ" (biểu tượng Info) để xem lịch trình, khách sạn, chuyến bay và danh sách khách đoàn.
+     - Nhóm Header accordion: Ẩn 2 nút "Thêm ngày đi mới" và "Tạo hàng loạt (Series)" khi `!canManageTours`.
+  4. **Tối ưu Drawer xem chi tiết:**
+     - Ẩn nút "Chỉnh sửa Tour" ở chân trang Drawer đối với tài khoản không có quyền quản lý tour.
+     - Ẩn ô "Hoa hồng / Khách" đối với vai trò `tour_guide`.
+  5. **Bảo vệ toàn diện ở tầng logic:**
+     - Thêm kiểm tra `if (!canManageTours) { toast.error(...); return; }` vào các hàm `startEdit`, `handleCloneTour`, `handleAddDepartureQuick`, `handleOpenBulkModal`, `handleSubmit`, `handleDeleteTourClick`.
+- **Trạng thái:** Đã hoàn thành, linter (`tsc --noEmit`) và biên dịch (`compile_applet`) thành công 100%.
+
+### 1.0 Chặn Hoàn Toàn Quyền Xem & Thao Tác Tab "Hành Chính Nhân Sự" Đối Với Vai Trò Đại Lý
+- **Mô tả yêu cầu & hiện tượng:**
+  - Tài khoản Đại lý (`role === 'agent'`) trước đây vẫn nhìn thấy và thao tác được tab "Hành chính nhân sự" trên Sidebar, bao gồm trang "Nghỉ phép & Chấm công" (`/leave-requests`).
+- **Nguyên nhân kỹ thuật:**
+  - Trong cấu hình `navigationTree`, `mainSidebarNav` và `allNavItems` tại `src/components/Layout.tsx`, danh sách `roleAccess` của mục "Hành chính nhân sự" và "Nghỉ phép & Chấm công" vô tình chứa vai trò `'agent'`.
+  - Trong menu Profile (Avatar người dùng), liên kết dẫn đến `/leave-requests` chưa kiểm tra phân quyền loại trừ tài khoản Đại lý.
+  - Trang `LeaveRequestsPage.tsx` chưa có cơ chế chặn trực tiếp (Permission Guard) đối với tài khoản Đại lý.
+- **Giải pháp xử lý triệt để:**
+  1. Loại bỏ hoàn toàn vai trò `'agent'` khỏi mảng `roleAccess` của "Hành chính nhân sự" và "Nghỉ phép & Chấm công" trong `navigationTree`, `mainSidebarNav` và `allNavItems` của `src/components/Layout.tsx`.
+  2. Ẩn liên kết "Nghỉ phép & Chấm công" trong dropdown menu của Avatar khi người dùng đăng nhập bằng tài khoản Đại lý (`currentRole === 'agent'`).
+  3. Bổ sung Permission Guard tại `src/pages/LeaveRequestsPage.tsx`: Nếu người dùng là Đại lý, hiển thị giao diện khóa quyền truy cập lịch sự và nút điều hướng về trang Lịch khởi hành.
+- **Trạng thái:** Đã hoàn thành, linter và build kiểm tra thành công 100%.
+
+### 1.0 Khắc Phục Lỗi Hiển Thị Thẻ Phân Trang Bài Viết & Lỗi Render Bảng Markdown Trong Docs
+- **Mô tả yêu cầu & hiện tượng:**
+  1. *Lỗi thẻ phân trang (Hình 1):* Thẻ nút "Bài tiếp theo" bị tràn văn bản ra ngoài mép khung về phía bên trái, dính sát và đè lên nội dung của thẻ "Bài trước". Tiêu đề thẻ bị cắt cụt bằng dấu chấm lửng `...` không đọc được trọn vẹn.
+  2. *Lỗi bảng Markdown (Hình 2):* Bảng ma trận 12 vai trò phân quyền không hiển thị dưới dạng kẻ bảng ô lưới mà bị nối thành đoạn văn bản thô kèm các ký tự `| |`.
+- **Nguyên nhân & Giải pháp thực hiện:**
+  1. *Khắc phục lỗi thẻ phân trang:*
+     - Khóa cứng giới hạn chiều rộng thẻ với `w-full min-w-0 overflow-hidden shadow-2xs`.
+     - Thay thế `truncate` 1 dòng bằng `line-clamp-2` kết hợp `w-full text-left` / `text-right`, giúp tiêu đề tự động ngắt dòng tự nhiên tối đa 2 dòng mà không bị tràn khung.
+     - Tăng khoảng cách lưới thành `gap-4 sm:gap-6` giữa 2 thẻ và bổ sung mũi tên chỉ hướng co giãn an toàn (`shrink-0`).
+  2. *Khắc phục render bảng Markdown:*
+     - Cài đặt và tích hợp plugin `remark-gfm` vào `<Markdown remarkPlugins={[remarkGfm]}>` trong `DocMarkdownRenderer.tsx`.
+     - Tinh chỉnh giao diện bảng Markdown theo chuẩn thiết kế hiện đại: bo góc mềm mại (`rounded-xl`), nền tiêu đề nhã nhặn (`bg-slate-100/80`), đường viền ngăn cách sắc nét, hiệu ứng di chuột nổi bật từng dòng (`hover:bg-blue-50/30`) và tự động cuộn ngang mượt mà trên thiết bị di động (`overflow-x-auto min-w-[550px]`).
+- **Trạng thái:** Đã hoàn thành, linter và build kiểm tra thành công 100%.
+
+### 1.0 Loại Bỏ Mục "Tài Liệu & Hướng Dẫn" Khỏi Thanh Sidebar Chính
+- **Mô tả yêu cầu:**
+  - Bỏ nút "Tài liệu & Hướng dẫn" ở phần sidebar bên trái giao diện (cả giao diện máy tính và menu mobile) để tinh gọn thanh điều hướng nghiệp vụ.
+- **Giải pháp thực hiện:**
+  - Loại bỏ phần tử khai báo `Tài liệu & Hướng dẫn` (`/docs`) khỏi mảng `mainSidebarNav` trong `src/components/Layout.tsx`.
+  - Giữ nguyên các lối tắt truy cập nhanh sẵn có trên thanh Header trên cùng (nút "📖 Hướng dẫn") và trong menu Avatar tài khoản cá nhân, đảm bảo nhân sự vẫn dễ dàng tra cứu tài liệu nghiệp vụ khi cần mà thanh Sidebar hoàn toàn gọn gàng.
+- **Trạng thái:** Đã hoàn thành, linter và build kiểm tra thành công.
+
+### 1.0 Kiểm Tra & Khắc Phục Lỗi UI Toàn Diện Cho Trang Tài Liệu & Hướng Dẫn (`/docs`)
+- **Mô tả yêu cầu:**
+  - Kiểm tra lại toàn bộ giao diện (UI/UX) của module Docs full màn hình, rà soát và khắc phục các lỗi hiển thị, responsive, cuộn trang, cuộn mục lục, căn chỉnh và modal thao tác.
+- **Các lỗi UI đã phát hiện & giải pháp khắc phục triệt để:**
+  1. **Khắc phục lỗi mục lục bài viết (Table of Contents - TOC) không khớp với tiêu đề bài:**
+     - *Nguyên nhân:* Hàm tạo ID tiêu đề dùng regex đơn giản chỉ xử lý ký tự ascii, làm các tiêu đề tiếng Việt có dấu sinh ra ID rỗng hoặc lệch với bộ phân tích Markdown.
+     - *Khắc phục:* Tạo tiện ích chuẩn hóa `slugifyHeading` và `extractTextFromNode` trong `src/utils/docUtils.ts`, chuyển đổi tiếng Việt có dấu thành slug an toàn (VD: "Quy trình giữ chỗ" -> `quy-trinh-giu-cho`), đồng bộ 100% giữa `DocMarkdownRenderer.tsx` và `DocsPage.tsx`.
+  2. **Tối ưu hóa Scroll Spy và Cuộn Đến Đề Mục (Scroll To Heading):**
+     - Thiết lập `root: contentRef.current` cho `IntersectionObserver` với `rootMargin: '-20px 0px -70% 0px'` để bắt chính xác vị trí thẻ H2 đang đọc trong khung cuộn riêng của bài viết.
+     - Cập nhật hàm `scrollToHeading` tính toán vị trí offset tương đối chính xác trong container cuộn và kích hoạt hiệu ứng cuộn mượt mà (`behavior: 'smooth'`).
+  3. **Khắc phục lỗi lớp phủ Backdrop và Drawer Menu trên thiết bị di động:**
+     - Bổ sung lớp nền mờ `fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs` khi mở sidebar trên màn hình nhỏ (mobile/tablet), hỗ trợ chạm ra ngoài backdrop để đóng menu nhanh chóng.
+  4. **Loại bỏ lỗi thanh cuộn kép (Double Scrollbar) & Chiều cao tĩnh:**
+     - Thay thế các chiều cao cố định `h-[calc(100vh-53px)]` ở cả 3 cột bằng `h-full` kết hợp `flex-1 overflow-hidden`, đảm bảo 3 cột luôn ôm sát khung nhìn khả dụng mà không bao giờ bị lệch 1-2px hay tạo thanh cuộn thừa.
+  5. **Sửa lỗi chính tả CSS & Căn chỉnh Badge:**
+     - Sửa lỗi class sai `py-0.2` thành `py-0.5` chuẩn Tailwind trên các badge "Docs" và huy hiệu bài viết.
+  6. **Cải tiến Modal Tìm kiếm (`DocSearchModal.tsx`) & Modal Soạn thảo (`DocEditModal.tsx`):**
+     - Bổ sung sự kiện `onClick={onClose}` khi bấm ra ngoài vùng backdrop nền đen mờ để đóng modal thuận tiện.
+     - Trang bị thêm thanh công cụ chèn nhanh Markdown (H2 Mục chính, H3 Mục con, Bôi đậm, Hộp Mẹo 💡, Hộp Cảnh báo ⚠️, Hộp Phân quyền 🔒, Bảng mẫu 📊) vào trình soạn thảo của Quản trị viên, giúp tạo và chỉnh sửa bài viết trực quan, không lo sai cú pháp.
+  7. **Hỗ trợ định dạng in ấn chuyên nghiệp (Print Stylesheet):**
+     - Thêm các thuộc tính `print:hidden`, `print:border-none`, `print:p-0` cho Header, Sidebar trái, Sidebar phải, hộp feedback và nút phân trang bài viết; khi bấm "In bài viết" (`window.print()`), tài liệu xuất ra bản in / PDF trang nhã như một cuốn sổ tay cẩm nang công ty hoàn chỉnh.
+- **Trạng thái:** Đã hoàn thành xuất sắc, kiểm tra `npm run lint` và `npm run build` thành công 100%.
+
+### 1.0 Chuyển Đổi Trang Tài Liệu & Hướng Dẫn Docs Thành Trang Riêng Full Màn Hình (`/docs`)
+- **Mô tả yêu cầu:**
+  - Tách trang "Tài liệu & Hướng dẫn" ra thành một trang riêng biệt hoàn toàn độc lập, hiển thị full màn hình 100vw x 100vh (không bị bọc trong khung Layout thông thường hay bị giới hạn bởi sidebar/padding của ứng dụng CRM chính).
+- **Giải pháp thực hiện:**
+  1. **Bỏ Bọc Khung Layout (Layout Bypass):**
+     - Tại `src/components/Layout.tsx`, bổ sung điều kiện kiểm tra đường dẫn `location.pathname === '/docs'` để trả về trực tiếp `children` mà không kết xuất Sidebar CRM, Header chung hay các container có padding cố định, đảm bảo trang Docs chiếm trọn vẹn màn hình.
+  2. **Thanh Điều Hướng Đầu Trang Full-Width Riêng Biệt:**
+     - Thiết kế Top Header `w-full` cao cấp với nút **"← Quay lại Tour CRM"** (cho phép người dùng quay trở lại CRM bất kỳ lúc nào chỉ với 1 click), Logo thương hiệu "Tour CRM Docs", đường dẫn phân cấp Breadcrumb, thanh tìm kiếm nhanh toàn trang `Ctrl + K`, bộ lọc vai trò linh hoạt và nút thêm bài mới cho Admin.
+  3. **Bố Cục 3 Cột Tràn Viền Độc Lập Cuộn Trang:**
+     - Cột danh mục bài viết bên trái (Sticky, scroll độc lập), Cột bài đọc trung tâm (Card bài viết rộng rãi `max-w-4xl` với typography chuẩn mực), và Cột mục lục bên phải (Table of Contents với Scroll Spy tự động bắt đề mục).
+  4. **Tối Ưu Hóa Cuộn Trang Nội Bộ:**
+     - Cập nhật hàm `handleSelectDoc` và `scrollToHeading` sử dụng `scrollIntoView` và cuộn trên container nội dung `contentRef.current`, giúp trải nghiệm đọc mượt mà như Pancake Docs, Stripe Docs hay GitBook.
+- **Trạng thái:** Đã hoàn thành, kiểm tra Linter và Biên dịch (`npm run build`) thành công 100%.
+
+### 1.0 Xây Dựng Hệ Thống Tài Liệu & Hướng Dẫn Docs Chuẩn Pancake (`/docs`)
+- **Mô tả yêu cầu:**
+  - Xây dựng trung tâm tài liệu và quy trình nghiệp vụ (Help Center / Docs) tương tự phong cách Pancake Docs (`docs.pancake.biz/pancake/intro?lang=vi`) để trợ giúp nhân viên toàn công ty tra cứu quy trình, hướng dẫn thao tác và giải đáp thắc mắc khi sử dụng Tour CRM.
+- **Giải pháp thực hiện:**
+  1. **Bố cục 3 Cột Hiện Đại:**
+     - **Cột trái:** Cây thư mục điều hướng phân theo 7 chuyên mục nghiệp vụ chính (Bắt đầu, Sale & Giữ chỗ, Điều hành tour, Kế toán & Tài chính, Dịch vụ Visa, Nhân sự & Phép năm, Hỏi đáp FAQ) với bộ lọc vai trò linh hoạt và huy hiệu chuyên biệt.
+     - **Cột giữa:** Nội dung bài viết chi tiết hỗ trợ Markdown, các khối Callout ghi chú nổi bật (Mẹo thao tác, Cảnh báo quan trọng, Phân quyền bảo mật, Quy định công ty, Xác nhận), bảng dữ liệu chuẩn hóa và thẻ điều hướng Bài trước / Bài tiếp theo.
+     - **Cột phải:** Mục lục bài viết (Table of Contents) tự động trích xuất các thẻ H2 và kích hoạt Scroll Spy theo thời gian thực khi cuộn trang, kèm widget đánh giá hữu ích.
+  2. **Tìm Kiếm Tức Thì (Ctrl + K):**
+     - Tích hợp hộp tìm kiếm nhanh toàn bộ bài viết, từ khóa, chuyên mục và tóm tắt nội dung hỗ trợ điều khiển bằng bàn phím (mũi tên lên/xuống và Enter).
+  3. **Cơ Chế Quản Trị Động & Fallback Dự Phòng (Phương Án 1):**
+     - Tạo bảng `system_docs` trên Supabase hỗ trợ Realtime và phân quyền RLS.
+     - Tích hợp bộ bài viết mẫu chuẩn ban đầu trong `defaultDocs.ts` và cơ chế fallback an toàn, giúp hệ thống luôn hoạt động mượt mà ngay cả khi chưa nạp dữ liệu vào database.
+     - Cung cấp Modal biên soạn / chỉnh sửa bài viết trực tiếp trên giao diện dành riêng cho Quản trị viên (Admin) với tính năng chuyển đổi chế độ xem trước (Preview) Markdown.
+  4. **Liên Kết Truy Cập Tiện Lợi:**
+     - Bổ sung mục "Tài liệu & Hướng dẫn" trên thanh Sidebar điều hướng, nút tắt nhanh "Hướng dẫn" trên thanh Header đầu trang và trong menu Thông tin cá nhân.
+- **Trạng thái:** Đã hoàn thành, lint và build pass 100%.
+
 ### 1.0 Giải Pháp Giữ Ấm Cơ Sở Dữ Liệu Supabase 24/7 (Chống Auto-Pause Sau 7 Ngày)
 - **Mô tả yêu cầu:**
   - Supabase gói miễn phí có chính sách tự động tạm dừng (pause) dự án nếu sau 7 ngày liên tục không ghi nhận lượt truy vấn nào. Nghiên cứu, đề xuất và triển khai giải pháp kỹ thuật triệt để để giữ ấm database liên tục.

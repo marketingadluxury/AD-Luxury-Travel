@@ -474,6 +474,11 @@ export default function ToursManagement() {
     updateOrder
   } = useCRM();
 
+  // Permissions for tabs and actions
+  const canAccessCosts = ['admin', 'bod', 'operator', 'accounting', 'sale_leader'].includes(currentRole);
+  const canAccessCategories = ['admin', 'bod', 'operator', 'sale_leader'].includes(currentRole);
+  const canManageTours = ['admin', 'operator', 'sale_leader'].includes(currentRole);
+
   // Navigation tabs: 'tours' | 'categories' | 'costs'
   const [activeTab, setActiveTab] = useState<'tours' | 'categories' | 'costs'>(
     currentRole === 'accounting' ? 'costs' : 'tours'
@@ -483,8 +488,12 @@ export default function ToursManagement() {
   useEffect(() => {
     if (currentRole === 'accounting') {
       setActiveTab('costs');
+    } else if (!canAccessCosts && activeTab === 'costs') {
+      setActiveTab('tours');
+    } else if (!canAccessCategories && activeTab === 'categories') {
+      setActiveTab('tours');
     }
-  }, [currentRole]);
+  }, [currentRole, activeTab, canAccessCosts, canAccessCategories]);
 
   // View mode for tour listing: 'grouped' (default) | 'flat'
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
@@ -671,6 +680,10 @@ export default function ToursManagement() {
   const [bulkDatesList, setBulkDatesList] = useState<Array<{ date: Date; selected: boolean }>>([]);
 
   const handleOpenBulkModal = (tour: Tour) => {
+    if (!canManageTours) {
+      toast.error('Bạn không có quyền tạo chuỗi ngày khởi hành.');
+      return;
+    }
     if (currentRole === 'sale_leader' && (!tour.tour_type || tour.tour_type === 'internal')) {
       toast.error('Sale Leader không có quyền thao tác với Tour tự vận hành.');
       return;
@@ -1056,6 +1069,10 @@ export default function ToursManagement() {
 
   // Trigger editing mode and populate states
   const startEdit = (tour: Tour) => {
+    if (!canManageTours) {
+      toast.error('Bạn không có quyền chỉnh sửa thông tin tour.');
+      return;
+    }
     if (currentRole === 'sale_leader' && (!tour.tour_type || tour.tour_type === 'internal')) {
       toast.error('Sale Leader không có quyền thao tác với Tour tự vận hành.');
       return;
@@ -1253,6 +1270,10 @@ export default function ToursManagement() {
 
   // Trigger duplicate/clone and populate form
   const handleCloneTour = (tour: Tour) => {
+    if (!canManageTours) {
+      toast.error('Bạn không có quyền sao chép hoặc thêm ngày khởi hành mới.');
+      return;
+    }
     if (currentRole === 'sale_leader' && (!tour.tour_type || tour.tour_type === 'internal')) {
       toast.error('Sale Leader không có quyền thao tác với Tour tự vận hành.');
       return;
@@ -1325,6 +1346,10 @@ export default function ToursManagement() {
 
   // Pre-fill form to quickly add a new departure under the same Tour series
   const handleAddDepartureQuick = (tour: Tour) => {
+    if (!canManageTours) {
+      toast.error('Bạn không có quyền thêm ngày khởi hành mới.');
+      return;
+    }
     if (currentRole === 'sale_leader' && (!tour.tour_type || tour.tour_type === 'internal')) {
       toast.error('Sale Leader không có quyền thao tác với Tour tự vận hành.');
       return;
@@ -1480,6 +1505,10 @@ export default function ToursManagement() {
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageTours) {
+      toast.error('Bạn không có quyền tạo hoặc chỉnh sửa tour.');
+      return;
+    }
     if (isCodeDuplicate) {
       toast.error('Mã tour/visa này đã tồn tại, vui lòng chọn mã khác!');
       return;
@@ -1757,6 +1786,10 @@ export default function ToursManagement() {
 
   // Delete tour helper
   const handleDeleteTourClick = (tour: Tour) => {
+    if (!canManageTours) {
+      toast.error('Bạn không có quyền xóa tour.');
+      return;
+    }
     if (currentRole === 'sale_leader' && (!tour.tour_type || tour.tour_type === 'internal')) {
       toast.error('Sale Leader không có quyền xóa Tour tự vận hành.');
       return;
@@ -1862,28 +1895,32 @@ export default function ToursManagement() {
                 <FileText className="w-3.5 h-3.5" />
                 <span>Danh sách Tour</span>
               </button>
-              <button
-                onClick={() => setActiveTab('costs')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'costs' 
-                    ? 'bg-white text-blue-700 shadow-sm' 
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                <span>Hạch toán Chi phí – Lãi lỗ</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('categories')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'categories' 
-                    ? 'bg-white text-blue-700 shadow-sm' 
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Tag className="w-3.5 h-3.5" />
-                <span>Tuyến / Danh mục ({categories.length})</span>
-              </button>
+              {canAccessCosts && (
+                <button
+                  onClick={() => setActiveTab('costs')}
+                  className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'costs' 
+                      ? 'bg-white text-blue-700 shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Hạch toán Chi phí – Lãi lỗ</span>
+                </button>
+              )}
+              {canAccessCategories && (
+                <button
+                  onClick={() => setActiveTab('categories')}
+                  className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'categories' 
+                      ? 'bg-white text-blue-700 shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>Tuyến / Danh mục ({categories.length})</span>
+                </button>
+              )}
             </div>
 
             {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
@@ -2017,7 +2054,7 @@ export default function ToursManagement() {
             </div>
           </div>
         </div>
-      ) : activeTab === 'costs' ? (
+      ) : (activeTab === 'costs' && canAccessCosts) ? (
         /* TOUR COSTS MANAGEMENT TAB */
         <TourCostsManagement />
       ) : (
@@ -3356,11 +3393,16 @@ export default function ToursManagement() {
 
                           <div className="flex items-center gap-2.5 self-end md:self-auto" onClick={e => e.stopPropagation()}>
                             {/* Quick Add Departure button */}
-                            {firstTour.tour_type !== 'visa' && firstTour.tour_type !== 'private' && (
+                            {canManageTours && firstTour.tour_type !== 'visa' && firstTour.tour_type !== 'private' && (
                               <button
                                 type="button"
                                 onClick={() => handleAddDepartureQuick(firstTour)}
-                                className="inline-flex items-center h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                                disabled={currentRole === 'sale_leader' && (!firstTour.tour_type || firstTour.tour_type === 'internal')}
+                                className={`inline-flex items-center h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+                                  currentRole === 'sale_leader' && (!firstTour.tour_type || firstTour.tour_type === 'internal')
+                                    ? 'opacity-40 cursor-not-allowed'
+                                    : ''
+                                }`}
                               >
                                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                                 Thêm ngày đi mới
@@ -3368,11 +3410,16 @@ export default function ToursManagement() {
                             )}
 
                             {/* Bulk Create Series button */}
-                            {firstTour.tour_type !== 'visa' && firstTour.tour_type !== 'private' && (
+                            {canManageTours && firstTour.tour_type !== 'visa' && firstTour.tour_type !== 'private' && (
                               <button
                                 type="button"
                                 onClick={() => handleOpenBulkModal(firstTour)}
-                                className="inline-flex items-center h-9 px-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                                disabled={currentRole === 'sale_leader' && (!firstTour.tour_type || firstTour.tour_type === 'internal')}
+                                className={`inline-flex items-center h-9 px-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+                                  currentRole === 'sale_leader' && (!firstTour.tour_type || firstTour.tour_type === 'internal')
+                                    ? 'opacity-40 cursor-not-allowed'
+                                    : ''
+                                }`}
                               >
                                 <Grid className="w-3.5 h-3.5 mr-1.5" />
                                 Tạo hàng loạt (Series)
@@ -3480,7 +3527,7 @@ export default function ToursManagement() {
                                         </button>
 
                                         {/* Duplicate/Clone */}
-                                        {t.tour_type !== 'private' && (
+                                        {canManageTours && t.tour_type !== 'private' && (
                                           <button
                                             type="button"
                                             onClick={() => handleCloneTour(t)}
@@ -3492,25 +3539,29 @@ export default function ToursManagement() {
                                           </button>
                                         )}
                                         {/* Edit */}
-                                        <button
-                                          type="button"
-                                          onClick={() => startEdit(t)}
-                                          disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
-                                          className={`p-1.5 text-amber-600 rounded-lg transition-colors border border-amber-100 bg-amber-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-amber-50"}`}
-                                          title="Sửa chi tiết"
-                                        >
-                                          <Edit3 className="w-4 h-4" />
-                                        </button>
+                                        {canManageTours && (
+                                          <button
+                                            type="button"
+                                            onClick={() => startEdit(t)}
+                                            disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
+                                            className={`p-1.5 text-amber-600 rounded-lg transition-colors border border-amber-100 bg-amber-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-amber-50"}`}
+                                            title="Sửa chi tiết"
+                                          >
+                                            <Edit3 className="w-4 h-4" />
+                                          </button>
+                                        )}
                                         {/* Delete */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteTourClick(t)}
-                                          disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
-                                          className={`p-1.5 text-rose-600 rounded-lg transition-colors border border-rose-100 bg-rose-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-rose-50"}`}
-                                          title="Xóa"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        {canManageTours && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteTourClick(t)}
+                                            disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
+                                            className={`p-1.5 text-rose-600 rounded-lg transition-colors border border-rose-100 bg-rose-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-rose-50"}`}
+                                            title="Xóa"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        )}
                                       </div>
                                     </td>
                                   </tr>
@@ -3713,7 +3764,7 @@ export default function ToursManagement() {
                             </button>
 
                             {/* Duplicate/Clone action */}
-                            {t.tour_type !== 'private' && (
+                            {canManageTours && t.tour_type !== 'private' && (
                               <button
                                 type="button"
                                 onClick={() => handleCloneTour(t)}
@@ -3726,26 +3777,30 @@ export default function ToursManagement() {
                             )}
                             
                             {/* Edit action */}
-                            <button
-                              type="button"
-                              onClick={() => startEdit(t)}
-                              disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
-                              className={`p-1.5 text-amber-600 rounded-lg transition-colors border border-amber-100 bg-amber-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-amber-50"}`}
-                              title="Sửa thông tin chi tiết tour"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
+                            {canManageTours && (
+                              <button
+                                type="button"
+                                onClick={() => startEdit(t)}
+                                disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
+                                className={`p-1.5 text-amber-600 rounded-lg transition-colors border border-amber-100 bg-amber-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-amber-50"}`}
+                                title="Sửa thông tin chi tiết tour"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                            )}
 
                             {/* Delete action */}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTourClick(t)}
-                              disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
-                              className={`p-1.5 text-rose-600 rounded-lg transition-colors border border-rose-100 bg-rose-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-rose-50"}`}
-                              title="Xóa tour khởi hành này"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canManageTours && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTourClick(t)}
+                                disabled={currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal")}
+                                className={`p-1.5 text-rose-600 rounded-lg transition-colors border border-rose-100 bg-rose-50/40 ${currentRole === "sale_leader" && (!t.tour_type || t.tour_type === "internal") ? "opacity-30 cursor-not-allowed" : "hover:bg-rose-50"}`}
+                                title="Xóa tour khởi hành này"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -4250,12 +4305,14 @@ export default function ToursManagement() {
                       {selectedTourForDrawer.single_room_surcharge ? `${new Intl.NumberFormat('vi-VN').format(selectedTourForDrawer.single_room_surcharge)} đ` : '0 đ'}
                     </p>
                   </div>
-                  <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                    <span className="text-slate-500 font-medium">Hoa hồng / Khách:</span>
-                    <p className="font-bold text-emerald-700">
-                      {selectedTourForDrawer.commission ? `${new Intl.NumberFormat('vi-VN').format(selectedTourForDrawer.commission)} đ` : '0 đ'}
-                    </p>
-                  </div>
+                  {currentRole !== 'tour_guide' && (
+                    <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
+                      <span className="text-slate-500 font-medium">Hoa hồng / Khách:</span>
+                      <p className="font-bold text-emerald-700">
+                        {selectedTourForDrawer.commission ? `${new Intl.NumberFormat('vi-VN').format(selectedTourForDrawer.commission)} đ` : '0 đ'}
+                      </p>
+                    </div>
+                  )}
                   <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
                     <span className="text-slate-500 font-medium">Thời gian giữ chỗ:</span>
                     <p className="font-bold text-slate-800">{selectedTourForDrawer.hold_duration_hours || 48} giờ</p>
@@ -4365,20 +4422,27 @@ export default function ToursManagement() {
               >
                 Đóng
               </button>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const t = selectedTourForDrawer;
-                    setSelectedTourForDrawer(null);
-                    startEdit(t);
-                  }}
-                  className="h-9 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  Chỉnh sửa Tour
-                </button>
-              </div>
+              {canManageTours && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = selectedTourForDrawer;
+                      setSelectedTourForDrawer(null);
+                      startEdit(t);
+                    }}
+                    disabled={currentRole === "sale_leader" && (!selectedTourForDrawer.tour_type || selectedTourForDrawer.tour_type === "internal")}
+                    className={`h-9 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                      currentRole === "sale_leader" && (!selectedTourForDrawer.tour_type || selectedTourForDrawer.tour_type === "internal")
+                        ? "opacity-40 cursor-not-allowed"
+                        : ""
+                    }`}
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    Chỉnh sửa Tour
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
