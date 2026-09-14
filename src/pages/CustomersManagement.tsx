@@ -683,7 +683,7 @@ export default function CustomersManagement() {
                 ]}
                 value={sortBy}
                 onChange={val => setSortBy(val as any)}
-                className="w-52"
+                className="w-56 sm:w-60"
                 buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
               />
             </div>

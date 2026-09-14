@@ -1687,7 +1687,7 @@ export default function Dashboard() {
                   onChange={(val) => setTableSortBy(val as any)}
                   options={tableSortOptions}
                   align="right"
-                  className="w-44 sm:w-48"
+                  className="w-48 sm:w-52"
                   buttonClassName="h-9 px-3 py-1.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-2xs"
                 />
 

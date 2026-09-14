@@ -18,6 +18,7 @@ interface CustomSelectProps {
   icon?: React.ReactNode;
   align?: 'left' | 'right';
   disabled?: boolean;
+  direction?: 'down' | 'up' | 'auto';
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -31,8 +32,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   icon,
   align = 'left',
   disabled = false,
+  direction = 'auto',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [dropDirection, setDropDirection] = useState<'down' | 'up'>(
+    direction === 'up' ? 'up' : 'down'
+  );
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value);
@@ -48,6 +53,30 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const calculateDirection = (): 'down' | 'up' => {
+    if (direction === 'up') return 'up';
+    if (direction === 'down') return 'down';
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      if (spaceBelow < 250 && spaceAbove > spaceBelow) {
+        return 'up';
+      }
+    }
+    return 'down';
+  };
+
+  const toggleDropdown = () => {
+    if (disabled) return;
+    if (!isOpen) {
+      setDropDirection(calculateDirection());
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
   return (
     <div ref={containerRef} className={`relative inline-flex flex-col gap-1 ${isOpen ? 'z-50' : 'z-10'} ${className}`}>
       {label && (
@@ -59,7 +88,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={toggleDropdown}
         className={`flex items-center justify-between gap-2 text-left whitespace-nowrap transition-all cursor-pointer ${
           buttonClassName
             ? `${buttonClassName} ${isOpen ? 'ring-2 ring-blue-500/20 !border-blue-500 !bg-white text-slate-900' : ''} ${disabled ? '!opacity-60 !cursor-not-allowed' : ''}`
@@ -87,9 +116,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
       {isOpen && !disabled && (
         <div
-          className={`absolute top-full ${
+          className={`absolute ${
+            dropDirection === 'up' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+          } ${
             align === 'right' ? 'right-0' : 'left-0'
-          } mt-1.5 z-[100] bg-white border border-slate-200 shadow-xl rounded-xl p-1 text-xs min-w-full w-max max-w-xs sm:max-w-md max-h-64 overflow-y-auto flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150`}
+          } z-[100] bg-white border border-slate-200 shadow-xl rounded-xl p-1 text-xs min-w-full w-max max-w-xs sm:max-w-md max-h-64 overflow-y-auto flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150`}
         >
           {options.map((opt) => {
             const isSelected = value === opt.value;

@@ -6,6 +6,21 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Smoke Test Giao Diện: Khắc Phục Lỗi Cắt Chữ & Bị Che Khuất Dropdown Phân Trang Do Tràn Viền
+- **Mô tả yêu cầu & hiện tượng:**
+  - Qua ảnh chụp màn hình kiểm thử UI thực tế từ người dùng, ô chọn phân trang *"10 tour / trang"* tại chân bảng Quản lý Tour (`src/pages/ToursManagement.tsx`) khi bấm mở ra thì menu danh sách lựa chọn bị che khuất gần như toàn bộ (chỉ hở 1 vệt viền sát đáy).
+  - Nguyên nhân: Thẻ bao ngoài bảng danh sách Tour sử dụng `overflow-hidden`. Menu lựa chọn mở theo chiều xuống dưới (`top-full mt-1.5`) nên toàn bộ popup bị rơi ra ngoài đáy thẻ và bị cắt cụt hoàn toàn.
+- **Giải pháp xử lý triệt để:**
+  1. **Nâng cấp `CustomSelect` với cơ chế nhận diện hướng mở thông minh (`direction="auto" | "up" | "down"`):**
+     - Mặc định ở chế độ `direction="auto"`, component tự động đo khoảng cách từ nút bấm tới đáy màn hình (`window.innerHeight - rect.bottom`). Nếu không gian bên dưới nhỏ hơn 250px và bên trên rộng hơn, menu sẽ **tự động mở ngược lên trên** (`bottom-full mb-1.5`).
+     - Hỗ trợ cấu hình chủ động `direction="up"` cho các thanh điều khiển, phân trang hoặc các dropdown nằm ở chân trang/chân bảng.
+  2. **Áp dụng cho chân bảng Quản lý Tour (`ToursManagement.tsx`):**
+     - Gán `direction="up"` cho ô chọn số lượng phân trang, giúp menu bung ngược lên phía trên nút bấm, hiển thị rõ ràng 100% trong lòng bảng.
+     - Loại bỏ `overflow-hidden` trên thẻ cha bao ngoài, thay thế bằng bo góc chuẩn hóa `rounded-t-2xl` cho header và `rounded-b-2xl` cho thanh footer phân trang, đảm bảo không có bất kỳ popup hay menu nào bị che khuất hay cắt viền.
+  3. **Kiểm thử toàn diện:**
+     - Chạy toàn bộ Linter (`tsc --noEmit`), Vitest (29/29 tests passed) và compile applet thành công 100%.
+- **Trạng thái:** Đã hoàn thành, menu phân trang mở nổi trọn vẹn lên phía trên, không còn bị che khuất.
+
 ### 1.0 Chặn Tự Phê Duyệt Đơn Nghỉ Phép & Phân Luồng Duyệt Theo Cấp Quản Lý Trực Tiếp
 - **Mô tả yêu cầu & hiện tượng:**
   - Người dùng là Trưởng phòng/Trưởng nhóm (`sale_leader`, `marketing_leader`, v.v.) khi tạo đơn nghỉ phép cá nhân lại tự nhìn thấy và bấm duyệt Cấp 1 (`Duyệt C1`) cho chính đơn của mình, dù đã được gán cấp trên trực tiếp (`leader_id`) là Ban Giám Đốc (`bod`).

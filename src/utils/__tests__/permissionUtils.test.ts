@@ -122,8 +122,8 @@ describe('Phần 2: Automation Tests - Kiểm thử logic Phân quyền (Permiss
 
     describe('Chặn tự duyệt đơn nghỉ phép & Định tuyến duyệt theo cấp quản lý (isUserAuthorizedToApproveLeaveL1 & Final)', () => {
       const leaderUser = { id: 'leader_1', role: 'sale_leader' as const, leader_id: 'bod_1', team_id: 'team_sale_1' };
-      const bodUser = { id: 'bod_1', role: 'bod' as const };
-      const hrUser = { id: 'hr_1', role: 'hr' as const };
+      const bodUser = { id: 'bod_1', role: 'bod' as const, leader_id: null, team_id: null };
+      const hrUser = { id: 'hr_1', role: 'hr' as const, leader_id: null, team_id: 'team_hr' };
       const employeeUser = { id: 'emp_1', role: 'sale' as const, leader_id: 'leader_1', team_id: 'team_sale_1' };
       const otherEmployee = { id: 'emp_2', role: 'sale' as const, leader_id: 'leader_2', team_id: 'team_sale_2' };
 

@@ -94,8 +94,8 @@ export function isUserAuthorizedToApproveLeaveL1(
   currentUserId: string,
   currentUserRole: string,
   requestUserId: string,
-  creatorProfile?: { leader_id?: string | null; team_id?: string | null } | null,
-  currentProfile?: { team_id?: string | null } | null
+  creatorProfile?: { leader_id?: string | null; team_id?: string | null; [key: string]: any } | null,
+  currentProfile?: { team_id?: string | null; [key: string]: any } | null
 ): boolean {
   if (!currentUserId || !requestUserId) return false;
   // Tuyệt đối không tự duyệt đơn của chính mình

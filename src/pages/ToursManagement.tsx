@@ -3272,8 +3272,8 @@ export default function ToursManagement() {
           </div>
 
           {/* LIST OF ACTIVE TOURS WITH FULL CRUD OPERATIONS */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-t-2xl">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   Danh sách điều phối chỗ & Lịch trình
@@ -3813,24 +3813,25 @@ export default function ToursManagement() {
             )}
 
             {/* PAGINATION FOOTER CONTROL BAR */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-b-2xl">
               <div className="text-xs text-slate-500 font-medium flex flex-wrap items-center gap-2">
                 <span>Hiển thị</span>
                 <div className="inline-block">
                   <CustomSelect
+                    direction="up"
                     options={[
-                      { value: '5', label: '5 phần tử / trang' },
-                      { value: '10', label: '10 phần tử / trang' },
-                      { value: '20', label: '20 phần tử / trang' },
-                      { value: '50', label: '50 phần tử / trang' },
+                      { value: '5', label: '5 tour / trang' },
+                      { value: '10', label: '10 tour / trang' },
+                      { value: '20', label: '20 tour / trang' },
+                      { value: '50', label: '50 tour / trang' },
                     ]}
                     value={String(itemsPerPage)}
                     onChange={val => {
                       setItemsPerPage(Number(val));
                       setCurrentPage(1);
                     }}
-                    className="w-36"
-                    buttonClassName="w-full h-8 px-2.5 py-1 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
+                    className="w-40 sm:w-44"
+                    buttonClassName="w-full h-8 px-3 py-1 border border-slate-300 rounded-lg bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-2xs"
                   />
                 </div>
                 <span>

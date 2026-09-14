@@ -257,7 +257,7 @@ export const LeaveManagementTab: React.FC = () => {
             ]}
             icon={<Clock className="w-3.5 h-3.5 text-slate-500" />}
             label="Trạng thái"
-            className="w-56"
+            className="w-60 sm:w-64"
           />
 
           {/* Lọc Loại Nghỉ Phép */}

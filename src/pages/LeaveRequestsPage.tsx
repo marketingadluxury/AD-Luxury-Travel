@@ -864,7 +864,7 @@ export default function LeaveRequestsPage() {
                 ]}
                 icon={<Clock className="w-3.5 h-3.5 text-gray-500" />}
                 label="Trạng thái"
-                className="w-56"
+                className="w-64 sm:w-72"
               />
 
               {/* Lọc Loại nghỉ */}

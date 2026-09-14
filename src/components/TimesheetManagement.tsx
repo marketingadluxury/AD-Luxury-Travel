@@ -301,7 +301,7 @@ export const TimesheetManagement: React.FC = () => {
             }))}
             icon={<Calendar className="w-3.5 h-3.5 text-blue-600" />}
             label="Tháng"
-            className="w-32 sm:w-36"
+            className="w-36 sm:w-40"
           />
 
           {/* Chọn Năm */}
