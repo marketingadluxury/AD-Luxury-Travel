@@ -6,7 +6,9 @@ import {
   canAccessHRSection,
   canViewPartnerCard,
   canApproveLeaveLevel1,
-  canApproveLeaveLevel2
+  canApproveLeaveLevel2,
+  isUserAuthorizedToApproveLeaveL1,
+  isUserAuthorizedToApproveLeaveFinal
 } from '../permissionUtils';
 
 describe('Phần 2: Automation Tests - Kiểm thử logic Phân quyền (PermissionUtils)', () => {
@@ -116,6 +118,77 @@ describe('Phần 2: Automation Tests - Kiểm thử logic Phân quyền (Permiss
       expect(canApproveLeaveLevel2('sale_leader')).toBe(false);
       expect(canApproveLeaveLevel2('operator')).toBe(false);
       expect(canApproveLeaveLevel2('accounting')).toBe(false);
+    });
+
+    describe('Chặn tự duyệt đơn nghỉ phép & Định tuyến duyệt theo cấp quản lý (isUserAuthorizedToApproveLeaveL1 & Final)', () => {
+      const leaderUser = { id: 'leader_1', role: 'sale_leader' as const, leader_id: 'bod_1', team_id: 'team_sale_1' };
+      const bodUser = { id: 'bod_1', role: 'bod' as const };
+      const hrUser = { id: 'hr_1', role: 'hr' as const };
+      const employeeUser = { id: 'emp_1', role: 'sale' as const, leader_id: 'leader_1', team_id: 'team_sale_1' };
+      const otherEmployee = { id: 'emp_2', role: 'sale' as const, leader_id: 'leader_2', team_id: 'team_sale_2' };
+
+      it('Chặn TUYỆT ĐỐI tự duyệt đơn Cấp 1 của chính mình (kể cả Trưởng phòng / Giám đốc)', () => {
+        // Trưởng phòng tự duyệt đơn của chính mình -> PHẢI LÀ FALSE
+        expect(isUserAuthorizedToApproveLeaveL1(
+          leaderUser.id,
+          leaderUser.role,
+          leaderUser.id,
+          leaderUser,
+          leaderUser
+        )).toBe(false);
+
+        // Giám đốc tự duyệt đơn của chính mình -> PHẢI LÀ FALSE
+        expect(isUserAuthorizedToApproveLeaveL1(
+          bodUser.id,
+          bodUser.role,
+          bodUser.id,
+          bodUser,
+          bodUser
+        )).toBe(false);
+      });
+
+      it('Khi Trưởng phòng tạo đơn, Giám đốc (BOD) được phân công là người có quyền duyệt', () => {
+        // Giám đốc duyệt đơn của Trưởng phòng -> TRUE
+        expect(isUserAuthorizedToApproveLeaveL1(
+          bodUser.id,
+          bodUser.role,
+          leaderUser.id,
+          leaderUser,
+          bodUser
+        )).toBe(true);
+      });
+
+      it('Trưởng phòng chỉ được duyệt đơn Cấp 1 của nhân viên cấp dưới trực thuộc', () => {
+        // Trưởng phòng duyệt đơn của nhân viên nhóm mình (leader_id: leader_1) -> TRUE
+        expect(isUserAuthorizedToApproveLeaveL1(
+          leaderUser.id,
+          leaderUser.role,
+          employeeUser.id,
+          employeeUser,
+          leaderUser
+        )).toBe(true);
+
+        // Trưởng phòng duyệt đơn của nhân viên nhóm khác (leader_id: leader_2) -> FALSE
+        expect(isUserAuthorizedToApproveLeaveL1(
+          leaderUser.id,
+          leaderUser.role,
+          otherEmployee.id,
+          otherEmployee,
+          leaderUser
+        )).toBe(false);
+      });
+
+      it('Chặn TUYỆT ĐỐI tự duyệt cấp cuối (Final) của chính mình', () => {
+        // HR tự duyệt cấp cuối đơn của chính mình -> FALSE
+        expect(isUserAuthorizedToApproveLeaveFinal(hrUser.id, hrUser.role, hrUser.id)).toBe(false);
+        // Giám đốc tự duyệt cấp cuối đơn của chính mình -> FALSE
+        expect(isUserAuthorizedToApproveLeaveFinal(bodUser.id, bodUser.role, bodUser.id)).toBe(false);
+      });
+
+      it('HR / BOD duyệt cấp cuối đơn của nhân viên khác thành công', () => {
+        expect(isUserAuthorizedToApproveLeaveFinal(hrUser.id, hrUser.role, employeeUser.id)).toBe(true);
+        expect(isUserAuthorizedToApproveLeaveFinal(bodUser.id, bodUser.role, leaderUser.id)).toBe(true);
+      });
     });
   });
 });

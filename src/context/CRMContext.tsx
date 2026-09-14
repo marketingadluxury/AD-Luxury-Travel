@@ -1196,6 +1196,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
   const approveLeaveRequestLevel1 = async (id: string, approverName: string): Promise<void> => {
     const currentUserId = profile?.id || user?.id || '';
+    const targetReq = leaveRequests.find(r => r.id === id);
+
+    // Chặn tuyệt đối tự duyệt đơn nghỉ phép của chính mình
+    if (targetReq && targetReq.user_id === currentUserId) {
+      toast.error('Bạn không thể tự phê duyệt đơn nghỉ phép của chính mình! Đơn cần được cấp trên duyệt.');
+      return;
+    }
+
     setLeaveRequests(prev => {
       const updated = prev.map(req => req.id === id ? {
         ...req,
@@ -1233,6 +1241,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const approveLeaveRequestFinal = async (id: string, approverName: string): Promise<void> => {
     const currentUserId = profile?.id || user?.id || '';
     const targetReq = leaveRequests.find(r => r.id === id);
+
+    // Chặn tuyệt đối tự duyệt hoàn tất đơn của chính mình
+    if (targetReq && targetReq.user_id === currentUserId) {
+      toast.error('Bạn không thể tự duyệt hoàn tất đơn nghỉ phép của chính mình! Cần HR hoặc cấp quản lý khác phê duyệt.');
+      return;
+    }
 
     setLeaveRequests(prev => {
       const updated = prev.map(req => req.id === id ? {
@@ -1321,6 +1335,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   };
 
   const rejectLeaveRequest = async (id: string, approverName: string, reason: string): Promise<void> => {
+    const currentUserId = profile?.id || user?.id || '';
+    const targetReq = leaveRequests.find(r => r.id === id);
+
+    // Không dùng quyền quản lý để từ chối đơn của chính mình (dùng nút Xóa đơn để hủy)
+    if (targetReq && targetReq.user_id === currentUserId) {
+      toast.error('Bạn không thể từ chối đơn của chính mình ở quyền quản lý. Hãy bấm nút Xóa đơn nếu muốn hủy đơn này.');
+      return;
+    }
+
     setLeaveRequests(prev => {
       const updated = prev.map(req => req.id === id ? {
         ...req,

@@ -32,6 +32,10 @@ import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { LeaveRequest, LeaveStatus, LeaveType, HolidayType, Holiday } from '../types';
 import { getLeaveRequestWorkdaysCount } from '../lib/payrollUtils';
+import {
+  isUserAuthorizedToApproveLeaveL1,
+  isUserAuthorizedToApproveLeaveFinal
+} from '../utils/permissionUtils';
 import { CreateLeaveRequestModal, EmployeeLeaveBalanceWidget } from '../components/LeaveRequestModal';
 import { TimesheetManagement } from '../components/TimesheetManagement';
 import { LeaveBalanceManagement } from '../components/LeaveBalanceManagement';
@@ -112,25 +116,36 @@ export default function LeaveRequestsPage() {
     return leaveRequests.filter((r) => r.user_id === currentUserId);
   }, [leaveRequests, currentUserId]);
 
-  // Đơn chờ Trưởng phòng duyệt cấp 1 (cho Leader/Admin/BOD)
+  // Đơn chờ Trưởng phòng duyệt cấp 1 (cho Leader/Admin/BOD - loại trừ đơn của chính mình)
   const pendingLevel1Requests = useMemo(() => {
     if (!isLeader) return [];
-    if (['admin', 'bod'].includes(effectiveRole)) {
-      return leaveRequests.filter((r) => r.status === 'pending');
-    }
-    // Trưởng nhóm: lọc các thành viên cùng nhóm hoặc được phân quyền
     return leaveRequests.filter((r) => {
       if (r.status !== 'pending') return false;
+      // Tuyệt đối không tự duyệt đơn của chính mình
+      if (r.user_id === currentUserId) return false;
       const creator = profilesList.find((p) => p.id === r.user_id);
-      return creator?.leader_id === currentUserId || (profile?.team_id && creator?.team_id === profile.team_id) || !creator?.leader_id;
+      return isUserAuthorizedToApproveLeaveL1(
+        currentUserId,
+        effectiveRole,
+        r.user_id,
+        creator,
+        profile
+      );
     });
   }, [leaveRequests, isLeader, effectiveRole, profilesList, currentUserId, profile]);
 
-  // Đơn chờ HR / BOD / Admin duyệt cấp 2 (Final)
+  // Đơn chờ HR / BOD / Admin duyệt cấp 2 (Final - loại trừ đơn của chính mình)
   const pendingFinalRequests = useMemo(() => {
     if (!isHRorBODorAdmin) return [];
-    return leaveRequests.filter((r) => r.status === 'approved_level_1' || (['admin', 'bod', 'hr'].includes(effectiveRole) && r.status === 'pending'));
-  }, [leaveRequests, isHRorBODorAdmin, effectiveRole]);
+    return leaveRequests.filter((r) => {
+      // Tuyệt đối không tự duyệt đơn của chính mình
+      if (r.user_id === currentUserId) return false;
+      return (
+        r.status === 'approved_level_1' ||
+        (['admin', 'bod', 'hr'].includes(effectiveRole) && r.status === 'pending')
+      );
+    });
+  }, [leaveRequests, isHRorBODorAdmin, effectiveRole, currentUserId]);
 
   // Danh sách theo tab hiện tại
   const displayRequests = useMemo(() => {
@@ -138,15 +153,18 @@ export default function LeaveRequestsPage() {
     if (activeTab === 'my_leaves') {
       list = myRequests;
     } else if (activeTab === 'team_approval') {
-      if (['admin', 'bod', 'hr'].includes(effectiveRole)) {
-        list = leaveRequests.filter((r) => r.status === 'pending');
-      } else {
-        list = leaveRequests.filter((r) => {
-          const creator = profilesList.find((p) => p.id === r.user_id);
-          const isMyTeam = creator?.leader_id === currentUserId || (profile?.team_id && creator?.team_id === profile.team_id);
-          return isMyTeam;
-        });
-      }
+      list = leaveRequests.filter((r) => {
+        if (r.status !== 'pending') return false;
+        if (r.user_id === currentUserId) return false;
+        const creator = profilesList.find((p) => p.id === r.user_id);
+        return isUserAuthorizedToApproveLeaveL1(
+          currentUserId,
+          effectiveRole,
+          r.user_id,
+          creator,
+          profile
+        );
+      });
     } else if (activeTab === 'final_approval') {
       list = leaveRequests.filter((r) => r.status === 'approved_level_1' || r.status === 'approved_final' || r.status === 'rejected' || (['admin', 'bod', 'hr'].includes(effectiveRole) && r.status === 'pending'));
     } else {
@@ -902,11 +920,16 @@ export default function LeaveRequestsPage() {
                     const isMyRequest = req.user_id === currentUserId;
                     const canDelete = (isMyRequest && (req.status === 'pending' || req.status === 'rejected')) || isHRorBODorAdmin;
 
-                    // Quyền duyệt cấp 2 / Duyệt Cuối: HR, BOD, Admin khi đơn status === 'approved_level_1' hoặc duyệt trực tiếp khi pending
-                    const canApproveFinal = isHRorBODorAdmin && (req.status === 'approved_level_1' || (['admin', 'bod', 'hr'].includes(effectiveRole) && req.status === 'pending'));
+                    const creator = profilesList.find((p) => p.id === req.user_id);
 
-                    // Quyền duyệt cấp 1: Leader khi đơn status === 'pending' (chỉ hiển thị nếu không có quyền duyệt cuối để tránh trùng lặp nút)
-                    const canApproveL1 = isLeader && req.status === 'pending' && !canApproveFinal;
+                    // Quyền duyệt cấp 2 / Duyệt Cuối: HR, BOD, Admin (TUYỆT ĐỐI KHÔNG TỰ DUYỆT ĐƠN CỦA CHÍNH MÌNH)
+                    const canApproveFinal = !isMyRequest && isUserAuthorizedToApproveLeaveFinal(currentUserId, effectiveRole, req.user_id) && (
+                      req.status === 'approved_level_1' ||
+                      (['admin', 'bod', 'hr'].includes(effectiveRole) && req.status === 'pending')
+                    );
+
+                    // Quyền duyệt cấp 1: Leader được chỉ định hoặc BOD/Admin (TUYỆT ĐỐI KHÔNG TỰ DUYỆT ĐƠN CỦA CHÍNH MÌNH)
+                    const canApproveL1 = !isMyRequest && isUserAuthorizedToApproveLeaveL1(currentUserId, effectiveRole, req.user_id, creator, profile) && req.status === 'pending' && !canApproveFinal;
 
                     return (
                       <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
@@ -998,8 +1021,8 @@ export default function LeaveRequestsPage() {
                               </button>
                             )}
 
-                            {/* Nút Từ chối (Cho Leader / HR / Admin khi chưa duyệt xong) */}
-                            {(canApproveL1 || canApproveFinal) && req.status !== 'approved_final' && req.status !== 'rejected' && (
+                            {/* Nút Từ chối (Cho Leader / HR / Admin khi chưa duyệt xong, tuyệt đối không tự từ chối đơn của mình) */}
+                            {!isMyRequest && (canApproveL1 || canApproveFinal) && req.status !== 'approved_final' && req.status !== 'rejected' && (
                               <button
                                 onClick={() => {
                                   setRejectingId(req.id);

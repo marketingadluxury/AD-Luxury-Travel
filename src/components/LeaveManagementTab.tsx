@@ -22,6 +22,10 @@ import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { LeaveRequest, LeaveStatus, LeaveType, getRoleConfig } from '../types';
 import { getLeaveRequestWorkdaysCount } from '../lib/payrollUtils';
+import {
+  isUserAuthorizedToApproveLeaveL1,
+  isUserAuthorizedToApproveLeaveFinal
+} from '../utils/permissionUtils';
 import { CreateLeaveRequestModal } from './LeaveRequestModal';
 import { CustomSelect } from './CustomSelect';
 
@@ -363,58 +367,66 @@ export const LeaveManagementTab: React.FC = () => {
 
                       {/* Thao tác */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Nút Duyệt Cấp 1 (Trưởng phòng) */}
-                          {req.status === 'pending' && canApproveLevel1 && (
-                            <button
-                              type="button"
-                              onClick={() => approveLeaveRequestLevel1(req.id, profile?.full_name || user?.email || 'Trưởng phòng')}
-                              className="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs"
-                              title="Duyệt Cấp 1 (Trưởng phòng)"
-                            >
-                              <Check className="w-3.5 h-3.5" /> Duyệt Cấp 1
-                            </button>
-                          )}
+                        {(() => {
+                          const creator = profilesList.find((p) => p.id === req.user_id);
+                          const canApproveL1 = !isOwner && isUserAuthorizedToApproveLeaveL1(currentUserId, currentRole, req.user_id, creator, profile);
+                          const canApproveL2 = !isOwner && isUserAuthorizedToApproveLeaveFinal(currentUserId, currentRole, req.user_id);
 
-                          {/* Nút Duyệt Cấp Cuối (Kế toán / HR) */}
-                          {req.status === 'approved_level_1' && canApproveFinal && (
-                            <button
-                              type="button"
-                              onClick={() => approveLeaveRequestFinal(req.id, profile?.full_name || user?.email || 'Kế toán')}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs"
-                              title="Duyệt cấp cuối (Hạch toán công/phép)"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Duyệt Cuối
-                            </button>
-                          )}
+                          return (
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Nút Duyệt Cấp 1 (Trưởng phòng) */}
+                              {req.status === 'pending' && canApproveL1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => approveLeaveRequestLevel1(req.id, profile?.full_name || user?.email || 'Trưởng phòng')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs"
+                                  title="Duyệt Cấp 1 (Trưởng phòng)"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Duyệt Cấp 1
+                                </button>
+                              )}
 
-                          {/* Nút Từ chối (Nếu chưa duyệt cuối) */}
-                          {(req.status === 'pending' || req.status === 'approved_level_1') && (canApproveLevel1 || canApproveFinal) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRejectingId(req.id);
-                                setRejectReason('');
-                              }}
-                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
-                              title="Từ chối đơn"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                              {/* Nút Duyệt Cấp Cuối (HR / BOD / Admin) */}
+                              {req.status === 'approved_level_1' && canApproveL2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => approveLeaveRequestFinal(req.id, profile?.full_name || user?.email || 'HR / Ban Giám Đốc')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs"
+                                  title="Duyệt cấp cuối (Hạch toán công/phép)"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Duyệt Cuối
+                                </button>
+                              )}
 
-                          {/* Nút Xóa (Dành cho chủ đơn khi chờ/từ chối hoặc HR/BOD/Admin) */}
-                          {((isOwner && (req.status === 'pending' || req.status === 'rejected')) || ['admin', 'hr', 'bod', 'accounting'].includes(currentRole || '')) && (
-                            <button
-                              type="button"
-                              onClick={() => setDeletingId(req.id)}
-                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                              title="Xóa đơn"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
+                              {/* Nút Từ chối (Nếu chưa duyệt cuối, tuyệt đối không tự từ chối đơn của mình) */}
+                              {!isOwner && (req.status === 'pending' || req.status === 'approved_level_1') && (canApproveL1 || canApproveL2) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRejectingId(req.id);
+                                    setRejectReason('');
+                                  }}
+                                  className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
+                                  title="Từ chối đơn"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {/* Nút Xóa (Dành cho chủ đơn khi chờ/từ chối hoặc HR/BOD/Admin) */}
+                              {((isOwner && (req.status === 'pending' || req.status === 'rejected')) || ['admin', 'hr', 'bod', 'accounting'].includes(currentRole || '')) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingId(req.id)}
+                                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                  title="Xóa đơn"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );

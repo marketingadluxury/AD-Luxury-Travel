@@ -192,9 +192,13 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
   - **Nhân viên mới:** Nếu nhân viên mới vào làm trong năm, quỹ phép sẽ được tính từ tháng bắt đầu làm việc đến thời điểm hiện tại.
   - **Ưu tiên điều chỉnh thủ công của HR:** Mọi điều chỉnh thủ công từ bộ phận HR (trong bảng `leave_balances` / Quản lý quỹ phép) luôn được ưu tiên áp dụng tuyệt đối hơn công thức tích lũy tự động.
   - **Vị Trí Tab Quản Lý Quỹ Phép:** Tính năng Quản lý Quỹ phép năm nhân viên nằm tập trung duy nhất tại trang **Hành chính nhân sự** (`/leave-requests`), hoàn toàn loại bỏ khỏi Cài đặt hệ thống (`/settings`).
-  - **Quy Trình Phân Quyền Duyệt Đơn Nghỉ Phép (2 Cấp Chuẩn Hóa):**
+  - **Quy Trình Phân Quyền Duyệt Đơn Nghỉ Phép (2 Cấp Chuẩn Hóa & Chặn Tuyệt Đối Tự Duyệt):**
+    - **Nguyên Tắc Chặn Tự Duyệt (No Self-Approval):** Tuyệt đối **không cho phép tự phê duyệt** đơn nghỉ phép của chính mình ở bất kỳ cấp nào (Cấp 1 hay Cấp Cuối), áp dụng cho mọi vị trí từ Nhân viên, Trưởng phòng đến Ban Giám Đốc. Đơn của ai thì người đó chỉ có quyền theo dõi hoặc xóa/hủy đơn khi đang chờ duyệt.
+    - **Định Tuyến Cấp Trên Trực Tiếp (Supervisor Routing):**
+      + Khi một nhân viên hoặc Trưởng phòng tạo đơn, nếu tài khoản đã được gán Quản lý trực tiếp (`leader_id`), thì chỉ Quản lý trực tiếp đó (hoặc BOD / Admin) mới nhìn thấy đơn trong danh sách chờ duyệt C1 và có quyền bấm Duyệt C1.
+      + Ví dụ: Trưởng phòng tạo đơn và có `leader_id` là Ban Giám Đốc (BOD) -> Trưởng phòng không thể tự duyệt đơn của mình, nút duyệt C1 sẽ chỉ hiển thị cho Ban Giám Đốc (BOD) hoặc Admin.
     - **Cấp 1 (Quản lý trực tiếp):** Trưởng nhóm Sale (`sale_leader`), Trưởng nhóm Marketing (`marketing_leader`), Nhân sự (`hr`), Quản trị viên (`admin`), Ban Giám Đốc (`bod`). *Lưu ý: Vai trò Điều hành tour (`operator`) là nhân viên điều hành tour, không có quyền duyệt cấp 1 đơn nghỉ phép*.
-    - **Cấp 2 (Duyệt Cấp Cuối & Trừ Phép):** Chỉ có **Nhân sự (`hr`)**, **Ban Giám Đốc (`bod`)** và **Quản trị viên (`admin`)** mới có quyền duyệt cấp cuối. *Lưu ý: Kế toán (`accounting`) không có quyền duyệt cấp cuối*.
+    - **Cấp 2 (Duyệt Cấp Cuối & Trừ Phép):** Chỉ có **Nhân sự (`hr`)**, **Ban Giám Đốc (`bod`)** và **Quản trị viên (`admin`)** mới có quyền duyệt cấp cuối và trừ vào quỹ phép năm. *Lưu ý: Kế toán (`accounting`) không có quyền duyệt cấp cuối*.
   - **Cấu Trúc Tab Quản Lý Người Dùng & Phân Quyền (`UserManagement.tsx`):**
     - Trang Quản lý người dùng trong Cài đặt hệ thống được phân tách thành **3 tab** chuyên biệt:
       1. **🏢 Quản lý Nhân sự Công ty (`company`):** Quản lý tất cả tài khoản nội bộ công ty (Admin, BOD, Sale Leader, Sale, Điều hành, Visa, Kế toán, HDV, HR, Marketing).

@@ -6,6 +6,31 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Chặn Tự Phê Duyệt Đơn Nghỉ Phép & Phân Luồng Duyệt Theo Cấp Quản Lý Trực Tiếp
+- **Mô tả yêu cầu & hiện tượng:**
+  - Người dùng là Trưởng phòng/Trưởng nhóm (`sale_leader`, `marketing_leader`, v.v.) khi tạo đơn nghỉ phép cá nhân lại tự nhìn thấy và bấm duyệt Cấp 1 (`Duyệt C1`) cho chính đơn của mình, dù đã được gán cấp trên trực tiếp (`leader_id`) là Ban Giám Đốc (`bod`).
+- **Nguyên nhân kỹ thuật:**
+  - Logic xác định quyền hiển thị nút duyệt (`canApproveL1`, `canApproveFinal`) trong `src/pages/LeaveRequestsPage.tsx` và `src/components/LeaveManagementTab.tsx` trước đây chỉ dựa trên vai trò tĩnh của tài khoản đăng nhập mà chưa kiểm tra quan hệ sở hữu (`user_id === currentUserId`).
+  - Danh sách đơn chờ duyệt Cấp 1 (`pendingLevel1Requests` và tab `team_approval`) chưa loại trừ các đơn do chính người dùng hiện tại tạo ra.
+  - Các hàm xử lý trong `CRMContext.tsx` (`approveLeaveRequestLevel1`, `approveLeaveRequestFinal`, `rejectLeaveRequest`) chưa có chốt chặn an toàn ở tầng state & API để ngăn tự duyệt.
+- **Giải pháp xử lý triệt để:**
+  1. **Xây dựng hàm thẩm quyền chuyên biệt trong `src/utils/permissionUtils.ts`:**
+     - `isUserAuthorizedToApproveLeaveL1`:
+       + Chặn TUYỆT ĐỐI nếu `targetUserId === currentUserId` (không tự duyệt).
+       + Ban Giám Đốc (`bod`) và Quản trị viên (`admin`) có quyền duyệt cấp 1 cho mọi nhân sự (trừ đơn của chính mình).
+       + Trưởng nhóm/Trưởng phòng (`sale_leader`, `marketing_leader`, `hr`): Nếu nhân sự có `leader_id`, chỉ cấp trên trực tiếp (`creator.leader_id === currentUserId`) mới có quyền duyệt; nếu chưa gán `leader_id`, xét theo cùng phòng ban (`creator.team_id === profile.team_id`).
+     - `isUserAuthorizedToApproveLeaveFinal`:
+       + Chặn TUYỆT ĐỐI nếu `targetUserId === currentUserId`.
+       + Chỉ cho phép HR, BOD, Admin duyệt cấp cuối và trừ ngày phép.
+  2. **Cập nhật giao diện `src/pages/LeaveRequestsPage.tsx` và `src/components/LeaveManagementTab.tsx`:**
+     - Ẩn hoàn toàn các nút "Duyệt C1", "Duyệt Cuối" và "Từ chối" trên dòng đơn nghỉ phép của chính người dùng hiện tại (chỉ giữ nút "Xóa đơn" khi đơn ở trạng thái chờ duyệt hoặc bị từ chối).
+     - Loại trừ đơn cá nhân khỏi danh sách "Chờ Trưởng phòng duyệt C1" (`pendingLevel1Requests`) và tab "Duyệt Cấp 1" (`team_approval`).
+  3. **Chốt chặn an toàn trong `CRMContext.tsx`:**
+     - Thêm kiểm tra `targetReq.user_id === currentUserId` trong `approveLeaveRequestLevel1`, `approveLeaveRequestFinal` và `rejectLeaveRequest`, hiển thị thông báo lỗi nếu có hành vi cố tình gọi hàm tự duyệt.
+  4. **Bổ sung Unit Tests tự động:**
+     - Đã bổ sung 5 test cases chuyên biệt trong `src/utils/__tests__/permissionUtils.test.ts` kiểm thử toàn bộ các tình huống tự duyệt, phân luồng theo `leader_id`, và duyệt cấp cuối. Toàn bộ 29/29 tests passed 100%.
+- **Trạng thái:** Đã hoàn thành, linter, tests và build kiểm tra thành công 100%.
+
 ### 1.0 Xây Dựng & Chạy Script Kiểm Thử Tự Động Độc Lập Cho 4 Vai Trò (Simulation Test)
 - **Mô tả yêu cầu & phạm vi kiểm thử:**
   - Tạo script kiểm thử tự động độc lập bằng TypeScript/Node.js (`scripts/simulationTest.ts`) chạy qua lệnh `npm run test:simulation`.

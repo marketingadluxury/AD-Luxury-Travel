@@ -82,3 +82,60 @@ export function canApproveLeaveLevel2(role?: string | null): boolean {
   if (!role) return false;
   return ['hr', 'bod', 'admin'].includes(role);
 }
+
+/**
+ * Kiểm tra xem người dùng hiện tại có thẩm quyền duyệt Cấp 1 cho một đơn nghỉ phép cụ thể hay không:
+ * - TUYỆT ĐỐI không cho phép tự duyệt đơn của chính mình (currentUserId === requestUserId -> false)
+ * - Admin hoặc BOD có quyền duyệt Cấp 1 cho tất cả đơn của nhân viên/trưởng phòng khác
+ * - Nếu người tạo có gán leader_id: Người duyệt phải có ID trùng với creator.leader_id
+ * - Nếu người tạo chưa gán leader_id: Trưởng phòng cùng team_id có thể duyệt
+ */
+export function isUserAuthorizedToApproveLeaveL1(
+  currentUserId: string,
+  currentUserRole: string,
+  requestUserId: string,
+  creatorProfile?: { leader_id?: string | null; team_id?: string | null } | null,
+  currentProfile?: { team_id?: string | null } | null
+): boolean {
+  if (!currentUserId || !requestUserId) return false;
+  // Tuyệt đối không tự duyệt đơn của chính mình
+  if (currentUserId === requestUserId) return false;
+
+  // Admin và BOD có thẩm quyền duyệt C1 cho mọi đơn của người khác
+  if (['admin', 'bod'].includes(currentUserRole)) return true;
+
+  // Nếu vai trò không thuộc nhóm có quyền duyệt C1
+  if (!['sale_leader', 'marketing_leader', 'hr'].includes(currentUserRole)) return false;
+
+  // Nếu người tạo có gán leader_id cụ thể: Chỉ đúng leader đó mới được duyệt
+  if (creatorProfile?.leader_id) {
+    return creatorProfile.leader_id === currentUserId;
+  }
+
+  // Nếu chưa gán leader_id: kiểm tra xem có cùng team_id hay không
+  if (currentProfile?.team_id && creatorProfile?.team_id) {
+    return currentProfile.team_id === creatorProfile.team_id;
+  }
+
+  // Trường hợp dự phòng cho HR khi nhân viên chưa có nhóm
+  if (currentUserRole === 'hr') return true;
+
+  return false;
+}
+
+/**
+ * Kiểm tra xem người dùng hiện tại có thẩm quyền duyệt Cuối (Cấp 2) cho đơn nghỉ phép:
+ * - Chỉ hr, bod, admin
+ * - TUYỆT ĐỐI không cho phép tự duyệt cuối đơn của chính mình
+ */
+export function isUserAuthorizedToApproveLeaveFinal(
+  currentUserId: string,
+  currentUserRole: string,
+  requestUserId: string
+): boolean {
+  if (!currentUserId || !requestUserId) return false;
+  // Tuyệt đối không tự duyệt đơn của chính mình
+  if (currentUserId === requestUserId) return false;
+  return ['hr', 'bod', 'admin'].includes(currentUserRole);
+}
+
