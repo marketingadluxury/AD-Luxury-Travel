@@ -65,6 +65,15 @@ export function canViewPartnerCard(role?: string | null): boolean {
 }
 
 /**
+ * Kiểm tra quyền duyệt và quản lý phiếu thu / kế toán
+ * Cho phép kế toán (accounting), quản trị viên (admin) và ban giám đốc (bod).
+ */
+export function canApproveReceipt(role?: string | null): boolean {
+  if (!role) return false;
+  return ['accounting', 'admin', 'bod'].includes(role);
+}
+
+/**
  * Phân quyền duyệt đơn nghỉ phép Cấp 1 (Quản lý trực tiếp)
  * Gồm: sale_leader, marketing_leader, hr, admin, bod.
  * (Lưu ý: operator và accounting KHÔNG có quyền duyệt cấp 1)

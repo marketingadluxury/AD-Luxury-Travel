@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   net_commission_amount numeric NULL DEFAULT 0,
   net_payable_amount numeric NULL DEFAULT 0,
   agent_commission_amount numeric NULL DEFAULT 0,
+  customer_source text NULL DEFAULT 'Quảng cáo'::text,
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
   CONSTRAINT bookings_code_key UNIQUE (code),
   CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id),

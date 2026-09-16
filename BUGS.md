@@ -6,6 +6,37 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.0 Phân Quyền Phê Duyệt Phiếu Thu & Kế Toán Cho Vai Trò Ban Giám Đốc (BOD)
+- **Mô tả yêu cầu & hiện tượng:**
+  - Người dùng yêu cầu cho phép vai trò Ban Giám Đốc (`bod`) có quyền duyệt phiếu thu.
+  - Trước đây, trang Kế toán (`AccountingInvoice.tsx`) chỉ cho phép Kế toán (`accounting`) và Quản trị viên (`admin`) truy cập tab Phiếu thu, xem danh sách phiếu thu chuyển khoản của khách và thao tác duyệt/từ chối phiếu thu.
+- **Các bước triển khai:**
+  1. **Tạo hàm phân quyền tập trung (`permissionUtils.ts`):**
+     - Bổ sung hàm `canApproveReceipt(role)` cho phép 3 vai trò: `accounting`, `admin`, và `bod`.
+     - Viết Unit Tests đầy đủ trong `permissionUtils.test.ts` kiểm thử quyền duyệt phiếu thu cho cả 3 vai trò hợp lệ và chặn nghiêm ngặt các vai trò khác.
+  2. **Cập nhật giao diện & logic duyệt phiếu thu (`AccountingInvoice.tsx`):**
+     - Đồng bộ điều kiện `isAccountantOrAdmin` sử dụng `canApproveReceipt(currentRole)`.
+     - Cho phép BOD truy cập đầy đủ tab "Phiếu thu" (được chọn mặc định khi vào trang Kế toán), xem thẻ thống kê phiếu thu chờ duyệt.
+     - Cho phép BOD thao tác duyệt (`Check`), từ chối (`X`) phiếu thu trên cả danh sách dạng bảng, dạng thẻ Kanban và popup modal chi tiết phiếu thu.
+     - Tên người xác thực (`verifierName`) tự động hiển thị tên thật của tài khoản BOD hoặc "Ban Giám Đốc".
+- **Trạng thái:** Đã hoàn thành, linter, 31 unit tests và kịch bản mô phỏng 4 vai trò đều vượt qua 100%.
+
+### 1.0 Chuyển Đổi Nguồn Khách Hàng (Customer Source) & Loại Bỏ Khối Nguồn Chiến Dịch Phức Tạp
+- **Mô tả yêu cầu & hiện tượng:**
+  - Người dùng yêu cầu loại bỏ hoàn toàn phần "Nguồn chiến dịch & Meta Ads Tracking" (UTM parameters, Meta Lead ID) phức tạp trong biểu mẫu đặt chỗ/booking.
+  - Thay thế bằng trường lựa chọn **"Nguồn khách hàng"** trực quan, gọn gàng dành riêng cho nhân viên Sale với 3 lựa chọn cốt lõi: **"Quảng cáo"**, **"Khách cá nhân"**, **"Kênh social"**.
+  - **Quy tắc nghiệp vụ:** Khi tạo đơn thay cho CTV (Cộng Tác Viên) hoặc tài khoản đặt là Đại lý/CTV (`isCreatingForCTV` hoặc role đại lý), khối chọn nguồn khách này sẽ tự động ẩn đi (hệ thống tự động gán nguồn là `CTV`).
+- **Các bước triển khai:**
+  1. **Định nghĩa kiểu dữ liệu & Database:**
+     - Bổ sung trường `customer_source` vào interface `Order` trong `src/types.ts`.
+     - Cập nhật định nghĩa và mapping trong `CRMContext.tsx` (`addOrder`, `updateOrder`, `createOrder`).
+     - Bổ sung cột `customer_source text NULL DEFAULT 'Quảng cáo'::text` vào bảng `bookings` trong file `supabase-schema.sql`.
+  2. **Tối ưu giao diện Tạo & Sửa đơn hàng:**
+     - **Quản lý đơn hàng (`OrdersManagement.tsx`):** Loại bỏ khối UTM tracking cũ; tích hợp bộ chọn Nguồn khách hàng với 3 nút chuyển kênh có icon tương ứng (`Quảng cáo`, `Khách cá nhân`, `Kênh social`), ẩn hoàn toàn khi chọn tạo đơn cho CTV; hiển thị huy hiệu nguồn khách trong chi tiết đơn hàng.
+     - **Lịch khởi hành (`DepartureCalendar.tsx`):** Tích hợp khối chọn nguồn khách hàng tương ứng vào drawer đặt chỗ nhanh, tự động lưu và reset dữ liệu chuẩn xác.
+     - **Chỉnh sửa đơn hàng (`EditOrderModal.tsx`):** Thay thế hoàn toàn khối Meta Ads tracking cồng kềnh bằng bộ chọn nguồn khách cho Sale khi xem/chỉnh sửa booking.
+- **Trạng thái:** Đã hoàn thành, linter và 29 unit test đều vượt qua 100%.
+
 ### 1.0 Khắc Phục Lỗi Tải File Google Drive: Create Folder Failed (insufficientParentPermissions 403)
 - **Mô tả yêu cầu & hiện tượng:**
   - Hệ thống ghi nhận lỗi khi tải file lên Google Drive: `[Google Drive Upload Failure] Upload failed: [Drive] Create folder failed: { "error": { "errors": [ { "message": "Insufficient permissions for the specified parent.", "reason": "insufficientParentPermissions" } ] } }`.

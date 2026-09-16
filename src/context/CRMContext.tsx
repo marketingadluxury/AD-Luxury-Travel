@@ -105,6 +105,7 @@ interface CRMContextType {
     vat_email?: string;
     special_requests?: string;
     ctv_info?: string;
+    customer_source?: string;
     discount_type?: 'percent' | 'amount';
     discount_value?: number;
     surcharge_name?: string;
@@ -1791,6 +1792,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               net_commission_amount: b.net_commission_amount !== undefined && b.net_commission_amount !== null ? Number(b.net_commission_amount) : undefined,
               net_payable_amount: b.net_payable_amount !== undefined && b.net_payable_amount !== null ? Number(b.net_payable_amount) : undefined,
               agent_commission_amount: b.agent_commission_amount !== undefined && b.agent_commission_amount !== null ? Number(b.agent_commission_amount) : undefined,
+              customer_source: b.customer_source || undefined,
               meta_lead_id: b.meta_lead_id || undefined,
               customer_phone: b.customer_phone || b.booker_phone || undefined,
               customer_email: b.customer_email || b.vat_email || undefined,
@@ -3442,6 +3444,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     vat_email?: string;
     special_requests?: string;
     ctv_info?: string;
+    customer_source?: string;
     discount_type?: 'percent' | 'amount';
     discount_value?: number;
     surcharge_name?: string;
@@ -3618,6 +3621,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       partner_id: (orderData as any).partner_id,
       original_price: (orderData as any).original_price,
       selling_price: (orderData as any).selling_price,
+      customer_source: (orderData as any).customer_source || ((orderData as any).ctv_info ? 'CTV' : 'Quảng cáo'),
       meta_lead_id: (orderData as any).meta_lead_id || undefined,
       customer_phone: (orderData as any).customer_phone || orderData.booker_phone || undefined,
       customer_email: (orderData as any).customer_email || orderData.vat_email || undefined,
@@ -3782,6 +3786,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           net_commission_amount: (orderData as any).net_commission_amount !== undefined && (orderData as any).net_commission_amount !== null ? Number((orderData as any).net_commission_amount) : null,
           net_payable_amount: (orderData as any).net_payable_amount !== undefined && (orderData as any).net_payable_amount !== null ? Number((orderData as any).net_payable_amount) : null,
           agent_commission_amount: (orderData as any).agent_commission_amount !== undefined && (orderData as any).agent_commission_amount !== null ? Number((orderData as any).agent_commission_amount) : null,
+          customer_source: (orderData as any).customer_source || (newOrder as any).customer_source || null,
           meta_lead_id: (orderData as any).meta_lead_id || null,
           customer_phone: (orderData as any).customer_phone || orderData.booker_phone || null,
           customer_email: (orderData as any).customer_email || orderData.vat_email || null,
@@ -3800,6 +3805,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             seller_type, partner_id, original_price, selling_price, price_markup,
             markup_tax_percent, markup_fee_amount, surcharges,
             net_commission_amount, net_payable_amount, agent_commission_amount,
+            customer_source,
             meta_lead_id, customer_phone, customer_email, utm_source, utm_medium,
             utm_campaign, utm_content, utm_term, conversion_event_id,
             ...fallbackPayload
@@ -4805,6 +4811,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           new: updatedData.hold_expiry || 'Đã giải phóng'
         });
       }
+      if (updatedData.customer_source !== undefined && updatedData.customer_source !== existingOrder.customer_source) {
+        orderChanges.push({
+          field: 'Nguồn khách hàng',
+          old: existingOrder.customer_source || 'Chưa có',
+          new: updatedData.customer_source || 'Chưa có'
+        });
+      }
     }
 
     // Fallback in case orderChanges is empty but updatedData has fields
@@ -4860,6 +4873,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         if (updatedData.net_commission_amount !== undefined) updatePayload.net_commission_amount = Number(updatedData.net_commission_amount);
         if (updatedData.net_payable_amount !== undefined) updatePayload.net_payable_amount = Number(updatedData.net_payable_amount);
         if (updatedData.agent_commission_amount !== undefined) updatePayload.agent_commission_amount = Number(updatedData.agent_commission_amount);
+        if (updatedData.customer_source !== undefined) updatePayload.customer_source = updatedData.customer_source;
         console.log('CRMContext: Updating booking with payload:', updatePayload);
         let { error } = await supabase.from('bookings').update(updatePayload).eq('id', toUuid(orderId));
         if (error) {
@@ -4878,7 +4892,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             seller_type, partner_id, original_price, selling_price, price_markup,
             markup_tax_percent, markup_fee_amount, surcharges,
             cit_tax_percent, vat_tax_percent, net_commission_amount,
-            net_payable_amount, agent_commission_amount, ...fallbackUpdatePayload
+            net_payable_amount, agent_commission_amount, customer_source, ...fallbackUpdatePayload
           } = updatePayload;
           if (Object.keys(fallbackUpdatePayload).length > 0) {
             const { error: fallbackError } = await supabase.from('bookings').update(fallbackUpdatePayload).eq('id', toUuid(orderId));

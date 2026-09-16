@@ -5,6 +5,7 @@ import {
   canSaleLeaderOperateTour,
   canAccessHRSection,
   canViewPartnerCard,
+  canApproveReceipt,
   canApproveLeaveLevel1,
   canApproveLeaveLevel2,
   isUserAuthorizedToApproveLeaveL1,
@@ -93,6 +94,26 @@ describe('Phần 2: Automation Tests - Kiểm thử logic Phân quyền (Permiss
       expect(canViewPartnerCard('tour_guide')).toBe(false);
       expect(canViewPartnerCard('agent')).toBe(false);
       expect(canViewPartnerCard('CTV')).toBe(false);
+    });
+  });
+
+  describe('Quyền duyệt phiếu thu (canApproveReceipt)', () => {
+    it('Cho phép Kế toán, Admin và Ban Giám Đốc (BOD) duyệt phiếu thu', () => {
+      expect(canApproveReceipt('accounting')).toBe(true);
+      expect(canApproveReceipt('admin')).toBe(true);
+      expect(canApproveReceipt('bod')).toBe(true);
+    });
+
+    it('Chặn nghiêm ngặt các vai trò khác (Sale, CTV, Operator, Visa, Tour Guide, HR)', () => {
+      expect(canApproveReceipt('sale')).toBe(false);
+      expect(canApproveReceipt('sale_leader')).toBe(false);
+      expect(canApproveReceipt('operator')).toBe(false);
+      expect(canApproveReceipt('visa')).toBe(false);
+      expect(canApproveReceipt('tour_guide')).toBe(false);
+      expect(canApproveReceipt('hr')).toBe(false);
+      expect(canApproveReceipt('agent')).toBe(false);
+      expect(canApproveReceipt('CTV')).toBe(false);
+      expect(canApproveReceipt(null)).toBe(false);
     });
   });
 

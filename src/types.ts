@@ -244,6 +244,7 @@ export interface Order {
   vat_email?: string;
   special_requests?: string;
   ctv_info?: string;
+  customer_source?: 'Quảng cáo' | 'Khách cá nhân' | 'Kênh social' | 'CTV' | string;
   discount_type?: 'percent' | 'amount';
   discount_value?: number;
   surcharge_name?: string;

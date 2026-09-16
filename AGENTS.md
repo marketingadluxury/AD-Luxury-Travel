@@ -155,6 +155,7 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 ---
 
 ## 7. Quy Tắc Phân Quyền & Tính Năng Đặc Biệt (Cập Nhật Mới)
+- **Phân Quyền Duyệt Phiếu Thu Cho Ban Giám Đốc (BOD):** Vai trò **Ban Giám Đốc (`bod`)** có đầy đủ quyền hạn truy cập mục Kế toán & Tài chính, xem tab **Phiếu thu** chuyển khoản của khách hàng, xem danh sách phiếu chờ duyệt/đã duyệt/từ chối và thực hiện hành động **Duyệt phiếu thu** hoặc **Từ chối phiếu thu** tương tự như Kế toán (`accounting`) và Quản trị viên (`admin`). Khi duyệt, thông tin người xác thực được tự động ghi nhận theo tên thật của tài khoản BOD.
 - **Phân Quyền Tab Hành Chính Nhân Sự (Không Áp Dụng Cho Đại Lý / CTV):** Tab "Hành chính nhân sự" (bao gồm Đề nghị thanh toán `/payment-proposals` và Nghỉ phép & Chấm công `/leave-requests`) chỉ áp dụng cho cán bộ công nhân viên chính thức thuộc công ty. Tài khoản đối tác ngoài (Đại lý & CTV - `role === 'agent'`) bị ẩn hoàn toàn mục này trên thanh Sidebar và menu Profile, đồng thời được thiết lập lớp bảo vệ (Permission Guard) chặn trực tiếp tại trang nếu truy cập qua đường dẫn URL.
 - **Quyền tạo Tour:** Chỉ có vai trò **Điều hành Tour (`operator`)** và **Quản trị viên (`admin`)** mới có quyền nhìn thấy và sử dụng tính năng **Tạo Tour mới**. Các vai trò khác (như Sale, CTV, Đại lý, Visa, Kế toán) sẽ không có quyền này.
 - **Nâng Cấp Trang Bảng Điều Khiển (Dashboard) Tùy Biến Theo 3 Nhóm Vai Trò:**

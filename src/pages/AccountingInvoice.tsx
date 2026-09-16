@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import { canApproveReceipt } from '@/utils/permissionUtils';
 
 export default function AccountingInvoice() {
   const { 
@@ -60,8 +61,8 @@ export default function AccountingInvoice() {
   } = useCRM();
   
   const { user, profile } = useAuth();
-  const verifierName = profile?.full_name || 'Kế toán';
-  const isAccountantOrAdmin = currentRole === 'accounting' || currentRole === 'admin';
+  const verifierName = profile?.full_name || (currentRole === 'bod' ? 'Ban Giám Đốc' : currentRole === 'admin' ? 'Quản trị viên' : 'Kế toán');
+  const isAccountantOrAdmin = canApproveReceipt(currentRole);
 
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
 
@@ -126,7 +127,7 @@ export default function AccountingInvoice() {
   }, [profilesMap, orders, profile, user]);
 
   const [activeTab, setActiveTab] = useState<'receipts' | 'vat' | 'payments'>(
-    (currentRole === 'accounting' || currentRole === 'admin') ? 'receipts' : 'payments'
+    canApproveReceipt(currentRole) ? 'receipts' : 'payments'
   );
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [filterInvoice, setFilterInvoice] = useState<string>('pending');
