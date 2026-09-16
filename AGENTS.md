@@ -30,7 +30,6 @@ Tài liệu này lưu trữ toàn bộ thông tin cốt lõi, quy tắc phát tr
 - **Quy tắc Thiết kế Dropdown & Tránh Cắt Cụt Ký Tự (No Text Truncation):**
   - **Độ rộng an toàn cho Dropdown (CustomSelect):** Tất cả các ô chọn (dropdown/select) có nhãn dài hoặc đi kèm biểu tượng (Icon + Chevron) phải được thiết lập độ rộng tối thiểu an toàn (từ `w-40` đến `w-64 sm:w-72` tùy độ dài text) để đảm bảo không bao giờ bị tràn viền hoặc cắt cụt hiển thị dạng `...` trên mọi thiết bị và độ phân giải.
   - **Chuẩn hóa nhãn phân trang:** Sử dụng nhãn gãy gọn theo chuẩn nghiệp vụ (ví dụ: `10 tour / trang` hoặc `10 mục / trang` thay vì chuỗi dài dễ gây vỡ layout).
-  - **Hướng mở thông minh chống che khuất (Smart Drop Direction):** Tất cả dropdown sử dụng `CustomSelect` được trang bị tính năng tự động nhận diện không gian màn hình (`direction="auto"`). Đối với các dropdown đặt ở chân bảng, thanh phân trang hoặc sát đáy màn hình, luôn cấu hình mở ngược lên trên (`direction="up"`) và loại bỏ thuộc tính `overflow-hidden` trên thẻ cha bao ngoài để popup không bao giờ bị cắt viền hay che khuất.
 - **Quy trình thay đổi logic:** Trước khi thực hiện bất kỳ thay đổi nào về logic hệ thống, cấu trúc database, hoặc tính năng chính, **PHẢI** giải thích chi tiết giải pháp cho người dùng và chỉ thực hiện sau khi có sự xác nhận của người dùng.
 - **Quản lý File & Storage:** 
   - **TẤT CẢ** các file tải lên (hình ảnh, tài liệu, file visa, hộ chiếu, hóa đơn...) **phải luôn được lưu vào Supabase Storage**.

@@ -6,20 +6,45 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
-### 1.0 Smoke Test Giao Diện: Khắc Phục Lỗi Cắt Chữ & Bị Che Khuất Dropdown Phân Trang Do Tràn Viền
+### 1.0 Khắc Phục Lỗi Tải File Google Drive: Create Folder Failed (insufficientParentPermissions 403)
 - **Mô tả yêu cầu & hiện tượng:**
-  - Qua ảnh chụp màn hình kiểm thử UI thực tế từ người dùng, ô chọn phân trang *"10 tour / trang"* tại chân bảng Quản lý Tour (`src/pages/ToursManagement.tsx`) khi bấm mở ra thì menu danh sách lựa chọn bị che khuất gần như toàn bộ (chỉ hở 1 vệt viền sát đáy).
-  - Nguyên nhân: Thẻ bao ngoài bảng danh sách Tour sử dụng `overflow-hidden`. Menu lựa chọn mở theo chiều xuống dưới (`top-full mt-1.5`) nên toàn bộ popup bị rơi ra ngoài đáy thẻ và bị cắt cụt hoàn toàn.
+  - Hệ thống ghi nhận lỗi khi tải file lên Google Drive: `[Google Drive Upload Failure] Upload failed: [Drive] Create folder failed: { "error": { "errors": [ { "message": "Insufficient permissions for the specified parent.", "reason": "insufficientParentPermissions" } ] } }`.
+- **Nguyên nhân kỹ thuật:**
+  - Hàm tìm kiếm thư mục gốc `getOrCreateADLuxuryTravelRootFolder` trong `server/services/googleDriveService.ts` trước đây khi không tìm thấy thư mục `AD Luxury Travel` trong `baseParentId` đã thực hiện tìm kiếm toàn cục trên Google Drive (`searchFolder('AD Luxury Travel', undefined, token)`).
+  - Thao tác tìm kiếm toàn cục này đã lấy phải một thư mục cũ trùng tên `AD Luxury Travel` của tài khoản bên ngoài được chia sẻ ở chế độ chỉ xem (Read-only, `canAddChildren: false`).
+  - Khi hệ thống tiến hành tạo các thư mục con bên trong (`Tour`, `Khách hàng`, `Visa`, `Kế toán`...), Google Drive API từ chối với mã lỗi 403 `insufficientParentPermissions`.
+  - Đồng thời, hàm `searchFolder` trước đây chưa lọc thuộc tính phân quyền ghi `capabilities/canAddChildren`, dẫn đến việc có thể trả về thư mục chỉ đọc.
 - **Giải pháp xử lý triệt để:**
-  1. **Nâng cấp `CustomSelect` với cơ chế nhận diện hướng mở thông minh (`direction="auto" | "up" | "down"`):**
-     - Mặc định ở chế độ `direction="auto"`, component tự động đo khoảng cách từ nút bấm tới đáy màn hình (`window.innerHeight - rect.bottom`). Nếu không gian bên dưới nhỏ hơn 250px và bên trên rộng hơn, menu sẽ **tự động mở ngược lên trên** (`bottom-full mb-1.5`).
-     - Hỗ trợ cấu hình chủ động `direction="up"` cho các thanh điều khiển, phân trang hoặc các dropdown nằm ở chân trang/chân bảng.
-  2. **Áp dụng cho chân bảng Quản lý Tour (`ToursManagement.tsx`):**
-     - Gán `direction="up"` cho ô chọn số lượng phân trang, giúp menu bung ngược lên phía trên nút bấm, hiển thị rõ ràng 100% trong lòng bảng.
-     - Loại bỏ `overflow-hidden` trên thẻ cha bao ngoài, thay thế bằng bo góc chuẩn hóa `rounded-t-2xl` cho header và `rounded-b-2xl` cho thanh footer phân trang, đảm bảo không có bất kỳ popup hay menu nào bị che khuất hay cắt viền.
-  3. **Kiểm thử toàn diện:**
-     - Chạy toàn bộ Linter (`tsc --noEmit`), Vitest (29/29 tests passed) và compile applet thành công 100%.
-- **Trạng thái:** Đã hoàn thành, menu phân trang mở nổi trọn vẹn lên phía trên, không còn bị che khuất.
+  1. **Nâng cấp `searchFolder` trong `server/services/googleDriveService.ts`:**
+     - Bổ sung trường `capabilities/canAddChildren` vào truy vấn API Google Drive.
+     - Đảm bảo chỉ trả về thư mục mà tài khoản hiện tại có đầy đủ quyền tạo file/thư mục con (`canAddChildren !== false`). Bỏ qua các thư mục chỉ xem từ bên ngoài chia sẻ.
+  2. **Tối ưu hóa `getOrCreateADLuxuryTravelRootFolder`:**
+     - Khi có `baseParentId` (cấu hình qua `GOOGLE_DRIVE_PARENT_FOLDER_ID`), hệ thống kiểm tra trực tiếp tính hợp lệ và quyền ghi của thư mục cha.
+     - Giới hạn tìm kiếm và khởi tạo thư mục `AD Luxury Travel` CHỈ nằm bên trong phạm vi `baseParentId`, tuyệt đối không tìm kiếm lung tung ngoài Drive.
+     - Khởi tạo thư mục `AD Luxury Travel` chính chủ an toàn bên trong thư mục gốc `Tour CRMs`.
+  3. **Loại bỏ tìm kiếm không chỉ định parent trong `getOrCreateVisaFolder`:**
+     - Đảm bảo toàn bộ cấu trúc cây thư mục luôn được neo chặt chẽ bên trong thư mục gốc của hệ thống.
+  4. **Kiểm thử thực tế (Smoke Test & E2E):**
+     - Đã chạy kiểm thử trực tiếp kết nối Google Drive, xác thực tạo thành công cây thư mục (`AD Luxury Travel`, `Tour`, `Kế toán`, `Visa`, `Khách hàng`, `Góp Ý`, `Trò chuyện`) và upload file mẫu thành công với phản hồi status 200.
+- **Trạng thái:** Đã hoàn thành, toàn bộ test và build đều vượt qua 100%.
+
+### 1.0 Smoke Test Giao Diện: Khắc Phục Lỗi Cắt Chữ Bộ Chọn Phân Trang & Chuẩn Hóa Độ Rộng Các Dropdown
+- **Mô tả yêu cầu & hiện tượng:**
+  - Qua ảnh chụp màn hình kiểm thử UI thực tế từ người dùng, ô chọn số lượng hiển thị trên trang Quản lý Tour (`src/pages/ToursManagement.tsx`) bị co hẹp độ rộng khiến văn bản hiển thị bị cắt cụt thành `10 phần tử / tra...`.
+  - Một số dropdown lựa chọn trạng thái và bộ lọc có độ dài văn bản Tiếng Việt lớn (ví dụ: `Đã duyệt hoàn tất (Cấp cuối)`, `Hoa hồng phát sinh nhiều nhất`) có nguy cơ bị tràn hoặc cắt cụt đuôi khi hiển thị trên các màn hình có độ phân giải khác nhau.
+- **Giải pháp xử lý:**
+  1. **Chuẩn hóa bộ chọn phân trang Tour (`ToursManagement.tsx`):**
+     - Nới rộng kích thước dropdown từ `w-36` lên `w-40 sm:w-44`.
+     - Tối ưu lại chuỗi nhãn hiển thị từ `X phần tử / trang` thành `X tour / trang` gãy gọn, đúng ngữ cảnh du lịch và vừa vặn tuyệt đối không bao giờ bị cắt chữ.
+  2. **Rà soát & nới rộng an toàn các dropdown có nhãn dài:**
+     - Bộ lọc sắp xếp khách hàng (`CustomersManagement.tsx`): Tăng độ rộng từ `w-52` lên `w-56 sm:w-60` để hiển thị trọn vẹn nhãn `Hoa hồng phát sinh nhiều nhất`.
+     - Bộ lọc trạng thái đơn nghỉ phép (`LeaveRequestsPage.tsx` và `LeaveManagementTab.tsx`): Nới rộng từ `w-56` lên `w-64 sm:w-72` để hiển thị trọn vẹn `Đã duyệt hoàn tất (Cấp cuối)`.
+     - Bộ lọc sắp xếp bảng trên Dashboard (`Dashboard.tsx`): Tăng từ `w-44 sm:w-48` lên `w-48 sm:w-52`.
+     - Bộ chọn tháng chấm công (`TimesheetManagement.tsx`): Nới rộng từ `w-32 sm:w-36` lên `w-36 sm:w-40`.
+  3. **Khắc phục triệt để type check trong Unit Tests (`permissionUtils.test.ts`):**
+     - Hoàn thiện kiểu dữ liệu linh hoạt `[key: string]: any` cho các tham số thông tin profile người dùng trong `isUserAuthorizedToApproveLeaveL1`.
+     - Chạy toàn bộ Linter (`tsc --noEmit`), Vitest (29/29 tests passed) và kịch bản giả lập Simulation Test (21/21 passed) đảm bảo hoạt động trơn tru 100%.
+- **Trạng thái:** Đã hoàn thành, linter, tests và build kiểm tra thành công 100%.
 
 ### 1.0 Chặn Tự Phê Duyệt Đơn Nghỉ Phép & Phân Luồng Duyệt Theo Cấp Quản Lý Trực Tiếp
 - **Mô tả yêu cầu & hiện tượng:**

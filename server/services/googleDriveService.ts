@@ -69,7 +69,7 @@ export async function searchFolder(folderName: string, parentId?: string, token?
     query += ` and '${parentId}' in parents`;
   }
   
-  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,capabilities/canAddChildren,capabilities/canEdit)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -82,7 +82,12 @@ export async function searchFolder(folderName: string, parentId?: string, token?
   
   const data: any = await res.json();
   if (data.files && data.files.length > 0) {
-    return data.files[0].id;
+    // Chỉ chọn thư mục mà tài khoản hiện tại có quyền tạo file con (canAddChildren !== false)
+    const writableFolder = data.files.find((f: any) => f.capabilities?.canAddChildren !== false);
+    if (writableFolder) {
+      return writableFolder.id;
+    }
+    console.warn(`[Drive] Tìm thấy thư mục '${folderName}' (${data.files.length} kết quả) nhưng người dùng không có quyền ghi/thêm file (read-only). Bỏ qua để tạo mới.`);
   }
   return null;
 }
@@ -179,13 +184,43 @@ export function getDriveRootParentId(): string | undefined {
 }
 
 export async function getOrCreateADLuxuryTravelRootFolder(baseParentId: string | undefined, token: string): Promise<string> {
-  let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
-  if (!rootId && baseParentId) {
-    rootId = await searchFolder('AD Luxury Travel', undefined, token);
+  // 1. Nếu có chỉ định thư mục cha baseParentId (GOOGLE_DRIVE_PARENT_FOLDER_ID)
+  if (baseParentId) {
+    try {
+      const parentRes = await fetch(`https://www.googleapis.com/drive/v3/files/${baseParentId}?fields=id,name,capabilities/canAddChildren,trashed&supportsAllDrives=true`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (parentRes.ok) {
+        const parentData: any = await parentRes.json();
+        if (!parentData.trashed && parentData.capabilities?.canAddChildren !== false) {
+          // Nếu chính thư mục được cấu hình đã tên là "AD Luxury Travel"
+          if (parentData.name === 'AD Luxury Travel') {
+            return parentData.id;
+          }
+
+          // Tìm thư mục con "AD Luxury Travel" CHỈ nằm trong baseParentId
+          let rootId = await searchFolder('AD Luxury Travel', baseParentId, token);
+          if (!rootId) {
+            console.log(`[Drive] Tạo mới thư mục 'AD Luxury Travel' bên trong thư mục gốc ${baseParentId}...`);
+            rootId = await createFolder('AD Luxury Travel', baseParentId, token);
+            await makeFolderPublic(rootId, token);
+          }
+          return rootId;
+        } else {
+          console.warn(`[Drive] Thư mục cha baseParentId (${baseParentId}) bị xóa hoặc không có quyền ghi.`);
+        }
+      } else {
+        console.warn(`[Drive] Không thể truy vấn baseParentId (${baseParentId}): status ${parentRes.status}`);
+      }
+    } catch (parentCheckErr) {
+      console.warn('[Drive] Lỗi kiểm tra baseParentId:', parentCheckErr);
+    }
   }
-  
+
+  // 2. Không có baseParentId hoặc baseParentId không thể ghi: tìm trên phạm vi cá nhân
+  let rootId = await searchFolder('AD Luxury Travel', undefined, token);
   if (!rootId) {
-    rootId = await createFolder('AD Luxury Travel', baseParentId, token);
+    rootId = await createFolder('AD Luxury Travel', undefined, token);
     await makeFolderPublic(rootId, token);
   }
   return rootId;
@@ -246,10 +281,6 @@ export async function getOrCreateVisaFolder(token: string): Promise<string> {
   const rootId = await getOrCreateADLuxuryTravelRootFolder(baseParentId, token);
 
   let visaFolderId = await searchFolder('Visa', rootId, token);
-  if (!visaFolderId && !baseParentId) {
-    visaFolderId = await searchFolder('Visa', undefined, token);
-  }
-  
   if (!visaFolderId) {
     visaFolderId = await createFolder('Visa', rootId, token);
     await makeFolderPublic(visaFolderId, token);
