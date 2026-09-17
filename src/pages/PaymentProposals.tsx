@@ -167,81 +167,54 @@ export default function PaymentProposals() {
     const toastId = toast.loading('Đang tải file lên hệ thống...');
 
     try {
-      let finalUrl = '';
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      uploadData.append('uploadType', 'payment_proposal');
 
-      // 1. Thử tải file lên qua API máy chủ (/api/upload -> Google Drive / Storage)
-      try {
-        const uploadData = new FormData();
-        uploadData.append('file', file);
-        uploadData.append('uploadType', 'payment_proposal');
-
-        if (isProof && actionModal.proposal) {
-          uploadData.append('proposalCode', actionModal.proposal.code);
-          uploadData.append('proposalType', actionModal.proposal.proposal_type);
-          if (actionModal.proposal.tour_code) {
-            uploadData.append('tourCode', actionModal.proposal.tour_code);
-          }
-        } else {
-          const nextCode = getNextProposalCode();
-          uploadData.append('proposalCode', nextCode);
-          uploadData.append('proposalType', formData.proposal_type);
-          if (formData.proposal_type === 'tour') {
-            const selectedTour = tours.find(t => t.id === formData.tour_id);
-            if (selectedTour?.code) {
-              uploadData.append('tourCode', selectedTour.code);
-            }
+      if (isProof && actionModal.proposal) {
+        uploadData.append('proposalCode', actionModal.proposal.code);
+        uploadData.append('proposalType', actionModal.proposal.proposal_type);
+        if (actionModal.proposal.tour_code) {
+          uploadData.append('tourCode', actionModal.proposal.tour_code);
+        }
+      } else {
+        const nextCode = getNextProposalCode();
+        uploadData.append('proposalCode', nextCode);
+        uploadData.append('proposalType', formData.proposal_type);
+        if (formData.proposal_type === 'tour') {
+          const selectedTour = tours.find(t => t.id === formData.tour_id);
+          if (selectedTour?.code) {
+            uploadData.append('tourCode', selectedTour.code);
           }
         }
-
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: uploadData
-        });
-
-        if (res.ok) {
-          const resText = await res.text();
-          try {
-            const data = JSON.parse(resText);
-            if (data.url || data.webViewLink) {
-              finalUrl = data.url || data.webViewLink;
-            }
-          } catch {
-            // non-json response
-          }
-        }
-      } catch (upErr) {
-        console.warn('Lỗi gọi /api/upload đề nghị thanh toán:', upErr);
       }
 
-      // 2. Fallback: Nếu máy chủ chưa phản hồi URL, tải trực tiếp lên Supabase Storage
-      if (!finalUrl) {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadData
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        let errMsg = 'Tải file lên Google Drive thất bại';
         try {
-          const ext = file.name.split('.').pop() || 'png';
-          const safeProposalCode = isProof 
-            ? (actionModal.proposal?.code || 'PROOF').replace(/[^a-zA-Z0-9_-]/g, '_')
-            : getNextProposalCode().replace(/[^a-zA-Z0-9_-]/g, '_');
-          const safeFileName = `payment_proposals/${safeProposalCode}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
-
-          const { data: storageData, error: storageErr } = await supabase.storage
-            .from('crm-attachments')
-            .upload(safeFileName, file, { upsert: true });
-
-          if (!storageErr && storageData) {
-            const { data: publicUrlData } = supabase.storage
-              .from('crm-attachments')
-              .getPublicUrl(storageData.path);
-            if (publicUrlData?.publicUrl) {
-              finalUrl = publicUrlData.publicUrl;
-            }
-          }
-        } catch (supErr) {
-          console.warn('Lỗi tải trực tiếp Supabase Storage:', supErr);
-        }
+          const errObj = JSON.parse(errText);
+          if (errObj.error) errMsg = errObj.error;
+        } catch {}
+        throw new Error(errMsg);
       }
 
-      // 3. Fallback cuối cùng nếu cả 2 đều không phản hồi: Tạo blob URL tạm thời
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        throw new Error('Định dạng phản hồi từ máy chủ không đúng.');
+      }
+
+      const finalUrl = data.url || data.webViewLink;
       if (!finalUrl) {
-        finalUrl = URL.createObjectURL(file);
+        throw new Error('Không nhận được đường dẫn file Google Drive.');
       }
 
       if (isProof) {
@@ -249,10 +222,10 @@ export default function PaymentProposals() {
       } else {
         setFormData(prev => ({ ...prev, file_url: finalUrl }));
       }
-      toast.success('Tải file đính kèm thành công!', { id: toastId });
+      toast.success('Tải file lên Google Drive thành công!', { id: toastId });
     } catch (err: any) {
       console.error(err);
-      toast.error('Có lỗi xảy ra khi tải file. Vui lòng thử lại.', { id: toastId });
+      toast.error(err.message || 'Có lỗi xảy ra khi tải file. Vui lòng thử lại.', { id: toastId });
     } finally {
       setIsUploading(false);
     }

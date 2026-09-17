@@ -104,57 +104,34 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
 
       // 1. Tải ảnh đính kèm (nếu có)
       if (imageFile) {
-        // Cách 1: Thử qua API máy chủ (/api/upload)
-        try {
-          const formData = new FormData();
-          formData.append('file', imageFile);
-          formData.append('uploadType', 'feedback');
+        // Gọi trực tiếp API máy chủ lưu ảnh vào Google Drive (/api/upload)
+        const formData = new FormData();
+        formData.append('file', imageFile);
+        formData.append('uploadType', 'feedback');
 
-          const uploadRes = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-          });
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
 
-          if (uploadRes.ok) {
-            const uploadText = await uploadRes.text();
-            try {
-              const uploadData = JSON.parse(uploadText);
-              if (uploadData.url) {
-                imageUrl = uploadData.url;
-              }
-            } catch {
-              // Non-JSON response
-            }
-          }
-        } catch (uploadErr) {
-          console.warn('Lỗi gọi /api/upload khi gửi feedback:', uploadErr);
-        }
-
-        // Cách 2: Nếu chưa có URL, Fallback tải trực tiếp lên Supabase Storage
-        if (!imageUrl) {
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          let errMsg = 'Lỗi tải ảnh đính kèm lên Google Drive.';
           try {
-            const ext = imageFile.name.split('.').pop() || 'png';
-            const safeFileName = `feedback/FB_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
-            const { data: storageData, error: storageErr } = await supabase.storage
-              .from('crm-attachments')
-              .upload(safeFileName, imageFile, { upsert: true });
-
-            if (!storageErr && storageData) {
-              const { data: publicUrlData } = supabase.storage
-                .from('crm-attachments')
-                .getPublicUrl(storageData.path);
-              if (publicUrlData?.publicUrl) {
-                imageUrl = publicUrlData.publicUrl;
-              }
-            }
-          } catch (supErr) {
-            console.warn('Lỗi tải ảnh trực tiếp lên Supabase Storage:', supErr);
-          }
+            const errObj = JSON.parse(errText);
+            if (errObj.error) errMsg = errObj.error;
+          } catch {}
+          throw new Error(errMsg);
         }
 
-        // Cách 3: Nếu cả 2 đều không lưu được URL, dùng imagePreview (base64) để không bao giờ làm mất ảnh của người dùng
-        if (!imageUrl && imagePreview) {
-          imageUrl = imagePreview;
+        const uploadText = await uploadRes.text();
+        try {
+          const uploadData = JSON.parse(uploadText);
+          if (uploadData.url) {
+            imageUrl = uploadData.url;
+          }
+        } catch {
+          throw new Error('Máy chủ không phản hồi JSON khi tải ảnh lên Google Drive.');
         }
       }
 

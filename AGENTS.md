@@ -177,6 +177,10 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
     2. Các nút **"Thêm ngày đi mới"**, **"Tạo hàng loạt (Series)"** và **"Sao chép ngày khởi hành"** (không được mở form thêm ngày khởi hành).
     3. Các nút **"Sửa chi tiết"** (trong bảng và nút chân trang Drawer) cũng như nút **"Xóa"** tour (chặn cả ở giao diện lẫn tầng logic).
     4. Ẩn thông tin **"Hoa hồng / Khách"** trong Drawer xem chi tiết tour.
+- **Dải Thông Báo Chạy Ngang Giai Đoạn Thử Nghiệm (Header Marquee Banner):**
+  - Hệ thống tích hợp dải thông báo chạy ngang mỏng nhẹ nằm ngay dưới Header chính trong `Layout.tsx`.
+  - Nội dung: *"Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy góp ý & Báo lỗi để cải thiện hệ thống. Xin cảm ơn!"*
+  - Hỗ trợ hiệu ứng lặp liên tục, tự động dừng chạy khi di chuột (`hover`) và tích hợp hành động click trực tiếp vào chữ hoặc nút *"Góp ý ngay"* để mở modal Góp ý & Báo lỗi (`FeedbackModal`).
 - **Nhiều Khoản Phụ Thu & Tiền Tour Chênh Lệch CTV:**
   - **Quản lý Nhiều Phụ Thu:** Hỗ trợ tạo, chỉnh sửa và xóa danh sách nhiều khoản phụ thu linh hoạt (`surcharges`) cho từng đơn hàng (thay vì chỉ 1 khoản đơn lẻ). Tự động cộng tổng các khoản phụ thu vào tổng giá trị đơn hàng. **Lưu ý quan trọng:** Các khoản phụ thu (nâng hạng ghế, vé tham quan, phụ thu phòng đơn, v.v.) chỉ tính vào tổng tiền đơn hàng, **hoàn toàn không được cộng vào hoa hồng thực nhận** của CTV/Đại lý.
   - **Tiền Tour Chênh Lệch CTV & Phí Công Ty:** Khi tạo đơn cho CTV, cho phép nhập cố định khoản Tiền tour chênh lệch (`price_markup`) khi CTV bán giá cao hơn cho khách. Hệ thống tự động tính phí công ty thu trên chênh lệch (mặc định 25%, có thể tự điều chỉnh 0-100%) và tính toán chính xác hoa hồng thực nhận còn lại cho CTV.

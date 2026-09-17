@@ -53,11 +53,11 @@ export async function ensureBucketExists(bucketName: string = 'AD Luxury Travel'
 }
 
 /**
- * Helper upload file lên hệ thống CRM qua /api/upload hoặc Supabase Storage
+ * Helper upload file lên hệ thống CRM qua /api/upload (Google Drive)
  */
 export async function uploadFileToCRM(
   file: File,
-  bucketName: string = 'crm-attachments',
+  _bucketName: string = 'crm-attachments',
   uploadType: string = 'chat'
 ): Promise<{ url: string; file_id?: string; name: string }> {
   try {
@@ -77,27 +77,10 @@ export async function uploadFileToCRM(
       }
     }
   } catch (e) {
-    console.warn('Upload via /api/upload error, falling back to Supabase/ObjectUrl:', e);
+    console.warn('Lỗi gọi /api/upload tải file lên Google Drive:', e);
   }
 
-  // Fallback if /api/upload is not configured or offline
-  try {
-    if (isSupabaseConfigured()) {
-      await ensureBucketExists(bucketName);
-      const safeFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { data, error } = await supabase.storage.from(bucketName).upload(safeFileName, file);
-      if (!error && data) {
-        const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(data.path);
-        if (publicUrlData?.publicUrl) {
-          return { url: publicUrlData.publicUrl, name: file.name };
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Supabase storage fallback upload error:', err);
-  }
-
-  // Local URL fallback
+  // Fallback tạm thời nếu mất mạng để xem trước trên trình duyệt
   return { url: URL.createObjectURL(file), name: file.name };
 }
 

@@ -934,6 +934,61 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
+
+        {/* Dải thông báo chạy ngang giai đoạn thử nghiệm (Testing Marquee Bar) */}
+        <div className="bg-amber-50/95 border-b border-amber-200/80 px-3 sm:px-4 py-1.5 flex items-center gap-2 overflow-hidden shrink-0 z-10 select-none shadow-2xs">
+          <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs shrink-0 bg-amber-100/90 px-2 sm:px-2.5 py-0.5 rounded-full border border-amber-300/80 shadow-2xs">
+            <Megaphone className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
+            <span className="text-[10px] sm:text-[11px] font-bold tracking-tight whitespace-nowrap">Thử nghiệm</span>
+          </div>
+
+          <div className="relative flex-1 overflow-hidden h-5 flex items-center cursor-pointer" onClick={() => setIsFeedbackModalOpen(true)} title="Bấm để Góp ý & Báo lỗi cho hệ thống">
+            <div className="animate-marquee flex items-center whitespace-nowrap text-xs font-medium text-amber-950">
+              <div className="inline-flex items-center gap-1.5 pr-14">
+                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                  Góp ý &amp; Báo lỗi
+                </span>
+                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                <span className="text-amber-400 font-bold ml-3">✦</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 pr-14">
+                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                  Góp ý &amp; Báo lỗi
+                </span>
+                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                <span className="text-amber-400 font-bold ml-3">✦</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 pr-14">
+                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                  Góp ý &amp; Báo lỗi
+                </span>
+                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                <span className="text-amber-400 font-bold ml-3">✦</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 pr-14">
+                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                  Góp ý &amp; Báo lỗi
+                </span>
+                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                <span className="text-amber-400 font-bold ml-3">✦</span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsFeedbackModalOpen(true)}
+            className="shrink-0 text-[11px] font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300/80 px-2.5 py-0.5 rounded-full border border-amber-300 transition-colors hidden sm:flex items-center gap-1 active:scale-95 cursor-pointer shadow-2xs"
+            title="Mở popup Góp ý & Báo lỗi"
+          >
+            <MessageSquarePlus className="w-3.5 h-3.5 text-amber-700" />
+            <span>Góp ý ngay</span>
+          </button>
+        </div>
         
         {/* Sub-Tabs Bar for Grouped Routes */}
         {activeGroup && (

@@ -6,6 +6,35 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.55 Tích Hợp Dải Thông Báo Chạy Ngang (Marquee Alert Banner) Giai Đoạn Thử Nghiệm
+- **Mô tả yêu cầu:**
+  - Thêm dòng text chạy ngang trên Header: *"Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy góp ý & Báo lỗi để cải thiện hệ thống. Xin cảm ơn!"*
+- **Các bước triển khai:**
+  1. **Hiệu ứng chuyển động (Marquee CSS):** Định nghĩa keyframe `marquee-scroll` và class `.animate-marquee` mượt mà trong `src/index.css`. Hỗ trợ tự động dừng chạy khi người dùng di chuột (`hover:animation-play-state: paused`) để dễ dàng theo dõi và đọc trọn vẹn.
+  2. **Giao diện & Bố cục (`src/components/Layout.tsx`):**
+     - Đặt dải thông báo mỏng gọn (chiều cao ~32px) ngay dưới Header chính và trên thanh Sub-Tabs.
+     - Tông màu vàng hổ phách nhã nhặn (`bg-amber-50/95`, viền `border-amber-200/80`, chữ `text-amber-950`) kèm badge "Thử nghiệm" và icon `Megaphone` nhấp nháy.
+     - Tích hợp nút hành động trực tiếp: Bấm vào cụm từ *"Góp ý & Báo lỗi"* hoặc nút *"Góp ý ngay"* sẽ kích hoạt mở ngay popup Góp ý & Báo lỗi (`FeedbackModal`) của hệ thống.
+- **Trạng thái:** Đã kiểm thử giao diện, lint và compile thành công 100%.
+
+### 1.54 Chuyển Đổi Hoàn Toàn Sang Lưu Trữ Google Drive (Không Lưu Trữ Supabase Storage)
+- **Mô tả yêu cầu & hiện tượng:**
+  - Người dùng yêu cầu không lưu file lên Supabase Storage, tất cả tài liệu, hình ảnh, hóa đơn, chứng từ thanh toán và ảnh góp ý báo lỗi phải được lưu trực tiếp vào Google Drive.
+  - Trước đây, hệ thống có thiết lập cơ chế dự phòng tự động tải file lên Supabase Storage (bucket `crm-attachments`) khi máy chủ gặp độ trễ hoặc không bắt kịp định dạng JSON.
+- **Các bước triển khai & kiểm thử:**
+  1. **Tại tầng Backend (`googleDriveService.ts`):**
+     - Kích hoạt chế độ nghiêm ngặt Google Drive (`strictDriveOnly: true`) cho toàn bộ hàm `uploadWith3TierFallback`. Vô hiệu hóa hoàn toàn nhánh ghi file vào Supabase Storage.
+     - Khi người dùng tải file, hệ thống sẽ đưa trực tiếp vào thư mục Google Drive tương ứng theo cấu trúc doanh nghiệp (`AD Luxury Travel > Tour / Kế toán / Góp ý & Báo lỗi`).
+  2. **Tại giao diện Client:**
+     - `FeedbackModal.tsx`: Loại bỏ nhánh tải lên Supabase Storage, gọi trực tiếp endpoint tải ảnh lên thư mục Google Drive `Góp Ý & Báo Lỗi`.
+     - `PaymentProposals.tsx`: Loại bỏ nhánh tải hóa đơn và chứng từ thanh toán lên Supabase Storage, chuyển 100% qua Google Drive.
+     - `src/lib/supabase.ts` (`uploadFileToCRM`): Loại bỏ nhánh tải vào Supabase Storage.
+  3. **Kết quả kiểm thử thực tế (Live Verification):**
+     - Đã chạy kiểm thử tải ảnh chụp màn hình feedback: Phản hồi thành công link Google Drive (`storage: "drive"`, URL dạng `https://drive.google.com/file/d/.../view`).
+     - Đã chạy kiểm thử tải hóa đơn Đề nghị thanh toán (DNTT) chung: Phản hồi thành công link Google Drive và tự động đặt tên theo mã đề nghị.
+     - Đã chạy kiểm thử tải chứng từ thanh toán DNTT theo Tour: Phản hồi thành công link Google Drive và tự động phân loại theo mã Tour.
+- **Trạng thái:** Đã hoàn thành 100%, tất cả file và ảnh đều lưu trữ an toàn trên Google Drive.
+
 ### 1.53 Khắc Phục Lỗi Gửi Góp Ý / Báo Lỗi & Tải File Đề Nghị Thanh Toán (DNTT)
 - **Mô tả hiện tượng & lỗi:**
   - Khi người dùng gửi phản hồi trong popup **"Góp Ý & Báo Lỗi"** kèm hình ảnh chụp màn hình, hệ thống báo lỗi: *"Máy chủ không trả về định dạng JSON khi tải ảnh. Vui lòng thử lại sau"* hoặc *"Máy chủ đang khởi động lại hoặc không phản hồi JSON"*.

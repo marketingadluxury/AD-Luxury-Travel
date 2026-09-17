@@ -632,21 +632,15 @@ export async function uploadWith3TierFallback(
   file: Express.Multer.File,
   fileName: string,
   getDriveFolderId: (token: string) => Promise<string>,
-  supabaseStoragePath: string,
-  strictDriveOnly: boolean = false
+  _supabaseStoragePath: string,
+  strictDriveOnly: boolean = true
 ): Promise<{ url: string; fileId?: string; storage: string; error?: string }> {
   const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.includes('PRIVATE KEY'));
   const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
   const driveActive = hasServiceAccount || hasOAuth;
 
   if (!driveActive) {
-    if (strictDriveOnly) {
-      throw new Error('Hệ thống chưa được cấu hình liên kết tài khoản Google Drive.');
-    }
-    console.log('[Upload Fallback] Google Drive is not configured. Falling back to Supabase Storage...');
-    const supabase = getAdminSupabaseClient(req);
-    const publicUrl = await uploadFileToSupabase('crm-attachments', supabaseStoragePath, file.buffer, file.mimetype, supabase);
-    return { url: publicUrl, storage: 'supabase' };
+    throw new Error('Hệ thống chưa được cấu hình tài khoản Google Drive hoặc thông tin xác thực chưa hợp lệ.');
   }
 
   try {
@@ -657,17 +651,7 @@ export async function uploadWith3TierFallback(
     return { url: result.webViewLink, fileId: result.id, storage: 'drive' };
   } catch (driveErr: any) {
     const driveErrorMsg = driveErr.message || String(driveErr);
-    console.warn('[Google Drive Upload Failure] Upload failed:', driveErrorMsg);
-    if (strictDriveOnly) {
-      throw new Error(`Lỗi tải file lên Google Drive: ${driveErrorMsg}.`);
-    }
-    console.log('[Upload Fallback] Falling back to Supabase Storage...', driveErrorMsg);
-    try {
-      const supabase = getAdminSupabaseClient(req);
-      const publicUrl = await uploadFileToSupabase('crm-attachments', supabaseStoragePath, file.buffer, file.mimetype, supabase);
-      return { url: publicUrl, storage: 'supabase' };
-    } catch (supErr: any) {
-      throw new Error(`Lỗi tải file: Cả Google Drive (${driveErrorMsg}) và Supabase Storage (${supErr.message || supErr}) đều thất bại.`);
-    }
+    console.error('[Google Drive Upload Failure] Upload failed:', driveErrorMsg);
+    throw new Error(`Lỗi tải file lên Google Drive: ${driveErrorMsg}`);
   }
 }
