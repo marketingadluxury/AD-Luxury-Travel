@@ -5,14 +5,28 @@ import { getGoogleDriveAccessToken, getOrCreateFeedbackFolder, uploadFileToGoogl
 const router = express.Router();
 
 // Feedback / Bug reports API
-router.post(['/feedback', '/api/feedback'], async (req, res) => {
+router.post(['/feedback', '/api/feedback', '/submit-feedback', '/api/submit-feedback'], async (req, res) => {
   try {
-    const { type, title, description, user_email, user_name, page_url, screenshot_url, metadata } = req.body;
+    const rawType = req.body.type || 'Góp ý & Báo lỗi';
+    const content = (req.body.content || req.body.description || req.body.title || '').trim();
     
-    if (!title || !description) {
-      res.status(400).json({ error: 'Tiêu đề và nội dung góp ý/báo lỗi không được để trống' });
+    if (!content) {
+      res.status(400).json({ error: 'Nội dung góp ý/báo lỗi không được để trống' });
       return;
     }
+
+    const title = req.body.title || (rawType === 'feature' ? 'Đề xuất tính năng mới' : 'Góp ý & Báo lỗi hệ thống');
+    const description = content;
+    const user_email = req.body.user_email || req.body.senderEmail || 'Khai báo ẩn danh';
+    const user_name = req.body.user_name || req.body.senderName || 'Người dùng CRM';
+    const screenshot_url = req.body.screenshot_url || req.body.imageUrl || null;
+    const page_url = req.body.page_url || '';
+    const metadata = {
+      sender_role: req.body.senderRole || req.body.user_role || '',
+      sender_phone: req.body.senderPhone || req.body.user_phone || '',
+      submitted_at: new Date().toISOString(),
+      ...(req.body.metadata || {})
+    };
 
     const supabase = getAdminSupabaseClient(req);
 
@@ -22,14 +36,14 @@ router.post(['/feedback', '/api/feedback'], async (req, res) => {
       const { data, error } = await supabase
         .from('system_feedback')
         .insert({
-          type: type || 'bug',
+          type: rawType,
           title,
           description,
-          user_email: user_email || 'Khai báo ẩn danh',
-          user_name: user_name || 'Người dùng CRM',
-          page_url: page_url || '',
-          screenshot_url: screenshot_url || null,
-          metadata: metadata || {}
+          user_email,
+          user_name,
+          page_url,
+          screenshot_url,
+          metadata
         })
         .select()
         .single();
@@ -53,9 +67,9 @@ router.post(['/feedback', '/api/feedback'], async (req, res) => {
         const token = await getGoogleDriveAccessToken();
         const feedbackFolderId = await getOrCreateFeedbackFolder(token);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `Feedback_${type || 'bug'}_${timestamp}.json`;
+        const filename = `Feedback_${rawType || 'bug'}_${timestamp}.json`;
         const content = JSON.stringify({
-          type: type || 'bug',
+          type: rawType || 'bug',
           title,
           description,
           user_email,

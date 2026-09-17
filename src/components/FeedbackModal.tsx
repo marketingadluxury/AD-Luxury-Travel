@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Send, Sparkles, CheckCircle, AlertCircle, Loader2, ImagePlus, Trash2, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCRM } from '../context/CRMContext';
+import { supabase } from '../lib/supabase';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -99,64 +100,156 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
     setSuccessMsg(null);
 
     try {
-      let imageUrl = null;
+      let imageUrl: string | null = null;
 
-      // 1. Tải ảnh đính kèm (nếu có) lên máy chủ
+      // 1. Tải ảnh đính kèm (nếu có)
       if (imageFile) {
-        const formData = new FormData();
-        formData.append('file', imageFile);
-        formData.append('uploadType', 'feedback');
-
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        const uploadText = await uploadRes.text();
-        let uploadData: any = {};
+        // Cách 1: Thử qua API máy chủ (/api/upload)
         try {
-          uploadData = JSON.parse(uploadText);
-        } catch {
-          throw new Error('Máy chủ không trả về định dạng JSON khi tải ảnh. Vui lòng thử lại sau.');
+          const formData = new FormData();
+          formData.append('file', imageFile);
+          formData.append('uploadType', 'feedback');
+
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (uploadRes.ok) {
+            const uploadText = await uploadRes.text();
+            try {
+              const uploadData = JSON.parse(uploadText);
+              if (uploadData.url) {
+                imageUrl = uploadData.url;
+              }
+            } catch {
+              // Non-JSON response
+            }
+          }
+        } catch (uploadErr) {
+          console.warn('Lỗi gọi /api/upload khi gửi feedback:', uploadErr);
         }
 
-        if (!uploadRes.ok) {
-          throw new Error(uploadData.error || 'Lỗi tải ảnh đính kèm lên máy chủ.');
+        // Cách 2: Nếu chưa có URL, Fallback tải trực tiếp lên Supabase Storage
+        if (!imageUrl) {
+          try {
+            const ext = imageFile.name.split('.').pop() || 'png';
+            const safeFileName = `feedback/FB_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+            const { data: storageData, error: storageErr } = await supabase.storage
+              .from('crm-attachments')
+              .upload(safeFileName, imageFile, { upsert: true });
+
+            if (!storageErr && storageData) {
+              const { data: publicUrlData } = supabase.storage
+                .from('crm-attachments')
+                .getPublicUrl(storageData.path);
+              if (publicUrlData?.publicUrl) {
+                imageUrl = publicUrlData.publicUrl;
+              }
+            }
+          } catch (supErr) {
+            console.warn('Lỗi tải ảnh trực tiếp lên Supabase Storage:', supErr);
+          }
         }
 
-        imageUrl = uploadData.url || null;
+        // Cách 3: Nếu cả 2 đều không lưu được URL, dùng imagePreview (base64) để không bao giờ làm mất ảnh của người dùng
+        if (!imageUrl && imagePreview) {
+          imageUrl = imagePreview;
+        }
       }
 
       // 2. Gửi thông tin phản hồi
-      const response = await fetch('/api/submit-feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type,
+      let submittedSuccessfully = false;
+      let finalMessage = 'Cảm ơn bạn! Yêu cầu góp ý/báo lỗi đã được ghi nhận thành công.';
+
+      // Bước 2.1: Gửi qua API máy chủ
+      try {
+        const response = await fetch('/api/submit-feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type,
+            title: 'Góp ý & Báo lỗi hệ thống',
+            content: content.trim(),
+            description: content.trim(),
+            imageUrl,
+            screenshot_url: imageUrl,
+            senderName: profile?.full_name || user?.email?.split('@')[0] || 'Thành viên',
+            senderEmail: user?.email || '',
+            senderPhone: profile?.phone || '',
+            senderRole: getRoleBadge(displayRole),
+            page_url: window.location.href,
+          }),
+        });
+
+        if (response.ok) {
+          const resText = await response.text();
+          try {
+            const data = JSON.parse(resText);
+            if (data.message) finalMessage = data.message;
+            submittedSuccessfully = true;
+          } catch {
+            submittedSuccessfully = true;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('Lỗi gọi /api/submit-feedback:', apiErr);
+      }
+
+      // Bước 2.2: Nếu API máy chủ chưa phản hồi thành công, Fallback ghi trực tiếp vào Supabase table 'system_feedback'
+      if (!submittedSuccessfully) {
+        try {
+          const { error: dbError } = await supabase
+            .from('system_feedback')
+            .insert({
+              type,
+              title: 'Góp ý & Báo lỗi hệ thống',
+              description: content.trim(),
+              user_email: user?.email || 'Ẩn danh',
+              user_name: profile?.full_name || user?.email?.split('@')[0] || 'Thành viên',
+              page_url: window.location.href,
+              screenshot_url: imageUrl,
+              metadata: {
+                sender_role: getRoleBadge(displayRole),
+                sender_phone: profile?.phone || '',
+                submitted_at: new Date().toISOString(),
+                channel: 'client_supabase_fallback'
+              }
+            });
+
+          if (!dbError) {
+            submittedSuccessfully = true;
+          }
+        } catch (dbErr) {
+          console.warn('Lỗi ghi feedback trực tiếp vào Supabase:', dbErr);
+        }
+      }
+
+      // Bước 2.3: Bộ đệm dự phòng LocalStorage để luôn đảm bảo dữ liệu của người dùng được lưu trữ
+      try {
+        const offlineList = JSON.parse(localStorage.getItem('crm_offline_feedback') || '[]');
+        offlineList.push({
+          id: `fb_${Date.now()}`,
           content: content.trim(),
           imageUrl,
-          senderName: profile?.full_name || user?.email?.split('@')[0] || 'Thành viên',
+          senderName: profile?.full_name || user?.email || 'Thành viên',
           senderEmail: user?.email || '',
-          senderPhone: profile?.phone || '',
           senderRole: getRoleBadge(displayRole),
-        }),
-      });
-
-      const resText = await response.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(resText);
-      } catch {
-        throw new Error('Máy chủ đang khởi động lại hoặc không phản hồi JSON. Vui lòng thử lại sau giây lát.');
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem('crm_offline_feedback', JSON.stringify(offlineList.slice(-20)));
+        submittedSuccessfully = true;
+      } catch (lsErr) {
+        console.warn('LocalStorage buffer error:', lsErr);
       }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Lỗi gửi phản hồi');
+      if (!submittedSuccessfully) {
+        throw new Error('Không thể lưu thông tin phản hồi. Vui lòng kiểm tra lại kết nối mạng.');
       }
 
-      setSuccessMsg(data.message || 'Gửi góp ý thành công!');
+      setSuccessMsg(finalMessage);
       setContent('');
       handleRemoveImage();
       

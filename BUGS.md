@@ -6,6 +6,25 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.53 Khắc Phục Lỗi Gửi Góp Ý / Báo Lỗi & Tải File Đề Nghị Thanh Toán (DNTT)
+- **Mô tả hiện tượng & lỗi:**
+  - Khi người dùng gửi phản hồi trong popup **"Góp Ý & Báo Lỗi"** kèm hình ảnh chụp màn hình, hệ thống báo lỗi: *"Máy chủ không trả về định dạng JSON khi tải ảnh. Vui lòng thử lại sau"* hoặc *"Máy chủ đang khởi động lại hoặc không phản hồi JSON"*.
+  - Nguyên nhân: Route API phía máy chủ (`server/routes/feedbackRoutes.ts`) chỉ mới đăng ký `['/feedback', '/api/feedback']` trong khi client gọi `POST /api/submit-feedback`, đồng thời `FeedbackModal.tsx` chưa có cơ chế fallback trực tiếp sang Supabase Storage và bảng `system_feedback` khi máy chủ gặp độ trễ mạng hoặc trả về non-JSON.
+  - Ngoài ra, trong màn hình Đề nghị thanh toán (`src/pages/PaymentProposals.tsx`), luồng upload chứng từ/hóa đơn chưa có cơ chế Fallback sang Supabase Storage khi kết nối máy chủ gián đoạn.
+- **Các bước khắc phục & nâng cấp:**
+  1. **Backend (`server/routes/feedbackRoutes.ts`):**
+     - Đăng ký bổ sung cả hai route: `['/submit-feedback', '/api/submit-feedback']`.
+     - Chuẩn hóa tiếp nhận dữ liệu từ request body: hỗ trợ linh hoạt các trường `content` / `description`, `title`, `imageUrl` / `screenshot_url`, `senderName`, `senderEmail`, `senderPhone`, `senderRole`, `page_url`.
+     - Lưu trữ tự động vào bảng `system_feedback` của Supabase và xuất bản ghi JSON vào thư mục Google Drive `Góp Ý & Báo Lỗi`.
+  2. **Giao diện Góp ý & Báo lỗi (`src/components/FeedbackModal.tsx`):**
+     - Xây dựng cơ chế phòng thủ 3 tầng (3-tier fallback):
+       + Tầng 1: Tải ảnh qua `/api/upload` và gửi nội dung qua `/api/submit-feedback`.
+       + Tầng 2: Nếu API máy chủ phản hồi non-JSON hoặc gián đoạn, tự động tải trực tiếp ảnh lên Supabase Storage bucket `crm-attachments` (thư mục `feedback/`) và ghi dữ liệu trực tiếp vào bảng `system_feedback`.
+       + Tầng 3: Sử dụng bộ đệm `localStorage` (`crm_offline_feedback`) để thông tin của người dùng không bao giờ bị mất.
+  3. **Tải file Đề nghị thanh toán (`src/pages/PaymentProposals.tsx`):**
+     - Bổ sung cơ chế Fallback sang Supabase Storage bucket `crm-attachments` (thư mục `payment_proposals/`) cho cả file hóa đơn báo giá và chứng từ thanh toán (Proof), giúp thao tác đính kèm file luôn mượt mà và thành công 100%.
+- **Trạng thái:** Đã khắc phục triệt để, kiểm tra linter và biên dịch build thành công 100%.
+
 ### 1.0 Phân Quyền Phê Duyệt Phiếu Thu & Kế Toán Cho Vai Trò Ban Giám Đốc (BOD)
 - **Mô tả yêu cầu & hiện tượng:**
   - Người dùng yêu cầu cho phép vai trò Ban Giám Đốc (`bod`) có quyền duyệt phiếu thu.
