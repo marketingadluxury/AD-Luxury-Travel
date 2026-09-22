@@ -22,7 +22,7 @@ import * as XLSX from 'xlsx';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { calculateEmployeeTimesheet, calculateStandardWorkingDays } from '../lib/payrollUtils';
-import { EmployeeTimesheetRow, Holiday, HolidayType, getRoleConfig, ROLE_DEPARTMENT_ORDER } from '../types';
+import { EmployeeTimesheetRow, Holiday, HolidayType, getRoleConfig, ROLE_DEPARTMENT_ORDER, EMPLOYMENT_STATUS_LABELS } from '../types';
 import { DatePicker } from './DatePicker';
 import { CustomSelect, SelectOption } from './CustomSelect';
 
@@ -459,17 +459,28 @@ export const TimesheetManagement: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Role / Bộ phận */}
+                      {/* Role / Bộ phận & Trạng thái làm việc */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        {(() => {
-                          const roleConfig = getRoleConfig(row.employee_role);
-                          return (
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black border ${roleConfig.bg} ${roleConfig.color} ${roleConfig.border}`}>
-                              <Shield className="w-3 h-3" />
-                              <span>{roleConfig.label}</span>
-                            </span>
-                          );
-                        })()}
+                        <div className="flex flex-col gap-1 items-start">
+                          {(() => {
+                            const roleConfig = getRoleConfig(row.employee_role);
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black border ${roleConfig.bg} ${roleConfig.color} ${roleConfig.border}`}>
+                                <Shield className="w-3 h-3" />
+                                <span>{roleConfig.label}</span>
+                              </span>
+                            );
+                          })()}
+                          {(() => {
+                            const empStatus = row.employment_status || 'official';
+                            const statusConfig = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
+                                <span>{statusConfig.label}</span>
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </td>
 
                       {/* Công chuẩn */}

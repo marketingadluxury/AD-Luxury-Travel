@@ -1129,6 +1129,10 @@ BEGIN
   END IF;
 END $$;
 
+-- Bổ sung cột employment_status cho bảng profiles (Quản lý Thử việc / Chính thức)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS employment_status TEXT DEFAULT 'official';
+
+
 
 
 

@@ -6,6 +6,47 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.57 Bổ Sung Trạng Thái Làm Việc (Thử Việc / Chính Thức) & Kiểm Soát Tích Lũy Phép Năm
+- **Mô tả yêu cầu:**
+  - Bổ sung trường quản lý "Trạng thái làm việc": Thử việc (`probation`) hoặc Chính thức (`official`).
+  - Kiểm soát quỹ phép năm: Nhân sự thử việc mặc định không được tích lũy ngày phép năm theo tháng (0 ngày phép tích lũy), nếu cần nghỉ sẽ áp dụng nghỉ không lương (trừ trường hợp HR can thiệp cấp ngày phép thủ công).
+  - Nhân sự chính thức tiếp tục tích lũy đủ 1 ngày phép/tháng theo quy chuẩn Luật Lao Động.
+- **Các bước triển khai:**
+  1. **Định nghĩa kiểu dữ liệu & schema:**
+     - Khai báo kiểu `EmploymentStatus = 'probation' | 'official'` và hằng số nhãn hiển thị `EMPLOYMENT_STATUS_LABELS` trong `src/types.ts`.
+     - Cập nhật các interface `User`, `Profile`, `UserProfile`, `ManagedUser`, `EmployeeTimesheetRow`.
+     - Cập nhật câu lệnh SQL migration trong `supabase-schema.sql`: `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS employment_status TEXT DEFAULT 'official';`.
+  2. **Logic tính toán tích lũy phép (`src/lib/payrollUtils.ts`):**
+     - Cập nhật hàm `calculateDefaultAccruedLeaveDays`: Nếu `employment_status === 'probation'` thì trả về 0 ngày phép.
+     - Cập nhật `calculateEmployeeTimesheet`: Truyền `employment_status` vào bảng chấm công nhân sự.
+  3. **Giao diện & Trải nghiệm người dùng (UI/UX):**
+     - **Quản lý người dùng (`UserManagement.tsx`):** Thêm cột hiển thị trạng thái "Thử việc / Chính thức", thêm ô chọn dropdown trạng thái làm việc khi tạo mới hoặc chỉnh sửa nhân sự.
+     - **Quản lý quỹ phép (`LeaveBalanceManagement.tsx`):** Hiển thị badge trạng thái làm việc của nhân sự, cập nhật ghi chú rõ ràng *"Thử việc (chưa tích lũy phép)"*.
+     - **Tạo đơn xin nghỉ (`LeaveRequestModal.tsx`):** Hiển thị badge "Nhân sự thử việc" kèm hộp cảnh báo hướng dẫn nhân sự thử việc chọn hình thức *Nghỉ Không Lương* khi quỹ phép là 0 ngày.
+     - **Bảng chấm công (`TimesheetManagement.tsx`):** Hiển thị nhãn vai trò và trạng thái làm việc đi kèm cho từng nhân sự.
+  4. **API Backend (`server/routes/adminRoutes.ts`):** Hỗ trợ nhận và lưu trường `employment_status` khi tạo hoặc cập nhật tài khoản người dùng qua Supabase Admin.
+  5. **Kiểm thử tự động:**
+     - Bổ sung unit tests trong `src/lib/__tests__/payrollUtils.test.ts` kiểm tra nhân sự thử việc mặc định 0 ngày phép và nhân sự chính thức tích lũy đúng.
+     - Vượt qua 100% 33 Unit tests, 21 kịch bản Simulation tests và lint/compile thành công.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
+### 1.56 Cấp Quyền Truy Cập "Quản Lý Booking" (/orders) Cho Vai Trò Điều Hành (Operator)
+- **Mô tả yêu cầu:**
+  - Cấp quyền hiển thị menu "Quản lý Booking" (`/orders`) trên thanh điều hướng cho vai trò Điều hành Tour (`operator`).
+  - Cho phép Điều hành truy cập trang `/orders` để xem danh sách toàn bộ booking đặt tour của công ty, kiểm tra tình trạng cọc/thanh toán, duyệt chỗ (chốt Sure), duyệt/từ chối gia hạn giữ chỗ và quản lý cập nhật thông tin hành khách của các đoàn.
+- **Các bước triển khai:**
+  1. **Thanh điều hướng (`src/components/Layout.tsx`):**
+     - Bổ sung `'operator'` vào mảng `roleAccess` của mục `Quản lý Booking` (`/orders`) trong cả cấu trúc `navigationTree` (nhóm Bookings) và `allNavItems`.
+  2. **Giao diện & Logic trang Quản lý Booking (`src/pages/OrdersManagement.tsx`):**
+     - Loại bỏ hoàn toàn khối chặn quyền `if (currentRole === 'operator')` vốn hiển thị thông báo từ chối truy cập trước đây.
+     - Chuẩn hóa tiêu đề trang thành **"Quản lý Booking"** ngắn gọn, chuyên nghiệp, phù hợp với các vai trò (Điều hành, Sales, Sale Leader, Admin, BOD).
+     - Cho phép Điều hành (`operator`) cùng Admin và Sale Leader thao tác nút **"Duyệt chỗ (Chốt Sure)"** trực tiếp trên danh sách booking giữ chỗ tạm và trong Box tổng quan hành khách.
+     - Tích hợp tính năng duyệt (`Duyệt` / `Từ chối`) yêu cầu gia hạn giữ chỗ bằng hàm `handleExtensionRequest` cho Điều hành (`operator`) và Admin ngay trên thẻ booking.
+     - Cho phép Điều hành cập nhật, thêm mới và xóa thông tin hành khách trong đoàn mà không bị giới hạn hoặc cảnh báo khóa.
+  3. **Kiểm thử & Xác nhận:**
+     - Đã chạy kiểm thử linter (`npm run lint`), toàn bộ 31 unit tests (`npm test`), 21 kịch bản kiểm thử mô phỏng 4 vai trò (`npm run test:simulation`) và kiểm thử biên dịch build (`compile_applet`) vượt qua thành công 100%.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.55 Tích Hợp Dải Thông Báo Chạy Ngang (Marquee Alert Banner) Giai Đoạn Thử Nghiệm
 - **Mô tả yêu cầu:**
   - Thêm dòng text chạy ngang trên Header: *"Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy góp ý & Báo lỗi để cải thiện hệ thống. Xin cảm ơn!"*

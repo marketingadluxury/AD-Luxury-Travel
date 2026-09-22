@@ -20,7 +20,7 @@ import { safeFetchApi } from '../lib/utils';
 
 export default function OrdersManagement() {
   const location = useLocation();
-  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, confirmOrder, updatePassenger, addPassengersToOrder, deletePassenger, updateOrder, createInvoiceReceipt, currentRole, profilesList } = useCRM();
+  const { tours, orders: allOrders, passengers, invoices, createOrder, cancelOrder, requestExtension, handleExtensionRequest, confirmOrder, updatePassenger, addPassengersToOrder, deletePassenger, updateOrder, createInvoiceReceipt, currentRole, profilesList } = useCRM();
   const { profile, user } = useAuth();
 
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
@@ -959,7 +959,7 @@ export default function OrdersManagement() {
       setShowCreateForm(false);
     };
 
-    if (!['admin', 'sale_leader', 'bod'].includes(currentRole)) {
+    if (!['admin', 'sale_leader', 'bod', 'operator'].includes(currentRole)) {
       setConfirmModalData({
         isOpen: true,
         title: '🔒 Cảnh báo: Tự động khóa booking sau khi lưu',
@@ -995,34 +995,12 @@ export default function OrdersManagement() {
     return 'normal';
   };
 
-  if (currentRole === 'operator') {
-    return (
-      <div className="max-w-4xl mx-auto my-12 bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm space-y-4">
-        <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto">
-          <ShieldCheck className="w-8 h-8" />
-        </div>
-        <h3 className="text-xl font-bold text-gray-900">Bộ phận Điều hành không có quyền truy cập trang Quản lý Booking</h3>
-        <p className="text-gray-600 text-sm max-w-md mx-auto">
-          Trang Quản lý Booking dành riêng cho Sales, CTV, Sale Leader và Quản trị viên. Điều hành Tour vui lòng truy cập trang Lịch khởi hành hoặc Quản lý Tour để điều phối chỗ và danh sách khách.
-        </p>
-        <div className="flex justify-center gap-3 pt-2">
-          <Link to="/" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-xl transition-all shadow-sm">
-            Về Lịch khởi hành
-          </Link>
-          <Link to="/tours" className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm rounded-xl transition-all">
-            Về Quản lý Tour
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header section */}
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Quản lý Booking (Sales & Đại lý)</h2>
+          <h2 className="text-xl font-bold text-gray-900">Quản lý Booking</h2>
           <p className="text-sm text-gray-500 mt-1">
             Giữ chỗ tạm thời, chốt chắc chắn (Sure) và theo dõi đếm ngược thời hạn giải phóng booking tự động.
           </p>
@@ -2850,12 +2828,54 @@ export default function OrdersManagement() {
 
                             <div className="bg-blue-50/60 border border-blue-100/80 rounded-xl p-3.5 text-blue-800 flex items-start gap-2.5">
                               <Info className="w-4.5 h-4.5 shrink-0 mt-0.5 text-blue-500" />
-                              <div className="space-y-0.5">
+                              <div className="space-y-1 w-full">
                                 <p className="font-bold text-xs">Yêu cầu khai báo thông tin & Hồ sơ Visa</p>
                                 <p className="text-gray-600 leading-relaxed text-[11px]">
                                   Trong trạng thái giữ chỗ tạm thời, hệ thống chỉ hiển thị tổng quan số lượng khách đặt chỗ để tối ưu hóa hiệu năng hiển thị.
                                   Bản khai chi tiết từng hành khách (Họ tên, Ngày sinh, Hộ chiếu) và chức năng tải lên hồ sơ Visa sẽ tự động kích hoạt sau khi booking được chuyển sang trạng thái <strong>Sure chỗ (Xác nhận chắc chắn)</strong>.
                                 </p>
+                                {['admin', 'operator', 'sale_leader'].includes(currentRole) && (
+                                  <div className="pt-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const currentOrderPassengers = passengers.filter(p => p.order_id === order.id);
+                                        const hasRealPassengers = currentOrderPassengers.length > 0 && currentOrderPassengers.some(p => {
+                                          const n = (p.full_name || p.name || '').trim();
+                                          return n && n !== 'Chưa cung cấp (Giữ chỗ tạm)' && n !== 'Hành khách';
+                                        });
+
+                                        if (hasRealPassengers) {
+                                          setConfirmModalData({
+                                            isOpen: true,
+                                            title: 'Duyệt chỗ & Chốt Sure',
+                                            message: `Xác nhận duyệt chỗ và chuyển booking #${order.id.substring(0, 8)} sang trạng thái Chắc chắn (Sure)? Danh sách ${currentOrderPassengers.length} hành khách đã được ghi nhận và số chỗ sẽ chuyển sang danh sách Đã bán chính thức của đoàn.`,
+                                            onConfirm: () => {
+                                              confirmOrder(order.id, currentOrderPassengers.map(p => ({
+                                                full_name: p.full_name || p.name || 'Hành khách',
+                                                gender: p.gender || 'male',
+                                                phone: p.phone,
+                                                dob: p.dob,
+                                                passport_number: p.passport_number,
+                                                passport_expiry_date: (p as any).passport_expiry || p.passport_expiry_date,
+                                                passport_url: p.passport_url,
+                                                needs_visa_service: p.needs_visa_service,
+                                                is_payer: p.is_payer
+                                              })));
+                                            }
+                                          });
+                                        } else {
+                                          setOrderToConfirm(order.id);
+                                          setIsPassengerModalOpen(true);
+                                        }
+                                      }}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                                    >
+                                      <CheckCircle className="w-3.5 h-3.5" />
+                                      Duyệt chỗ (Chốt Sure) ngay
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -2982,7 +3002,7 @@ export default function OrdersManagement() {
                                             >
                                               Sửa
                                             </button>
-                                            {(!isOrderLocked(order) || ['admin', 'sale_leader'].includes(currentRole)) && (
+                                            {(!isOrderLocked(order) || ['admin', 'sale_leader', 'operator'].includes(currentRole)) && (
                                               <button
                                                 type="button"
                                                 onClick={() => {
@@ -3389,15 +3409,82 @@ export default function OrdersManagement() {
                           )}
                           {order.status === 'hold' && (
                             <>
+                              {/* Direct Confirm / Sure Button for Operator, Admin, Sale Leader */}
+                              {['admin', 'operator', 'sale_leader'].includes(currentRole) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentOrderPassengers = passengers.filter(p => p.order_id === order.id);
+                                    const hasRealPassengers = currentOrderPassengers.length > 0 && currentOrderPassengers.some(p => {
+                                      const n = (p.full_name || p.name || '').trim();
+                                      return n && n !== 'Chưa cung cấp (Giữ chỗ tạm)' && n !== 'Hành khách';
+                                    });
+
+                                    if (hasRealPassengers) {
+                                      setConfirmModalData({
+                                        isOpen: true,
+                                        title: 'Duyệt chỗ & Chốt Sure',
+                                        message: `Xác nhận duyệt chỗ và chuyển booking #${order.id.substring(0, 8)} sang trạng thái Chắc chắn (Sure)? Danh sách ${currentOrderPassengers.length} hành khách đã được ghi nhận và số chỗ sẽ chuyển sang danh sách Đã bán chính thức của đoàn.`,
+                                        onConfirm: () => {
+                                          confirmOrder(order.id, currentOrderPassengers.map(p => ({
+                                            full_name: p.full_name || p.name || 'Hành khách',
+                                            gender: p.gender || 'male',
+                                            phone: p.phone,
+                                            dob: p.dob,
+                                            passport_number: p.passport_number,
+                                            passport_expiry_date: (p as any).passport_expiry || p.passport_expiry_date,
+                                            passport_url: p.passport_url,
+                                            needs_visa_service: p.needs_visa_service,
+                                            is_payer: p.is_payer
+                                          })));
+                                        }
+                                      });
+                                    } else {
+                                      setOrderToConfirm(order.id);
+                                      setIsPassengerModalOpen(true);
+                                    }
+                                  }}
+                                  className="px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-lg hover:bg-emerald-100 hover:text-emerald-800 transition-colors inline-flex items-center cursor-pointer shadow-2xs"
+                                  title="Duyệt chỗ và chốt chắc chắn (Sure) cho đoàn"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                                  Duyệt chỗ (Chốt Sure)
+                                </button>
+                              )}
+
                               {/* Extensions Request Button */}
                               {order.is_extended ? (
                                 <span className="text-xs text-emerald-600 font-extrabold bg-emerald-50 px-3.5 py-2 rounded-lg border border-emerald-200 inline-flex items-center">
                                   <Check className="w-4 h-4 mr-1.5" /> Đã gia hạn thành công
                                 </span>
                               ) : order.extension_status === 'requested' ? (
-                                <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-3.5 py-2 rounded-lg border border-amber-200 inline-flex items-center animate-pulse">
-                                  <Clock className="w-4 h-4 mr-1.5" /> Chờ duyệt gia hạn...
-                                </span>
+                                ['admin', 'operator'].includes(currentRole) ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-amber-700 font-semibold bg-amber-50 px-2 py-1.5 rounded-lg border border-amber-200 inline-flex items-center">
+                                      <Clock className="w-3.5 h-3.5 mr-1 text-amber-600 animate-pulse" /> Xin thêm {(order as any).extension_hours || 24}h
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleExtensionRequest(order.id, true)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg inline-flex items-center shadow-xs cursor-pointer"
+                                      title="Duyệt đồng ý gia hạn giữ chỗ"
+                                    >
+                                      <Check className="w-3.5 h-3.5 mr-1" /> Duyệt
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleExtensionRequest(order.id, false)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-lg inline-flex items-center cursor-pointer"
+                                      title="Từ chối yêu cầu gia hạn"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-3.5 py-2 rounded-lg border border-amber-200 inline-flex items-center animate-pulse">
+                                    <Clock className="w-4 h-4 mr-1.5" /> Chờ duyệt gia hạn...
+                                  </span>
+                                )
                               ) : order.extension_status === 'rejected' ? (
                                 <span className="text-xs text-rose-600 font-medium bg-rose-50 px-3.5 py-2 rounded-lg border border-rose-200">
                                   Bị từ chối gia hạn
@@ -3557,7 +3644,7 @@ export default function OrdersManagement() {
         tourPriceVisa={orderToConfirm ? tours.find(t => t.id === allOrders.find(o => o.id === orderToConfirm)?.tour_id)?.price_visa_tour : 0}
         onConfirm={(passengers) => {
           if (orderToConfirm) {
-            if (!['admin', 'sale_leader'].includes(currentRole)) {
+            if (!['admin', 'sale_leader', 'operator'].includes(currentRole)) {
               setConfirmModalData({
                 isOpen: true,
                 title: '🔒 Cảnh báo: Chốt Sure & Tự động khóa booking',

@@ -42,4 +42,23 @@ describe('Phần 2: Automation Tests - Kiểm thử quỹ phép tích lũy (payr
     const accruedDays = calculateDefaultAccruedLeaveDays(currentYear, futureEmployee, 5);
     expect(accruedDays).toBe(0);
   });
+
+  it('Nhân sự thử việc (employment_status = "probation") mặc định nhận 0 ngày phép', () => {
+    const probationEmployee = {
+      join_date: `${currentYear}-01-01`,
+      employment_status: 'probation' as const
+    };
+    // Dù ở tháng 8 thì nhân sự thử việc vẫn là 0 ngày
+    const accruedDays = calculateDefaultAccruedLeaveDays(currentYear, probationEmployee, 8);
+    expect(accruedDays).toBe(0);
+  });
+
+  it('Nhân sự chính thức (employment_status = "official" hoặc không set) tích lũy bình thường', () => {
+    const officialEmployee = {
+      join_date: `${currentYear}-01-01`,
+      employment_status: 'official' as const
+    };
+    const accruedDays = calculateDefaultAccruedLeaveDays(currentYear, officialEmployee, 8);
+    expect(accruedDays).toBe(8);
+  });
 });

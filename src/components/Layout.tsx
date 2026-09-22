@@ -93,7 +93,7 @@ export const navigationTree: NavGroup[] = [
     groupName: 'Bookings',
     icon: ShoppingCart,
     items: [
-      { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin'] },
+      { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['operator', 'agent', 'bod', 'sale', 'sale_leader', 'admin'] },
       { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
       { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
     ]
@@ -170,7 +170,7 @@ const allNavItems: NavItem[] = [
   { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'accounting'] },
   { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
-  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin'] },
+  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['operator', 'agent', 'bod', 'sale', 'sale_leader', 'admin'] },
   { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
   { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
   { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },

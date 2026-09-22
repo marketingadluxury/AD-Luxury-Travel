@@ -132,7 +132,14 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
           {/* Thông tin Quỹ phép năm hiện tại */}
           <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-100 flex items-center justify-between">
             <div>
-              <div className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Quỹ phép năm {currentYear}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Quỹ phép năm {currentYear}</div>
+                {profile?.employment_status === 'probation' && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                    Nhân sự thử việc
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-blue-600 mt-0.5">
                 Tổng cộng: <strong className="font-bold">{userBalance.total}</strong> ngày | Đã dùng: <strong className="font-bold">{userBalance.used}</strong> ngày
               </div>
@@ -142,6 +149,15 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
               <div className="text-xl font-black text-blue-700">{userBalance.remaining} ngày</div>
             </div>
           </div>
+
+          {profile?.employment_status === 'probation' && userBalance.total === 0 && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <strong>Lưu ý đối với nhân sự Thử việc:</strong> Bạn hiện chưa có ngày phép năm hưởng lương (0 ngày). Nếu cần nghỉ, vui lòng chọn hình thức <strong>Nghỉ Không Lương</strong> hoặc liên hệ HR để được hỗ trợ.
+              </div>
+            </div>
+          )}
 
           {/* Loại nghỉ phép */}
           <div>
@@ -423,6 +439,11 @@ export const EmployeeLeaveBalanceWidget: React.FC<EmployeeLeaveBalanceWidgetProp
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-slate-800">Quỹ Phép Năm ({currentYear})</h4>
+              {profile?.employment_status === 'probation' && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                  Thử việc
+                </span>
+              )}
               {pendingRequestsCount > 0 && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
                   <Clock className="w-3 h-3 mr-1" /> {pendingRequestsCount} đơn chờ duyệt

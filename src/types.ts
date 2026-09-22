@@ -7,6 +7,20 @@ export interface RoleConfig {
   border: string;
 }
 
+export type EmploymentStatus = 'official' | 'probation';
+
+export interface EmploymentStatusConfig {
+  label: string;
+  color: string;
+  bg: string;
+  border: string;
+}
+
+export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, EmploymentStatusConfig> = {
+  official: { label: 'Chính thức', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  probation: { label: 'Thử việc', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' }
+};
+
 export const ROLE_LABELS: Record<Role, RoleConfig> = {
   admin: { label: 'Quản trị viên (Admin)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
   sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
@@ -57,6 +71,7 @@ export interface User {
   email: string;
   full_name: string;
   role: Role;
+  employment_status?: EmploymentStatus;
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;
@@ -69,6 +84,7 @@ export interface Profile {
   phone?: string;
   company_name?: string;
   role: Role;
+  employment_status?: EmploymentStatus;
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;
@@ -588,6 +604,7 @@ export interface EmployeeTimesheetRow {
   employee_name: string;
   employee_email: string;
   employee_role: string;
+  employment_status?: EmploymentStatus;
   department_name?: string;
   month: number;
   year: number;

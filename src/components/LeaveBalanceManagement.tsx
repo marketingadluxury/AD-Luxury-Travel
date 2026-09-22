@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
-import { LeaveBalance, Profile, getRoleConfig, ROLE_DEPARTMENT_ORDER } from '../types';
+import { LeaveBalance, Profile, getRoleConfig, ROLE_DEPARTMENT_ORDER, EMPLOYMENT_STATUS_LABELS } from '../types';
 import { getEffectiveLeaveBalance } from '../lib/payrollUtils';
 import { CustomSelect } from './CustomSelect';
 
@@ -278,17 +278,28 @@ export const LeaveBalanceManagement: React.FC = () => {
                         <div className="text-[11px] text-slate-400">{staff.email || staff.phone || '-'}</div>
                       </td>
 
-                      {/* Role / Bộ phận */}
+                      {/* Role / Bộ phận & Trạng thái làm việc */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        {(() => {
-                          const roleConfig = getRoleConfig(staff.role);
-                          return (
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black border ${roleConfig.bg} ${roleConfig.color} ${roleConfig.border}`}>
-                              <Shield className="w-3 h-3" />
-                              <span>{roleConfig.label}</span>
-                            </span>
-                          );
-                        })()}
+                        <div className="flex flex-col gap-1 items-start">
+                          {(() => {
+                            const roleConfig = getRoleConfig(staff.role);
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black border ${roleConfig.bg} ${roleConfig.color} ${roleConfig.border}`}>
+                                <Shield className="w-3 h-3" />
+                                <span>{roleConfig.label}</span>
+                              </span>
+                            );
+                          })()}
+                          {(() => {
+                            const empStatus = staff.employment_status || 'official';
+                            const statusConfig = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
+                                <span>{statusConfig.label}</span>
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </td>
 
                       {/* Tổng ngày phép */}
@@ -331,6 +342,8 @@ export const LeaveBalanceManagement: React.FC = () => {
                           </div>
                         ) : isManual ? (
                           <span className="text-slate-400 italic">Đã điều chỉnh thủ công</span>
+                        ) : staff.employment_status === 'probation' ? (
+                          <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-[11px] font-semibold">Thử việc (chưa tích lũy phép)</span>
                         ) : (
                           <span className="text-slate-400 italic">Tích lũy 1 ngày/tháng ({total} ngày)</span>
                         )}

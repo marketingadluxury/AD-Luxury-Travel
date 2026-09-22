@@ -17,9 +17,14 @@ import { Holiday, LeaveRequest, HolidayType, LeaveBalance } from '../types';
  */
 export function calculateDefaultAccruedLeaveDays(
   year: number,
-  profile?: { join_date?: string; created_at?: string } | null,
+  profile?: { join_date?: string; created_at?: string; employment_status?: string } | null,
   targetMonth?: number
 ): number {
+  // Nếu nhân sự đang trong giai đoạn thử việc (probation) và chưa được HR cấp phép thủ công: Mặc định 0 ngày
+  if (profile?.employment_status === 'probation') {
+    return 0;
+  }
+
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1 - 12
@@ -355,6 +360,7 @@ export interface EmployeeTimesheetRow {
   employee_name: string;
   employee_email: string;
   employee_role: string;
+  employment_status?: 'probation' | 'official';
   month: number;
   year: number;
   standard_working_days: number;
@@ -519,6 +525,7 @@ export function calculateEmployeeTimesheet(
     employee_name: profile.full_name || profile.name || 'Chưa đặt tên',
     employee_email: profile.email || '',
     employee_role: profile.role || '',
+    employment_status: profile.employment_status,
     month,
     year,
     standard_working_days: standardWorkingDays,

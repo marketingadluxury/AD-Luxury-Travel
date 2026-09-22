@@ -9,6 +9,7 @@ export interface UserProfile {
   phone: string;
   company_name: string;
   role: Role;
+  employment_status?: 'probation' | 'official';
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;
