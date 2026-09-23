@@ -6,7 +6,7 @@ import {
   CheckCircle2, Clock, XCircle, TrendingUp, 
   ChevronRight, Plus, 
   Building2, Phone, Mail, Sparkles, 
-  BarChart3, Check, AlertCircle
+  BarChart3, Check, AlertCircle, LayoutDashboard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -23,6 +23,7 @@ import {
   getRoleConfig
 } from '../types';
 import { CreateLeaveRequestModal } from '../components/LeaveRequestModal';
+import { CustomSelect, SelectOption } from '../components/CustomSelect';
 
 const LEAVE_TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   annual: { label: 'Nghỉ phép năm', color: 'text-emerald-700', bg: 'bg-emerald-50' },
@@ -102,25 +103,25 @@ export default function MyDashboard() {
       .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
   }, [leaveRequests, userId, myProfile, selectedYear]);
 
-  // Tổng hợp công & thu nhập từng tháng trong năm (12 tháng)
+  // Dữ liệu bảng công & thu nhập 12 tháng
   const monthlyTimesheetData = useMemo(() => {
     const months = Array.from({ length: 12 }, (_, i) => i + 1);
+    const userBalance = leaveBalances.find(b => b.user_id === userId && b.year === selectedYear);
     
     return months.map(m => {
-      const currentBalance = leaveBalances.find(b => b.user_id === userId && b.year === selectedYear);
       const ts = calculateEmployeeTimesheet(
-        myProfile || { id: userId, full_name: user?.email },
+        myProfile || { id: userId, full_name: myProfile?.full_name || 'Nhân viên' },
         m,
         selectedYear,
         leaveRequests,
         holidays,
-        currentBalance
+        userBalance
       );
 
       const standardDays = ts.standard_working_days;
       const actualDays = ts.actual_working_days;
       const annualLeaveDays = ts.paid_leave_days;
-      const holidayDays = ts.compensatory_leave_days + ts.special_leave_days;
+      const holidayDays = 0;
       const paidLeaveDays = ts.paid_leave_days + ts.compensatory_leave_days + ts.special_leave_days;
       const unpaidLeaveDays = ts.unpaid_leave_days;
       const completionRate = standardDays > 0 ? Math.min(100, Math.round((actualDays / standardDays) * 100)) : 100;
@@ -188,64 +189,66 @@ export default function MyDashboard() {
   const statusCfg = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
   const roleCfg = getRoleConfig(myProfile?.role || currentRole);
 
+  const yearOptions: SelectOption[] = [
+    { value: String(currentYear - 1), label: `Năm ${currentYear - 1}` },
+    { value: String(currentYear), label: `Năm ${currentYear} (Hiện tại)` },
+    { value: String(currentYear + 1), label: `Năm ${currentYear + 1}` },
+  ];
+
   return (
     <div className="space-y-6 font-sans max-w-7xl mx-auto pb-12">
       {/* 1. TOP HEADER & EMPLOYEE PROFILE CARD */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
-        {/* Background decorative circles */}
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-12 w-48 h-48 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+      <div className="bg-white rounded-2xl p-5 sm:p-6 text-gray-900 shadow-2xs border border-gray-200">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
             {/* Avatar */}
             <div className="relative">
-              <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 p-0.5 shadow-lg shadow-cyan-500/20">
-                <div className="w-full h-full rounded-[14px] bg-slate-900 flex items-center justify-center text-2xl font-black text-white">
+              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-sm">
+                <div className="w-full h-full rounded-[14px] bg-white flex items-center justify-center text-2xl font-black text-blue-600">
                   {myProfile?.full_name ? myProfile.full_name.charAt(0).toUpperCase() : 'U'}
                 </div>
               </div>
-              <div className="absolute -bottom-1 -right-1 p-1 bg-slate-900 rounded-full">
-                <div className={`w-3.5 h-3.5 rounded-full ${empStatus === 'official' ? 'bg-emerald-500 ring-2 ring-slate-900' : 'bg-amber-500 ring-2 ring-slate-900'}`} />
+              <div className="absolute -bottom-1 -right-1 p-0.5 bg-white rounded-full">
+                <div className={`w-3.5 h-3.5 rounded-full ${empStatus === 'official' ? 'bg-emerald-500 ring-2 ring-white' : 'bg-amber-500 ring-2 ring-white'}`} />
               </div>
             </div>
 
             {/* Profile Info */}
             <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
                   {myProfile?.full_name || user?.email?.split('@')[0] || 'Nhân sự AD Luxury'}
                 </h1>
                 
                 {/* Role Badge */}
-                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${roleCfg.bg} ${roleCfg.color} ${roleCfg.border}`}>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${roleCfg.bg} ${roleCfg.color} ${roleCfg.border}`}>
                   {roleCfg.label}
                 </span>
 
                 {/* Employment Status Badge */}
-                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${statusCfg.bg} ${statusCfg.color} ${statusCfg.border}`}>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusCfg.bg} ${statusCfg.color} ${statusCfg.border}`}>
                   {statusCfg.label}
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-300 font-medium">
+              <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-gray-500 font-medium">
                 <span className="flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <Mail className="w-3.5 h-3.5 text-gray-400" />
                   <span>{myProfile?.email || user?.email}</span>
                 </span>
                 {myProfile?.phone && (
                   <span className="flex items-center gap-1">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    <Phone className="w-3.5 h-3.5 text-gray-400" />
                     <span>{myProfile.phone}</span>
                   </span>
                 )}
                 {myProfile?.team_name && (
-                  <span className="flex items-center gap-1 text-indigo-300 font-bold">
+                  <span className="flex items-center gap-1 text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
                     <Building2 className="w-3.5 h-3.5" />
                     <span>{myProfile.team_name}</span>
                   </span>
                 )}
-                <span className="flex items-center gap-1 text-cyan-300">
+                <span className="flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                   <Clock className="w-3.5 h-3.5" />
                   <span>{seniorityText}</span>
                 </span>
@@ -255,25 +258,21 @@ export default function MyDashboard() {
 
           {/* Year selector & Quick Action */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
-            <div className="bg-slate-800/80 border border-slate-700 p-1 rounded-xl flex items-center gap-1">
-              <Calendar className="w-4 h-4 text-cyan-400 ml-2" />
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="bg-transparent text-xs font-black text-white px-2 py-1.5 outline-none cursor-pointer"
-              >
-                <option value={currentYear - 1} className="bg-slate-900 text-white">Năm {currentYear - 1}</option>
-                <option value={currentYear} className="bg-slate-900 text-white">Năm {currentYear} (Hiện tại)</option>
-                <option value={currentYear + 1} className="bg-slate-900 text-white">Năm {currentYear + 1}</option>
-              </select>
-            </div>
+            <CustomSelect
+              options={yearOptions}
+              value={String(selectedYear)}
+              onChange={(val) => setSelectedYear(Number(val))}
+              icon={<Calendar className="w-4 h-4 text-blue-600" />}
+              className="w-48 sm:w-52"
+              buttonClassName="w-full h-10 px-3 py-2 bg-gray-50 hover:bg-gray-100/80 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 shadow-2xs"
+            />
 
             <button
               onClick={() => setIsLeaveModalOpen(true)}
-              className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+              className="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" />
-              <span>Tạo Đơn Xin Nghỉ Phép</span>
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Tạo đơn xin nghỉ phép</span>
             </button>
           </div>
         </div>
@@ -282,41 +281,41 @@ export default function MyDashboard() {
       {/* 2. TOP METRIC CARDS (QUỸ PHÉP & CÔNG THÁNG NÀY & HOA HỒNG) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Card 1: Quỹ Phép Năm */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
                   <Palmtree className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Quỹ Phép Năm {selectedYear}</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Chính sách nghỉ phép theo luật</p>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">Quỹ Phép Năm {selectedYear}</h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Chính sách nghỉ phép theo luật</p>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-black text-xs border border-emerald-200">
+              <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200">
                 Còn {effectiveLeave.remaining} ngày
               </span>
             </div>
 
             <div className="py-4 space-y-3">
               <div className="flex items-baseline justify-between">
-                <span className="text-xs font-bold text-slate-500">Đã dùng / Tổng cấp:</span>
+                <span className="text-xs font-bold text-gray-500">Đã dùng / Tổng cấp:</span>
                 <div className="text-right">
-                  <span className="text-xl font-black text-slate-900">{effectiveLeave.used}</span>
-                  <span className="text-xs font-bold text-slate-400"> / {effectiveLeave.total} ngày</span>
+                  <span className="text-xl font-black text-gray-900">{effectiveLeave.used}</span>
+                  <span className="text-xs font-bold text-gray-400"> / {effectiveLeave.total} ngày</span>
                 </div>
               </div>
 
               {/* Progress bar */}
               <div className="space-y-1">
-                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                   <div 
-                    className="bg-gradient-to-r from-emerald-500 to-teal-600 h-2.5 rounded-full transition-all duration-500"
+                    className="bg-emerald-500 h-2.5 rounded-full transition-all duration-500"
                     style={{ width: `${leaveUsagePercent}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
+                <div className="flex justify-between text-[10px] text-gray-400 font-semibold">
                   <span>Đã dùng {leaveUsagePercent}%</span>
                   <span>Khả dụng {effectiveLeave.remaining} ngày</span>
                 </div>
@@ -324,14 +323,14 @@ export default function MyDashboard() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
             <span className="flex items-center gap-1 font-medium">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>Tích lũy 1 ngày/tháng</span>
             </span>
             <button
               onClick={() => setIsLeaveModalOpen(true)}
-              className="font-extrabold text-blue-600 hover:text-blue-700 cursor-pointer flex items-center gap-0.5"
+              className="font-bold text-blue-600 hover:text-blue-700 cursor-pointer flex items-center gap-0.5"
             >
               <span>Nghỉ phép</span>
               <ChevronRight className="w-3 h-3" />
@@ -340,19 +339,19 @@ export default function MyDashboard() {
         </div>
 
         {/* Card 2: Chấm Công Tháng Này */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
                   <Briefcase className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Công Tháng {currentMonth}/{selectedYear}</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Tiến độ ngày làm việc chuẩn</p>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">Công Tháng {currentMonth}/{selectedYear}</h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Tiến độ ngày làm việc chuẩn</p>
                 </div>
               </div>
-              <span className={`px-2.5 py-1 rounded-full font-black text-xs border ${
+              <span className={`px-2.5 py-1 rounded-full font-bold text-xs border ${
                 currentMonthStats.completionRate >= 100 
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : 'bg-blue-50 text-blue-700 border-blue-200'
@@ -363,60 +362,60 @@ export default function MyDashboard() {
 
             <div className="py-4 space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-500">Ngày công chuẩn:</span>
-                <span className="font-black text-slate-800">{currentMonthStats.standardDays} ngày</span>
+                <span className="font-bold text-gray-500">Ngày công chuẩn:</span>
+                <span className="font-bold text-gray-800">{currentMonthStats.standardDays} ngày</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-500">Công thực tế ghi nhận:</span>
-                <span className="font-black text-blue-600">{currentMonthStats.actualDays} ngày</span>
+                <span className="font-bold text-gray-500">Công thực tế ghi nhận:</span>
+                <span className="font-bold text-blue-600">{currentMonthStats.actualDays} ngày</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-500">Nghỉ hưởng lương (Lễ/Phép):</span>
-                <span className="font-black text-emerald-600">{currentMonthStats.paidLeaveDays} ngày</span>
+                <span className="font-bold text-gray-500">Nghỉ hưởng lương (Lễ/Phép):</span>
+                <span className="font-bold text-emerald-600">{currentMonthStats.paidLeaveDays} ngày</span>
               </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
             <span className="font-medium">Nghỉ không lương: <strong className="text-rose-600">{currentMonthStats.unpaidLeaveDays} ngày</strong></span>
-            <Link to="/leave-requests" className="font-extrabold text-blue-600 hover:text-blue-700 flex items-center gap-0.5">
+            <Link to="/leave-requests" className="font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5">
               <span>Bảng công</span>
               <ChevronRight className="w-3 h-3" />
             </Link>
           </div>
         </div>
 
-        {/* Card 3: Doanh Số & Hoa Hồng Cá Nhân (hoặc Đề nghị thanh toán) */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
+        {/* Card 3: Doanh Số & Hoa Hồng Cá Nhân */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
                   <TrendingUp className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Hiệu Quả & Thu Nhập {selectedYear}</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Hoa hồng & Kết quả kinh doanh</p>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">Hiệu Quả & Thu Nhập {selectedYear}</h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Hoa hồng & Kết quả kinh doanh</p>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 font-black text-xs border border-amber-200">
+              <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 font-bold text-xs border border-amber-200">
                 {annualSalesSummary.totalOrders} Đơn hàng
               </span>
             </div>
 
             <div className="py-4 space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-500">Tổng doanh số chốt:</span>
-                <span className="font-black text-slate-900">{annualSalesSummary.totalSales.toLocaleString('vi-VN')} đ</span>
+                <span className="font-bold text-gray-500">Tổng doanh số chốt:</span>
+                <span className="font-bold text-gray-900">{annualSalesSummary.totalSales.toLocaleString('vi-VN')} đ</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-500">Hoa hồng thực nhận:</span>
-                <span className="font-black text-emerald-600 text-sm">
+                <span className="font-bold text-gray-500">Hoa hồng thực nhận:</span>
+                <span className="font-bold text-emerald-600 text-sm">
                   {annualSalesSummary.totalCommission.toLocaleString('vi-VN')} đ
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-500">Hoa hồng tháng này:</span>
+                <span className="font-bold text-gray-500">Hoa hồng tháng này:</span>
                 <span className="font-bold text-amber-700">
                   {currentMonthStats.monthCommission.toLocaleString('vi-VN')} đ
                 </span>
@@ -424,9 +423,9 @@ export default function MyDashboard() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-            <span className="font-medium">Trạng thái: <strong className="text-slate-800">Đã đối soát kế toán</strong></span>
-            <Link to="/orders" className="font-extrabold text-blue-600 hover:text-blue-700 flex items-center gap-0.5">
+          <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
+            <span className="font-medium">Trạng thái: <strong className="text-gray-800">Đã đối soát</strong></span>
+            <Link to="/orders" className="font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5">
               <span>Đơn hàng</span>
               <ChevronRight className="w-3 h-3" />
             </Link>
@@ -435,31 +434,31 @@ export default function MyDashboard() {
       </div>
 
       {/* 3. SECTION: LỊCH SỬ BẢNG CÔNG & THU NHẬP 12 THÁNG */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-600" />
               <span>Bảng Tổng Hợp Công & Lương Năm {selectedYear}</span>
             </h2>
-            <p className="text-xs text-slate-400 font-semibold mt-0.5">
+            <p className="text-xs text-gray-500 font-medium mt-0.5">
               Chi tiết ngày công chuẩn, ngày công thực tế, ngày nghỉ phép và hoa hồng theo từng tháng
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+          <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl">
             <button
               onClick={() => setViewMode('table')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                viewMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'table' ? 'bg-white text-blue-700 shadow-2xs' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Bảng dữ liệu
             </button>
             <button
               onClick={() => setViewMode('chart')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                viewMode === 'chart' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'chart' ? 'bg-white text-blue-700 shadow-2xs' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Biểu đồ trực quan
@@ -471,7 +470,7 @@ export default function MyDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold uppercase text-gray-500 tracking-wider">
                   <th className="py-3.5 px-4">Tháng</th>
                   <th className="py-3.5 px-4 text-center">Công Chuẩn</th>
                   <th className="py-3.5 px-4 text-center">Công Thực Tế</th>
@@ -483,7 +482,7 @@ export default function MyDashboard() {
                   <th className="py-3.5 px-4 text-center">Đánh Giá</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-gray-100 text-xs">
                 {monthlyTimesheetData.map((m) => {
                   const isCurrent = selectedYear === currentYear && m.month === currentMonth;
                   const isFuture = selectedYear > currentYear || (selectedYear === currentYear && m.month > currentMonth);
@@ -495,21 +494,21 @@ export default function MyDashboard() {
                         isCurrent 
                           ? 'bg-blue-50/60 font-bold hover:bg-blue-50/80' 
                           : isFuture 
-                          ? 'text-slate-400 hover:bg-slate-50/50' 
-                          : 'hover:bg-slate-50/80'
+                          ? 'text-gray-400 hover:bg-gray-50/50' 
+                          : 'hover:bg-gray-50/80'
                       }`}
                     >
-                      <td className="py-3 px-4 font-black">
+                      <td className="py-3 px-4 font-bold">
                         <div className="flex items-center gap-2">
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${
                             isCurrent 
                               ? 'bg-blue-600 text-white' 
-                              : 'bg-slate-100 text-slate-700'
+                              : 'bg-gray-100 text-gray-700'
                           }`}>
                             T{m.month}
                           </div>
                           <div>
-                            <span className={isCurrent ? 'text-blue-700' : 'text-slate-800'}>
+                            <span className={isCurrent ? 'text-blue-700' : 'text-gray-800'}>
                               Tháng {m.month}/{selectedYear}
                             </span>
                             {isCurrent && (
@@ -521,15 +520,15 @@ export default function MyDashboard() {
                         </div>
                       </td>
 
-                      <td className="py-3 px-4 text-center font-bold text-slate-600">
+                      <td className="py-3 px-4 text-center font-bold text-gray-600">
                         {m.standardDays} ngày
                       </td>
 
-                      <td className="py-3 px-4 text-center font-black text-blue-600">
+                      <td className="py-3 px-4 text-center font-bold text-blue-600">
                         {isFuture ? '-' : `${m.actualDays} ngày`}
                       </td>
 
-                      <td className="py-3 px-4 text-center font-bold text-slate-600">
+                      <td className="py-3 px-4 text-center font-bold text-gray-600">
                         {isFuture ? '-' : (m.holidayDays > 0 ? `${m.holidayDays} ngày` : '0')}
                       </td>
 
@@ -543,9 +542,9 @@ export default function MyDashboard() {
 
                       <td className="py-3 px-4 text-center">
                         {isFuture ? (
-                          <span className="text-slate-300">-</span>
+                          <span className="text-gray-300">-</span>
                         ) : (
-                          <span className={`px-2 py-0.5 rounded-full font-black text-[11px] ${
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] ${
                             m.completionRate >= 100 
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
                               : m.completionRate >= 80 
@@ -557,21 +556,21 @@ export default function MyDashboard() {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-right font-black text-slate-800">
+                      <td className="py-3 px-4 text-right font-bold text-gray-800">
                         {isFuture ? '-' : (
                           m.monthCommission > 0 ? (
-                            <span className="text-emerald-600 font-extrabold">
+                            <span className="text-emerald-600 font-bold">
                               {m.monthCommission.toLocaleString('vi-VN')} đ
                             </span>
                           ) : (
-                            <span className="text-slate-400">0 đ</span>
+                            <span className="text-gray-400">0 đ</span>
                           )
                         )}
                       </td>
 
                       <td className="py-3 px-4 text-center">
                         {isFuture ? (
-                          <span className="text-slate-400 text-[11px] italic">Chưa tới</span>
+                          <span className="text-gray-400 text-[11px] italic">Chưa tới</span>
                         ) : m.completionRate >= 100 ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
                             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -598,10 +597,10 @@ export default function MyDashboard() {
         ) : (
           <div className="p-6 space-y-6">
             <div className="space-y-3">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
                 Biểu đồ tỷ lệ hoàn thành công chuẩn (%) theo từng tháng
               </h3>
-              <div className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-end h-44 pt-4 border-b border-slate-200 pb-2">
+              <div className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-end h-44 pt-4 border-b border-gray-200 pb-2">
                 {monthlyTimesheetData.map((m) => {
                   const heightPercent = Math.min(100, Math.max(10, m.completionRate));
                   const isCurrent = selectedYear === currentYear && m.month === currentMonth;
@@ -609,22 +608,22 @@ export default function MyDashboard() {
 
                   return (
                     <div key={m.month} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                      <div className="text-[10px] font-black text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="text-[10px] font-bold text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
                         {isFuture ? '-' : `${m.completionRate}%`}
                       </div>
                       <div 
                         className={`w-full max-w-[28px] rounded-t-lg transition-all ${
                           isFuture 
-                            ? 'bg-slate-100 h-2' 
+                            ? 'bg-gray-100 h-2' 
                             : isCurrent 
-                            ? 'bg-gradient-to-t from-blue-600 to-cyan-500 shadow-md shadow-blue-500/20' 
+                            ? 'bg-blue-600 shadow-sm' 
                             : m.completionRate >= 100 
                             ? 'bg-emerald-500' 
                             : 'bg-amber-400'
                         }`}
                         style={{ height: isFuture ? '8px' : `${heightPercent}%` }}
                       />
-                      <span className={`text-[10px] font-bold ${isCurrent ? 'text-blue-700 font-black' : 'text-slate-400'}`}>
+                      <span className={`text-[10px] font-bold ${isCurrent ? 'text-blue-700 font-bold' : 'text-gray-400'}`}>
                         T{m.month}
                       </span>
                     </div>
@@ -635,10 +634,10 @@ export default function MyDashboard() {
 
             {/* Commission Trend Chart */}
             <div className="space-y-3 pt-4">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
                 Biến động hoa hồng & thu nhập kinh doanh (VNĐ)
               </h3>
-              <div className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-end h-36 pt-4 border-b border-slate-200 pb-2">
+              <div className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-end h-36 pt-4 border-b border-gray-200 pb-2">
                 {monthlyTimesheetData.map((m) => {
                   const maxComm = Math.max(1, ...monthlyTimesheetData.map(x => x.monthCommission));
                   const heightPercent = m.monthCommission > 0 ? Math.min(100, Math.max(12, (m.monthCommission / maxComm) * 100)) : 4;
@@ -646,20 +645,20 @@ export default function MyDashboard() {
 
                   return (
                     <div key={m.month} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                      <div className="text-[9px] font-black text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity truncate max-w-full">
+                      <div className="text-[9px] font-bold text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity truncate max-w-full">
                         {m.monthCommission > 0 ? `${(m.monthCommission / 1000000).toFixed(1)}Tr` : ''}
                       </div>
                       <div 
                         className={`w-full max-w-[28px] rounded-t-lg transition-all ${
                           isFuture 
-                            ? 'bg-slate-100' 
+                            ? 'bg-gray-100' 
                             : m.monthCommission > 0 
-                            ? 'bg-gradient-to-t from-emerald-600 to-teal-400 shadow-md shadow-emerald-500/20' 
-                            : 'bg-slate-100'
+                            ? 'bg-emerald-500 shadow-sm' 
+                            : 'bg-gray-100'
                         }`}
                         style={{ height: `${heightPercent}%` }}
                       />
-                      <span className="text-[10px] font-bold text-slate-400">
+                      <span className="text-[10px] font-bold text-gray-400">
                         T{m.month}
                       </span>
                     </div>
@@ -672,21 +671,21 @@ export default function MyDashboard() {
       </div>
 
       {/* 4. SECTION: LỊCH SỬ ĐƠN NGHỈ PHÉP CỦA TÔI */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <Palmtree className="w-5 h-5 text-emerald-600" />
               <span>Lịch Sử Đơn Nghỉ Phép Năm {selectedYear}</span>
             </h2>
-            <p className="text-xs text-slate-400 font-semibold mt-0.5">
+            <p className="text-xs text-gray-500 font-medium mt-0.5">
               Danh sách các đơn xin nghỉ phép đã gửi và tiến độ phê duyệt
             </p>
           </div>
 
           <button
             onClick={() => setIsLeaveModalOpen(true)}
-            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-xs rounded-xl border border-emerald-200 flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Tạo đơn mới</span>
@@ -694,15 +693,15 @@ export default function MyDashboard() {
         </div>
 
         {myLeaveRequests.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 font-semibold text-xs flex flex-col items-center justify-center gap-2">
-            <Palmtree className="w-8 h-8 text-slate-300" />
+          <div className="p-12 text-center text-gray-400 font-medium text-xs flex flex-col items-center justify-center gap-2">
+            <Palmtree className="w-8 h-8 text-gray-300" />
             <span>Bạn chưa có đơn xin nghỉ phép nào trong năm {selectedYear}.</span>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase text-gray-500 tracking-wider">
                   <th className="py-3.5 px-4">Loại Nghỉ</th>
                   <th className="py-3.5 px-4">Khoảng Thời Gian</th>
                   <th className="py-3.5 px-4 text-center">Buổi Nghỉ</th>
@@ -712,21 +711,21 @@ export default function MyDashboard() {
                   <th className="py-3.5 px-4 text-right">Người Phê Duyệt</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-gray-100 text-xs">
                 {myLeaveRequests.map((req) => {
-                  const typeCfg = LEAVE_TYPE_LABELS[req.type] || { label: req.type, color: 'text-slate-700', bg: 'bg-slate-100' };
+                  const typeCfg = LEAVE_TYPE_LABELS[req.type] || { label: req.type, color: 'text-gray-700', bg: 'bg-gray-100' };
                   
                   return (
-                    <tr key={req.id} className="hover:bg-slate-50/80 transition-all">
-                      <td className="py-3.5 px-4 font-black text-slate-800">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-extrabold ${typeCfg.bg} ${typeCfg.color}`}>
+                    <tr key={req.id} className="hover:bg-gray-50/80 transition-all">
+                      <td className="py-3.5 px-4 font-bold text-gray-800">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold ${typeCfg.bg} ${typeCfg.color}`}>
                           {typeCfg.label}
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4 font-bold text-slate-700">
+                      <td className="py-3.5 px-4 font-bold text-gray-700">
                         <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
                           <span>
                             {new Date(req.start_date).toLocaleDateString('vi-VN')}
                             {req.start_date !== req.end_date && ` - ${new Date(req.end_date).toLocaleDateString('vi-VN')}`}
@@ -734,20 +733,20 @@ export default function MyDashboard() {
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4 text-center font-semibold text-slate-600">
+                      <td className="py-3.5 px-4 text-center font-medium text-gray-600">
                         {req.leave_session === 'morning' ? 'Buổi sáng' : req.leave_session === 'afternoon' ? 'Buổi chiều' : 'Cả ngày'}
                       </td>
 
-                      <td className="py-3.5 px-4 text-center font-black text-emerald-600">
+                      <td className="py-3.5 px-4 text-center font-bold text-emerald-600">
                         {req.total_days || 1} ngày
                       </td>
 
                       <td className="py-3.5 px-4 max-w-xs">
-                        <div className="font-semibold text-slate-800 truncate" title={req.reason}>
+                        <div className="font-medium text-gray-800 truncate" title={req.reason}>
                           {req.reason}
                         </div>
                         {req.handover_user_name && (
-                          <div className="text-[10px] text-slate-400 font-medium">
+                          <div className="text-[10px] text-gray-400 font-medium">
                             Bàn giao: {req.handover_user_name}
                           </div>
                         )}
@@ -755,35 +754,35 @@ export default function MyDashboard() {
 
                       <td className="py-3.5 px-4 text-center">
                         {req.status === 'approved_final' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-extrabold text-[11px] border border-emerald-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[11px] border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3" />
                             <span>Đã duyệt hoàn tất</span>
                           </span>
                         ) : req.status === 'approved_level_1' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-extrabold text-[11px] border border-blue-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[11px] border border-blue-200">
                             <Clock className="w-3 h-3" />
                             <span>Trưởng nhóm đã duyệt</span>
                           </span>
                         ) : req.status === 'rejected' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 font-extrabold text-[11px] border border-rose-200" title={req.rejection_reason || ''}>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 font-bold text-[11px] border border-rose-200" title={req.rejection_reason || ''}>
                             <XCircle className="w-3 h-3" />
                             <span>Từ chối</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-extrabold text-[11px] border border-amber-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold text-[11px] border border-amber-200">
                             <Clock className="w-3 h-3" />
                             <span>Chờ duyệt</span>
                           </span>
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4 text-right font-bold text-slate-700">
+                      <td className="py-3.5 px-4 text-right font-medium text-gray-700">
                         {req.approver_final_name ? (
-                          <div className="text-[11px] text-emerald-700 font-black">{req.approver_final_name}</div>
+                          <div className="text-[11px] text-emerald-700 font-bold">{req.approver_final_name}</div>
                         ) : req.approver_level_1_name ? (
-                          <div className="text-[11px] text-blue-700 font-semibold">L1: {req.approver_level_1_name}</div>
+                          <div className="text-[11px] text-blue-700 font-medium">L1: {req.approver_level_1_name}</div>
                         ) : (
-                          <span className="text-slate-300">-</span>
+                          <span className="text-gray-300">-</span>
                         )}
                       </td>
                     </tr>
