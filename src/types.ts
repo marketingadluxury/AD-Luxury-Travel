@@ -7,7 +7,7 @@ export interface RoleConfig {
   border: string;
 }
 
-export type EmploymentStatus = 'official' | 'probation';
+export type EmploymentStatus = 'official' | 'probation' | 'resigned' | 'suspended';
 
 export interface EmploymentStatusConfig {
   label: string;
@@ -18,7 +18,9 @@ export interface EmploymentStatusConfig {
 
 export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, EmploymentStatusConfig> = {
   official: { label: 'Chính thức', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-  probation: { label: 'Thử việc', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' }
+  probation: { label: 'Thử việc', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' },
+  resigned: { label: 'Đã nghỉ việc', color: 'text-slate-600', bg: 'bg-slate-100', border: 'border-slate-300' },
+  suspended: { label: 'Tạm nghỉ / Đình chỉ', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' }
 };
 
 export const ROLE_LABELS: Record<Role, RoleConfig> = {
@@ -72,6 +74,8 @@ export interface User {
   full_name: string;
   role: Role;
   employment_status?: EmploymentStatus;
+  resigned_at?: string | null;
+  resigned_note?: string | null;
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;
@@ -85,6 +89,8 @@ export interface Profile {
   company_name?: string;
   role: Role;
   employment_status?: EmploymentStatus;
+  resigned_at?: string | null;
+  resigned_note?: string | null;
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;
@@ -614,6 +620,7 @@ export interface EmployeeTimesheetRow {
   special_leave_days: number; // Nghỉ chế độ
   unpaid_leave_days: number; // Nghỉ không lương
   actual_working_days: number; // Ngày công hạch toán
+  leave_balance_total: number; // Tổng quỹ phép năm được cấp / tích lũy
   leave_balance_remaining: number; // Quỹ phép năm còn lại
   leave_details?: LeaveRequest[];
   bridge_leave_applied?: {

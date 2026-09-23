@@ -1030,6 +1030,9 @@ ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAU
 ALTER TABLE holidays ADD COLUMN IF NOT EXISTS holiday_type TEXT DEFAULT 'official_paid';
 ALTER TABLE holidays ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS join_date DATE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS employment_status TEXT DEFAULT 'official';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS resigned_at TIMESTAMPTZ;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS resigned_note TEXT;
 
 ALTER TABLE leave_balances ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow access to leave_balances" ON leave_balances;

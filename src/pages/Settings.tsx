@@ -6,14 +6,18 @@ import DatabaseKeepAliveSettings from '../components/DatabaseKeepAliveSettings';
 
 export default function Settings() {
   const { currentRole, membershipSettings, updateMembershipSettings } = useCRM();
-  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database'>('membership');
+  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database'>(
+    currentRole === 'hr' ? 'users' : 'membership'
+  );
   
   const [silver, setSilver] = useState(membershipSettings?.silverMin || 20000000);
   const [gold, setGold] = useState(membershipSettings?.goldMin || 50000000);
   const [platinum, setPlatinum] = useState(membershipSettings?.platinumMin || 100000000);
   const [isSaved, setIsSaved] = useState(false);
 
-  if (currentRole !== 'admin') {
+  const canAccessSettings = ['admin', 'bod', 'hr'].includes(currentRole);
+
+  if (!canAccessSettings) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 bg-white rounded-2xl border border-gray-200 shadow-sm max-w-md mx-auto my-12 text-center font-sans">
         <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-6 border border-amber-200">
@@ -21,11 +25,8 @@ export default function Settings() {
         </div>
         <h2 className="text-xl font-black text-gray-900 mb-2">Quyền truy cập hạn chế</h2>
         <p className="text-xs text-gray-500 mb-6 max-w-sm leading-relaxed font-semibold">
-          Chỉ có <span className="text-blue-600 font-bold">Quản trị viên (admin)</span> mới có quyền truy cập trang Cài đặt hệ thống.
+          Chỉ có <span className="text-blue-600 font-bold">Quản trị viên (Admin)</span>, <span className="text-violet-600 font-bold">Ban Giám Đốc (BOD)</span> và <span className="text-cyan-700 font-bold">Nhân sự (HR)</span> mới có quyền truy cập trang Cài đặt & Quản lý nhân sự.
         </p>
-        <div className="text-xs bg-slate-50 border border-slate-200 p-3 rounded-lg font-bold text-slate-600">
-          Mẹo: Hãy đổi vai trò của bạn ở thanh menu bên trái thành "Quản trị viên" để truy cập trang này.
-        </div>
       </div>
     );
   }
@@ -83,17 +84,19 @@ export default function Settings() {
           <Users className="w-4 h-4" />
           <span>Quản lý người dùng & phân quyền</span>
         </button>
-        <button
-          onClick={() => setActiveTab('database')}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-            activeTab === 'database'
-              ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
-          }`}
-        >
-          <Database className="w-4 h-4" />
-          <span>Cơ sở dữ liệu & Tự động giữ ấm</span>
-        </button>
+        {currentRole === 'admin' && (
+          <button
+            onClick={() => setActiveTab('database')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              activeTab === 'database'
+                ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Cơ sở dữ liệu & Tự động giữ ấm</span>
+          </button>
+        )}
       </div>
 
       {activeTab === 'membership' && (

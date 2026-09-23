@@ -71,6 +71,7 @@ interface CRMContextType {
   refreshProfiles: () => Promise<void>;
   addAgentProfile: (profileData: Omit<UserProfile, 'id'> & { id?: string }) => Promise<UserProfile>;
   updateAgentProfile: (id: string, updatedData: Partial<UserProfile>) => Promise<void>;
+  updateUserProfile: (id: string, updatedData: Partial<UserProfile>) => Promise<void>;
   deleteAgentProfile: (id: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   currentRole: Role;
@@ -6371,6 +6372,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       refreshProfiles,
       addAgentProfile,
       updateAgentProfile,
+      updateUserProfile: updateAgentProfile,
       deleteAgentProfile,
       deleteUser,
       currentRole,

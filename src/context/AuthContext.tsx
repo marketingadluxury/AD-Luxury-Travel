@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
-import { Role } from '../types';
+import { Role, EmploymentStatus } from '../types';
 
 export interface UserProfile {
   id: string;
@@ -9,7 +9,9 @@ export interface UserProfile {
   phone: string;
   company_name: string;
   role: Role;
-  employment_status?: 'probation' | 'official';
+  employment_status?: EmploymentStatus;
+  resigned_at?: string | null;
+  resigned_note?: string | null;
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;

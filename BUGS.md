@@ -6,6 +6,36 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.59 Đồng Bộ Tổng Quỹ Phép Năm Động Trên Bảng Chấm Công (Thay Thế Mẫu Số Cố Định / 12 Ngày)
+- **Mô tả yêu cầu:**
+  - Trên Bảng chấm công hàng tháng (`TimesheetManagement.tsx`), cột **"Quỹ phép còn"** trước đây bị hardcode hiển thị mẫu số cố định là `/ 12 ngày` (ví dụ `8 / 12 ngày`, `0 / 12 ngày`), trong khi cột **"Tổng phép"** ở tab Quản lý quỹ phép năm hiển thị số ngày thực tế được tích lũy hoặc cấp (ví dụ: tháng 9 là `9 ngày`).
+  - Cần đồng bộ chính xác mẫu số tổng phép trên bảng chấm công theo đúng tổng phép thực tế của từng nhân viên (`row.leave_balance_total`).
+- **Các bước triển khai:**
+  1. **Định nghĩa kiểu dữ liệu & hàm tính toán (`src/types.ts` & `src/lib/payrollUtils.ts`):**
+     - Thêm trường `leave_balance_total: number` vào interface `EmployeeTimesheetRow`.
+     - Cập nhật hàm `calculateEmployeeTimesheet` trả về `leave_balance_total: totalDays`, phản ánh chính xác số ngày phép tích lũy (theo tháng đang hạch toán hoặc theo điều chỉnh thủ công của HR/Admin).
+  2. **Giao diện & Xuất Excel (`src/components/TimesheetManagement.tsx`):**
+     - Cột *Quỹ phép còn lại* trên bảng chấm công hiển thị linh hoạt: `{row.leave_balance_remaining} / {row.leave_balance_total} ngày` (khớp hoàn toàn với tab Quỹ phép năm, ví dụ `8 / 9 ngày`, `0 / 9 ngày`).
+     - Khi bấm nút cây bút để điều chỉnh nhanh, trường `Tổng Ngày Cấp` trong modal tự động lấy đúng `row.leave_balance_total`.
+     - Đồng bộ cột *Quỹ phép năm còn lại* trong file Excel xuất ra.
+  3. **Kiểm thử tự động:**
+     - Đạt 100% 33/33 Unit tests (`npm test`), TypeScript check (`tsc --noEmit`) và biên dịch (`compile_applet`) thành công.
+- **Trạng thái:** Đã hoàn thành và kiểm thử ổn định.
+
+### 1.58 Cấp Quyền Cho Nhân Sự (HR, BOD, Admin) Chỉnh Trạng Thái Làm Việc Trong Tab Nghỉ Phép & Chấm Công
+- **Mô tả yêu cầu:**
+  - Cho phép vai trò **Nhân sự (HR)** cùng **Ban Giám Đốc (BOD)** và **Quản trị viên (Admin)** chỉnh sửa trạng thái làm việc (*Thử việc* / *Chính thức*) của nhân viên trực tiếp ngay trong tab Quản lý Quỹ Phép Năm (`/leave-requests`), thay vì chỉ có thể chỉnh trong mục Cài đặt người dùng.
+- **Các bước triển khai:**
+  1. **Tầng Context & Đồng bộ dữ liệu (`src/context/CRMContext.tsx`):**
+     - Cung cấp hàm `updateUserProfile` thông qua `CRMContext` để cập nhật trực tiếp `employment_status` lên Supabase và lưu trữ local tức thì.
+  2. **Giao diện & Tương tác người dùng (`src/components/LeaveBalanceManagement.tsx`):**
+     - **Bảng danh sách:** Giữ nguyên huy hiệu (badge) hiển thị trạng thái tĩnh gọn gàng, trang nhã, không hiển thị dropdown xổ xuống để tránh rối mắt và bấm nhầm.
+     - **Tích hợp trong Modal Điều chỉnh quỹ phép:** Chỉ cho phép lựa chọn và điều chỉnh trạng thái làm việc (*Chính thức: Tích lũy phép 1 ngày/tháng* / *Thử việc: 0 ngày phép*) khi HR, BOD hoặc Admin bấm vào nút **"Điều chỉnh"** của từng nhân sự.
+     - Kiểm soát phân quyền: Chỉ các tài khoản có vai trò `hr`, `bod`, `admin` mới thấy và sử dụng được khối điều chỉnh trạng thái làm việc trong Modal.
+  3. **Kiểm thử tự động:**
+     - Đạt 100% 33 Unit tests (`npm test`), lint (`tsc --noEmit`) và compile (`compile_applet`) thành công.
+- **Trạng thái:** Đã hoàn thành và kiểm thử ổn định.
+
 ### 1.57 Bổ Sung Trạng Thái Làm Việc (Thử Việc / Chính Thức) & Kiểm Soát Tích Lũy Phép Năm
 - **Mô tả yêu cầu:**
   - Bổ sung trường quản lý "Trạng thái làm việc": Thử việc (`probation`) hoặc Chính thức (`official`).

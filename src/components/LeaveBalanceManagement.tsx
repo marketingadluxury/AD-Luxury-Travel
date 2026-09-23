@@ -15,23 +15,27 @@ import {
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
-import { LeaveBalance, Profile, getRoleConfig, ROLE_DEPARTMENT_ORDER, EMPLOYMENT_STATUS_LABELS } from '../types';
+import { LeaveBalance, Profile, getRoleConfig, ROLE_DEPARTMENT_ORDER, EMPLOYMENT_STATUS_LABELS, EmploymentStatus } from '../types';
 import { getEffectiveLeaveBalance } from '../lib/payrollUtils';
 import { CustomSelect } from './CustomSelect';
 
 export const LeaveBalanceManagement: React.FC = () => {
   const { profile } = useAuth();
-  const { profilesList, leaveBalances, updateLeaveBalance, leaveRequests, holidays } = useCRM();
+  const { profilesList, leaveBalances, updateLeaveBalance, updateUserProfile, leaveRequests, holidays } = useCRM();
 
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
+  // Kiểm tra quyền chỉnh sửa trạng thái nhân sự (HR, Admin, BOD)
+  const canManageEmploymentStatus = ['admin', 'bod', 'hr'].includes(profile?.role || '');
+
   // Modal điều chỉnh quỹ phép
   const [editingStaff, setEditingStaff] = useState<Profile | null>(null);
   const [modalTotalDays, setModalTotalDays] = useState<number>(12);
   const [modalUsedDays, setModalUsedDays] = useState<number>(0);
+  const [modalEmploymentStatus, setModalEmploymentStatus] = useState<EmploymentStatus>('official');
   const [modalNote, setModalNote] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -75,6 +79,7 @@ export const LeaveBalanceManagement: React.FC = () => {
     setEditingStaff(staff);
     setModalTotalDays(eff.total);
     setModalUsedDays(eff.used);
+    setModalEmploymentStatus((staff.employment_status as EmploymentStatus) || 'official');
     setModalNote(eff.note || '');
   };
 
@@ -90,6 +95,14 @@ export const LeaveBalanceManagement: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // 1. Cập nhật trạng thái làm việc nếu có quyền và trạng thái thay đổi
+      if (canManageEmploymentStatus && modalEmploymentStatus !== (editingStaff.employment_status || 'official')) {
+        await updateUserProfile(editingStaff.id, {
+          employment_status: modalEmploymentStatus,
+        });
+      }
+
+      // 2. Cập nhật quỹ phép
       await updateLeaveBalance(editingStaff.id, selectedYear, {
         total_days: Number(modalTotalDays),
         used_days: Number(modalUsedDays),
@@ -293,6 +306,7 @@ export const LeaveBalanceManagement: React.FC = () => {
                           {(() => {
                             const empStatus = staff.employment_status || 'official';
                             const statusConfig = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
+
                             return (
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
                                 <span>{statusConfig.label}</span>
@@ -415,6 +429,106 @@ export const LeaveBalanceManagement: React.FC = () => {
                   <div className="text-[10px] text-emerald-600">ngày</div>
                 </div>
               </div>
+
+              {/* Lựa Chọn Trạng Thái Làm Việc (Dành cho HR, BOD, Admin) */}
+              {canManageEmploymentStatus && (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span>Trạng thái làm việc của nhân sự</span>
+                    <span className="text-[10px] text-cyan-600 font-semibold bg-cyan-50 px-2 py-0.5 rounded-md border border-cyan-200">
+                      Quyền HR & Quản trị
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <label
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        modalEmploymentStatus === 'official'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100/60'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="modal_employment_status"
+                        value="official"
+                        checked={modalEmploymentStatus === 'official'}
+                        onChange={() => setModalEmploymentStatus('official')}
+                        className="accent-emerald-600"
+                      />
+                      <div>
+                        <div>Chính thức</div>
+                        <div className="text-[10px] font-normal text-slate-500">1 ngày/tháng</div>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        modalEmploymentStatus === 'probation'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300 shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100/60'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="modal_employment_status"
+                        value="probation"
+                        checked={modalEmploymentStatus === 'probation'}
+                        onChange={() => setModalEmploymentStatus('probation')}
+                        className="accent-amber-600"
+                      />
+                      <div>
+                        <div>Thử việc</div>
+                        <div className="text-[10px] font-normal text-slate-500">Mặc định 0 ngày</div>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        modalEmploymentStatus === 'resigned'
+                          ? 'bg-slate-100 text-slate-800 border-slate-400 shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100/60'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="modal_employment_status"
+                        value="resigned"
+                        checked={modalEmploymentStatus === 'resigned'}
+                        onChange={() => setModalEmploymentStatus('resigned')}
+                        className="accent-slate-600"
+                      />
+                      <div>
+                        <div>Đã nghỉ việc</div>
+                        <div className="text-[10px] font-normal text-slate-500">Khóa tài khoản</div>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        modalEmploymentStatus === 'suspended'
+                          ? 'bg-rose-50 text-rose-800 border-rose-300 shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100/60'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="modal_employment_status"
+                        value="suspended"
+                        checked={modalEmploymentStatus === 'suspended'}
+                        onChange={() => setModalEmploymentStatus('suspended')}
+                        className="accent-rose-600"
+                      />
+                      <div>
+                        <div>Tạm nghỉ</div>
+                        <div className="text-[10px] font-normal text-slate-500">Đình chỉ tạm thời</div>
+                      </div>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Khi chuyển sang <strong>Chính thức</strong>, nhân viên bắt đầu được tích lũy ngày phép tự động mỗi tháng làm việc.
+                  </p>
+                </div>
+              )}
 
               {/* Ô Nhập Tổng Ngày Phép Được Cấp */}
               <div>

@@ -1,4 +1,4 @@
-import { Holiday, LeaveRequest, HolidayType, LeaveBalance } from '../types';
+import { Holiday, LeaveRequest, HolidayType, LeaveBalance, EmploymentStatus } from '../types';
 
 /**
  * Tính số ngày phép năm tích lũy mặc định theo Luật Lao Động (1 ngày cho mỗi tháng làm việc):
@@ -20,8 +20,8 @@ export function calculateDefaultAccruedLeaveDays(
   profile?: { join_date?: string; created_at?: string; employment_status?: string } | null,
   targetMonth?: number
 ): number {
-  // Nếu nhân sự đang trong giai đoạn thử việc (probation) và chưa được HR cấp phép thủ công: Mặc định 0 ngày
-  if (profile?.employment_status === 'probation') {
+  // Nếu nhân sự đang trong giai đoạn thử việc (probation) hoặc đã nghỉ việc (resigned): Mặc định 0 ngày
+  if (profile?.employment_status === 'probation' || profile?.employment_status === 'resigned') {
     return 0;
   }
 
@@ -360,7 +360,7 @@ export interface EmployeeTimesheetRow {
   employee_name: string;
   employee_email: string;
   employee_role: string;
-  employment_status?: 'probation' | 'official';
+  employment_status?: EmploymentStatus;
   month: number;
   year: number;
   standard_working_days: number;
@@ -369,6 +369,7 @@ export interface EmployeeTimesheetRow {
   special_leave_days: number;
   unpaid_leave_days: number;
   actual_working_days: number;
+  leave_balance_total: number;
   leave_balance_remaining: number;
   leave_details?: LeaveRequest[];
   bridge_leave_applied?: {
@@ -534,6 +535,7 @@ export function calculateEmployeeTimesheet(
     special_leave_days: specialLeaveDays,
     unpaid_leave_days: unpaidLeaveDays,
     actual_working_days: actualWorkingDays,
+    leave_balance_total: totalDays,
     leave_balance_remaining,
     leave_details: userApprovedLeaves,
     bridge_leave_applied: bridgeAppliedList.length > 0 ? bridgeAppliedList : undefined,

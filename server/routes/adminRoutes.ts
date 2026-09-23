@@ -74,7 +74,7 @@ router.get(['/admin/users', '/api/admin/users'], async (req, res) => {
 // Admin API: Create user profile
 router.post(['/admin/users', '/api/admin/users'], async (req, res) => {
   try {
-    const { email, password, full_name, phone, company_name, role, leader_id, team_id, team_name, employment_status } = req.body;
+    const { email, password, full_name, phone, company_name, role, leader_id, team_id, team_name, employment_status, resigned_at, resigned_note } = req.body;
     if (!email || !full_name) {
       res.status(400).json({ error: 'Email và Họ tên không được để trống' });
       return;
@@ -118,6 +118,8 @@ router.post(['/admin/users', '/api/admin/users'], async (req, res) => {
       team_id: team_id || null,
       team_name: team_name || null,
       employment_status: employment_status || 'official',
+      resigned_at: employment_status === 'resigned' ? (resigned_at || new Date().toISOString()) : null,
+      resigned_note: resigned_note || null,
       created_at: new Date().toISOString()
     };
 
@@ -144,7 +146,7 @@ router.post(['/admin/users', '/api/admin/users'], async (req, res) => {
 router.put(['/admin/users/:id', '/api/admin/users/:id'], async (req, res) => {
   try {
     const { id } = req.params;
-    const { email, full_name, phone, company_name, role, leader_id, team_id, team_name, employment_status, password } = req.body;
+    const { email, full_name, phone, company_name, role, leader_id, team_id, team_name, employment_status, resigned_at, resigned_note, password } = req.body;
 
     if (!id) {
       res.status(400).json({ error: 'Thiếu ID người dùng' });
@@ -162,7 +164,18 @@ router.put(['/admin/users/:id', '/api/admin/users/:id'], async (req, res) => {
     if (leader_id !== undefined) updateData.leader_id = leader_id || null;
     if (team_id !== undefined) updateData.team_id = team_id || null;
     if (team_name !== undefined) updateData.team_name = team_name || null;
-    if (employment_status !== undefined) updateData.employment_status = employment_status;
+    if (employment_status !== undefined) {
+      updateData.employment_status = employment_status;
+      if (employment_status === 'resigned') {
+        updateData.resigned_at = resigned_at || new Date().toISOString();
+        if (resigned_note !== undefined) updateData.resigned_note = resigned_note;
+      } else {
+        updateData.resigned_at = null;
+        if (resigned_note !== undefined) updateData.resigned_note = resigned_note;
+      }
+    }
+    if (resigned_at !== undefined && employment_status === 'resigned') updateData.resigned_at = resigned_at;
+    if (resigned_note !== undefined) updateData.resigned_note = resigned_note;
 
     const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from('profiles')

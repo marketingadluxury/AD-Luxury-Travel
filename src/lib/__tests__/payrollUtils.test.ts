@@ -61,4 +61,13 @@ describe('Phần 2: Automation Tests - Kiểm thử quỹ phép tích lũy (payr
     const accruedDays = calculateDefaultAccruedLeaveDays(currentYear, officialEmployee, 8);
     expect(accruedDays).toBe(8);
   });
+
+  it('Nhân sự đã nghỉ việc (employment_status = "resigned") mặc định nhận 0 ngày phép', () => {
+    const resignedEmployee = {
+      join_date: `${currentYear}-01-01`,
+      employment_status: 'resigned' as const
+    };
+    const accruedDays = calculateDefaultAccruedLeaveDays(currentYear, resignedEmployee, 8);
+    expect(accruedDays).toBe(0);
+  });
 });

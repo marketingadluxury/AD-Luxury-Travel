@@ -6,7 +6,8 @@ import { Role, Team, EmploymentStatus, EMPLOYMENT_STATUS_LABELS } from '../types
 import { 
   Users, UserPlus, Edit2, Trash2, Shield, Key, Mail, Phone, 
   Building2, Search, X, Check, AlertCircle, RefreshCw, Eye, EyeOff,
-  Target, Layers, Plus, Award, UserCheck, ChevronRight, ShieldAlert, Briefcase
+  Target, Plus, Award, UserCheck, ShieldAlert, Briefcase,
+  UserMinus, Calendar, FileText, CheckCircle2, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -18,6 +19,8 @@ interface ManagedUser {
   company_name: string;
   role: Role;
   employment_status?: EmploymentStatus;
+  resigned_at?: string | null;
+  resigned_note?: string | null;
   leader_id?: string | null;
   team_id?: string | null;
   team_name?: string | null;
@@ -42,9 +45,11 @@ const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; bord
 
 export default function UserManagement() {
   const { session } = useAuth();
-  const { currentRole, deleteUser, refreshProfiles } = useCRM();
+  const { currentRole, deleteUser, refreshProfiles, updateUserProfile } = useCRM();
 
-  if (currentRole === 'hr') {
+  const canAccess = ['admin', 'bod', 'hr'].includes(currentRole);
+
+  if (!canAccess) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 bg-white rounded-2xl border border-gray-200 shadow-sm max-w-md mx-auto my-8 text-center font-sans">
         <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-4 border border-rose-200">
@@ -52,7 +57,7 @@ export default function UserManagement() {
         </div>
         <h3 className="text-lg font-black text-gray-900 mb-2">Quyền truy cập hạn chế</h3>
         <p className="text-xs text-gray-500 max-w-sm leading-relaxed font-semibold">
-          Bộ phận Nhân sự (HR) không có quyền truy cập vào danh sách thành viên và phân quyền hệ thống.
+          Chỉ có <span className="text-blue-600 font-bold">Quản trị viên (Admin)</span>, <span className="text-violet-600 font-bold">Ban Giám Đốc (BOD)</span> và <span className="text-cyan-700 font-bold">Bộ phận Nhân sự (HR)</span> mới có quyền quản lý nhân sự và phân quyền.
         </p>
       </div>
     );
@@ -66,12 +71,20 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [employmentFilter, setEmploymentFilter] = useState<string>('all');
   
   // User Modal state
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   
+  // Quick Employment Status Change Modal
+  const [statusTargetUser, setStatusTargetUser] = useState<ManagedUser | null>(null);
+  const [quickStatus, setQuickStatus] = useState<EmploymentStatus>('resigned');
+  const [quickResignedAt, setQuickResignedAt] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [quickResignedNote, setQuickResignedNote] = useState<string>('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
   // Team Modal state
   const [isTeamFormOpen, setIsTeamFormOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
@@ -97,6 +110,8 @@ export default function UserManagement() {
     company_name: '',
     role: 'agent' as Role,
     employment_status: 'official' as EmploymentStatus,
+    resigned_at: '',
+    resigned_note: '',
     leader_id: '',
     team_id: '',
     team_name: ''
@@ -146,6 +161,7 @@ export default function UserManagement() {
             phone: '0988888888',
             company_name: 'AD Luxury Travel',
             role: 'admin',
+            employment_status: 'official',
             created_at: new Date().toISOString()
           },
           {
@@ -155,11 +171,11 @@ export default function UserManagement() {
             phone: '0999999999',
             company_name: 'AD Luxury Travel',
             role: 'admin',
+            employment_status: 'official',
             created_at: new Date().toISOString()
           }
         ];
 
-        // Try inserting default admins into profiles table in background so they persist
         try {
           await supabase.from('profiles').upsert(loadedUsers);
         } catch (e) {
@@ -241,6 +257,8 @@ export default function UserManagement() {
       company_name: 'AD Luxury Travel',
       role: activeTab === 'agents' ? 'agent' : 'sale',
       employment_status: 'official',
+      resigned_at: '',
+      resigned_note: '',
       leader_id: '',
       team_id: '',
       team_name: ''
@@ -259,6 +277,8 @@ export default function UserManagement() {
       company_name: user.company_name || '',
       role: user.role,
       employment_status: user.employment_status || 'official',
+      resigned_at: user.resigned_at ? user.resigned_at.split('T')[0] : '',
+      resigned_note: user.resigned_note || '',
       leader_id: user.leader_id || '',
       team_id: user.team_id || '',
       team_name: user.team_name || ''
@@ -289,11 +309,12 @@ export default function UserManagement() {
       const url = editingUser ? `/api/admin/users/${editingUser.id}` : '/api/admin/users';
       const method = editingUser ? 'PUT' : 'POST';
       
-      // Auto fill team_name if team_id selected
       const selectedTeam = teams.find(t => t.id === formData.team_id);
       const bodyData: any = {
         ...formData,
-        team_name: selectedTeam ? selectedTeam.name : (formData.team_id ? formData.team_name : '')
+        team_name: selectedTeam ? selectedTeam.name : (formData.team_id ? formData.team_name : ''),
+        resigned_at: formData.employment_status === 'resigned' ? (formData.resigned_at || new Date().toISOString()) : null,
+        resigned_note: formData.employment_status === 'resigned' ? (formData.resigned_note || null) : null
       };
 
       if (editingUser && !bodyData.password) {
@@ -326,6 +347,92 @@ export default function UserManagement() {
     }
   };
 
+  // Quick Change Status Modal
+  const handleOpenQuickStatus = (user: ManagedUser) => {
+    setStatusTargetUser(user);
+    const currentSt = user.employment_status || 'official';
+    // If already resigned, offer to reactivate to official, otherwise offer to resign
+    setQuickStatus(currentSt === 'resigned' ? 'official' : 'resigned');
+    setQuickResignedAt(user.resigned_at ? user.resigned_at.split('T')[0] : new Date().toISOString().split('T')[0]);
+    setQuickResignedNote(user.resigned_note || '');
+  };
+
+  const handleSaveQuickStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusTargetUser) return;
+    try {
+      setIsUpdatingStatus(true);
+      setError(null);
+
+      const payload: any = {
+        employment_status: quickStatus,
+        resigned_at: quickStatus === 'resigned' ? (quickResignedAt || new Date().toISOString()) : null,
+        resigned_note: quickStatus === 'resigned' ? (quickResignedNote.trim() || null) : (quickResignedNote.trim() ? `[Lịch sử: ${quickResignedNote.trim()}]` : null)
+      };
+
+      // 1. Cập nhật qua context
+      await updateUserProfile(statusTargetUser.id, payload);
+
+      // 2. Cập nhật qua API backend
+      const token = session?.access_token;
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      await fetch(`/api/admin/users/${statusTargetUser.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      // 3. Cập nhật state local
+      setUsers(prev => prev.map(u => u.id === statusTargetUser.id ? { ...u, ...payload } : u));
+      setStatusTargetUser(null);
+      await refreshProfiles();
+
+      const stLabel = EMPLOYMENT_STATUS_LABELS[quickStatus]?.label || quickStatus;
+      setActionSuccess(`Đã chuyển trạng thái của ${statusTargetUser.full_name} sang: ${stLabel}!`);
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi cập nhật trạng thái nhân sự.');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleConvertDeleteToResign = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      setError(null);
+
+      const payload: any = {
+        employment_status: 'resigned',
+        resigned_at: new Date().toISOString(),
+        resigned_note: 'Chuyển sang Đã nghỉ việc thay vì xóa tài khoản'
+      };
+
+      await updateUserProfile(deleteTarget.id, payload);
+
+      const token = session?.access_token;
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      await fetch(`/api/admin/users/${deleteTarget.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      setUsers(prev => prev.map(u => u.id === deleteTarget.id ? { ...u, ...payload } : u));
+      setDeleteTarget(null);
+      await refreshProfiles();
+      setActionSuccess(`Đã chuyển ${deleteTarget.full_name} sang trạng thái "Đã nghỉ việc" an toàn!`);
+      setTimeout(() => setActionSuccess(null), 3500);
+    } catch (err: any) {
+      setError(err.message || 'Không thể chuyển trạng thái.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleDeleteUser = async () => {
     if (!deleteTarget) return;
     try {
@@ -333,8 +440,6 @@ export default function UserManagement() {
       setError(null);
       
       const targetId = deleteTarget.id;
-
-      // Xóa qua CRMContext để đồng bộ ngay lập tức toàn bộ hệ thống
       await deleteUser(targetId);
 
       setUsers(prev => prev.filter(u => u.id !== targetId));
@@ -457,12 +562,22 @@ export default function UserManagement() {
       (user.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (user.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (user.company_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.team_name || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (user.team_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.resigned_note || '').toLowerCase().includes(searchQuery.toLowerCase());
       
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     const matchesTeam = teamFilter === 'all' || user.team_id === teamFilter || (teamFilter === 'none' && !user.team_id);
     
-    return matchesSearch && matchesRole && matchesTeam;
+    // Employment Status Filter
+    let matchesEmployment = true;
+    const empStatus = user.employment_status || 'official';
+    if (employmentFilter === 'working') {
+      matchesEmployment = empStatus !== 'resigned' && empStatus !== 'suspended';
+    } else if (employmentFilter !== 'all') {
+      matchesEmployment = empStatus === employmentFilter;
+    }
+
+    return matchesSearch && matchesRole && matchesTeam && matchesEmployment;
   });
 
   return (
@@ -488,7 +603,7 @@ export default function UserManagement() {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-xl flex-wrap">
           <button
-            onClick={() => { setActiveTab('company'); setRoleFilter('all'); }}
+            onClick={() => { setActiveTab('company'); setRoleFilter('all'); setEmploymentFilter('all'); }}
             className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'company' 
                 ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80' 
@@ -503,7 +618,7 @@ export default function UserManagement() {
           </button>
 
           <button
-            onClick={() => { setActiveTab('agents'); setRoleFilter('all'); }}
+            onClick={() => { setActiveTab('agents'); setRoleFilter('all'); setEmploymentFilter('all'); }}
             className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'agents' 
                 ? 'bg-white text-amber-800 shadow-sm border border-slate-200/80' 
@@ -563,7 +678,7 @@ export default function UserManagement() {
               <Search className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Tìm kiếm theo Tên, Email, SĐT, Công ty, Team..."
+                placeholder="Tìm kiếm theo Tên, Email, SĐT, Công ty, Ghi chú..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
@@ -571,7 +686,7 @@ export default function UserManagement() {
               {searchQuery && (
                 <button 
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -579,6 +694,24 @@ export default function UserManagement() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+              {/* Employment Status Filter */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                <Briefcase className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-xs font-bold text-gray-500">Trạng thái:</span>
+                <select
+                  value={employmentFilter}
+                  onChange={(e) => setEmploymentFilter(e.target.value)}
+                  className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
+                >
+                  <option value="all">Tất cả ({baseUsersForTab.length})</option>
+                  <option value="working">🟢 Đang làm việc ({baseUsersForTab.filter(u => u.employment_status !== 'resigned' && u.employment_status !== 'suspended').length})</option>
+                  <option value="official">Chính thức ({baseUsersForTab.filter(u => !u.employment_status || u.employment_status === 'official').length})</option>
+                  <option value="probation">Thử việc ({baseUsersForTab.filter(u => u.employment_status === 'probation').length})</option>
+                  <option value="resigned">⚪ Đã nghỉ việc ({baseUsersForTab.filter(u => u.employment_status === 'resigned').length})</option>
+                  <option value="suspended">🔴 Tạm nghỉ ({baseUsersForTab.filter(u => u.employment_status === 'suspended').length})</option>
+                </select>
+              </div>
+
               {/* Role filter */}
               <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
                 <Shield className="w-3.5 h-3.5 text-gray-400" />
@@ -600,21 +733,23 @@ export default function UserManagement() {
               </div>
 
               {/* Team filter */}
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                <span className="text-xs font-bold text-gray-500">Team:</span>
-                <select
-                  value={teamFilter}
-                  onChange={(e) => setTeamFilter(e.target.value)}
-                  className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
-                >
-                  <option value="all">Tất cả Team</option>
-                  <option value="none">Chưa gán Team</option>
-                  {teams.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
+              {activeTab === 'company' && (
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="text-xs font-bold text-gray-500">Team:</span>
+                  <select
+                    value={teamFilter}
+                    onChange={(e) => setTeamFilter(e.target.value)}
+                    className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
+                  >
+                    <option value="all">Tất cả Team</option>
+                    <option value="none">Chưa gán Team</option>
+                    {teams.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <button
                 onClick={fetchUsers}
@@ -654,6 +789,7 @@ export default function UserManagement() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {filteredUsers.map((u) => {
+                      const isResigned = u.employment_status === 'resigned';
                       const roleConfig = ROLE_LABELS[u.role] || { 
                         label: u.role, 
                         color: 'text-gray-700', 
@@ -663,16 +799,34 @@ export default function UserManagement() {
 
                       const leaderObj = users.find(l => l.id === u.leader_id);
                       const teamObj = teams.find(t => t.id === u.team_id) || (u.team_name ? { name: u.team_name } : null);
+                      const empStatus = u.employment_status || 'official';
+                      const statusConfig = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
 
                       return (
-                        <tr key={u.id} className="hover:bg-slate-50/80 transition-all group">
+                        <tr 
+                          key={u.id} 
+                          className={`transition-all group ${isResigned ? 'bg-slate-50/50 hover:bg-slate-100/60 opacity-85' : 'hover:bg-slate-50/80'}`}
+                        >
                           <td className="py-3.5 px-4 font-black text-slate-800">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-slate-700 text-xs shadow-xs">
+                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs shadow-xs ${
+                                isResigned 
+                                  ? 'bg-slate-200 border-slate-300 text-slate-600' 
+                                  : 'bg-blue-50 border-blue-200 text-blue-700'
+                              }`}>
                                 {u.full_name ? u.full_name.charAt(0).toUpperCase() : 'U'}
                               </div>
                               <div>
-                                <div className="font-extrabold text-slate-900">{u.full_name || 'Chưa đặt tên'}</div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`font-extrabold ${isResigned ? 'text-slate-600 line-through decoration-slate-400' : 'text-slate-900'}`}>
+                                    {u.full_name || 'Chưa đặt tên'}
+                                  </span>
+                                  {isResigned && (
+                                    <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-700 font-bold rounded-md">
+                                      Nghỉ việc
+                                    </span>
+                                  )}
+                                </div>
                                 {u.company_name && (
                                   <div className="text-[10px] text-gray-400 font-bold">{u.company_name}</div>
                                 )}
@@ -683,7 +837,7 @@ export default function UserManagement() {
                           <td className="py-3.5 px-4 font-bold text-slate-700">
                             <div className="flex items-center gap-1.5">
                               <Mail className="w-3.5 h-3.5 text-gray-400" />
-                              <span>{u.email}</span>
+                              <span className={isResigned ? 'text-slate-500' : 'text-slate-700'}>{u.email}</span>
                             </div>
                           </td>
 
@@ -705,18 +859,30 @@ export default function UserManagement() {
                             </span>
                           </td>
 
-                          {/* Trạng thái làm việc (Chính thức / Thử việc) */}
+                          {/* Trạng thái làm việc */}
                           <td className="py-3.5 px-4">
-                            {(() => {
-                              const empStatus = u.employment_status || 'official';
-                              const statusConfig = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
-                              return (
-                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
-                                  <Briefcase className="w-3 h-3" />
-                                  <span>{statusConfig.label}</span>
+                            <div className="flex flex-col items-start gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenQuickStatus(u)}
+                                title="Bấm để chuyển trạng thái nhân sự / bàn giao"
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold border transition-all cursor-pointer hover:shadow-xs hover:scale-102 ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
+                              >
+                                {isResigned ? <UserMinus className="w-3 h-3 text-slate-500" /> : <Briefcase className="w-3 h-3" />}
+                                <span>{statusConfig.label}</span>
+                              </button>
+                              {isResigned && u.resigned_at && (
+                                <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                                  <Calendar className="w-2.5 h-2.5" />
+                                  <span>Từ: {new Date(u.resigned_at).toLocaleDateString('vi-VN')}</span>
                                 </span>
-                              );
-                            })()}
+                              )}
+                              {isResigned && u.resigned_note && (
+                                <span className="text-[10px] text-slate-400 italic font-medium truncate max-w-[150px]" title={u.resigned_note}>
+                                  Note: {u.resigned_note}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           <td className="py-3.5 px-4 font-bold">
@@ -743,6 +909,15 @@ export default function UserManagement() {
 
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {/* Quick Change Status Button */}
+                              <button
+                                onClick={() => handleOpenQuickStatus(u)}
+                                className="p-1.5 text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 rounded-lg transition-all cursor-pointer"
+                                title={isResigned ? 'Khôi phục làm việc' : 'Chuyển trạng thái / Bàn giao nghỉ việc'}
+                              >
+                                {isResigned ? <RotateCcw className="w-4 h-4 text-cyan-600" /> : <UserMinus className="w-4 h-4 text-slate-500" />}
+                              </button>
+
                               <button
                                 onClick={() => handleOpenEditUser(u)}
                                 className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
@@ -750,13 +925,17 @@ export default function UserManagement() {
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
-                              <button
-                                onClick={() => setDeleteTarget(u)}
-                                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                                title="Xóa tài khoản"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+
+                              {/* Only Admin can delete accounts */}
+                              {currentRole === 'admin' && (
+                                <button
+                                  onClick={() => setDeleteTarget(u)}
+                                  className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                  title="Xóa tài khoản hoặc chuyển sang Đã nghỉ việc"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -776,6 +955,7 @@ export default function UserManagement() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {teams.map((t) => {
               const teamMembers = users.filter(u => u.team_id === t.id || u.team_name === t.name);
+              const activeMembers = teamMembers.filter(u => u.employment_status !== 'resigned');
               const leaderUser = users.find(u => u.id === t.leader_id);
 
               return (
@@ -800,13 +980,15 @@ export default function UserManagement() {
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => setDeleteTeamTarget(t)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                          title="Xóa Team"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {currentRole === 'admin' && (
+                          <button
+                            onClick={() => setDeleteTeamTarget(t)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                            title="Xóa Team"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -840,7 +1022,7 @@ export default function UserManagement() {
                           Số thành viên:
                         </span>
                         <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-black text-[11px] border border-blue-200">
-                          {teamMembers.length} Sale
+                          {activeMembers.length} Sale đang làm
                         </span>
                       </div>
                     </div>
@@ -853,7 +1035,12 @@ export default function UserManagement() {
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {teamMembers.slice(0, 5).map(m => (
-                            <span key={m.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[10px]">
+                            <span 
+                              key={m.id} 
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold ${
+                                m.employment_status === 'resigned' ? 'bg-slate-100 text-slate-400 line-through' : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
                               <span>{m.full_name}</span>
                             </span>
                           ))}
@@ -872,6 +1059,178 @@ export default function UserManagement() {
           </div>
         </div>
       )}
+
+      {/* QUICK EMPLOYMENT STATUS MODAL */}
+      <AnimatePresence>
+        {statusTargetUser && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden my-8"
+            >
+              <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-cyan-400" />
+                  <div>
+                    <h3 className="font-black text-sm">Chuyển Trạng Thái Nhân Sự</h3>
+                    <p className="text-[11px] text-slate-400 font-medium">{statusTargetUser.full_name} ({statusTargetUser.email})</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setStatusTargetUser(null)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveQuickStatus} className="p-6 space-y-4 font-sans">
+                {error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {/* Status Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                    Chọn trạng thái nhân sự mới *
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuickStatus('official')}
+                      className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                        quickStatus === 'official'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-xs ring-2 ring-emerald-500/20'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-black text-emerald-700">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Chính thức</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">Tích lũy phép 1 ngày/tháng</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQuickStatus('probation')}
+                      className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                        quickStatus === 'probation'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300 shadow-xs ring-2 ring-amber-500/20'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-black text-amber-700">
+                        <Briefcase className="w-3.5 h-3.5" />
+                        <span>Thử việc</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">Mặc định 0 ngày phép</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQuickStatus('resigned')}
+                      className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                        quickStatus === 'resigned'
+                          ? 'bg-slate-100 text-slate-900 border-slate-400 shadow-xs ring-2 ring-slate-500/20'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-black text-slate-700">
+                        <UserMinus className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Đã nghỉ việc</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">Bảo toàn dữ liệu lịch sử</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQuickStatus('suspended')}
+                      className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                        quickStatus === 'suspended'
+                          ? 'bg-rose-50 text-rose-800 border-rose-300 shadow-xs ring-2 ring-rose-500/20'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-black text-rose-700">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Tạm nghỉ</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">Tạm dừng hoạt động</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Resignation Specific Inputs */}
+                {quickStatus === 'resigned' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="space-y-3 pt-2 border-t border-slate-100"
+                  >
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] font-semibold leading-relaxed">
+                      💡 <strong>Lợi ích bảo toàn:</strong> Nhân sự chuyển sang "Đã nghỉ việc" sẽ không thể đăng nhập hoặc nhận tour mới, nhưng 100% đơn hàng và báo cáo doanh số trước đây vẫn được giữ nguyên đầy đủ.
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Ngày chính thức nghỉ việc *</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={quickResignedAt}
+                        onChange={(e) => setQuickResignedAt(e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                        <FileText className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Ghi chú lý do / Bàn giao công việc cho ai</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="VD: Nghỉ theo nguyện vọng cá nhân, đã bàn giao các đơn hàng và danh sách khách cho Sale Nguyễn Văn B..."
+                        value={quickResignedNote}
+                        onChange={(e) => setQuickResignedNote(e.target.value)}
+                        className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Modal Footer */}
+                <div className="pt-4 border-t border-slate-150 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    disabled={isUpdatingStatus}
+                    onClick={() => setStatusTargetUser(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUpdatingStatus}
+                    className="px-5 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white rounded-xl text-xs font-black shadow-lg shadow-cyan-700/15 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isUpdatingStatus && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Lưu Cập Nhật Trạng Thái</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* USER EDIT/ADD MODAL */}
       <AnimatePresence>
@@ -940,7 +1299,7 @@ export default function UserManagement() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -1010,11 +1369,11 @@ export default function UserManagement() {
                   </select>
                 </div>
 
-                {/* Trạng thái làm việc: Chính thức / Thử việc */}
+                {/* Trạng thái làm việc */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
                     <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Trạng thái làm việc (Chế độ phép & nhân sự)</span>
+                    <span>Trạng thái làm việc & Chế độ nhân sự *</span>
                   </label>
                   <select
                     value={formData.employment_status || 'official'}
@@ -1023,13 +1382,37 @@ export default function UserManagement() {
                   >
                     <option value="official">Chính thức (Tích lũy phép 1 ngày/tháng)</option>
                     <option value="probation">Thử việc (Mặc định 0 ngày phép)</option>
+                    <option value="resigned">Đã nghỉ việc (Khóa quyền truy cập, bảo toàn dữ liệu)</option>
+                    <option value="suspended">Tạm nghỉ / Đình chỉ</option>
                   </select>
-                  <p className="text-[11px] text-slate-400">
-                    Nhân sự thử việc sẽ mặc định 0 ngày phép năm trừ khi HR cấp thủ công.
-                  </p>
                 </div>
 
-                {/* Team SELECT (Thuộc Team Kinh Doanh) */}
+                {/* Resigned Details in User Form */}
+                {formData.employment_status === 'resigned' && (
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 uppercase">Ngày chính thức nghỉ việc</label>
+                      <input
+                        type="date"
+                        value={formData.resigned_at}
+                        onChange={(e) => setFormData({ ...formData, resigned_at: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white outline-none cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 uppercase">Ghi chú lý do / Bàn giao cho ai</label>
+                      <input
+                        type="text"
+                        placeholder="VD: Bàn giao khách cho Sale B..."
+                        value={formData.resigned_note}
+                        onChange={(e) => setFormData({ ...formData, resigned_note: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Team SELECT */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-indigo-700 uppercase tracking-wide flex items-center gap-1">
                     <Building2 className="w-3.5 h-3.5 text-indigo-500" />
@@ -1221,22 +1604,36 @@ export default function UserManagement() {
       {/* DELETE USER CONFIRM MODAL */}
       <AnimatePresence>
         {deleteTarget && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden my-8"
             >
               <div className="p-6 text-center space-y-4">
-                <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-200">
+                <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto border border-amber-200">
                   <AlertCircle className="w-6 h-6" />
                 </div>
                 
                 <div>
-                  <h3 className="text-base font-black text-slate-900">Xác nhận xóa người dùng?</h3>
+                  <h3 className="text-base font-black text-slate-900">Xử lý tài khoản nhân sự</h3>
                   <p className="text-xs text-gray-500 font-semibold mt-1.5 leading-relaxed">
-                    Hành động này sẽ xóa hoàn toàn thông tin profile của <strong className="text-rose-600">{deleteTarget.full_name}</strong> ({deleteTarget.email}) khỏi cơ sở dữ liệu.
+                    Bạn đang thao tác với tài khoản <strong className="text-slate-800">{deleteTarget.full_name}</strong> ({deleteTarget.email}).
+                  </p>
+                </div>
+
+                {/* Safety recommendation box */}
+                <div className="p-4 bg-amber-50 border border-amber-200/80 rounded-xl text-left space-y-2">
+                  <div className="flex items-center gap-2 text-amber-900 font-black text-xs">
+                    <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Lưu ý toàn vẹn dữ liệu kế toán & đơn hàng</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                    Nếu nhân sự này đã từng có <strong>Đơn hàng (Booking)</strong>, <strong>Hóa đơn phiếu thu</strong> hoặc <strong>Lịch sử chấm công</strong>, việc xóa vĩnh viễn tài khoản có thể làm mất dấu dữ liệu doanh số.
+                  </p>
+                  <p className="text-[11px] text-emerald-800 font-bold leading-relaxed">
+                    👉 <strong>Khuyến nghị tốt nhất:</strong> Chuyển sang <strong>"Đã nghỉ việc"</strong> để khóa quyền truy cập, ẩn khỏi danh sách gán mới nhưng vẫn bảo toàn 100% doanh số và lịch sử kế toán.
                   </p>
                 </div>
 
@@ -1246,21 +1643,29 @@ export default function UserManagement() {
                   </div>
                 )}
 
-                <div className="pt-2 flex items-center justify-center gap-3">
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
                   <button
                     disabled={isDeleting}
                     onClick={() => setDeleteTarget(null)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all cursor-pointer disabled:opacity-55"
+                    className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all cursor-pointer disabled:opacity-55"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     disabled={isDeleting}
-                    onClick={handleDeleteUser}
-                    className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md shadow-rose-600/15 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-55"
+                    onClick={handleConvertDeleteToResign}
+                    className="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/15 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-55"
                   >
                     {isDeleting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                    <span>Xác nhận Xóa</span>
+                    <span>Chuyển sang "Đã nghỉ việc" (Khuyên dùng)</span>
+                  </button>
+                  <button
+                    disabled={isDeleting}
+                    onClick={handleDeleteUser}
+                    className="w-full sm:w-auto px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-55"
+                    title="Xóa cứng vĩnh viễn khỏi CSDL"
+                  >
+                    <span>Vẫn muốn xóa</span>
                   </button>
                 </div>
               </div>

@@ -168,7 +168,7 @@ export const TimesheetManagement: React.FC = () => {
           'Nghỉ bù / Chế độ': row.compensatory_leave_days + row.special_leave_days,
           'Nghỉ không lương (trừ công)': row.unpaid_leave_days,
           'Ngày công thực tế tính lương': row.actual_working_days,
-          'Quỹ phép năm còn lại': row.leave_balance_remaining,
+          'Quỹ phép năm còn lại': `${row.leave_balance_remaining} / ${row.leave_balance_total} ngày`,
           'Ghi chú': notes.join('; ')
         };
       });
@@ -530,7 +530,7 @@ export const TimesheetManagement: React.FC = () => {
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           <span className="font-bold text-slate-700">
-                            {row.leave_balance_remaining} / 12 ngày
+                            {row.leave_balance_remaining} / {row.leave_balance_total} ngày
                           </span>
                           {isHRorBODorAdmin && (
                             <button
@@ -538,8 +538,8 @@ export const TimesheetManagement: React.FC = () => {
                               onClick={() => {
                                 const currentBal = leaveBalances.find(b => b.user_id === row.user_id && b.year === selectedYear);
                                 setQuickEditUserId(row.user_id);
-                                setQuickEditTotal(currentBal ? Number(currentBal.total_days ?? 12) : 12);
-                                setQuickEditUsed(currentBal ? Number(currentBal.used_days ?? 0) : 0);
+                                setQuickEditTotal(row.leave_balance_total);
+                                setQuickEditUsed(currentBal ? Number(currentBal.used_days ?? 0) : Math.max(0, row.leave_balance_total - row.leave_balance_remaining));
                                 setQuickEditNote(currentBal?.note || '');
                               }}
                               className="p-1 rounded-md text-cyan-600 hover:text-cyan-800 hover:bg-cyan-50 transition-colors"
