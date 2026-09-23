@@ -39,22 +39,41 @@ describe('Phần 2: Automation Tests - Kiểm thử logic Tính tiền & Hoa h�
       expect(result.finalTotalAmount).toBe(14500000);
     });
 
-    it('Tính VAT 10% khi chọn Xuất VAT và trừ tiền giảm giá', () => {
+    it('Bóc tách VAT 10% khi chọn Xuất VAT (giá đã bao gồm VAT)', () => {
+      const result = calculateOrderTotal({
+        adultCount: 1,
+        childCount: 0,
+        priceAdult: 11000000,
+        priceChild: 0,
+        discountAmount: 0,
+        vatOption: 'Xuất VAT'
+      });
+
+      // Giá 11,000,000 đ đã bao gồm VAT:
+      // Tổng thanh toán vẫn là 11,000,000 đ (không bị đội thêm tiền)
+      expect(result.finalTotalAmount).toBe(11000000);
+      // Tiền trước thuế = 11,000,000 / 1.1 = 10,000,000 đ
+      expect(result.totalBeforeVat).toBe(10000000);
+      // Tiền thuế VAT = 1,000,000 đ
+      expect(result.vatAmount).toBe(1000000);
+    });
+
+    it('Bóc tách VAT khi có chiết khấu giảm giá', () => {
       const result = calculateOrderTotal({
         adultCount: 1,
         childCount: 0,
         priceAdult: 10000000,
         priceChild: 0,
-        discountAmount: 1000000, // giảm 1M
+        discountAmount: 1200000, // giảm 1.2M -> tổng còn 8.8M
         vatOption: 'Xuất VAT'
       });
 
-      // (10M - 1M) = 9M before VAT
-      expect(result.totalBeforeVat).toBe(9000000);
-      // 10% VAT = 900,000
-      expect(result.vatAmount).toBe(900000);
-      // Final = 9.9M
-      expect(result.finalTotalAmount).toBe(9900000);
+      // Tổng tiền sau giảm = 8,800,000 đ
+      expect(result.finalTotalAmount).toBe(8800000);
+      // Tiền trước thuế = 8,800,000 / 1.1 = 8,000,000 đ
+      expect(result.totalBeforeVat).toBe(8000000);
+      // Tiền thuế VAT 10% = 800,000 đ
+      expect(result.vatAmount).toBe(800000);
     });
   });
 

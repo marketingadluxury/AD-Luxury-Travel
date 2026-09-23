@@ -378,7 +378,11 @@ export default function MyDashboard() {
 
           <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
             <span className="font-medium">Nghỉ không lương: <strong className="text-rose-600">{currentMonthStats.unpaidLeaveDays} ngày</strong></span>
-            <Link to="/leave-requests" className="font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5">
+            <Link 
+              to="/leave-requests" 
+              state={{ tab: 'timesheet' }}
+              className="font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+            >
               <span>Bảng công</span>
               <ChevronRight className="w-3 h-3" />
             </Link>

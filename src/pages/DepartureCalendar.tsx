@@ -711,9 +711,11 @@ export default function DepartureCalendar() {
     ? (priceAdult * adultCount) + (priceChild * childCount) + (priceInfant * infantCount) + (singleRoomSurcharge * singleRoomCount)
     : 0;
 
-  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(subtotalPrice * 0.1) : 0;
-
-  const calculatedTotalPrice = subtotalPrice + vatAmount;
+  // Thuế VAT đã bao gồm trong giá tour
+  const calculatedTotalPrice = subtotalPrice;
+  const vatAmount = vatOption === 'Xuất VAT' 
+    ? Math.round(calculatedTotalPrice - (calculatedTotalPrice / 1.1)) 
+    : 0;
 
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1546,8 +1548,8 @@ export default function DepartureCalendar() {
                     )}
                     {vatOption === 'Xuất VAT' && (
                       <div className="flex justify-between gap-8 border-t border-blue-200/60 pt-1 text-emerald-700 font-medium">
-                        <span>• Thuế VAT (10%):</span>
-                        <span className="font-bold">+{formatCurrency(vatAmount)} đ</span>
+                        <span>• Thuế VAT 10% (Đã gồm trong giá):</span>
+                        <span className="font-bold">{formatCurrency(vatAmount)} đ</span>
                       </div>
                     )}
                   </div>

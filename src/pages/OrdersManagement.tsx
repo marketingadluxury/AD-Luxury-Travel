@@ -851,8 +851,9 @@ export default function OrdersManagement() {
     ? (priceAdult * adultCount) + (priceChild * childCount) + (priceInfant * infantCount) + (singleRoomSurcharge * singleRoomCount)
     : 0;
 
-  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(subtotalPrice * 0.1) : 0;
-  const calculatedTotalPrice = subtotalPrice + vatAmount;
+  // Thuế VAT đã bao gồm trong giá tour
+  const calculatedTotalPrice = subtotalPrice;
+  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(calculatedTotalPrice - (calculatedTotalPrice / 1.1)) : 0;
 
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1930,8 +1931,8 @@ export default function OrdersManagement() {
                   )}
                   {vatOption === 'Xuất VAT' && (
                     <>
-                      <div>• Thuế VAT (10%):</div>
-                      <div className="font-semibold text-blue-600">+{new Intl.NumberFormat('vi-VN').format(vatAmount)} VND</div>
+                      <div>• Thuế VAT 10% (Đã gồm trong giá):</div>
+                      <div className="font-semibold text-blue-600">{new Intl.NumberFormat('vi-VN').format(vatAmount)} VND</div>
                     </>
                   )}
                 </div>
@@ -2167,8 +2168,9 @@ export default function OrdersManagement() {
                 ? (totalSubtotal * (order.discount_value || 0)) / 100
                 : (order.discount_value || 0);
               const customSurchargeAmount = order.surcharge_amount || 0;
-              const totalBeforeVat = totalSubtotal - discountAmount + customSurchargeAmount;
-              const computedVat = order.vat_option === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
+              // Thuế VAT đã bao gồm trong giá tour: bóc tách từ tổng tiền đơn hàng
+              const grossOrderTotal = order.total_price || Math.max(0, totalSubtotal - discountAmount + customSurchargeAmount + (order.price_markup || 0));
+              const computedVat = order.vat_option === 'Xuất VAT' ? Math.round(grossOrderTotal - (grossOrderTotal / 1.1)) : 0;
 
               // Commission breakdown calculations
               const baseCommissionPerSeat = tour?.commission || 0;
@@ -2656,8 +2658,8 @@ export default function OrdersManagement() {
                               )}
                               {order.vat_option === 'Xuất VAT' && (
                                 <div className="flex justify-between py-1 border-b border-dashed border-gray-100">
-                                  <span className="text-emerald-700 font-medium">Thuế VAT (10%):</span>
-                                  <span className="font-bold text-emerald-600">+{new Intl.NumberFormat('vi-VN').format(computedVat)} đ</span>
+                                  <span className="text-emerald-700 font-medium">Thuế VAT 10% (Đã gồm trong giá):</span>
+                                  <span className="font-bold text-emerald-600">{new Intl.NumberFormat('vi-VN').format(computedVat)} đ</span>
                                 </div>
                               )}
                               <div className="flex justify-between py-2 mt-1 bg-slate-50 px-2.5 rounded-lg border border-slate-200 items-center">

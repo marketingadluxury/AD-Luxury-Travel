@@ -760,20 +760,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         
-        {currentRole === 'admin' && (
-          <div className="p-3 border-t border-gray-200 shrink-0">
-            <Link
-              to="/settings"
-              className={cn(
-                location.pathname === '/settings'
-                  ? 'bg-blue-50 text-blue-700 font-bold'
-                  : 'text-gray-700 hover:bg-gray-100/80 font-medium',
-                'group flex items-center px-3 py-2 text-xs rounded-xl transition-colors'
-              )}
-            >
-              <Settings className="text-gray-400 group-hover:text-gray-500 mr-2.5 flex-shrink-0 h-4 w-4" />
-              Cài đặt hệ thống
-            </Link>
+        {(['admin', 'bod', 'hr'].includes(currentRole)) && (
+          <div className="p-3 border-t border-gray-200 shrink-0 space-y-1">
+            {['admin', 'bod'].includes(currentRole) && (
+              <Link
+                to="/activity-logs"
+                className={cn(
+                  location.pathname === '/activity-logs'
+                    ? 'bg-blue-50 text-blue-700 font-bold'
+                    : 'text-gray-700 hover:bg-gray-100/80 font-medium',
+                  'group flex items-center px-3 py-2 text-xs rounded-xl transition-colors'
+                )}
+              >
+                <History className="text-gray-400 group-hover:text-gray-500 mr-2.5 flex-shrink-0 h-4 w-4" />
+                Nhật ký hệ thống
+              </Link>
+            )}
+            {['admin', 'hr'].includes(currentRole) && (
+              <Link
+                to="/settings"
+                className={cn(
+                  location.pathname === '/settings'
+                    ? 'bg-blue-50 text-blue-700 font-bold'
+                    : 'text-gray-700 hover:bg-gray-100/80 font-medium',
+                  'group flex items-center px-3 py-2 text-xs rounded-xl transition-colors'
+                )}
+              >
+                <Settings className="text-gray-400 group-hover:text-gray-500 mr-2.5 flex-shrink-0 h-4 w-4" />
+                Cài đặt hệ thống
+              </Link>
+            )}
           </div>
         )}
       </aside>
@@ -1200,23 +1216,45 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 );
               })}
 
-              {currentRole === 'admin' && (
-                <Link
-                  to="/settings"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={cn(
-                    location.pathname === '/settings'
-                      ? 'bg-blue-50 text-blue-700 font-bold shadow-xs'
-                      : 'text-gray-700 hover:bg-gray-100 font-medium',
-                    'flex items-center justify-between px-3 py-2.5 text-xs rounded-xl transition-colors mt-2 border-t border-gray-100 pt-3'
+              {['admin', 'bod', 'hr'].includes(currentRole) && (
+                <div className="mt-2 border-t border-gray-100 pt-3 space-y-1">
+                  {['admin', 'bod'].includes(currentRole) && (
+                    <Link
+                      to="/activity-logs"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={cn(
+                        location.pathname === '/activity-logs'
+                          ? 'bg-blue-50 text-blue-700 font-bold shadow-xs'
+                          : 'text-gray-700 hover:bg-gray-100 font-medium',
+                        'flex items-center justify-between px-3 py-2.5 text-xs rounded-xl transition-colors'
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <History className="mr-3 h-4 w-4 text-gray-400" />
+                        <span>Nhật ký hệ thống</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300" />
+                    </Link>
                   )}
-                >
-                  <div className="flex items-center">
-                    <Settings className="mr-3 h-4 w-4 text-gray-400" />
-                    <span>Cài đặt hệ thống</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300" />
-                </Link>
+                  {['admin', 'hr'].includes(currentRole) && (
+                    <Link
+                      to="/settings"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={cn(
+                        location.pathname === '/settings'
+                          ? 'bg-blue-50 text-blue-700 font-bold shadow-xs'
+                          : 'text-gray-700 hover:bg-gray-100 font-medium',
+                        'flex items-center justify-between px-3 py-2.5 text-xs rounded-xl transition-colors'
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <Settings className="mr-3 h-4 w-4 text-gray-400" />
+                        <span>Cài đặt hệ thống</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300" />
+                    </Link>
+                  )}
+                </div>
               )}
             </div>
 

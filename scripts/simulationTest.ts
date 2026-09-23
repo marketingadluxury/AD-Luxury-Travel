@@ -98,17 +98,17 @@ function simulateSaleRole() {
   const orderResult = calculateOrderTotal(orderParams);
   // Vé: 3*12M + 2*9M + 1*2.5M = 36M + 18M + 2.5M = 56.5M
   // Phụ thu: 3M (phòng đơn) + 4.5M + 1.2M = 8.7M
-  // Tổng trước VAT: 56.5M + 8.7M - 2M (giảm) = 63.2M
-  // VAT 10%: 6.32M
-  // Tổng cuối: 69.52M
+  // Tổng thanh toán (giá tour đã gồm VAT): 56.5M + 8.7M - 2M (giảm) = 63.2M
+  // Bóc tách trước VAT: Math.round(63.2M / 1.1) = 57.454.545 đ
+  // Thuế VAT 10%: 63.2M - 57.454.545 = 5.745.455 đ
   assert(
     'Sale',
-    'Tính toán chính xác đơn hàng đa dịch vụ & VAT',
+    'Tính toán chính xác đơn hàng đa dịch vụ & VAT (Giá đã bao gồm VAT)',
     orderResult.seatsSubtotal === 56500000 &&
       orderResult.surchargesTotal === 8700000 &&
-      orderResult.totalBeforeVat === 63200000 &&
-      orderResult.vatAmount === 6320000 &&
-      orderResult.finalTotalAmount === 69520000,
+      orderResult.totalBeforeVat === 57454545 &&
+      orderResult.vatAmount === 5745455 &&
+      orderResult.finalTotalAmount === 63200000,
     `Tổng vé: ${orderResult.seatsSubtotal.toLocaleString('vi-VN')} đ, Phụ thu: ${orderResult.surchargesTotal.toLocaleString('vi-VN')} đ, VAT: ${orderResult.vatAmount.toLocaleString('vi-VN')} đ, Tổng thanh toán: ${orderResult.finalTotalAmount.toLocaleString('vi-VN')} đ`
   );
 

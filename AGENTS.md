@@ -361,6 +361,46 @@ Khi thực hiện nâng cấp hoặc sửa đổi bất kỳ file nào trong h�
   - **Trưởng nhóm (Leader):** Xem dữ liệu của chính mình và các thành viên trực thuộc nhóm phụ trách.
   - **HR / BOD / Admin:** Xem toàn bộ nhân sự công ty.
 
+---
+
+## 13. Quy Chuẩn Xuất Hóa Đơn VAT & Tính Thuế / Phí Cho Cộng Tác Viên (CTV)
+
+### 13.1 Xuất Hóa Đơn VAT (VAT Invoicing)
+- **Tùy chọn xuất VAT:**
+  - Hệ thống hỗ trợ 2 chế độ: **"Xuất VAT"** (`vat_option === 'Xuất VAT'`) và **"Không xuất VAT"** (mặc định).
+  - Tỷ lệ thuế VAT chuẩn: **10%**.
+- **Nguyên tắc Giá Tour Đã Bao Gồm Thuế VAT (VAT Included):**
+  - Biểu giá niêm yết của Tour (Người lớn, Trẻ em, Trẻ nhỏ) và các phụ thu là giá trọn gói **đã bao gồm thuế VAT**. Khách hàng chọn xuất hóa đơn đỏ hay không thì **Tổng tiền thanh toán không đổi** (không bị đội thêm 10%).
+  - **Tổng tiền thanh toán đơn hàng (Final Total Amount):** Tổng tiền vé + Tổng phụ thu + Tiền bán tour chênh lệch CTV - Tiền giảm giá (chiết khấu).
+  - **Khi chọn "Xuất VAT":** Hệ thống bóc tách thuế VAT từ tổng tiền thanh toán:
+    + `Tiền trước thuế (Total Before VAT) = Math.round(Tổng thanh toán / 1.1)`.
+    + `Tiền thuế VAT (VAT Amount) = Tổng thanh toán - Tiền trước thuế`.
+    + `Tổng giá trị hóa đơn xuất VAT = Tổng thanh toán`.
+  - **Khi chọn "Không xuất VAT":** Tiền VAT ghi nhận bằng 0, Tổng thanh toán giữ nguyên.
+- **Trường thông tin doanh nghiệp nhận hóa đơn VAT:**
+  - `vat_company_name`: Tên pháp nhân đầy đủ của doanh nghiệp nhận hóa đơn.
+  - `vat_tax_code`: Mã số thuế (MST) của công ty.
+  - `vat_address`: Địa chỉ trụ sở ghi nhận trên giấy phép kinh doanh.
+  - `vat_email`: Email tiếp nhận hóa đơn điện tử (e-invoice).
+
+---
+
+### 13.2 Tính Thuế / Phí Công Ty & Hoa Hồng Cho Cộng Tác Viên (CTV)
+- **Cơ chế hoa hồng định mức cơ bản:**
+  - Hoa hồng định mức được tính trên mỗi ghế khách: người lớn và trẻ em (`paxCount = adultCount + childCount`). Trẻ nhỏ (< 2 tuổi) không tính hoa hồng.
+  - **Hoa hồng gốc:** `Hoa hồng định mức mỗi khách * Số khách tính hoa hồng`.
+  - **Quy tắc phụ thu:** Các khoản phụ thu (phòng đơn, nâng hạng, dịch vụ thêm) **tuyệt đối không được tính vào hoa hồng** của CTV.
+- **Tiền bán tour chênh lệch (Price Markup) & Phí công ty thu:**
+  - Khi CTV bán giá cao hơn biểu giá niêm yết của công ty cho khách, khoản chênh lệch này được khai báo ở trường `price_markup`.
+  - **Tỷ lệ phí/thuế công ty thu:** Mặc định là **25%** (`markup_tax_percent = 25`), có thể tùy chỉnh từ 0% đến 100%.
+  - **Số tiền phí công ty thu:** `Tiền bán chênh lệch * 25%`.
+  - **Tiền chênh lệch thực nhận của CTV:** `Tiền bán chênh lệch - Tiền phí công ty thu` (tương đương 75% giá trị chênh lệch).
+- **Khấu trừ giảm giá cho khách:**
+  - Nếu CTV chủ động giảm giá cho khách hàng (`discountAmount`), số tiền giảm giá này sẽ bị trừ trực tiếp vào tổng hoa hồng thực nhận của CTV.
+- **Công thức tổng hoa hồng thực nhận cuối cùng của CTV:**
+  - `Tổng hoa hồng thực nhận = (Hoa hồng định mức * Số khách) + (Tiền bán chênh lệch - Phí công ty thu) - Tiền giảm giá`.
+  - Nếu có gán hoa hồng thủ công đặc biệt (`manualCommission`), hệ thống sẽ ưu tiên ghi nhận theo số tiền này.
+
 
 
 

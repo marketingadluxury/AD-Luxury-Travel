@@ -90,9 +90,10 @@ export default function EditOrderModal({
   const markupFeeAmount = Math.round((priceMarkup * markupTaxPercent) / 100);
   const netMarkupReceived = Math.max(0, priceMarkup - markupFeeAmount);
 
-  const totalBeforeVat = subtotalAfterDiscount + customSurchargeAmount + priceMarkup;
-  const vatAmount = vatOption === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
-  const computedTotalPrice = totalBeforeVat + vatAmount;
+  // Thuế VAT đã bao gồm trong giá tour
+  const computedTotalPrice = Math.max(0, subtotalAfterDiscount + customSurchargeAmount + priceMarkup);
+  const totalBeforeVat = vatOption === 'Xuất VAT' ? Math.round(computedTotalPrice / 1.1) : computedTotalPrice;
+  const vatAmount = vatOption === 'Xuất VAT' ? Math.max(0, computedTotalPrice - totalBeforeVat) : 0;
 
   // Commission calculations
   const baseCommissionPerSeat = tour?.commission || 0;
@@ -881,9 +882,9 @@ export default function EditOrderModal({
                 <div className="flex justify-between text-emerald-700 font-medium border-t border-slate-200/60 pt-1.5">
                   <span className="flex items-center gap-1">
                     <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                    Thuế VAT (10%):
+                    Thuế VAT 10% (Đã gồm trong giá):
                   </span>
-                  <span className="font-bold">+{formatCurrency(vatAmount)} đ</span>
+                  <span className="font-bold">{formatCurrency(vatAmount)} đ</span>
                 </div>
               )}
 

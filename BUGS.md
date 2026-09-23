@@ -6,6 +6,32 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.60 Cập Nhật Nguyên Tắc Tính Thuế VAT Đã Bao Gồm Trong Giá Tour (VAT Included)
+- **Mô tả yêu cầu:**
+  - Chuyển đổi cơ chế tính VAT: Biểu giá niêm yết của tour là giá trọn gói đã bao gồm thuế giá trị gia tăng (VAT).
+  - Khi người dùng tick chọn *"Xuất VAT"*, hệ thống không cộng dồn thêm 10% vào tổng tiền thanh toán nữa mà giữ nguyên tổng tiền và bóc tách doanh thu/thuế:
+    + `Tiền trước thuế = Math.round(Tổng thanh toán / 1.1)`
+    + `Thuế VAT 10% = Tổng thanh toán - Tiền trước thuế`
+    + `Tổng giá trị hóa đơn xuất = Tổng thanh toán`
+  - Cơ chế tính hoa hồng và phí công ty của CTV vẫn giữ nguyên như cũ.
+- **Các bước triển khai:**
+  1. **Hàm tính toán lõi (`src/utils/orderCalculations.ts`):**
+     - Cập nhật hàm `calculateOrderTotal`: `finalTotalAmount` bằng tổng tiền vé + phụ thu + chênh lệch CTV - chiết khấu (không cộng thêm 10% VAT).
+     - Khi `vatOption === 'Xuất VAT'`, tự động tính `totalBeforeVat = Math.round(finalTotalAmount / 1.1)` và `vatAmount = finalTotalAmount - totalBeforeVat`.
+  2. **Form Đặt Tour & Giữ Chỗ (`src/pages/DepartureCalendar.tsx` & `src/pages/OrdersManagement.tsx`):**
+     - Đồng bộ `calculatedTotalPrice`: bằng đúng tổng tiền dịch vụ (đã gồm VAT).
+     - Dòng hiển thị tóm tắt thuế hiển thị rõ: *"Thuế VAT 10% (Đã gồm trong giá): {formatCurrency(vatAmount)} đ"* thay vì dấu `+` cộng dồn tiền.
+  3. **Drawer Chi Tiết Booking & Modal Chỉnh Sửa Đơn Hàng (`src/components/EditOrderModal.tsx` & `src/pages/OrdersManagement.tsx`):**
+     - Cập nhật `computedTotalPrice`, bóc tách `totalBeforeVat` và `vatAmount` theo đúng thực thu của đơn hàng.
+     - Hiển thị nhãn trực quan, chuyên nghiệp cho nhân viên Sale và Điều hành.
+  4. **Phân hệ Kế toán & Hóa đơn VAT (`src/pages/AccountingInvoice.tsx`):**
+     - Bổ sung chi tiết bóc tách doanh thu trước thuế và tiền thuế VAT 10% ngay trên tiêu đề tổng giá trị đơn hàng trong popup xem thông tin xuất hóa đơn VAT cho Kế toán.
+  5. **Kiểm thử tự động & Tài liệu:**
+     - Cập nhật test cases trong `src/utils/__tests__/orderCalculations.test.ts` và `scripts/simulationTest.ts`.
+     - Vượt qua 100% 35 unit tests (`npm test`), 21 kịch bản simulation tests (`npm run test:simulation`), kiểm tra linter (`npm run lint`) và `compile_applet` thành công.
+     - Đồng bộ quy chuẩn vào mục 13.1 của `AGENTS.md`.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.59 Đồng Bộ Tổng Quỹ Phép Năm Động Trên Bảng Chấm Công (Thay Thế Mẫu Số Cố Định / 12 Ngày)
 - **Mô tả yêu cầu:**
   - Trên Bảng chấm công hàng tháng (`TimesheetManagement.tsx`), cột **"Quỹ phép còn"** trước đây bị hardcode hiển thị mẫu số cố định là `/ 12 ngày` (ví dụ `8 / 12 ngày`, `0 / 12 ngày`), trong khi cột **"Tổng phép"** ở tab Quản lý quỹ phép năm hiển thị số ngày thực tế được tích lũy hoặc cấp (ví dụ: tháng 9 là `9 ngày`).

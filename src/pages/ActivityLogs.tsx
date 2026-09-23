@@ -104,7 +104,7 @@ function parseLogDetails(detailsStr?: string): ParsedLogDetail {
   };
 }
 
-export default function ActivityLogs() {
+export default function ActivityLogs({ embedded }: { embedded?: boolean } = {}) {
   const { activityLogs, clearActivityLogs, currentRole } = useCRM();
   const { profile, user } = useAuth();
 
@@ -320,7 +320,9 @@ export default function ActivityLogs() {
     document.body.removeChild(link);
   };
 
-  if (currentRole !== 'admin' && profile?.role !== 'admin') {
+  const canAccessLogs = currentRole === 'admin' || profile?.role === 'admin' || currentRole === 'bod' || profile?.role === 'bod';
+
+  if (!canAccessLogs) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 bg-white rounded-2xl border border-gray-200 shadow-xs max-w-md mx-auto my-12 text-center">
         <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
@@ -328,9 +330,9 @@ export default function ActivityLogs() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0-6v2m0-5a7 7 0 110 14 7 7 0 010-14z" />
           </svg>
         </div>
-        <h2 className="text-xl font-black text-gray-900 mb-2">Chỉ Quản trị viên mới có quyền xem</h2>
+        <h2 className="text-xl font-black text-gray-900 mb-2">Chỉ Quản trị viên & Ban Giám Đốc mới có quyền xem</h2>
         <p className="text-xs text-gray-500 mb-6 max-w-sm leading-relaxed font-semibold">
-          Tính năng Nhật ký thao tác hệ thống chỉ dành riêng cho tài khoản Quản trị viên (Admin).
+          Tính năng Nhật ký thao tác hệ thống chỉ dành riêng cho tài khoản Quản trị viên (Admin) và Ban Giám Đốc (BOD).
         </p>
         <Link
           to="/"
@@ -343,7 +345,7 @@ export default function ActivityLogs() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className={embedded ? "space-y-6" : "p-6 max-w-7xl mx-auto space-y-6"}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs">
         <div>

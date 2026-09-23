@@ -51,10 +51,17 @@ export function calculateOrderTotal(params: OrderTotalCalculationParams): OrderT
   const discountAmount = Math.max(0, params.discountAmount || 0);
   const priceMarkup = Math.max(0, params.priceMarkup || 0);
 
-  const totalBeforeVat = Math.max(0, seatsSubtotal + surchargesTotal + priceMarkup - discountAmount);
+  // Thuế VAT đã bao gồm trong giá tour (Gross Amount)
+  const finalTotalAmount = Math.max(0, seatsSubtotal + surchargesTotal + priceMarkup - discountAmount);
   
-  const vatAmount = params.vatOption === 'Xuất VAT' ? Math.round(totalBeforeVat * 0.1) : 0;
-  const finalTotalAmount = totalBeforeVat + vatAmount;
+  let totalBeforeVat = finalTotalAmount;
+  let vatAmount = 0;
+
+  if (params.vatOption === 'Xuất VAT') {
+    // Bóc tách tiền trước thuế và tiền thuế VAT (10%) từ tổng tiền đã gồm VAT
+    totalBeforeVat = Math.round(finalTotalAmount / 1.1);
+    vatAmount = finalTotalAmount - totalBeforeVat;
+  }
 
   return {
     seatsSubtotal,

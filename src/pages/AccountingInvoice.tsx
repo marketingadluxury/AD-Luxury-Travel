@@ -3192,8 +3192,13 @@ export default function AccountingInvoice() {
                         <span className="text-lg font-black text-blue-950 font-mono">#{orderCode}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tổng giá trị đơn</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tổng giá trị đơn (Đã gồm VAT)</span>
                         <span className="text-base font-black text-slate-900">{new Intl.NumberFormat('vi-VN').format(order.total_price)}đ</span>
+                        <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-end gap-2">
+                          <span>Trước thuế: <b className="text-slate-800">{new Intl.NumberFormat('vi-VN').format(Math.round(order.total_price / 1.1))}đ</b></span>
+                          <span>•</span>
+                          <span>VAT 10%: <b className="text-emerald-700">{new Intl.NumberFormat('vi-VN').format(order.total_price - Math.round(order.total_price / 1.1))}đ</b></span>
+                        </div>
                       </div>
                     </div>
 

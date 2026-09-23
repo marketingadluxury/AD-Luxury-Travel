@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useCRM } from '../context/CRMContext';
-import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database } from 'lucide-react';
+import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database, History } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
 import DatabaseKeepAliveSettings from '../components/DatabaseKeepAliveSettings';
+import ActivityLogs from './ActivityLogs';
 
 export default function Settings() {
   const { currentRole, membershipSettings, updateMembershipSettings } = useCRM();
-  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database'>(
-    currentRole === 'hr' ? 'users' : 'membership'
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab') as any;
+
+  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database' | 'logs'>(
+    tabFromUrl && ['membership', 'users', 'database', 'logs'].includes(tabFromUrl)
+      ? tabFromUrl
+      : currentRole === 'hr' ? 'users' : 'membership'
   );
   
   const [silver, setSilver] = useState(membershipSettings?.silverMin || 20000000);
@@ -86,7 +93,10 @@ export default function Settings() {
         </button>
         {currentRole === 'admin' && (
           <button
-            onClick={() => setActiveTab('database')}
+            onClick={() => {
+              setActiveTab('database');
+              setSearchParams({ tab: 'database' });
+            }}
             className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
               activeTab === 'database'
                 ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
@@ -95,6 +105,22 @@ export default function Settings() {
           >
             <Database className="w-4 h-4" />
             <span>Cơ sở dữ liệu & Tự động giữ ấm</span>
+          </button>
+        )}
+        {['admin', 'bod'].includes(currentRole) && (
+          <button
+            onClick={() => {
+              setActiveTab('logs');
+              setSearchParams({ tab: 'logs' });
+            }}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              activeTab === 'logs'
+                ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>Nhật ký hệ thống</span>
           </button>
         )}
       </div>
@@ -247,6 +273,7 @@ export default function Settings() {
 
       {activeTab === 'users' && <UserManagement />}
       {activeTab === 'database' && <DatabaseKeepAliveSettings />}
+      {activeTab === 'logs' && <ActivityLogs embedded />}
     </div>
   );
 }
