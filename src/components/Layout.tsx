@@ -102,8 +102,9 @@ export const navigationTree: NavGroup[] = [
     groupName: 'Hành chính nhân sự',
     icon: FileCheck,
     items: [
-      { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+      { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
       { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+      { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
     ]
   },
   {
@@ -147,10 +148,10 @@ export const mainSidebarNav: MainTabItem[] = [
   { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },
   {
     name: 'Hành chính nhân sự',
-    href: '/leave-requests',
+    href: '/my-dashboard',
     icon: FileCheck,
     roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'],
-    matchPaths: ['/payment-proposals', '/leave-requests'],
+    matchPaths: ['/my-dashboard', '/leave-requests', '/payment-proposals'],
     groupRef: navigationTree[2]
   },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
@@ -174,8 +175,9 @@ const allNavItems: NavItem[] = [
   { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
   { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
   { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },
-  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+  { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
   { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
   { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
@@ -909,23 +911,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                  </Link>
                  {currentRole !== 'agent' && (
                    <Link 
-                     to="/leave-requests"
-                     className="w-full flex items-center px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                     to="/my-dashboard"
+                     className="w-full flex items-center px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors border-t border-gray-100"
                    >
-                     <Palmtree className="h-4 w-4 mr-2 text-emerald-600" />
-                     Nghỉ phép & Chấm công
+                     <LayoutDashboard className="h-4 w-4 mr-2 text-blue-600" />
+                     Dashboard cá nhân
                    </Link>
                  )}
-                 <Link 
-                   to="/docs"
-                   className="w-full flex items-center px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                 >
-                   <BookOpen className="h-4 w-4 mr-2 text-blue-600" />
-                   Tài liệu & Hướng dẫn
-                 </Link>
                  <button 
                    onClick={() => signOut()}
-                   className="w-full flex items-center text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                   className="w-full flex items-center text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
                  >
                    <LogOut className="h-4 w-4 mr-2" />
                    Đăng xuất
