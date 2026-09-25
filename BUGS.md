@@ -6,6 +6,21 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.65 Khắc Phục Lỗi Không Đăng Nhập Được & Không Tự Động Điều Hướng Vào Hệ Thống
+- **Nguyên nhân sự cố:**
+  1. Thiếu file `.env` trên môi trường runtime khiến Vite không nạp biến môi trường `VITE_SUPABASE_URL` vào client, dẫn tới việc rơi vào chế độ kiểm tra lỗi cơ sở dữ liệu.
+  2. Trang Đăng nhập (`Auth.tsx`) sau khi người dùng bấm *"Đăng nhập ngay"* và gọi `signInWithPassword` thành công thì thiếu hoàn toàn lệnh điều hướng `navigate('/')`. Người dùng vẫn bị giữ lại tại đường dẫn `/login` và nhìn thấy form đăng nhập như cũ.
+  3. Thiếu hook tự động kiểm tra trạng thái đăng nhập (`user && !loading`): Nếu người dùng đã có phiên đăng nhập hợp lệ nhưng truy cập vào URL `/login` thì không được tự động chuyển hướng vào trang chính.
+- **Các bước khắc phục triệt để:**
+  1. Tạo file `.env` chứa cấu hình kết nối Supabase đầy đủ (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+  2. Bổ sung `define` trong `vite.config.ts` nhằm đảm bảo biến môi trường Supabase luôn được tiêm cứng vào code frontend trong mọi hoàn cảnh.
+  3. Cập nhật `src/pages/Auth.tsx`:
+     - Tích hợp `useNavigate`, `useLocation`, `useAuth`, `toast`.
+     - Thêm `useEffect` tự động điều hướng về `/` (hoặc trang trước đó) nếu tài khoản đã đăng nhập.
+     - Sau khi `signInWithPassword` thành công, hiển thị thông báo toast thành công và lập tức điều hướng về trang chủ `/`.
+  4. Khởi động lại dev server, kiểm tra kiểm thử và biên dịch thành công 100%.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.64 Loại Bỏ Trùng Lặp Nút Đăng Nhập Hệ Thống, Giữ Lại Duy Nhất Nút Trên Header
 - **Mô tả yêu cầu:**
   - Trên màn hình của tài khoản chưa đăng nhập (khách vãng lai), loại bỏ các nút đăng nhập trùng lặp ở Sidebar và Banner trang Lịch khởi hành; chỉ giữ lại 1 nút Đăng nhập duy nhất ở góc trên bên phải thanh Header.

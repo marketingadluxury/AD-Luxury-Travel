@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 import { Lock, Mail, User, Phone, ArrowRight, Building2, Map, Eye, EyeOff, CheckCircle2, AlertCircle, Ticket } from 'lucide-react';
 
 interface AuthProps {
@@ -52,6 +55,18 @@ export default function Auth({ initialIsUpdatePassword = false }: AuthProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, loading: authLoading } = useAuth();
+
+  // If user is already authenticated and not updating password, redirect to return URL or home
+  useEffect(() => {
+    if (user && !authLoading && !isUpdatePassword) {
+      const returnUrl = (location.state as any)?.from || '/';
+      navigate(returnUrl, { replace: true });
+    }
+  }, [user, authLoading, isUpdatePassword, navigate, location]);
 
   useEffect(() => {
     // Check if URL hash or search params contains recovery or signup tokens
@@ -167,6 +182,10 @@ export default function Auth({ initialIsUpdatePassword = false }: AuthProps) {
           password,
         });
         if (error) throw error;
+
+        toast.success('Đăng nhập thành công!');
+        const returnUrl = (location.state as any)?.from || '/';
+        navigate(returnUrl, { replace: true });
       } else {
         const role = 'CTV';
         const redirectUrl = `${window.location.origin}`;
