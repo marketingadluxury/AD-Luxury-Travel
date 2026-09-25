@@ -155,6 +155,11 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 ---
 
 ## 7. Quy Tắc Phân Quyền & Tính Năng Đặc Biệt (Cập Nhật Mới)
+- **Chế Độ Xem Lịch Khởi Hành Công Khai (Public View-Only) Cho Tất Cả Người Dùng:**
+  - **Truy cập công khai:** Mọi người dùng khi vào trang chủ website (`/`) đều có thể xem ngay trang **Lịch khởi hành tour** mà không cần đăng nhập trước.
+  - **Giới hạn Chỉ xem (View-only):** Khách vãng lai xem được đầy đủ: Danh sách tour, lịch trình, hành trình, thời gian đi/về, chuyến bay, khách sạn, số chỗ trống khả dụng, biểu giá các đối tượng (người lớn, trẻ em, trẻ nhỏ, phụ thu phòng đơn, phí visa), tìm kiếm, bộ lọc nâng cao, tải/mở file PDF lịch trình chi tiết và modal Thông tin lưu ý.
+  - **Bảo mật dữ liệu kinh doanh:** Ẩn hoàn toàn thông tin **Hoa hồng / Khách** (cả trên thẻ tour và bảng chi tiết), ẩn thẻ đối tác nhận gửi khách (`🤝 GỬI KHÁCH ĐỐI TÁC`), ẩn nút *Thêm Tour Mới*. Nút hành động giữ chỗ được chuyển thành *"Đăng nhập để giữ chỗ / đặt tour"* dẫn trực tiếp tới trang Đăng nhập (`/login`).
+  - **Bảo vệ phân hệ nội bộ:** Tất cả các phân hệ quản lý nội bộ (Đơn hàng, Hạch toán kế toán, Hành chính nhân sự, Quản lý tour, CRM khách hàng, Dashboard...) đều được bảo vệ bởi `ProtectedRoute`; khách vãng lai khi truy cập sẽ được thông báo và chuyển hướng yêu cầu đăng nhập tài khoản.
 - **Phân Quyền Duyệt Phiếu Thu Cho Ban Giám Đốc (BOD):** Vai trò **Ban Giám Đốc (`bod`)** có đầy đủ quyền hạn truy cập mục Kế toán & Tài chính, xem tab **Phiếu thu** chuyển khoản của khách hàng, xem danh sách phiếu chờ duyệt/đã duyệt/từ chối và thực hiện hành động **Duyệt phiếu thu** hoặc **Từ chối phiếu thu** tương tự như Kế toán (`accounting`) và Quản trị viên (`admin`). Khi duyệt, thông tin người xác thực được tự động ghi nhận theo tên thật của tài khoản BOD.
 - **Phân Quyền Tab Hành Chính Nhân Sự (Không Áp Dụng Cho Đại Lý / CTV):** Tab "Hành chính nhân sự" (bao gồm Đề nghị thanh toán `/payment-proposals` và Nghỉ phép & Chấm công `/leave-requests`) chỉ áp dụng cho cán bộ công nhân viên chính thức thuộc công ty. Tài khoản đối tác ngoài (Đại lý & CTV - `role === 'agent'`) bị ẩn hoàn toàn mục này trên thanh Sidebar và menu Profile, đồng thời được thiết lập lớp bảo vệ (Permission Guard) chặn trực tiếp tại trang nếu truy cập qua đường dẫn URL.
 - **Phân Quyền Quản Lý Booking Cho Điều Hành (Operator):** Vai trò **Điều hành Tour (`operator`)** được cấp quyền truy cập đầy đủ trang **Quản lý Booking (`/orders`)** trên thanh điều hướng Sidebar. Điều hành có quyền xem toàn bộ danh sách booking đặt tour của công ty, kiểm tra tiến độ cọc/thanh toán, duyệt chỗ (Chốt Sure) cho booking giữ chỗ tạm, phê duyệt/từ chối yêu cầu gia hạn giữ chỗ của Sales và cập nhật/xóa thông tin danh sách hành khách đoàn.
@@ -350,9 +355,13 @@ Khi thực hiện nâng cấp hoặc sửa đổi bất kỳ file nào trong h�
 
 ## 12. Phân Hệ Quản Lý Nhân Sự (HR), Nghỉ Phép & Chấm Công
 - **Vai trò Nhân sự (`role: 'hr'`):**
-  - Quản lý phân hệ *Cài đặt Quỹ phép* (`/settings`) và *Nghỉ phép & Chấm công* (`/leave-requests`).
-  - Tuyệt đối **không có quyền** xem, thêm/sửa/xóa hay phân quyền thành viên trong mục *Quản lý người dùng & phân quyền* (`UserManagement`).
+  - Quản lý phân hệ **Quản lý nhân sự** (`/employees`) trực thuộc cụm *Hành chính nhân sự* (thay vì vào Cài đặt hệ thống) và phân hệ *Nghỉ phép & Chấm công* (`/leave-requests`).
+  - Có toàn quyền xem danh sách nhân sự công ty, cơ cấu phòng ban/team, thêm nhân sự mới, cập nhật hồ sơ cá nhân và quản lý trạng thái làm việc (Thử việc / Chính thức / Đã nghỉ việc).
   - Có quyền điều chỉnh số ngày phép / quỹ phép của toàn bộ nhân viên thủ công (qua bảng chấm công `TimesheetManagement.tsx` và phân hệ `LeaveBalanceManagement.tsx`).
+  - Mục *Cài đặt hệ thống* (`/settings`): Đã được ẩn khỏi thanh Sidebar của HR (chỉ dành riêng cho Admin/BOD); nếu HR truy cập URL này sẽ được tự động điều hướng sang `/employees`.
+- **Tab Con "Quản lý nhân sự" Trong Cụm Hành Chính Nhân Sự:**
+  - Vị trí: Hiển thị trên thanh Sidebar và thanh Sub-tabs điều hướng của cụm *Hành chính nhân sự* (`/employees`).
+  - Phân quyền: Chỉ hiển thị cho **Nhân sự (`hr`)**, **Quản trị viên (`admin`)** và **Ban Giám Đốc (`bod`)**. Các nhân viên khác (Sale, Điều hành, Visa, Kế toán, HDV...) bị ẩn để bảo mật hồ sơ nhân sự nội bộ.
 - **Quy trình Duyệt Nghỉ Phép 2 Cấp:**
   - **Cấp 1:** Trưởng nhóm (Leader: `sale_leader`, `marketing_leader`, etc.) duyệt đơn của thành viên trong nhóm (`status` chuyển thành `approved_level_1`).
   - **Cấp 2 (Duyệt cuối):** Nhân sự (`hr`) hoặc Ban Giám Đốc/Admin duyệt hoàn tất (`status` chuyển thành `approved_final`).

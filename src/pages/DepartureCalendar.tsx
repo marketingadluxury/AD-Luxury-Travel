@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Tour, MetaLead } from '@/types';
-import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle, Coins, Sparkles, MessageSquare, Share2, Megaphone, UserCheck, Globe } from 'lucide-react';
+import { Filter, Search, Plus, Plane, Calendar as CalendarIcon, User, ChevronDown, ChevronUp, Building, Tag, X, Clock, ShoppingCart, Users, FileText, HelpCircle, Coins, Sparkles, MessageSquare, Share2, Megaphone, UserCheck, Globe, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '../components/DatePicker';
 import { TimeRangeFilter } from '../components/TimeRangeFilter';
@@ -58,7 +58,8 @@ const TourCard: React.FC<{
   tour: Tour; 
   onBookClick: (tour: Tour) => void;
   onShowNotice: (tour: Tour) => void;
-}> = ({ tour, onBookClick, onShowNotice }) => {
+  isGuest?: boolean;
+}> = ({ tour, onBookClick, onShowNotice, isGuest }) => {
   const { currentRole } = useCRM();
   const [expanded, setExpanded] = useState(false);
 
@@ -259,13 +260,15 @@ const TourCard: React.FC<{
                 </span>
               </div>
             ) : null}
-            <div className="mt-1.5 flex justify-end">
-              <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 border border-amber-300/80 px-2.5 py-1 rounded-lg shadow-xs">
-                <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span className="text-[11px] font-bold text-amber-800">Hoa hồng:</span>
-                <span className="text-sm font-black text-emerald-700">{formatCurrency(tour.commission)} đ</span>
-              </span>
-            </div>
+            {!isGuest && (
+              <div className="mt-1.5 flex justify-end">
+                <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 border border-amber-300/80 px-2.5 py-1 rounded-lg shadow-xs">
+                  <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span className="text-[11px] font-bold text-amber-800">Hoa hồng:</span>
+                  <span className="text-sm font-black text-emerald-700">{formatCurrency(tour.commission)} đ</span>
+                </span>
+              </div>
+            )}
           </div>
 
           <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 self-center hidden sm:block">
@@ -285,7 +288,7 @@ const TourCard: React.FC<{
                 <span className="w-1.5 h-3 bg-blue-600 rounded mr-2 inline-block"></span>
                 Biểu giá tour chi tiết theo độ tuổi & dịch vụ
               </h4>
-              <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 text-center">
+              <div className={`grid grid-cols-2 ${isGuest ? 'lg:grid-cols-5' : 'lg:grid-cols-6'} gap-3 text-center`}>
                 <div className="bg-blue-50/30 p-3 rounded-lg border border-blue-100/50">
                   <div className="text-xs text-gray-500 mb-1 font-semibold">Người lớn (≥ 10 tuổi)</div>
                   <div className="text-base font-bold text-gray-900">{formatCurrency(tour.price_adult ?? tour.price)} VND</div>
@@ -309,13 +312,15 @@ const TourCard: React.FC<{
                   </div>
                   <div className="text-base font-black text-blue-700">{tour.price_visa_tour ? `${formatCurrency(tour.price_visa_tour)} VND` : 'Miễn phí'}</div>
                 </div>
-                <div className="bg-amber-50/90 p-3 rounded-lg border border-amber-200 shadow-2xs flex flex-col justify-center">
-                  <div className="text-xs text-amber-900 mb-1 font-bold flex items-center justify-center gap-1">
-                    <Coins className="w-3.5 h-3.5 text-amber-600" />
-                    Hoa hồng / Khách
+                {!isGuest && (
+                  <div className="bg-amber-50/90 p-3 rounded-lg border border-amber-200 shadow-2xs flex flex-col justify-center">
+                    <div className="text-xs text-amber-900 mb-1 font-bold flex items-center justify-center gap-1">
+                      <Coins className="w-3.5 h-3.5 text-amber-600" />
+                      Hoa hồng / Khách
+                    </div>
+                    <div className="text-base font-black text-amber-700">{formatCurrency(tour.commission)} VND</div>
                   </div>
-                  <div className="text-base font-black text-amber-700">{formatCurrency(tour.commission)} VND</div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -458,6 +463,22 @@ const TourCard: React.FC<{
                 todayStart.setHours(0, 0, 0, 0);
                 const isDeparted = !isNaN(depDate.getTime()) && depDate < todayStart;
 
+                if (isGuest) {
+                  return (
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBookClick(tour);
+                      }}
+                      className="w-full inline-flex items-center justify-center h-9 px-4 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
+                    >
+                      <LogIn className="w-4 h-4 mr-1.5" />
+                      <span>Đăng nhập để giữ chỗ / đặt tour</span>
+                    </button>
+                  );
+                }
+
                 return (
                   <button 
                     type="button"
@@ -490,8 +511,18 @@ export default function DepartureCalendar() {
   const location = useLocation();
   const { tours, orders: allOrders = [], createOrder, currentRole, passengers = [], categories = [] } = useCRM();
   const { profile, user } = useAuth();
+  const isGuest = !user;
   const [searchTerm, setSearchTerm] = useState('');
   const [noticeTour, setNoticeTour] = useState<Tour | null>(null);
+
+  const handleBookClick = (tour: Tour) => {
+    if (isGuest) {
+      toast('Vui lòng đăng nhập hệ thống để thực hiện giữ chỗ hoặc đặt tour.', { icon: '🔒' });
+      navigate('/login');
+      return;
+    }
+    setSelectedTourForBooking(tour);
+  };
   
   // Meta Leads state for Booking flow
   const [metaLeads, setMetaLeads] = useState<MetaLead[]>([]);
@@ -871,6 +902,34 @@ export default function DepartureCalendar() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Banner chào đón & hướng dẫn dành riêng cho Khách vãng lai */}
+      {isGuest && (
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-4 sm:p-5 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider backdrop-blur-xs">
+                Chế độ xem công khai
+              </span>
+              <span className="text-xs font-bold text-blue-100">• Cập nhật thời gian thực</span>
+            </div>
+            <h2 className="text-base sm:text-lg font-black tracking-tight">
+              Lịch Khởi Hành Tour Du Lịch — AD Luxury Travel
+            </h2>
+            <p className="text-xs text-blue-100/90 leading-relaxed max-w-2xl font-medium">
+              Bạn có thể tự do tra cứu thông tin hành trình, số chỗ khả dụng, giá vé và tải file lịch trình tour chi tiết. Để thực hiện giữ chỗ, tạo booking hoặc liên kết đại lý, vui lòng đăng nhập tài khoản.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            className="shrink-0 px-4 py-2.5 bg-white text-blue-700 hover:bg-blue-50 rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
+          >
+            <LogIn className="w-4 h-4 text-blue-600" />
+            <span>Đăng nhập hệ thống</span>
+          </button>
+        </div>
+      )}
+
       {/* Filters and Actions */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
         <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
@@ -910,7 +969,7 @@ export default function DepartureCalendar() {
               <Filter className="h-4 w-4 mr-1.5 shrink-0" />
               <span>Bộ lọc nâng cao</span>
             </button>
-            {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader' || currentRole === 'bod') && (
+            {!isGuest && (currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader' || currentRole === 'bod') && (
               <button 
                 onClick={() => navigate('/tours', { state: { openCreateModal: true } })}
                 className="inline-flex items-center justify-center h-9 px-3.5 py-1.5 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer whitespace-nowrap"
@@ -1003,7 +1062,7 @@ export default function DepartureCalendar() {
           </div>
         ) : (
           sortedFilteredTours.map((tour) => (
-            <TourCard key={tour.id} tour={tour} onBookClick={setSelectedTourForBooking} onShowNotice={setNoticeTour} />
+            <TourCard key={tour.id} tour={tour} onBookClick={handleBookClick} onShowNotice={setNoticeTour} isGuest={isGuest} />
           ))
         )}
       </div>

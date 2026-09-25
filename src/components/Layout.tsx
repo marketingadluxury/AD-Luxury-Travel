@@ -39,7 +39,8 @@ import {
   Megaphone,
   BarChart3,
   Palmtree,
-  BookOpen
+  BookOpen,
+  LogIn
 } from 'lucide-react';
 import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -105,6 +106,7 @@ export const navigationTree: NavGroup[] = [
       { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
       { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
       { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+      { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
     ]
   },
   {
@@ -151,7 +153,7 @@ export const mainSidebarNav: MainTabItem[] = [
     href: '/my-dashboard',
     icon: FileCheck,
     roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'],
-    matchPaths: ['/my-dashboard', '/leave-requests', '/payment-proposals'],
+    matchPaths: ['/my-dashboard', '/leave-requests', '/payment-proposals', '/employees'],
     groupRef: navigationTree[2]
   },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
@@ -178,12 +180,13 @@ const allNavItems: NavItem[] = [
   { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+  { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
   { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
   { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
   { name: 'Tài liệu & Hướng dẫn', href: '/docs', icon: BookOpen, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
-  { name: 'Cài đặt hệ thống', href: '/settings', icon: Settings, roleAccess: ['admin', 'hr'] },
+  { name: 'Cài đặt hệ thống', href: '/settings', icon: Settings, roleAccess: ['admin'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
 
@@ -623,9 +626,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Check access control for current page and role
   const isSettingsPath = location.pathname === '/settings';
   const currentNavItem = allNavItems.find(n => n.href === location.pathname);
+  const isGuest = !user;
   
   let hasAccess = false;
-  if (currentRole === 'admin' || (isSettingsPath && currentRole === 'hr')) {
+  if (isGuest) {
+    hasAccess = location.pathname === '/' || location.pathname === '/docs' || location.pathname === '/login' || location.pathname === '/guest-upload';
+  } else if (currentRole === 'admin') {
     hasAccess = true;
   } else if (isSettingsPath) {
     hasAccess = false;
@@ -655,19 +661,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </div>
       <h2 className="text-lg font-black text-gray-900 mb-2">Không có quyền truy cập</h2>
       <p className="text-xs text-gray-500 mb-6 max-w-sm leading-relaxed font-semibold">
-        Vai trò hiện tại của bạn là <strong className="text-blue-600">{getRoleLabel(displayRole)}</strong> không được phân quyền truy cập chức năng này.
+        {isGuest ? (
+          <span>Vui lòng đăng nhập hệ thống để truy cập chức năng này.</span>
+        ) : (
+          <span>Vai trò hiện tại của bạn là <strong className="text-blue-600">{getRoleLabel(displayRole)}</strong> không được phân quyền truy cập chức năng này.</span>
+        )}
       </p>
       <Link
-        to="/"
+        to={isGuest ? "/login" : "/"}
         className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
       >
-        Quay lại Lịch khởi hành
+        {isGuest ? "Đăng nhập ngay" : "Quay lại Lịch khởi hành"}
       </Link>
     </div>
   );
 
-  // Trang riêng full màn hình cho Tài liệu & Hướng dẫn (/docs)
-  if (location.pathname === '/docs') {
+  // Trang riêng full màn hình cho Tài liệu & Hướng dẫn (/docs), Đăng nhập (/login), Guest Upload (/guest-upload)
+  if (location.pathname === '/docs' || location.pathname === '/login' || location.pathname === '/guest-upload') {
     return <>{children}</>;
   }
 
@@ -686,81 +696,129 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
         
         {/* Active Role Card */}
-        <div className="p-4 border-b border-gray-150 bg-slate-50/50 shrink-0">
-          <div className="flex items-center space-x-2 mb-2">
-            <UserCheck className="w-4 h-4 text-blue-600" />
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Vai trò đang xem</span>
-          </div>
-          <CustomSelect
-            options={roleOptions}
-            value={displayRole}
-            onChange={(val) => setCurrentRole(val as Role)}
-            disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}
-            className="w-full"
-            buttonClassName="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
-          />
-
-          {/* Button Góp Ý & Báo Lỗi */}
-          {currentRole !== 'admin' && (
-            <button
-              type="button"
-              onClick={() => setIsFeedbackModalOpen(true)}
-              className="mt-3 w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
+        {isGuest ? (
+          <div className="p-4 border-b border-gray-150 bg-blue-50/50 shrink-0">
+            <div className="flex items-center space-x-2 mb-1.5">
+              <Globe className="w-4 h-4 text-blue-600" />
+              <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">Chế độ xem công khai</span>
+            </div>
+            <p className="text-[11px] text-gray-500 font-medium leading-relaxed mb-3">
+              Xem lịch khởi hành và tình trạng chỗ trống cập nhật thời gian thực.
+            </p>
+            <Link
+              to="/login"
+              className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
             >
-              <MessageSquarePlus className="w-4 h-4 text-emerald-100" />
-              <span>Góp ý & Báo lỗi</span>
-            </button>
-          )}
-        </div>
+              <LogIn className="w-4 h-4" />
+              <span>Đăng nhập hệ thống</span>
+            </Link>
+          </div>
+        ) : (
+          <div className="p-4 border-b border-gray-150 bg-slate-50/50 shrink-0">
+            <div className="flex items-center space-x-2 mb-2">
+              <UserCheck className="w-4 h-4 text-blue-600" />
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Vai trò đang xem</span>
+            </div>
+            <CustomSelect
+              options={roleOptions}
+              value={displayRole}
+              onChange={(val) => setCurrentRole(val as Role)}
+              disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}
+              className="w-full"
+              buttonClassName="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+            />
+
+            {/* Button Góp Ý & Báo Lỗi */}
+            {currentRole !== 'admin' && (
+              <button
+                type="button"
+                onClick={() => setIsFeedbackModalOpen(true)}
+                className="mt-3 w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
+              >
+                <MessageSquarePlus className="w-4 h-4 text-emerald-100" />
+                <span>Góp ý & Báo lỗi</span>
+              </button>
+            )}
+          </div>
+        )}
 
         <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-          {mainSidebarNav.map((item) => {
-            if (!item.roleAccess.includes(currentRole as any)) return null;
-
-            let targetHref = item.href;
-            if (item.groupRef) {
-              const accessibleChild = item.groupRef.items.find(child => child.roleAccess.includes(currentRole as any));
-              if (accessibleChild) {
-                const canAccessPrimary = allNavItems.find(n => n.href === item.href)?.roleAccess.includes(currentRole as any);
-                if (!canAccessPrimary) {
-                  targetHref = accessibleChild.href;
-                }
-              }
-            }
-
-            const isActive = location.pathname === targetHref || (item.matchPaths && item.matchPaths.includes(location.pathname));
-
-            return (
+          {isGuest ? (
+            <div className="space-y-1">
               <Link
-                key={item.name}
-                to={targetHref}
+                to="/"
                 className={cn(
-                  isActive
+                  location.pathname === '/'
                     ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
                     : 'text-gray-800 hover:bg-gray-100/80 font-semibold',
-                  'group flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors relative'
+                  'group flex items-center px-3.5 py-2.5 text-sm rounded-xl transition-colors'
                 )}
               >
-                <div className="flex items-center min-w-0 pr-1">
-                  <item.icon
-                    className={cn(
-                      isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600',
-                      'mr-2.5 flex-shrink-0 h-4 w-4'
-                    )}
-                  />
-                  <span className="truncate">{item.name}</span>
-                </div>
-                {(item.href === '/leave-requests' || item.matchPaths?.includes('/leave-requests')) && pendingLeavesBadgeCount > 0 && (
-                  <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full shadow-2xs animate-pulse">
-                    {pendingLeavesBadgeCount}
-                  </span>
-                )}
+                <Calendar className="mr-2.5 flex-shrink-0 h-4 w-4 text-blue-600" />
+                <span>Lịch khởi hành</span>
               </Link>
-            );
-          })}
+              <Link
+                to="/docs"
+                className={cn(
+                  location.pathname === '/docs'
+                    ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
+                    : 'text-gray-800 hover:bg-gray-100/80 font-semibold',
+                  'group flex items-center px-3.5 py-2.5 text-sm rounded-xl transition-colors'
+                )}
+              >
+                <BookOpen className="mr-2.5 flex-shrink-0 h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                <span>Tài liệu & Hướng dẫn</span>
+              </Link>
+            </div>
+          ) : (
+            mainSidebarNav.map((item) => {
+              if (!item.roleAccess.includes(currentRole as any)) return null;
+
+              let targetHref = item.href;
+              if (item.groupRef) {
+                const accessibleChild = item.groupRef.items.find(child => child.roleAccess.includes(currentRole as any));
+                if (accessibleChild) {
+                  const canAccessPrimary = allNavItems.find(n => n.href === item.href)?.roleAccess.includes(currentRole as any);
+                  if (!canAccessPrimary) {
+                    targetHref = accessibleChild.href;
+                  }
+                }
+              }
+
+              const isActive = location.pathname === targetHref || (item.matchPaths && item.matchPaths.includes(location.pathname));
+
+              return (
+                <Link
+                  key={item.name}
+                  to={targetHref}
+                  className={cn(
+                    isActive
+                      ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
+                      : 'text-gray-800 hover:bg-gray-100/80 font-semibold',
+                    'group flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors relative'
+                  )}
+                >
+                  <div className="flex items-center min-w-0 pr-1">
+                    <item.icon
+                      className={cn(
+                        isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600',
+                        'mr-2.5 flex-shrink-0 h-4 w-4'
+                      )}
+                    />
+                    <span className="truncate">{item.name}</span>
+                  </div>
+                  {(item.href === '/leave-requests' || item.matchPaths?.includes('/leave-requests')) && pendingLeavesBadgeCount > 0 && (
+                    <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full shadow-2xs animate-pulse">
+                      {pendingLeavesBadgeCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })
+          )}
         </nav>
         
-        {(['admin', 'bod', 'hr'].includes(currentRole)) && (
+        {!isGuest && (['admin', 'bod'].includes(currentRole)) && (
           <div className="p-3 border-t border-gray-200 shrink-0 space-y-1">
             {['admin', 'bod'].includes(currentRole) && (
               <Link
@@ -776,7 +834,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 Nhật ký hệ thống
               </Link>
             )}
-            {['admin', 'hr'].includes(currentRole) && (
+            {currentRole === 'admin' && (
               <Link
                 to="/settings"
                 className={cn(
@@ -811,10 +869,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="flex items-center gap-2 min-w-0">
               <h1 className="text-[28px] font-bold text-gray-900 truncate" style={{ fontSize: '28px' }}>
-                {allNavItems.find(n => n.href === location.pathname)?.name || 'Tour CRM'}
+                {isGuest ? 'Lịch khởi hành tour' : (allNavItems.find(n => n.href === location.pathname)?.name || 'Tour CRM')}
               </h1>
               <span className="hidden sm:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">
-                {getRoleLabel(displayRole)}
+                {isGuest ? 'Khách vãng lai' : getRoleLabel(displayRole)}
               </span>
             </div>
           </div>
@@ -830,119 +888,131 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <span className="hidden sm:inline text-xs font-bold text-slate-700 hover:text-blue-600">Hướng dẫn</span>
             </Link>
 
-            {/* Notification Dropdown */}
-            <div className="relative">
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="text-gray-500 hover:text-gray-700 relative p-2 rounded-full hover:bg-gray-100 transition-colors active:scale-95"
+            {isGuest ? (
+              <Link
+                to="/login"
+                className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
               >
-                <Bell className="h-5 w-5" />
-                {unreadNotifications.length > 0 && (
-                  <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
-                )}
-              </button>
-
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-84 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40">
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                    <span className="font-bold text-sm text-gray-900">Thông báo hệ thống</span>
-                    <div className="flex items-center gap-2">
-                      {unreadNotifications.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            markAllNotificationsAsRead();
-                          }}
-                          className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer hover:underline"
-                        >
-                          Đã đọc tất cả
-                        </button>
-                      )}
-                      <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                        {unreadNotifications.length} mới
-                      </span>
-                    </div>
-                  </div>
-                  <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-gray-500">Chưa có thông báo nào</div>
-                    ) : (
-                      notifications.map(notif => {
-                        const isProposalNotif = (notif.title || '').toLowerCase().includes('đề nghị thanh toán') || 
-                                                (notif.message || '').toLowerCase().includes('đề nghị thanh toán') || 
-                                                (notif.message || '').includes('DNTT-');
-                        return (
-                          <div 
-                            key={notif.id} 
-                            onClick={() => handleNotificationClick(notif)}
-                            className={`p-3 hover:bg-gray-50 transition-colors cursor-pointer ${!notif.read ? 'bg-blue-50/40' : ''}`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                isProposalNotif ? 'bg-amber-100 text-amber-800 border border-amber-200' :
-                                notif.type === 'visa' ? 'bg-purple-50 text-purple-600' :
-                                notif.type === 'accounting' ? 'bg-red-50 text-red-600' :
-                                notif.type === 'extension' ? 'bg-orange-50 text-orange-600' :
-                                'bg-blue-50 text-blue-600 border border-blue-200'
-                              }`}>
-                                {isProposalNotif ? 'ĐỀ NGHỊ TT' :
-                                 notif.type === 'visa' ? 'VISA' :
-                                 notif.type === 'accounting' ? 'KẾ TOÁN' :
-                                 notif.type === 'extension' ? 'ĐIỀU HÀNH' : 'ĐƠN HÀNG'}
-                              </span>
-                              {!notif.read && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
-                              )}
-                            </div>
-                            <p className="text-xs font-semibold text-gray-800 mt-1">{notif.title}</p>
-                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">
-                              {(notif.message || '').replace(/\b([0-9a-fA-F]{8})-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g, '$1')}
-                            </p>
-                          </div>
-                        );
-                      })
+                <LogIn className="w-4 h-4" />
+                <span>Đăng nhập</span>
+              </Link>
+            ) : (
+              <>
+                {/* Notification Dropdown */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="text-gray-500 hover:text-gray-700 relative p-2 rounded-full hover:bg-gray-100 transition-colors active:scale-95"
+                  >
+                    <Bell className="h-5 w-5" />
+                    {unreadNotifications.length > 0 && (
+                      <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
                     )}
+                  </button>
+
+                  {showNotifications && (
+                    <div className="absolute right-0 mt-2 w-80 sm:w-84 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40">
+                      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <span className="font-bold text-sm text-gray-900">Thông báo hệ thống</span>
+                        <div className="flex items-center gap-2">
+                          {unreadNotifications.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAllNotificationsAsRead();
+                              }}
+                              className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer hover:underline"
+                            >
+                              Đã đọc tất cả
+                            </button>
+                          )}
+                          <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                            {unreadNotifications.length} mới
+                          </span>
+                        </div>
+                      </div>
+                      <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-gray-500">Chưa có thông báo nào</div>
+                        ) : (
+                          notifications.map(notif => {
+                            const isProposalNotif = (notif.title || '').toLowerCase().includes('đề nghị thanh toán') || 
+                                                    (notif.message || '').toLowerCase().includes('đề nghị thanh toán') || 
+                                                    (notif.message || '').includes('DNTT-');
+                            return (
+                              <div 
+                                key={notif.id} 
+                                onClick={() => handleNotificationClick(notif)}
+                                className={`p-3 hover:bg-gray-50 transition-colors cursor-pointer ${!notif.read ? 'bg-blue-50/40' : ''}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                    isProposalNotif ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                    notif.type === 'visa' ? 'bg-purple-50 text-purple-600' :
+                                    notif.type === 'accounting' ? 'bg-red-50 text-red-600' :
+                                    notif.type === 'extension' ? 'bg-orange-50 text-orange-600' :
+                                    'bg-blue-50 text-blue-600 border border-blue-200'
+                                  }`}>
+                                    {isProposalNotif ? 'ĐỀ NGHỊ TT' :
+                                     notif.type === 'visa' ? 'VISA' :
+                                     notif.type === 'accounting' ? 'KẾ TOÁN' :
+                                     notif.type === 'extension' ? 'ĐIỀU HÀNH' : 'ĐƠN HÀNG'}
+                                  </span>
+                                  {!notif.read && (
+                                    <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+                                  )}
+                                </div>
+                                <p className="text-xs font-semibold text-gray-800 mt-1">{notif.title}</p>
+                                <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">
+                                  {(notif.message || '').replace(/\b([0-9a-fA-F]{8})-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g, '$1')}
+                                </p>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Profile Menu */}
+                <div className="relative group">
+                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs cursor-pointer ring-2 ring-blue-100">
+                    {user?.email ? user.email.charAt(0).toUpperCase() : 'AD'}
+                  </div>
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                     <div className="px-4 py-3 border-b border-gray-100 overflow-hidden bg-slate-50">
+                        <p className="text-xs font-bold text-gray-900 truncate">{user?.email || 'Tài khoản'}</p>
+                        <p className="text-[10px] text-blue-600 font-semibold">{getRoleLabel(displayRole)}</p>
+                     </div>
+                     <Link 
+                       to="/profile"
+                       className="w-full flex items-center px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                     >
+                       <User className="h-4 w-4 mr-2 text-slate-400" />
+                       Thông tin cá nhân
+                     </Link>
+                     {currentRole !== 'agent' && (
+                       <Link 
+                         to="/my-dashboard"
+                         className="w-full flex items-center px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors border-t border-gray-100"
+                       >
+                         <LayoutDashboard className="h-4 w-4 mr-2 text-blue-600" />
+                         Dashboard cá nhân
+                       </Link>
+                     )}
+                     <button 
+                       onClick={() => signOut()}
+                       className="w-full flex items-center text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
+                     >
+                       <LogOut className="h-4 w-4 mr-2" />
+                       Đăng xuất
+                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Profile Menu */}
-            <div className="relative group">
-              <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs cursor-pointer ring-2 ring-blue-100">
-                {user?.email ? user.email.charAt(0).toUpperCase() : 'AD'}
-              </div>
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                 <div className="px-4 py-3 border-b border-gray-100 overflow-hidden bg-slate-50">
-                    <p className="text-xs font-bold text-gray-900 truncate">{user?.email || 'Tài khoản'}</p>
-                    <p className="text-[10px] text-blue-600 font-semibold">{getRoleLabel(displayRole)}</p>
-                 </div>
-                 <Link 
-                   to="/profile"
-                   className="w-full flex items-center px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                 >
-                   <User className="h-4 w-4 mr-2 text-slate-400" />
-                   Thông tin cá nhân
-                 </Link>
-                 {currentRole !== 'agent' && (
-                   <Link 
-                     to="/my-dashboard"
-                     className="w-full flex items-center px-4 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors border-t border-gray-100"
-                   >
-                     <LayoutDashboard className="h-4 w-4 mr-2 text-blue-600" />
-                     Dashboard cá nhân
-                   </Link>
-                 )}
-                 <button 
-                   onClick={() => signOut()}
-                   className="w-full flex items-center text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
-                 >
-                   <LogOut className="h-4 w-4 mr-2" />
-                   Đăng xuất
-                 </button>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </header>
 
@@ -1002,7 +1072,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
         
         {/* Sub-Tabs Bar for Grouped Routes */}
-        {activeGroup && (
+        {activeGroup && !isGuest && (
           <div className="bg-white border-b border-gray-200 px-3.5 sm:px-6 py-2.5 shrink-0 z-10 shadow-2xs">
             <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 overflow-x-auto max-w-full">
               {activeGroup.items
@@ -1040,64 +1110,98 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Mobile Bottom Navigation Bar (App Experience) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-40 flex items-center justify-around px-1 py-1 shadow-lg pb-[calc(0.4rem+env(safe-area-inset-bottom))]">
-          <Link
-            to="/"
-            className={cn(
-              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
-              location.pathname === '/' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-            )}
-          >
-            <Calendar className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Lịch Tour</span>
-          </Link>
+        {isGuest ? (
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-40 flex items-center justify-around px-3 py-1.5 shadow-lg pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+            <Link
+              to="/"
+              className={cn(
+                'flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all',
+                location.pathname === '/' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+              )}
+            >
+              <Calendar className="w-5 h-5 mb-0.5" />
+              <span className="text-[10px] leading-tight">Lịch Tour</span>
+            </Link>
 
-          <Link
-            to="/tours"
-            className={cn(
-              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
-              location.pathname === '/tours' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-            )}
-          >
-            <Map className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Quản Lý Tour</span>
-          </Link>
+            <Link
+              to="/docs"
+              className={cn(
+                'flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all',
+                location.pathname === '/docs' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+              )}
+            >
+              <BookOpen className="w-5 h-5 mb-0.5" />
+              <span className="text-[10px] leading-tight">Hướng Dẫn</span>
+            </Link>
 
-          {/* Big Center Action Camera Button for HDV Quick Upload */}
-          <button
-            type="button"
-            onClick={() => setIsHdvQuickUploadOpen(true)}
-            className="flex flex-col items-center justify-center -mt-5 relative z-10 focus:outline-none"
-            title="Upload Ảnh Đoàn Nhanh"
-          >
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 p-0.5 shadow-lg shadow-blue-500/25 ring-4 ring-white active:scale-95 transition-transform flex items-center justify-center">
-              <div className="w-full h-full rounded-full bg-blue-600 flex items-center justify-center text-white">
-                <Camera className="w-5 h-5 text-white" />
+            <Link
+              to="/login"
+              className="flex flex-col items-center justify-center py-1 px-4 rounded-xl text-white bg-blue-600 hover:bg-blue-700 font-bold shadow-xs active:scale-95 transition-all"
+            >
+              <LogIn className="w-4 h-4 mb-0.5" />
+              <span className="text-[10px] leading-tight">Đăng Nhập</span>
+            </Link>
+          </nav>
+        ) : (
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-40 flex items-center justify-around px-1 py-1 shadow-lg pb-[calc(0.4rem+env(safe-area-inset-bottom))]">
+            <Link
+              to="/"
+              className={cn(
+                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
+                location.pathname === '/' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+              )}
+            >
+              <Calendar className="w-5 h-5 mb-0.5" />
+              <span className="text-[10px] leading-tight">Lịch Tour</span>
+            </Link>
+
+            <Link
+              to="/tours"
+              className={cn(
+                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
+                location.pathname === '/tours' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+              )}
+            >
+              <Map className="w-5 h-5 mb-0.5" />
+              <span className="text-[10px] leading-tight">Quản Lý Tour</span>
+            </Link>
+
+            {/* Big Center Action Camera Button for HDV Quick Upload */}
+            <button
+              type="button"
+              onClick={() => setIsHdvQuickUploadOpen(true)}
+              className="flex flex-col items-center justify-center -mt-5 relative z-10 focus:outline-none"
+              title="Upload Ảnh Đoàn Nhanh"
+            >
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 p-0.5 shadow-lg shadow-blue-500/25 ring-4 ring-white active:scale-95 transition-transform flex items-center justify-center">
+                <div className="w-full h-full rounded-full bg-blue-600 flex items-center justify-center text-white">
+                  <Camera className="w-5 h-5 text-white" />
+                </div>
               </div>
-            </div>
-            <span className="text-[10px] font-bold text-blue-600 tracking-tight mt-0.5">Chụp Ảnh</span>
-          </button>
+              <span className="text-[10px] font-bold text-blue-600 tracking-tight mt-0.5">Chụp Ảnh</span>
+            </button>
 
-          <Link
-            to="/payment-proposals"
-            className={cn(
-              'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
-              location.pathname === '/payment-proposals' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-            )}
-          >
-            <FileCheck className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Đề Nghị TT</span>
-          </Link>
+            <Link
+              to="/payment-proposals"
+              className={cn(
+                'flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-w-[52px]',
+                location.pathname === '/payment-proposals' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+              )}
+            >
+              <FileCheck className="w-5 h-5 mb-0.5" />
+              <span className="text-[10px] leading-tight">Đề Nghị TT</span>
+            </Link>
 
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-slate-500 hover:text-slate-800 min-w-[52px]"
-          >
-            <MoreHorizontal className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Menu</span>
-          </button>
-        </nav>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-slate-500 hover:text-slate-800 min-w-[52px]"
+            >
+              <MoreHorizontal className="w-5 h-5 mb-0.5" />
+              <span className="text-[10px] leading-tight">Menu</span>
+            </button>
+          </nav>
+        )}
       </div>
 
       {/* Mobile Menu Drawer / Slide-over */}
@@ -1132,91 +1236,148 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Active Role Card Mobile */}
-            <div className="p-4 border-b border-gray-150 bg-slate-50">
-              <div className="flex items-center space-x-2 mb-2">
-                <UserCheck className="w-4 h-4 text-blue-600" />
-                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Vai trò đang xem</span>
-              </div>
-              <CustomSelect
-                options={roleOptions}
-                value={currentRole}
-                onChange={(val) => {
-                  setCurrentRole(val as Role);
-                  setIsMobileMenuOpen(false);
-                }}
-                disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}
-                className="w-full"
-                buttonClassName="w-full px-2.5 py-2 border border-gray-300 rounded-xl text-xs font-bold bg-white text-gray-800 shadow-xs focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              />
-
-              {currentRole !== 'admin' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    setIsFeedbackModalOpen(true);
-                  }}
-                  className="mt-3 w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs"
+            {isGuest ? (
+              <div className="p-4 border-b border-gray-150 bg-blue-50/50">
+                <div className="flex items-center space-x-2 mb-1.5">
+                  <Globe className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">Chế độ xem công khai</span>
+                </div>
+                <p className="text-[11px] text-gray-500 font-medium leading-relaxed mb-3">
+                  Xem lịch khởi hành và tình trạng chỗ trống cập nhật thời gian thực.
+                </p>
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
                 >
-                  <MessageSquarePlus className="w-4 h-4" />
-                  <span>Góp ý & Báo lỗi</span>
-                </button>
-              )}
-            </div>
+                  <LogIn className="w-4 h-4" />
+                  <span>Đăng nhập hệ thống</span>
+                </Link>
+              </div>
+            ) : (
+              <div className="p-4 border-b border-gray-150 bg-slate-50">
+                <div className="flex items-center space-x-2 mb-2">
+                  <UserCheck className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Vai trò đang xem</span>
+                </div>
+                <CustomSelect
+                  options={roleOptions}
+                  value={currentRole}
+                  onChange={(val) => {
+                    setCurrentRole(val as Role);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}
+                  className="w-full"
+                  buttonClassName="w-full px-2.5 py-2 border border-gray-300 rounded-xl text-xs font-bold bg-white text-gray-800 shadow-xs focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+
+                {currentRole !== 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setIsFeedbackModalOpen(true);
+                    }}
+                    className="mt-3 w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs"
+                  >
+                    <MessageSquarePlus className="w-4 h-4" />
+                    <span>Góp ý & Báo lỗi</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Nav list */}
             <div className="flex-1 overflow-y-auto p-3 space-y-1">
               <div className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider px-3 py-1">Menu Chức Năng</div>
-              {mainSidebarNav.map((item) => {
-                if (!item.roleAccess.includes(currentRole as any)) return null;
-
-                let targetHref = item.href;
-                if (item.groupRef) {
-                  const accessibleChild = item.groupRef.items.find(child => child.roleAccess.includes(currentRole as any));
-                  if (accessibleChild) {
-                    const canAccessPrimary = allNavItems.find(n => n.href === item.href)?.roleAccess.includes(currentRole as any);
-                    if (!canAccessPrimary) {
-                      targetHref = accessibleChild.href;
-                    }
-                  }
-                }
-
-                const isActive = location.pathname === targetHref || (item.matchPaths && item.matchPaths.includes(location.pathname));
-
-                return (
+              {isGuest ? (
+                <>
                   <Link
-                    key={item.name}
-                    to={targetHref}
+                    to="/"
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={cn(
-                      isActive
+                      location.pathname === '/'
                         ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
                         : 'text-gray-800 hover:bg-gray-100 font-semibold',
                       'flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors'
                     )}
                   >
                     <div className="flex items-center">
-                      <item.icon
-                        className={cn(
-                          isActive ? 'text-blue-700' : 'text-gray-400',
-                          'mr-3 flex-shrink-0 h-4 w-4'
-                        )}
-                      />
-                      <span>{item.name}</span>
+                      <Calendar className="mr-3 flex-shrink-0 h-4 w-4 text-blue-700" />
+                      <span>Lịch khởi hành</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {(item.href === '/leave-requests' || item.matchPaths?.includes('/leave-requests')) && pendingLeavesBadgeCount > 0 && (
-                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full animate-pulse">
-                          {pendingLeavesBadgeCount}
-                        </span>
-                      )}
-                      <ChevronRight className="w-4 h-4 text-gray-300" />
-                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
                   </Link>
-                );
-              })}
+                  <Link
+                    to="/docs"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={cn(
+                      location.pathname === '/docs'
+                        ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
+                        : 'text-gray-800 hover:bg-gray-100 font-semibold',
+                      'flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors'
+                    )}
+                  >
+                    <div className="flex items-center">
+                      <BookOpen className="mr-3 flex-shrink-0 h-4 w-4 text-gray-400" />
+                      <span>Tài liệu & Hướng dẫn</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </Link>
+                </>
+              ) : (
+                mainSidebarNav.map((item) => {
+                  if (!item.roleAccess.includes(currentRole as any)) return null;
 
-              {['admin', 'bod', 'hr'].includes(currentRole) && (
+                  let targetHref = item.href;
+                  if (item.groupRef) {
+                    const accessibleChild = item.groupRef.items.find(child => child.roleAccess.includes(currentRole as any));
+                    if (accessibleChild) {
+                      const canAccessPrimary = allNavItems.find(n => n.href === item.href)?.roleAccess.includes(currentRole as any);
+                      if (!canAccessPrimary) {
+                        targetHref = accessibleChild.href;
+                      }
+                    }
+                  }
+
+                  const isActive = location.pathname === targetHref || (item.matchPaths && item.matchPaths.includes(location.pathname));
+
+                  return (
+                    <Link
+                      key={item.name}
+                      to={targetHref}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={cn(
+                        isActive
+                          ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
+                          : 'text-gray-800 hover:bg-gray-100 font-semibold',
+                        'flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors'
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <item.icon
+                          className={cn(
+                            isActive ? 'text-blue-700' : 'text-gray-400',
+                            'mr-3 flex-shrink-0 h-4 w-4'
+                          )}
+                        />
+                        <span>{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {(item.href === '/leave-requests' || item.matchPaths?.includes('/leave-requests')) && pendingLeavesBadgeCount > 0 && (
+                          <span className="inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full animate-pulse">
+                            {pendingLeavesBadgeCount}
+                          </span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-gray-300" />
+                      </div>
+                    </Link>
+                  );
+                })
+              )}
+
+              {!isGuest && ['admin', 'bod', 'hr'].includes(currentRole) && (
                 <div className="mt-2 border-t border-gray-100 pt-3 space-y-1">
                   {['admin', 'bod'].includes(currentRole) && (
                     <Link
@@ -1259,26 +1420,40 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Footer Profile & Logout */}
-            <div className="p-4 border-t border-gray-200 bg-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                <div className="h-8 w-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                  {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-gray-800 truncate">{user?.email || 'Tài khoản'}</p>
-                  <p className="text-[10px] text-gray-500 font-medium">{getRoleLabel(displayRole)}</p>
-                </div>
+            {isGuest ? (
+              <div className="p-4 border-t border-gray-200 bg-slate-50 flex items-center justify-between">
+                <span className="text-xs text-gray-500 font-medium">Chế độ xem công khai</span>
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Đăng nhập</span>
+                </Link>
               </div>
+            ) : (
+              <div className="p-4 border-t border-gray-200 bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                  <div className="h-8 w-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-gray-800 truncate">{user?.email || 'Tài khoản'}</p>
+                    <p className="text-[10px] text-gray-500 font-medium">{getRoleLabel(displayRole)}</p>
+                  </div>
+                </div>
 
-              <button
-                type="button"
-                onClick={() => signOut()}
-                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                title="Đăng xuất"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                  title="Đăng xuất"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

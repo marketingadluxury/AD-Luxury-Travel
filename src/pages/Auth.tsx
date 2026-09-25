@@ -229,6 +229,14 @@ export default function Auth({ initialIsUpdatePassword = false }: AuthProps) {
         {/* Right Side - Auth Form */}
         <div className="md:w-7/12 p-8 sm:p-12">
           <div className="max-w-md mx-auto">
+            <div className="mb-4">
+              <a
+                href="/"
+                className="inline-flex items-center text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors gap-1.5 hover:underline"
+              >
+                <span>← Quay lại xem Lịch khởi hành</span>
+              </a>
+            </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {isUpdatePassword 
                 ? 'Đặt lại mật khẩu mới'

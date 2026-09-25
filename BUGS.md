@@ -6,6 +6,55 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.62 Thiết Kế Chế Độ Xem Lịch Khởi Hành Công Khai (Public View-Only) Cho Mọi Người Truy Cập Website
+- **Mô tả yêu cầu:**
+  - Cho phép tất cả người dùng khi truy cập vào website (kể cả chưa đăng nhập / khách vãng lai) đều xem được trang Lịch khởi hành tour (`/`).
+  - Chế độ dành cho khách vãng lai: **Chỉ xem (View-only), hoàn toàn không thể thực hiện thao tác nội bộ**.
+  - Khách vãng lai xem được đầy đủ: Danh sách tour, lịch trình, hành trình, thời gian đi/về, chuyến bay, khách sạn, số chỗ trống khả dụng, biểu giá các đối tượng (người lớn, trẻ em, trẻ nhỏ, phụ thu phòng đơn, phí visa), tìm kiếm, bộ lọc nâng cao, tải/mở file PDF lịch trình chi tiết và modal Thông tin lưu ý.
+  - Bảo mật dữ liệu nội bộ: Ẩn hoàn toàn thông tin **Hoa hồng / Khách**, ẩn thẻ thông tin đối tác gửi khách (`🤝 GỬI KHÁCH ĐỐI TÁC`), ẩn nút *"Thêm Tour Mới"*, thay thế nút *"Giữ chỗ / Tạo booking"* bằng nút *"Đăng nhập để giữ chỗ / đặt tour"* (kèm điều hướng sang trang đăng nhập).
+  - Khách vãng lai khi click vào bất kỳ tính năng yêu cầu đăng nhập nào hoặc các route nội bộ sẽ được chuyển hướng an toàn tới trang Đăng nhập (`/login`).
+- **Các bước triển khai:**
+  1. **Kiến trúc phân quyền định tuyến (`src/App.tsx`):**
+     - Xây dựng component `ProtectedRoute` bao bọc các phân hệ nội bộ (`/orders`, `/tours`, `/accounting`, `/employees`, `/dashboard`...).
+     - Mở quyền truy cập công khai cho các route `/`, `/docs`, `/login`, `/guest-upload` mà không bắt buộc đăng nhập trước.
+  2. **Giao diện & Điều hướng Layout (`src/components/Layout.tsx`):**
+     - Nhận diện trạng thái khách vãng lai (`isGuest = !user`).
+     - Hiển thị thẻ *"Chế độ xem công khai"* trên Sidebar và Menu mobile với nút kêu gọi *"Đăng nhập hệ thống"*.
+     - Ẩn hộp chọn chuyển đổi vai trò, nút góp ý báo lỗi và các nhóm phân hệ nội bộ khỏi Sidebar/Bottom Nav đối với khách vãng lai.
+     - Header hiển thị tiêu đề *"Lịch khởi hành tour"* kèm badge *"Khách vãng lai"* và nút *"Đăng nhập"* nổi bật.
+  3. **Tối ưu trải nghiệm trang Lịch khởi hành (`src/pages/DepartureCalendar.tsx`):**
+     - Bổ sung banner chào đón & hướng dẫn dành riêng cho khách vãng lai ở đầu trang với nút *"Đăng nhập hệ thống"*.
+     - Truyền cờ `isGuest` vào `TourCard`.
+     - Ẩn hoàn toàn nhãn và số tiền **Hoa hồng / Khách** ở cả thẻ tóm tắt và bảng chi tiết biểu giá tour (tự động điều chỉnh layout lưới 5 cột cân đối).
+     - Chuyển nút hành động ở chân thẻ tour thành *"Đăng nhập để giữ chỗ / đặt tour"*. Khi click, hệ thống thông báo lịch sự và dẫn trực tiếp về `/login`.
+     - Ẩn nút *"Thêm Tour Mới"* trên thanh công cụ lọc.
+  4. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 unit tests (`npm test`) và 21 kịch bản simulation tests (`npm run test:simulation`).
+     - Kiểm tra TypeScript (`tsc --noEmit`) và biên dịch (`compile_applet`) hoàn toàn sạch lỗi.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
+### 1.61 Tích Hợp Tab Con "Quản Lý Nhân Sự" Vào Cụm Hành Chính Nhân Sự Cho Vai Trò HR
+- **Mô tả yêu cầu:**
+  - Chuyển phân hệ Quản lý nhân sự công ty vào trực tiếp cụm menu *Hành chính nhân sự* (thay vì phải vào mục Cài đặt hệ thống như trước).
+  - Vai trò **Nhân sự (`role: 'hr'`)** thao tác tập trung tại tab con *Quản lý nhân sự* mới (`/employees`).
+  - Ẩn mục *Cài đặt hệ thống* (`/settings`) đối với vai trò HR (chỉ dành riêng cho Admin/BOD); nếu HR truy cập URL `/settings` sẽ được tự động điều hướng sang `/employees`.
+- **Các bước triển khai:**
+  1. **Khởi tạo trang Quản lý nhân sự (`src/pages/EmployeesManagement.tsx`):**
+     - Xây dựng giao diện trang với tiêu đề, biểu tượng và nhãn danh mục *Hành chính nhân sự* đồng bộ chuẩn thiết kế.
+     - Tích hợp toàn diện component `UserManagement` (danh sách nhân viên, phòng ban/team, thêm/sửa nhân sự, chuyển trạng thái làm việc Thử việc/Chính thức/Đã nghỉ việc).
+     - Kiểm soát phân quyền chặt chẽ (`canAccess = ['admin', 'bod', 'hr']`), chặn truy cập trái phép.
+  2. **Định tuyến & Cấu hình Menu (`src/App.tsx` & `src/components/Layout.tsx`):**
+     - Khai báo route `/employees` trong `App.tsx`.
+     - Bổ sung mục *Quản lý nhân sự* (`href: '/employees'`) vào nhóm `navigationTree` của *Hành chính nhân sự*, tự động xuất hiện trên thanh Sub-tabs điều hướng ngang và Sidebar.
+     - Phân quyền hiển thị: Chỉ các tài khoản có vai trò `hr`, `admin`, `bod` mới thấy tab con này; các vai trò nhân viên khác (Sale, Điều hành, Visa, Kế toán, HDV...) bị ẩn để bảo mật.
+     - Ẩn nút *Cài đặt hệ thống* ở chân Sidebar đối với vai trò HR (chỉ giữ cho `admin`), cập nhật danh sách `allNavItems` và phân quyền route.
+  3. **Tự động điều hướng tại trang Cài đặt (`src/pages/Settings.tsx`):**
+     - Tự động nhận diện nếu người dùng vai trò `hr` truy cập `/settings` thì điều hướng (`navigate('/employees', { replace: true })`) tức thì.
+  4. **Kiểm thử tự động & Tài liệu:**
+     - Vượt qua 100% 35 unit tests (`npm test`), 21 kịch bản simulation tests (`npm run test:simulation`), kiểm tra TypeScript (`tsc --noEmit`) và biên dịch hệ thống sạch lỗi.
+     - Đồng bộ quy chuẩn vào mục 12 của `AGENTS.md`.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.60 Cập Nhật Nguyên Tắc Tính Thuế VAT Đã Bao Gồm Trong Giá Tour (VAT Included)
 - **Mô tả yêu cầu:**
   - Chuyển đổi cơ chế tính VAT: Biểu giá niêm yết của tour là giá trọn gói đã bao gồm thuế giá trị gia tăng (VAT).

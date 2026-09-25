@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useCRM } from '../context/CRMContext';
 import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database, History } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
@@ -9,12 +9,19 @@ import ActivityLogs from './ActivityLogs';
 export default function Settings() {
   const { currentRole, membershipSettings, updateMembershipSettings } = useCRM();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tabFromUrl = searchParams.get('tab') as any;
+
+  useEffect(() => {
+    if (currentRole === 'hr') {
+      navigate('/employees', { replace: true });
+    }
+  }, [currentRole, navigate]);
 
   const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database' | 'logs'>(
     tabFromUrl && ['membership', 'users', 'database', 'logs'].includes(tabFromUrl)
       ? tabFromUrl
-      : currentRole === 'hr' ? 'users' : 'membership'
+      : 'membership'
   );
   
   const [silver, setSilver] = useState(membershipSettings?.silverMin || 20000000);
@@ -22,7 +29,7 @@ export default function Settings() {
   const [platinum, setPlatinum] = useState(membershipSettings?.platinumMin || 100000000);
   const [isSaved, setIsSaved] = useState(false);
 
-  const canAccessSettings = ['admin', 'bod', 'hr'].includes(currentRole);
+  const canAccessSettings = ['admin', 'bod'].includes(currentRole);
 
   if (!canAccessSettings) {
     return (
@@ -32,7 +39,7 @@ export default function Settings() {
         </div>
         <h2 className="text-xl font-black text-gray-900 mb-2">Quyền truy cập hạn chế</h2>
         <p className="text-xs text-gray-500 mb-6 max-w-sm leading-relaxed font-semibold">
-          Chỉ có <span className="text-blue-600 font-bold">Quản trị viên (Admin)</span>, <span className="text-violet-600 font-bold">Ban Giám Đốc (BOD)</span> và <span className="text-cyan-700 font-bold">Nhân sự (HR)</span> mới có quyền truy cập trang Cài đặt & Quản lý nhân sự.
+          Chỉ có <span className="text-blue-600 font-bold">Quản trị viên (Admin)</span> và <span className="text-violet-600 font-bold">Ban Giám Đốc (BOD)</span> mới có quyền truy cập trang Cài đặt hệ thống.
         </p>
       </div>
     );

@@ -20,10 +20,19 @@ import TourMediaManagement from './pages/TourMediaManagement';
 import { GuestPhotoUploadPage } from './pages/GuestPhotoUploadPage';
 import MetaAdsAnalytics from './pages/MetaAdsAnalytics';
 import LeaveRequestsPage from './pages/LeaveRequestsPage';
+import EmployeesManagement from './pages/EmployeesManagement';
 import MyDashboard from './pages/MyDashboard';
 import DocsPage from './pages/DocsPage';
 import { CRMProvider } from './context/CRMContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user) {
+    return <Auth />;
+  }
+  return <>{children}</>;
+}
 
 function AppContent() {
   const { user, profile, loading } = useAuth();
@@ -50,7 +59,7 @@ function AppContent() {
     );
   }
 
-  if (!user || isRecoveryInUrl) {
+  if (isRecoveryInUrl) {
     return <Auth initialIsUpdatePassword={isRecoveryInUrl} />;
   }
 
@@ -60,25 +69,28 @@ function AppContent() {
         <Layout>
           <Routes>
             <Route path="/" element={<DepartureCalendar />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/tours" element={<ToursManagement />} />
-            <Route path="/tour-media" element={<TourMediaManagement />} />
-            <Route path="/guest-upload" element={<GuestPhotoUploadPage />} />
-            <Route path="/visa-services" element={<VisaServices />} />
-            <Route path="/visa-orders" element={<VisaOrders />} />
-            <Route path="/orders" element={<OrdersManagement />} />
-            <Route path="/visa" element={<VisaProcessing />} />
-            <Route path="/accounting" element={<AccountingInvoice />} />
-            <Route path="/payment-proposals" element={<PaymentProposals />} />
-            <Route path="/customers" element={<CustomersManagement />} />
-            <Route path="/passengers" element={<PassengersManagement />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/my-dashboard" element={<MyDashboard />} />
-            <Route path="/meta-ads" element={<MetaAdsAnalytics />} />
-            <Route path="/leave-requests" element={<LeaveRequestsPage />} />
             <Route path="/docs" element={<DocsPage />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/activity-logs" element={<ActivityLogs />} />
+            <Route path="/login" element={<Auth />} />
+            <Route path="/guest-upload" element={<GuestPhotoUploadPage />} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/tours" element={<ProtectedRoute><ToursManagement /></ProtectedRoute>} />
+            <Route path="/tour-media" element={<ProtectedRoute><TourMediaManagement /></ProtectedRoute>} />
+            <Route path="/visa-services" element={<ProtectedRoute><VisaServices /></ProtectedRoute>} />
+            <Route path="/visa-orders" element={<ProtectedRoute><VisaOrders /></ProtectedRoute>} />
+            <Route path="/orders" element={<ProtectedRoute><OrdersManagement /></ProtectedRoute>} />
+            <Route path="/visa" element={<ProtectedRoute><VisaProcessing /></ProtectedRoute>} />
+            <Route path="/accounting" element={<ProtectedRoute><AccountingInvoice /></ProtectedRoute>} />
+            <Route path="/payment-proposals" element={<ProtectedRoute><PaymentProposals /></ProtectedRoute>} />
+            <Route path="/customers" element={<ProtectedRoute><CustomersManagement /></ProtectedRoute>} />
+            <Route path="/passengers" element={<ProtectedRoute><PassengersManagement /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/my-dashboard" element={<ProtectedRoute><MyDashboard /></ProtectedRoute>} />
+            <Route path="/meta-ads" element={<ProtectedRoute><MetaAdsAnalytics /></ProtectedRoute>} />
+            <Route path="/leave-requests" element={<ProtectedRoute><LeaveRequestsPage /></ProtectedRoute>} />
+            <Route path="/employees" element={<ProtectedRoute><EmployeesManagement /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/activity-logs" element={<ProtectedRoute><ActivityLogs /></ProtectedRoute>} />
+            <Route path="*" element={<DepartureCalendar />} />
           </Routes>
         </Layout>
       </Router>
