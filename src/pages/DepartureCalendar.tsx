@@ -904,7 +904,7 @@ export default function DepartureCalendar() {
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Banner chào đón & hướng dẫn dành riêng cho Khách vãng lai */}
       {isGuest && (
-        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-4 sm:p-5 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-4 sm:p-5 rounded-2xl shadow-md">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider backdrop-blur-xs">
@@ -915,18 +915,10 @@ export default function DepartureCalendar() {
             <h2 className="text-base sm:text-lg font-black tracking-tight">
               Lịch Khởi Hành Tour Du Lịch — AD Luxury Travel
             </h2>
-            <p className="text-xs text-blue-100/90 leading-relaxed max-w-2xl font-medium">
+            <p className="text-xs text-blue-100/90 leading-relaxed max-w-3xl font-medium">
               Bạn có thể tự do tra cứu thông tin hành trình, số chỗ khả dụng, giá vé và tải file lịch trình tour chi tiết. Để thực hiện giữ chỗ, tạo booking hoặc liên kết đại lý, vui lòng đăng nhập tài khoản.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/login')}
-            className="shrink-0 px-4 py-2.5 bg-white text-blue-700 hover:bg-blue-50 rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
-          >
-            <LogIn className="w-4 h-4 text-blue-600" />
-            <span>Đăng nhập hệ thống</span>
-          </button>
         </div>
       )}
 

@@ -6,6 +6,37 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.64 Loại Bỏ Trùng Lặp Nút Đăng Nhập Hệ Thống, Giữ Lại Duy Nhất Nút Trên Header
+- **Mô tả yêu cầu:**
+  - Trên màn hình của tài khoản chưa đăng nhập (khách vãng lai), loại bỏ các nút đăng nhập trùng lặp ở Sidebar và Banner trang Lịch khởi hành; chỉ giữ lại 1 nút Đăng nhập duy nhất ở góc trên bên phải thanh Header.
+- **Các bước triển khai:**
+  1. **Sidebar (`src/components/Layout.tsx`):**
+     - Loại bỏ nút *"Đăng nhập hệ thống"* trong thẻ *"Chế độ xem công khai"*, chỉ giữ lại thông tin giới thiệu trạng thái ngắn gọn, tinh tế.
+  2. **Banner Lịch Khởi Hành (`src/pages/DepartureCalendar.tsx`):**
+     - Loại bỏ nút *"Đăng nhập hệ thống"* màu trắng bên phải banner; banner lúc này đóng vai trò là bảng thông báo giới thiệu nhẹ nhàng, thoáng đãng.
+  3. **Header Topbar (`src/components/Layout.tsx`):**
+     - Giữ lại nút *"Đăng nhập"* màu xanh ở góc trên bên phải màn hình chuẩn hóa theo giao diện ứng dụng web/SaaS.
+  4. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 unit tests, kiểm tra TypeScript và biên dịch hoàn toàn thành công.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
+### 1.63 Khóa Toàn Diện Quyền Xem Tài Liệu Hướng Dẫn & Gửi Góp Ý Đối Với Khách Chưa Đăng Nhập
+- **Mô tả yêu cầu:**
+  - Tài khoản chưa đăng nhập (khách vãng lai) tuyệt đối không được xem tài liệu hướng dẫn sử dụng nội bộ (`/docs`) và không được gửi góp ý & báo lỗi.
+- **Các bước triển khai:**
+  1. **Khóa Tuyến Đường Tài Liệu (`src/App.tsx` & `src/components/Layout.tsx`):**
+     - Đưa route `/docs` vào danh sách bảo vệ bằng `<ProtectedRoute><DocsPage /></ProtectedRoute>` trong `App.tsx`. Khi khách chưa đăng nhập truy cập `/docs`, hệ thống tự động hiển thị màn hình yêu cầu đăng nhập.
+     - Loại bỏ `/docs` khỏi danh sách `hasAccess` của khách vãng lai trong `Layout.tsx`.
+     - Ẩn hoàn toàn nút truy cập nhanh *"Hướng dẫn"* trên Topbar Header.
+     - Ẩn mục *"Tài liệu & Hướng dẫn"* trên cả thanh Sidebar (desktop), Bottom Navigation Bar (mobile) và Mobile Drawer khi chưa đăng nhập. Khách vãng lai chỉ thấy duy nhất mục *"Lịch khởi hành"* và nút *"Đăng nhập"*.
+  2. **Chặn Khả Năng Gửi Góp Ý & Báo Lỗi (`src/components/Layout.tsx` & `src/components/FeedbackModal.tsx`):**
+     - Ẩn hoàn toàn dải banner thông báo thử nghiệm chạy ngang (Testing Marquee Bar) dưới Header khi chưa đăng nhập, loại bỏ điểm kích hoạt mở popup góp ý báo lỗi.
+     - Không render `FeedbackModal` đối với khách vãng lai (`!isGuest`).
+     - Bổ sung lớp bảo vệ bên trong `FeedbackModal`: tự động từ chối mở (`if (!isOpen || !user) return null`) và chặn gửi góp ý nếu không có tài khoản (`if (!user) { setErrorMsg(...); return; }`).
+  3. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 bài kiểm thử đơn vị (`npm test`), 21 kịch bản kiểm thử mô phỏng (`npm run test:simulation`), kiểm tra TypeScript (`tsc --noEmit`) và biên dịch (`compile_applet`) hoàn toàn thành công.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.62 Thiết Kế Chế Độ Xem Lịch Khởi Hành Công Khai (Public View-Only) Cho Mọi Người Truy Cập Website
 - **Mô tả yêu cầu:**
   - Cho phép tất cả người dùng khi truy cập vào website (kể cả chưa đăng nhập / khách vãng lai) đều xem được trang Lịch khởi hành tour (`/`).

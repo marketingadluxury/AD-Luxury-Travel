@@ -23,7 +23,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen) return null;
+  if (!isOpen || !user) return null;
 
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -90,6 +90,10 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      setErrorMsg('Vui lòng đăng nhập hệ thống để gửi góp ý hoặc báo lỗi!');
+      return;
+    }
     if (!content.trim()) {
       setErrorMsg('Vui lòng nhập nội dung góp ý hoặc báo lỗi!');
       return;

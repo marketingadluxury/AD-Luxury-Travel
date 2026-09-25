@@ -630,7 +630,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   
   let hasAccess = false;
   if (isGuest) {
-    hasAccess = location.pathname === '/' || location.pathname === '/docs' || location.pathname === '/login' || location.pathname === '/guest-upload';
+    hasAccess = location.pathname === '/' || location.pathname === '/login' || location.pathname === '/guest-upload';
   } else if (currentRole === 'admin') {
     hasAccess = true;
   } else if (isSettingsPath) {
@@ -702,16 +702,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Globe className="w-4 h-4 text-blue-600" />
               <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">Chế độ xem công khai</span>
             </div>
-            <p className="text-[11px] text-gray-500 font-medium leading-relaxed mb-3">
+            <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
               Xem lịch khởi hành và tình trạng chỗ trống cập nhật thời gian thực.
             </p>
-            <Link
-              to="/login"
-              className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>Đăng nhập hệ thống</span>
-            </Link>
           </div>
         ) : (
           <div className="p-4 border-b border-gray-150 bg-slate-50/50 shrink-0">
@@ -756,18 +749,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Calendar className="mr-2.5 flex-shrink-0 h-4 w-4 text-blue-600" />
                 <span>Lịch khởi hành</span>
-              </Link>
-              <Link
-                to="/docs"
-                className={cn(
-                  location.pathname === '/docs'
-                    ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
-                    : 'text-gray-800 hover:bg-gray-100/80 font-semibold',
-                  'group flex items-center px-3.5 py-2.5 text-sm rounded-xl transition-colors'
-                )}
-              >
-                <BookOpen className="mr-2.5 flex-shrink-0 h-4 w-4 text-gray-400 group-hover:text-gray-600" />
-                <span>Tài liệu & Hướng dẫn</span>
               </Link>
             </div>
           ) : (
@@ -878,15 +859,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-            {/* Quick Docs Link */}
-            <Link
-              to="/docs"
-              title="Tài liệu & Hướng dẫn sử dụng (Ctrl + K)"
-              className="text-gray-500 hover:text-blue-600 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl hover:bg-blue-50 transition-colors flex items-center gap-1.5 active:scale-95 border border-slate-200/80 bg-slate-50/60"
-            >
-              <BookOpen className="h-4 w-4 text-blue-600" />
-              <span className="hidden sm:inline text-xs font-bold text-slate-700 hover:text-blue-600">Hướng dẫn</span>
-            </Link>
+            {/* Quick Docs Link (chỉ dành cho tài khoản đã đăng nhập) */}
+            {!isGuest && (
+              <Link
+                to="/docs"
+                title="Tài liệu & Hướng dẫn sử dụng (Ctrl + K)"
+                className="text-gray-500 hover:text-blue-600 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl hover:bg-blue-50 transition-colors flex items-center gap-1.5 active:scale-95 border border-slate-200/80 bg-slate-50/60"
+              >
+                <BookOpen className="h-4 w-4 text-blue-600" />
+                <span className="hidden sm:inline text-xs font-bold text-slate-700 hover:text-blue-600">Hướng dẫn</span>
+              </Link>
+            )}
 
             {isGuest ? (
               <Link
@@ -1016,60 +999,62 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Dải thông báo chạy ngang giai đoạn thử nghiệm (Testing Marquee Bar) */}
-        <div className="bg-amber-50/95 border-b border-amber-200/80 px-3 sm:px-4 py-1.5 flex items-center gap-2 overflow-hidden shrink-0 z-10 select-none shadow-2xs">
-          <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs shrink-0 bg-amber-100/90 px-2 sm:px-2.5 py-0.5 rounded-full border border-amber-300/80 shadow-2xs">
-            <Megaphone className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
-            <span className="text-[10px] sm:text-[11px] font-bold tracking-tight whitespace-nowrap">Thử nghiệm</span>
-          </div>
+        {/* Dải thông báo chạy ngang giai đoạn thử nghiệm (Chỉ hiển thị cho người dùng nội bộ đã đăng nhập) */}
+        {!isGuest && (
+          <div className="bg-amber-50/95 border-b border-amber-200/80 px-3 sm:px-4 py-1.5 flex items-center gap-2 overflow-hidden shrink-0 z-10 select-none shadow-2xs">
+            <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs shrink-0 bg-amber-100/90 px-2 sm:px-2.5 py-0.5 rounded-full border border-amber-300/80 shadow-2xs">
+              <Megaphone className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
+              <span className="text-[10px] sm:text-[11px] font-bold tracking-tight whitespace-nowrap">Thử nghiệm</span>
+            </div>
 
-          <div className="relative flex-1 overflow-hidden h-5 flex items-center cursor-pointer" onClick={() => setIsFeedbackModalOpen(true)} title="Bấm để Góp ý & Báo lỗi cho hệ thống">
-            <div className="animate-marquee flex items-center whitespace-nowrap text-xs font-medium text-amber-950">
-              <div className="inline-flex items-center gap-1.5 pr-14">
-                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
-                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
-                  Góp ý &amp; Báo lỗi
-                </span>
-                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
-                <span className="text-amber-400 font-bold ml-3">✦</span>
-              </div>
-              <div className="inline-flex items-center gap-1.5 pr-14">
-                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
-                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
-                  Góp ý &amp; Báo lỗi
-                </span>
-                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
-                <span className="text-amber-400 font-bold ml-3">✦</span>
-              </div>
-              <div className="inline-flex items-center gap-1.5 pr-14">
-                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
-                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
-                  Góp ý &amp; Báo lỗi
-                </span>
-                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
-                <span className="text-amber-400 font-bold ml-3">✦</span>
-              </div>
-              <div className="inline-flex items-center gap-1.5 pr-14">
-                <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
-                <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
-                  Góp ý &amp; Báo lỗi
-                </span>
-                <span>để cải thiện hệ thống. Xin cảm ơn!</span>
-                <span className="text-amber-400 font-bold ml-3">✦</span>
+            <div className="relative flex-1 overflow-hidden h-5 flex items-center cursor-pointer" onClick={() => setIsFeedbackModalOpen(true)} title="Bấm để Góp ý & Báo lỗi cho hệ thống">
+              <div className="animate-marquee flex items-center whitespace-nowrap text-xs font-medium text-amber-950">
+                <div className="inline-flex items-center gap-1.5 pr-14">
+                  <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                  <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                    Góp ý &amp; Báo lỗi
+                  </span>
+                  <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                  <span className="text-amber-400 font-bold ml-3">✦</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 pr-14">
+                  <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                  <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                    Góp ý &amp; Báo lỗi
+                  </span>
+                  <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                  <span className="text-amber-400 font-bold ml-3">✦</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 pr-14">
+                  <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                  <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                    Góp ý &amp; Báo lỗi
+                  </span>
+                  <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                  <span className="text-amber-400 font-bold ml-3">✦</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 pr-14">
+                  <span>Hệ thống đang trong giai đoạn thử nghiệm, nếu có lỗi mong mọi người thông cảm. Hãy</span>
+                  <span className="font-bold underline text-blue-700 hover:text-blue-900 mx-0.5">
+                    Góp ý &amp; Báo lỗi
+                  </span>
+                  <span>để cải thiện hệ thống. Xin cảm ơn!</span>
+                  <span className="text-amber-400 font-bold ml-3">✦</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <button
-            type="button"
-            onClick={() => setIsFeedbackModalOpen(true)}
-            className="shrink-0 text-[11px] font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300/80 px-2.5 py-0.5 rounded-full border border-amber-300 transition-colors hidden sm:flex items-center gap-1 active:scale-95 cursor-pointer shadow-2xs"
-            title="Mở popup Góp ý & Báo lỗi"
-          >
-            <MessageSquarePlus className="w-3.5 h-3.5 text-amber-700" />
-            <span>Góp ý ngay</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setIsFeedbackModalOpen(true)}
+              className="shrink-0 text-[11px] font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300/80 px-2.5 py-0.5 rounded-full border border-amber-300 transition-colors hidden sm:flex items-center gap-1 active:scale-95 cursor-pointer shadow-2xs"
+              title="Mở popup Góp ý & Báo lỗi"
+            >
+              <MessageSquarePlus className="w-3.5 h-3.5 text-amber-700" />
+              <span>Góp ý ngay</span>
+            </button>
+          </div>
+        )}
         
         {/* Sub-Tabs Bar for Grouped Routes */}
         {activeGroup && !isGuest && (
@@ -1111,35 +1096,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Bottom Navigation Bar (App Experience) */}
         {isGuest ? (
-          <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-40 flex items-center justify-around px-3 py-1.5 shadow-lg pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-40 flex items-center justify-around px-4 py-1.5 shadow-lg pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
             <Link
               to="/"
               className={cn(
-                'flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all',
+                'flex flex-col items-center justify-center py-1 px-4 rounded-xl transition-all',
                 location.pathname === '/' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
               )}
             >
               <Calendar className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] leading-tight">Lịch Tour</span>
-            </Link>
-
-            <Link
-              to="/docs"
-              className={cn(
-                'flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all',
-                location.pathname === '/docs' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
-              )}
-            >
-              <BookOpen className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] leading-tight">Hướng Dẫn</span>
+              <span className="text-[10px] leading-tight font-semibold">Lịch Tour</span>
             </Link>
 
             <Link
               to="/login"
-              className="flex flex-col items-center justify-center py-1 px-4 rounded-xl text-white bg-blue-600 hover:bg-blue-700 font-bold shadow-xs active:scale-95 transition-all"
+              className="flex items-center justify-center py-1.5 px-5 rounded-xl text-white bg-blue-600 hover:bg-blue-700 font-bold shadow-xs active:scale-95 transition-all gap-1.5"
             >
-              <LogIn className="w-4 h-4 mb-0.5" />
-              <span className="text-[10px] leading-tight">Đăng Nhập</span>
+              <LogIn className="w-4 h-4" />
+              <span className="text-xs leading-tight">Đăng Nhập</span>
             </Link>
           </nav>
         ) : (
@@ -1309,22 +1283,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-300" />
                   </Link>
-                  <Link
-                    to="/docs"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={cn(
-                      location.pathname === '/docs'
-                        ? 'bg-blue-50 text-blue-700 font-bold shadow-2xs'
-                        : 'text-gray-800 hover:bg-gray-100 font-semibold',
-                      'flex items-center justify-between px-3.5 py-2.5 text-sm rounded-xl transition-colors'
-                    )}
-                  >
-                    <div className="flex items-center">
-                      <BookOpen className="mr-3 flex-shrink-0 h-4 w-4 text-gray-400" />
-                      <span>Tài liệu & Hướng dẫn</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                  </Link>
                 </>
               ) : (
                 mainSidebarNav.map((item) => {
@@ -1458,11 +1416,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Modal Góp ý & Báo lỗi */}
-      <FeedbackModal
-        isOpen={isFeedbackModalOpen}
-        onClose={() => setIsFeedbackModalOpen(false)}
-      />
+      {/* Modal Góp ý & Báo lỗi (Chỉ dành cho tài khoản đã đăng nhập) */}
+      {!isGuest && (
+        <FeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+        />
+      )}
 
       {/* Modal Upload Ảnh Nhanh cho HDV */}
       <HDVQuickUploadModal

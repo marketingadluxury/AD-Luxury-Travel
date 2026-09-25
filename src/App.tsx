@@ -69,7 +69,7 @@ function AppContent() {
         <Layout>
           <Routes>
             <Route path="/" element={<DepartureCalendar />} />
-            <Route path="/docs" element={<DocsPage />} />
+            <Route path="/docs" element={<ProtectedRoute><DocsPage /></ProtectedRoute>} />
             <Route path="/login" element={<Auth />} />
             <Route path="/guest-upload" element={<GuestPhotoUploadPage />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
