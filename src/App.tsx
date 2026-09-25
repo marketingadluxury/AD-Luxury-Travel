@@ -23,6 +23,7 @@ import LeaveRequestsPage from './pages/LeaveRequestsPage';
 import EmployeesManagement from './pages/EmployeesManagement';
 import MyDashboard from './pages/MyDashboard';
 import DocsPage from './pages/DocsPage';
+import TaxHandbook from './pages/TaxHandbook';
 import { CRMProvider } from './context/CRMContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -80,6 +81,7 @@ function AppContent() {
             <Route path="/orders" element={<ProtectedRoute><OrdersManagement /></ProtectedRoute>} />
             <Route path="/visa" element={<ProtectedRoute><VisaProcessing /></ProtectedRoute>} />
             <Route path="/accounting" element={<ProtectedRoute><AccountingInvoice /></ProtectedRoute>} />
+            <Route path="/tax-handbook" element={<ProtectedRoute><TaxHandbook /></ProtectedRoute>} />
             <Route path="/payment-proposals" element={<ProtectedRoute><PaymentProposals /></ProtectedRoute>} />
             <Route path="/customers" element={<ProtectedRoute><CustomersManagement /></ProtectedRoute>} />
             <Route path="/passengers" element={<ProtectedRoute><PassengersManagement /></ProtectedRoute>} />

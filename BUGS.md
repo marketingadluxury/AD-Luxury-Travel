@@ -6,6 +6,28 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.66 Tích Hợp Module Tra Cứu Thuế & Sổ Tay Thuế Lữ Hành 2025 – 2026 (Từ MCP Skill thue-vietnam)
+- **Mô tả yêu cầu:**
+  - Tích hợp kỹ năng tra cứu thuế từ MCP `thue-vietnam` vào hệ thống Tour CRM thông qua một tab độc lập dành cho nhân sự công ty (Kế toán, Sale, Điều hành, Leader, BOD, Quản trị viên).
+- **Các bước triển khai:**
+  1. **Tạo Trang Sổ Tay Thuế & Máy Tính Thuế (`src/pages/TaxHandbook.tsx`):**
+     - **3 Bộ công cụ tính nhanh (Interactive Calculators):**
+       + *Công cụ 1:* Tính thuế GTGT (VAT) tour du lịch: Hỗ trợ bóc tách VAT theo mức ưu đãi 8% (NĐ 174/2025 áp dụng đến 31/12/2026) hoặc 10%, tự động trừ chi phí thực tế phát sinh tại nước ngoài đối với tour Outbound theo Điều 7 TT 219.
+       + *Công cụ 2:* Tính thuế TNCN & Hoa hồng CTV: Khấu trừ 10% tại nguồn cho CTV ngoài (có tùy chọn cam kết 08/CK-TNCN), hoặc tính thuế lũy tiến lương nhân sự theo quy định giảm trừ gia cảnh mới (15,5 triệu bản thân / 6,2 triệu người phụ thuộc).
+       + *Công cụ 3:* Tính thuế nhà thầu (FCT) chạy quảng cáo Meta Ads / Google Ads: Hạch toán chi phí hợp lý được trừ TNDN và nghĩa vụ thuế 5% GTGT + 5% TNDN.
+     - **Cẩm nang quy chuẩn thuế du lịch:**
+       + Quy tắc thuế suất 8%, bóc tách chi phí outbound, ngưỡng bắt buộc thanh toán không dùng tiền mặt từ 5.000.000đ.
+       + Hồ sơ chi phí hợp lý TNDN: Vé máy bay, phòng khách sạn, tiếp khách, thuê hướng dẫn viên freelance.
+       + Khấu trừ thuế hoa hồng CTV và cam kết mẫu 08/CK-TNCN.
+       + Tích hợp bộ lọc tìm kiếm nhanh quy định theo từ khóa.
+     - **Lịch tuân thủ thuế:** Bảng theo dõi hạn nộp tờ khai và thuế hàng tháng, hàng quý (30/04, 31/07, 31/10, 31/01), quyết toán năm (31/03, 30/04).
+  2. **Định Tuyến & Phân Quyền (`src/App.tsx` & `src/components/Layout.tsx`):**
+     - Đăng ký route `/tax-handbook` bảo vệ bởi `<ProtectedRoute>`.
+     - Thêm mục *"Tra cứu thuế"* (icon `Scale`) trên thanh Sidebar cho các vai trò: `admin`, `bod`, `accounting`, `operator`, `sale`, `sale_leader`, `hr`.
+  3. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 unit tests, linter không lỗi, biên dịch hoàn thành sạch sẽ.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.65 Khắc Phục Lỗi Không Đăng Nhập Được & Không Tự Động Điều Hướng Vào Hệ Thống
 - **Nguyên nhân sự cố:**
   1. Thiếu file `.env` trên môi trường runtime khiến Vite không nạp biến môi trường `VITE_SUPABASE_URL` vào client, dẫn tới việc rơi vào chế độ kiểm tra lỗi cơ sở dữ liệu.
