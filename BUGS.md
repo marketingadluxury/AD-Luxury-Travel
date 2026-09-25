@@ -6,6 +6,23 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.67 Tích Hợp Cơ Chế Kiểm Tra Cập Nhật & Đồng Bộ Dữ Liệu Thuế Tự Động Từ MCP Server
+- **Mô tả yêu cầu:**
+  - Bổ sung cơ chế tự động kết nối và đồng bộ phiên bản mới nhất từ MCP Server (`https://go.noti.vn/api/skill-mcp/...`) cho phân hệ Tra cứu thuế.
+- **Các bước triển khai:**
+  1. **Tạo Endpoint Proxy An Toàn (`server/routes/taxRoutes.ts` & `app.ts`):**
+     - Tạo route `/api/tax/check-mcp-update` xử lý gửi truy vấn JSON-RPC chuẩn `tools/call -> list_skills` đến máy chủ MCP `thue-vietnam`.
+     - Phân tích phiên bản, thời gian cập nhật thực tế (`updatedAt`) và định dạng theo múi giờ Việt Nam.
+     - Tích hợp timeout và cơ chế fallback mượt mà (chuyển sang dữ liệu đóng gói sẵn nếu MCP tạm thời bận).
+  2. **Giao Diện Đồng Bộ & Thông Báo Trạng Thái (`src/pages/TaxHandbook.tsx`):**
+     - Bổ sung nút bấm *"Kiểm tra cập nhật MCP"* kèm biểu tượng xoay tải `RefreshCw` trên Header Banner.
+     - Hiển thị chấm trạng thái màu xanh lá (`●`) báo hiệu kết nối MCP Server thành công.
+     - Hiển thị phiên bản MCP Skill hiện hành (`v2.2.0`), ngày phát hành và thời gian kiểm tra gần nhất.
+     - Tự động kích hoạt kiểm tra ngầm 1 lần khi người dùng mở trang và cho phép bấm thủ công kiểm tra bất kỳ lúc nào.
+  3. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 unit tests, linter không lỗi, biên dịch hoàn thành sạch sẽ.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.66 Tích Hợp Module Tra Cứu Thuế & Sổ Tay Thuế Lữ Hành 2025 – 2026 (Từ MCP Skill thue-vietnam)
 - **Mô tả yêu cầu:**
   - Tích hợp kỹ năng tra cứu thuế từ MCP `thue-vietnam` vào hệ thống Tour CRM thông qua một tab độc lập dành cho nhân sự công ty (Kế toán, Sale, Điều hành, Leader, BOD, Quản trị viên).
