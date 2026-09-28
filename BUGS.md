@@ -6,6 +6,21 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.72 Tối Ưu Hóa Đơn Xin Nghỉ Phép Gói Gọn Chuẩn 1 Trang A4 (Chống Tràn & Mất Chữ)
+- **Mô tả yêu cầu:**
+  - Tối ưu lại biểu mẫu in Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`) để toàn bộ nội dung nằm vừa vặn trọn vẹn trong đúng 1 trang A4 khi in hoặc lưu PDF, loại bỏ hoàn toàn tình trạng bị tràn sang trang thứ 2 hoặc mất chữ.
+- **Các bước triển khai:**
+  1. **Tối Ưu CSS `@media print`:**
+     - Thiết lập căn lề chuẩn in ấn (`padding: 10mm 14mm 8mm 14mm`), loại bỏ ép `100vh` cứng và cấu hình `page-break-inside: avoid` / `page-break-after: avoid`.
+     - Kích hoạt chuẩn in màu `-webkit-print-color-adjust: exact` để giữ nét viền bảng và các ô tick chọn `[X]`.
+  2. **Tinh Chỉnh Khoảng Cách & Bố Cục (Vertical Rhythm):**
+     - Thu gọn khoảng cách tiêu đề, Section A, Section B, Section C và Section D xuống mức vừa vặn, chuẩn tỷ lệ văn bản hành chính.
+     - Lưới bảng chọn loại nghỉ phép (Leave Type) 2 cột x 4 dòng được tối ưu padding `px-2 py-1`, ô tick `[X]` vuông vức 18x18px gọn gàng.
+     - Khu vực 3 chữ ký phê duyệt (Cấp trên, Trưởng phòng, Trưởng phòng nhân sự) được căn chỉnh chiều cao hợp lý (48px) đảm bảo chữ ký rõ nét và không bao giờ bị đẩy sang trang tiếp theo.
+  3. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua toàn bộ unit tests, linter và build applet hoàn thành thành công 100%.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.71 Thiết Kế & Tích Hợp Chức Năng Xuất Biểu Mẫu Chuẩn: Giấy Đề Nghị Thanh Toán & Đơn Xin Nghỉ Phép
 - **Mô tả yêu cầu:**
   - Thiết kế và tích hợp khả năng xuất và in trực tiếp từ hệ thống ra 2 mẫu văn bản hành chính theo đúng chuẩn PDF của công ty: *Giấy Đề Nghị Thanh Toán* và *Đơn Xin Nghỉ Phép (Application For Leave - Song ngữ Anh/Việt)*.
