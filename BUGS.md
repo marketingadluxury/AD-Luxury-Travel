@@ -6,17 +6,17 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
-### 1.72 Tối Ưu Hóa Đơn Xin Nghỉ Phép Gói Gọn Chuẩn 1 Trang A4 (Chống Tràn & Mất Chữ)
+### 1.72 Tối Ưu Hóa Đơn Xin Nghỉ Phép Gói Gọn Chuẩn 1 Trang A4 Dọc (Chống Tràn, Cân Bằng Dòng & Bỏ Dòng Footer)
 - **Mô tả yêu cầu:**
-  - Tối ưu lại biểu mẫu in Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`) để toàn bộ nội dung nằm vừa vặn trọn vẹn trong đúng 1 trang A4 khi in hoặc lưu PDF, loại bỏ hoàn toàn tình trạng bị tràn sang trang thứ 2 hoặc mất chữ.
+  - Tối ưu lại biểu mẫu in Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`): loại bỏ dòng text footer `Hệ thống Tour CRM AD Luxury Travel · Trang 1/1`, giãn cách hợp lý các khối dòng thông tin trên khổ giấy A4 dọc để bố cục trải đều đẹp mắt, loại bỏ khoảng trắng thừa lớn phía dưới và chống tràn sang trang thứ 2.
 - **Các bước triển khai:**
-  1. **Tối Ưu CSS `@media print`:**
-     - Thiết lập căn lề chuẩn in ấn (`padding: 10mm 14mm 8mm 14mm`), loại bỏ ép `100vh` cứng và cấu hình `page-break-inside: avoid` / `page-break-after: avoid`.
-     - Kích hoạt chuẩn in màu `-webkit-print-color-adjust: exact` để giữ nét viền bảng và các ô tick chọn `[X]`.
-  2. **Tinh Chỉnh Khoảng Cách & Bố Cục (Vertical Rhythm):**
-     - Thu gọn khoảng cách tiêu đề, Section A, Section B, Section C và Section D xuống mức vừa vặn, chuẩn tỷ lệ văn bản hành chính.
-     - Lưới bảng chọn loại nghỉ phép (Leave Type) 2 cột x 4 dòng được tối ưu padding `px-2 py-1`, ô tick `[X]` vuông vức 18x18px gọn gàng.
-     - Khu vực 3 chữ ký phê duyệt (Cấp trên, Trưởng phòng, Trưởng phòng nhân sự) được căn chỉnh chiều cao hợp lý (48px) đảm bảo chữ ký rõ nét và không bao giờ bị đẩy sang trang tiếp theo.
+  1. **Loại Bỏ Text Footer Thừa:**
+     - Xóa dòng text `Hệ thống Tour CRM AD Luxury Travel · Trang 1/1` ở góc dưới cùng bên phải.
+  2. **Tối Ưu CSS & Khoảng Cách Dòng Khổ A4 Dọc (Portrait):**
+     - Mở rộng khoảng cách dọc (vertical rhythm) tự nhiên: tiêu đề (`my-4`, font 16-17px), Section A, Section B, Section C được giãn cách đều đặn (`space-y-1.5 mb-4`).
+     - Tăng kích thước các ô trong bảng Leave Type (`px-2.5 py-1.5`, ô tick [X] chuẩn 20x20px), bổ sung 2 dòng kẻ chấm bàn giao công việc ở mục C.1.
+     - Nâng chiều cao khu vực ký phê duyệt của 3 cấp thẩm quyền (Mục D) lên `h-16 sm:h-20` (64-80px), giúp chữ ký và họ tên người duyệt hiển thị trang trọng, vừa vặn.
+     - Sử dụng bố cục `flex flex-col justify-between` với `min-h-[297mm]` và lề in `padding: 12mm 16mm 12mm 16mm`, đảm bảo toàn bộ nội dung trải đều tuyệt đối từ đầu đến cuối 1 trang A4 dọc mà không bị dồn cục ở nửa trên hay nhảy trang.
   3. **Kiểm thử tự động & Xác thực:**
      - Vượt qua toàn bộ unit tests, linter và build applet hoàn thành thành công 100%.
 - **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
