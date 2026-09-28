@@ -6,6 +6,36 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.71 Thiết Kế & Tích Hợp Chức Năng Xuất Biểu Mẫu Chuẩn: Giấy Đề Nghị Thanh Toán & Đơn Xin Nghỉ Phép
+- **Mô tả yêu cầu:**
+  - Thiết kế và tích hợp khả năng xuất và in trực tiếp từ hệ thống ra 2 mẫu văn bản hành chính theo đúng chuẩn PDF của công ty: *Giấy Đề Nghị Thanh Toán* và *Đơn Xin Nghỉ Phép (Application For Leave - Song ngữ Anh/Việt)*.
+- **Các bước triển khai:**
+  1. **Xây Dựng Thuật Toán Đọc Số Tiền Thành Chữ Chuẩn Tài Chính Kế Toán (`src/utils/numberToWords.ts`):**
+     - Đọc chính xác mọi mệnh giá từ hàng trăm, hàng triệu đến hàng tỷ đồng; hỗ trợ viết hoa đầu câu và đuôi "đồng." (Ví dụ: `23209200` -> `Hai mươi ba triệu hai trăm lẻ chín nghìn hai trăm đồng.`).
+     - Bổ sung bộ kiểm thử tự động `src/utils/__tests__/numberToWords.test.ts`.
+  2. **Biểu Mẫu 1: Giấy Đề Nghị Thanh Toán (`PaymentProposalPrintModal.tsx`):**
+     - Thiết kế chuẩn mẫu văn bản hành chính A4: Quốc hiệu - Tiêu ngữ, CÔNG TY TNHH TM & DV AD LUXURY, ngày tháng năm TP.HCM tự động theo ngày lập.
+     - Họ tên người đề nghị, bộ phận, nội dung thanh toán, số tiền định dạng phân tách hàng nghìn VND và bằng chữ Tiếng Việt.
+     - Tự động sinh mã QR chuyển khoản VietQR Napas 24/7 theo số tài khoản, ngân hàng thụ hưởng, số tiền và nội dung mã phiếu để quét chuyển khoản ngay trên app ngân hàng.
+     - Bảng ký duyệt 3 cột viền đen đúng chuẩn: *Người đề nghị thanh toán*, *Người phụ trách*, *Phụ trách Kế toán*.
+     - Nút *"Xuất mẫu in"* được gắn trực tiếp trên thẻ đề xuất, từng dòng trong bảng và trong modal xem chi tiết.
+  3. **Biểu Mẫu 2: Đơn Xin Nghỉ Phép Song Ngữ (`LeaveRequestPrintModal.tsx`):**
+     - Thiết kế chuẩn mẫu A4 song ngữ Anh - Việt không dùng khung logo giả lập: Header căn chỉnh tinh tế gồm tên đơn vị, địa chỉ, website & fanpage chính thức.
+     - Mục A: Thông tin nhân viên, mã số, phòng ban, ngày vào làm, ngày viết đơn.
+     - Mục B: Thời gian nghỉ (sáng/chiều hoặc chuỗi ngày), tổng số ngày công, lý do xin nghỉ.
+     - Bảng phân loại loại nghỉ phép dạng ô tick `[X]` trực quan (Nghỉ thường niên, Nghỉ không lương, Nghỉ kết hôn/thai sản, Việc khẩn cấp, Nghỉ ốm...).
+     - Mục C: Bàn giao công việc, họ tên & chữ ký người hỗ trợ, số điện thoại liên lạc khẩn cấp, chữ ký nhân viên.
+     - Mục D: 3 cột ký duyệt cấp trên trực tiếp, Trưởng phòng bộ phận và Trưởng phòng nhân sự.
+     - Nút *"Xuất đơn"* được tích hợp trên bảng danh sách đơn nghỉ phép tại `/leave-requests`.
+  4. **Loại Bỏ Logo & Cân Đối Bố Cục Toàn Bộ Text:**
+     - Loại bỏ hoàn toàn khối logo, tái cấu trúc thông tin doanh nghiệp phía trên cùng theo chuẩn in ấn văn bản tài chính & hành chính nhân sự.
+     - Bổ sung hiển thị mã số phiếu đề nghị ngay dưới tên công ty ở Giấy Đề Nghị Thanh Toán; tối ưu khoảng cách giữa các phần để vừa vặn trọn vẹn trong 1 trang A4.
+  4. **Tối Ưu Hóa Trải Nghiệm In Ấn (`@media print`):**
+     - Tự động ẩn toàn bộ header, thanh menu sidebar và các nút điều hướng khi gọi lệnh in, tự động căn lề giấy A4 portrait chuẩn xác, cho phép in trực tiếp hoặc lưu file PDF sắc nét.
+  5. **Kiểm thử tự động & Xác thực:**
+     - Toàn bộ 38 unit tests vượt qua thành công, linter và build applet hoàn thành không có lỗi.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.70 Tái Cấu Trúc Toàn Diện UI & Trải Nghiệm Đọc Cẩm Nang Quy Chuẩn Thuế Du Lịch
 - **Mô tả yêu cầu:**
   - Điều chỉnh giao diện toàn bộ phần văn bản ở tab Cẩm nang quy chuẩn thuế du lịch (`/tax-handbook`), khắc phục tình trạng quá nhiều text thô gây khó nhìn và mỏi mắt khi tra cứu.

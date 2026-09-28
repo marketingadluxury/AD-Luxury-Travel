@@ -26,7 +26,8 @@ import {
   AlertTriangle,
   Edit2,
   Edit3,
-  RotateCcw
+  RotateCcw,
+  Printer
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
@@ -41,6 +42,7 @@ import { TimesheetManagement } from '../components/TimesheetManagement';
 import { LeaveBalanceManagement } from '../components/LeaveBalanceManagement';
 import { DatePicker } from '../components/DatePicker';
 import { CustomSelect } from '../components/CustomSelect';
+import LeaveRequestPrintModal from '../components/LeaveRequestPrintModal';
 
 export default function LeaveRequestsPage() {
   const { profile, user } = useAuth();
@@ -97,6 +99,9 @@ export default function LeaveRequestsPage() {
 
   // Modal Xác nhận Xóa đơn
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Modal In / Xuất đơn xin nghỉ phép
+  const [selectedLeaveForPrint, setSelectedLeaveForPrint] = useState<LeaveRequest | null>(null);
 
   // Form Cấu hình / Chỉnh sửa ngày lễ
   const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
@@ -997,6 +1002,17 @@ export default function LeaveRequestsPage() {
 
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Nút Xuất / In Đơn Xin Nghỉ Phép */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLeaveForPrint(req)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs border border-blue-200 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
+                              title="In / Xuất Đơn xin nghỉ phép (A4)"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Xuất đơn</span>
+                            </button>
+
                             {/* Nút Duyệt Cấp 1 (Trưởng nhóm) */}
                             {canApproveL1 && (
                               <button
@@ -1138,6 +1154,23 @@ export default function LeaveRequestsPage() {
           </div>
         </div>
       )}
+      {/* PRINT PREVIEW MODAL CHO ĐƠN XIN NGHỈ PHÉP */}
+      <LeaveRequestPrintModal
+        isOpen={!!selectedLeaveForPrint}
+        onClose={() => setSelectedLeaveForPrint(null)}
+        leaveRequest={selectedLeaveForPrint}
+        employeePhone={profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.phone || profile?.phone}
+        departmentName={
+          profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'marketing' || profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'marketing_leader' ? 'Marketing' :
+          profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'sale' || profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'sale_leader' ? 'Kinh doanh (Sales)' :
+          profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'operator' ? 'Điều hành Tour' :
+          profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'accounting' ? 'Kế toán' :
+          profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'hr' ? 'Hành chính Nhân sự' :
+          profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'visa' ? 'Bộ phận Visa' :
+          profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'tour_guide' ? 'Hướng dẫn viên' :
+          'Văn phòng Công ty'
+        }
+      />
     </div>
   );
 }

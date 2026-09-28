@@ -42,9 +42,11 @@ import {
   Layers,
   RotateCcw,
   Compass,
+  Printer,
   X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PaymentProposalPrintModal from '@/components/PaymentProposalPrintModal';
 
 const VIETNAM_BANKS = [
   'Vietcombank (VCB)',
@@ -115,6 +117,7 @@ export default function PaymentProposals() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<PaymentProposal | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedProposalForPrint, setSelectedProposalForPrint] = useState<PaymentProposal | null>(null);
 
   // Approval Modals
   const [actionModal, setActionModal] = useState<{
@@ -747,7 +750,20 @@ export default function PaymentProposals() {
                                   <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shrink-0">
                                     {proposal.code}
                                   </span>
-                                  <span className="text-[10px] text-slate-500 whitespace-nowrap">{formatDateVi(proposal.created_at)}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedProposalForPrint(proposal);
+                                      }}
+                                      className="p-1 hover:bg-blue-100 text-slate-400 hover:text-blue-700 rounded-md transition-colors"
+                                      title="Xuất / In giấy đề nghị thanh toán"
+                                    >
+                                      <Printer className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="text-[10px] text-slate-500 whitespace-nowrap">{formatDateVi(proposal.created_at)}</span>
+                                  </div>
                                 </div>
                                 <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug" title={proposal.title}>{proposal.title}</h4>
                                 
@@ -1004,6 +1020,15 @@ export default function PaymentProposals() {
                               </button>
                             </div>
                           )}
+
+                          {/* Export / Print Proposal */}
+                          <button
+                            onClick={() => setSelectedProposalForPrint(p)}
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                            title="Xuất / In giấy đề nghị thanh toán"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
 
                           {/* Detail View */}
                           <button
@@ -1443,14 +1468,25 @@ export default function PaymentProposals() {
                   <div className="text-xs text-blue-200 font-mono">Chi tiết đề nghị</div>
                   <h2 className="text-lg font-bold">{selectedProposal.code}</h2>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDetailModal(false)}
-                  className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Đóng"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProposalForPrint(selectedProposal)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-white/20"
+                    title="Xuất / In giấy đề nghị"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Xuất mẫu in</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDetailModal(false)}
+                    className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Đóng"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto text-xs text-gray-800">
@@ -1582,6 +1618,13 @@ export default function PaymentProposals() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* PRINT PREVIEW MODAL */}
+      <PaymentProposalPrintModal
+        isOpen={!!selectedProposalForPrint}
+        onClose={() => setSelectedProposalForPrint(null)}
+        proposal={selectedProposalForPrint}
+      />
     </div>
   );
 }
