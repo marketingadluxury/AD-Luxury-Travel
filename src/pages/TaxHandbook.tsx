@@ -22,8 +22,12 @@ import {
   ChevronUp,
   Info,
   Scale,
-  RefreshCw
+  RefreshCw,
+  MapPin,
+  Sparkles,
+  Plus
 } from 'lucide-react';
+import { CustomSelect } from '@/components/CustomSelect';
 import { cn } from '@/lib/utils';
 
 // Helper format currency
@@ -40,6 +44,8 @@ const parseCurrency = (str: string): number => {
 export default function TaxHandbook() {
   const [activeTab, setActiveTab] = useState<'calculators' | 'handbook' | 'calendar'>('calculators');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [expandedArticleIds, setExpandedArticleIds] = useState<string[]>(['vat-tour']);
 
   // MCP Sync State
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
@@ -319,85 +325,176 @@ export default function TaxHandbook() {
     }
   }, [fctExpense, fctType]);
 
-  // Handbook Articles
+  // Handbook Articles Structured Data
   const handbookArticles = [
     {
       id: 'vat-tour',
       category: 'Thuế GTGT (VAT)',
+      badge: 'Ưu đãi 8% đến hết 2026',
       title: 'Quy tắc tính thuế GTGT đối với Tour Du Lịch Lữ Hành & Thuế Suất 8%',
       summary: 'Áp dụng mức thuế suất ưu đãi 8% đến 31/12/2026. Hướng dẫn bóc tách doanh thu và chi phí phát sinh tại nước ngoài của tour Outbound.',
-      content: [
+      sections: [
         {
           heading: '1. Thuế suất GTGT áp dụng cho Tour du lịch',
-          text: 'Theo Nghị định 174/2025/NĐ-CP, chính sách giảm thuế GTGT xuống mức 8% được tiếp tục áp dụng đến hết ngày 31/12/2026 đối với các nhóm hàng hóa, dịch vụ thuộc ngành du lịch lữ hành, dịch vụ lưu trú khách sạn, nhà hàng ăn uống, dịch vụ vận tải hành khách nội địa. Các dịch vụ khác ngoài danh mục ưu đãi vẫn áp dụng mức thuế suất phổ thông 10%.'
+          badge: 'Nghị định 174/2025/NĐ-CP',
+          highlight: {
+            title: 'Mức thuế suất ưu đãi 8% được gia hạn áp dụng đến hết ngày 31/12/2026',
+            description: 'Áp dụng cho các nhóm hàng hóa, dịch vụ thuộc ngành du lịch lữ hành, dịch vụ lưu trú khách sạn, nhà hàng ăn uống, dịch vụ vận chuyển hành khách nội địa.',
+            type: 'success' as const
+          },
+          paragraphs: [
+            'Theo Nghị định 174/2025/NĐ-CP, chính sách giảm 2% thuế suất thuế GTGT tiếp tục có hiệu lực đến hết năm 2026. Các dịch vụ khác ngoài danh mục ưu đãi vẫn áp dụng mức thuế suất phổ thông 10%.'
+          ]
         },
         {
           heading: '2. Cách tính thuế GTGT tour Outbound (Đi nước ngoài)',
-          text: 'Căn cứ Khoản 16 Điều 7 Thông tư 219/2013/TT-BTC và Luật Thuế GTGT:\n- Đối với dịch vụ du lịch lữ hành ra nước ngoài theo hợp đồng trọn gói thu tiền một lần của khách, giá tính thuế GTGT chỉ tính trên phần doanh thu công ty lữ hành được hưởng, được xác định bằng: [Tổng giá thanh toán trọn gói thu của khách hàng] trừ (-) [Toàn bộ các khoản chi phí thực tế phát sinh tại nước ngoài do các nhà cung cấp dịch vụ ở nước ngoài thực hiện].\n- Các chi phí được trừ ở nước ngoài bao gồm: Tiền vé máy bay quốc tế khứ hồi, tiền thuê khách sạn lưu trú, tiền ăn uống, vé tham quan danh lam thắng cảnh, tiền xe vận chuyển tại nước ngoài, tiền bảo hiểm du lịch quốc tế, chi phí đối tác land tour nước ngoài.\n- Doanh nghiệp cần lưu giữ hợp đồng với đối tác nước ngoài, hóa đơn/chứng từ hợp pháp và chứng từ thanh toán ngân hàng quốc tế để làm căn cứ trừ hợp lệ.'
+          badge: 'Khoản 16 Điều 7 Thông tư 219/2013/TT-BTC',
+          formula: {
+            label: 'Công thức xác định doanh thu tính thuế GTGT tour Outbound',
+            items: [
+              { label: 'Doanh thu chịu thuế GTGT', sign: '=' },
+              { label: 'Tổng giá trọn gói thu của khách', sign: '-' },
+              { label: 'Toàn bộ chi phí thực tế tại nước ngoài' }
+            ],
+            note: 'Giá tính thuế chỉ tính trên phần doanh thu công ty lữ hành được hưởng sau khi trừ toàn bộ các chi phí dịch vụ thực tế ở nước ngoài.'
+          },
+          bullets: [
+            { text: 'Tiền vé máy bay quốc tế khứ hồi', subText: 'Vé máy bay chặng quốc tế từ Việt Nam đi nước ngoài và chiều về có cuống vé/e-ticket.' },
+            { text: 'Tiền thuê khách sạn lưu trú', subText: 'Booking phòng khách sạn và hóa đơn/receipt từ nhà cung cấp nước ngoài.' },
+            { text: 'Tiền ăn uống & vé tham quan', subText: 'Chi phí ẩm thực, nhà hàng và vé vào cổng các điểm danh lam thắng cảnh trong tour.' },
+            { text: 'Tiền xe vận chuyển & bảo hiểm du lịch', subText: 'Xe đưa đón hành trình tại nước ngoài và bảo hiểm du lịch quốc tế cho đoàn.' },
+            { text: 'Chi phí đối tác Land Tour nước ngoài', subText: 'Hợp đồng trọn gói và hóa đơn do đối tác công ty du lịch bản địa thực hiện.' }
+          ],
+          note: 'Doanh nghiệp bắt buộc lưu giữ hợp đồng với đối tác nước ngoài, hóa đơn/chứng từ hợp pháp và chứng từ thanh toán ngân hàng quốc tế để làm căn cứ khấu trừ hợp lệ khi quyết toán.'
         },
         {
           heading: '3. Quy định thanh toán không dùng tiền mặt (Ngưỡng 5 triệu đồng)',
-          text: 'Lưu ý đặc biệt: Theo quy định mới nhất, ngưỡng thanh toán bắt buộc không dùng tiền mặt (chuyển khoản qua ngân hàng từ tài khoản công ty đến tài khoản nhà cung cấp) đã được hạ từ 20 triệu đồng xuống còn 5.000.000 đồng đối với cả điều kiện khấu trừ thuế GTGT đầu vào và điều kiện tính chi phí hợp lý được trừ TNDN. Các hóa đơn từng lần từ 5.000.000 đồng trở lên thanh toán bằng tiền mặt sẽ bị loại thuế GTGT và bị loại khỏi chi phí hợp lý.'
+          badge: 'Quy định quản lý thuế mới',
+          highlight: {
+            title: 'Hạ ngưỡng thanh toán bắt buộc không dùng tiền mặt từ 20 triệu xuống 5.000.000 đồng',
+            description: 'Bắt buộc chuyển khoản qua ngân hàng từ tài khoản công ty đến tài khoản nhà cung cấp đối với tất cả hóa đơn từng lần từ 5.000.000 đồng trở lên.',
+            type: 'warning' as const
+          },
+          paragraphs: [
+            'Áp dụng đồng thời cho cả điều kiện khấu trừ thuế GTGT đầu vào và điều kiện tính chi phí hợp lý được trừ khi xác định thu nhập chịu thuế TNDN. Các hóa đơn từng lần từ 5.000.000 đồng trở lên nếu thanh toán bằng tiền mặt sẽ bị loại toàn bộ thuế GTGT và loại khỏi chi phí hợp lý.'
+          ]
         }
       ]
     },
     {
       id: 'cit-expenses',
       category: 'Thuế TNDN',
+      badge: 'Hồ sơ chi phí hợp lệ',
       title: 'Hồ Sơ Chứng Từ Chi Phí Hợp Lý Được Trừ Của Công Ty Du Lịch',
       summary: 'Quy chuẩn hồ sơ vé máy bay, phòng khách sạn, tiếp khách, thuê hướng dẫn viên freelance và hoa hồng chi trả đại lý.',
-      content: [
+      sections: [
         {
           heading: '1. Thuế suất Thuế Thu Nhập Doanh Nghiệp (TNDN)',
-          text: 'Thuế suất TNDN phổ thông là 20%. Theo Luật 67/2025/QH15 và Nghị định 320/2025/NĐ-CP, áp dụng mức thuế suất ưu đãi 15% đối với doanh nghiệp có tổng doanh thu năm không quá 3 tỷ đồng; và mức 17% đối với doanh nghiệp có doanh thu từ trên 3 tỷ đến 50 tỷ đồng.'
+          badge: 'Luật 67/2025/QH15 & NĐ 320/2025/NĐ-CP',
+          bullets: [
+            { text: 'Thuế suất ưu đãi 15%', subText: 'Áp dụng đối với doanh nghiệp có tổng doanh thu năm không quá 3 tỷ đồng.' },
+            { text: 'Thuế suất ưu đãi 17%', subText: 'Áp dụng đối với doanh nghiệp có tổng doanh thu năm từ trên 3 tỷ đến 50 tỷ đồng.' },
+            { text: 'Thuế suất phổ thông 20%', subText: 'Áp dụng cho doanh nghiệp có quy mô doanh thu trên 50 tỷ đồng/năm.' }
+          ]
         },
         {
           heading: '2. Chứng từ vé máy bay hành khách đoàn',
-          text: 'Để chi phí vé máy bay được tính vào chi phí hợp lý khi tính thuế TNDN, công ty lữ hành cần lưu trữ đầy đủ:\n- Hóa đơn điện tử hoặc vé máy bay điện tử (e-ticket) có ghi đầy đủ mã đặt chỗ, tên hành khách.\n- Danh sách hành khách đoàn đi tour khớp với vé máy bay.\n- Chứng từ thanh toán ngân hàng không dùng tiền mặt (ủy nhiệm chi hoặc sao kê tài khoản công ty chuyển tiền cho hãng bay/đại lý vé).\n- Thẻ lên máy bay (Boarding pass) hoặc biên bản xác nhận hoàn thành chuyến bay của hãng hàng không.'
+          badge: 'Hồ sơ chi phí vé đoàn',
+          bullets: [
+            { text: 'Hóa đơn điện tử hoặc vé máy bay điện tử (e-ticket)', subText: 'Vé ghi đầy đủ mã đặt chỗ (PNR) và họ tên từng hành khách tham gia tour.' },
+            { text: 'Danh sách hành khách đoàn đi tour', subText: 'Danh sách đóng dấu của công ty lữ hành khớp chính xác với vé máy bay đã xuất.' },
+            { text: 'Chứng từ thanh toán không dùng tiền mặt', subText: 'Ủy nhiệm chi hoặc sao kê tài khoản công ty chuyển tiền cho hãng bay/đại lý vé F1.' },
+            { text: 'Thẻ lên máy bay (Boarding pass)', subText: 'Thẻ lên máy bay hoặc biên bản xác nhận hoàn thành chuyến bay của hãng hàng không.' }
+          ]
         },
         {
           heading: '3. Chi phí thuê Hướng dẫn viên (Tour Guide) và CTV bán tour',
-          text: 'Đối với hướng dẫn viên ngoài (freelance) hoặc CTV bán tour không có hợp đồng lao động dài hạn:\n- Ký Hợp đồng dịch vụ hoặc Hợp đồng cộng tác viên ghi rõ nội dung công việc và định mức thù lao/hoa hồng.\n- Biên bản nghiệm thu công việc / Báo cáo kết thúc đoàn tour.\n- Chứng từ chi tiền chuyển khoản ngân hàng.\n- Khấu trừ 10% thuế TNCN tại nguồn đối với từng lần chi trả từ 2.000.000 đồng trở lên (hoặc lưu trữ Bản cam kết 08/CK-TNCN nếu cá nhân đủ điều kiện).\n- Cấp chứng từ khấu trừ thuế TNCN điện tử cho HDV/CTV khi họ yêu cầu để phục vụ quyết toán thuế cuối năm.'
+          badge: 'Thông tư 111/2013/TT-BTC',
+          bullets: [
+            { text: 'Hợp đồng dịch vụ / Hợp đồng CTV', subText: 'Ghi rõ phạm vi công việc, thời gian thực hiện tour và định mức thù lao/hoa hồng.' },
+            { text: 'Biên bản nghiệm thu / Báo cáo kết thúc đoàn', subText: 'Báo cáo quyết toán đoàn tour có xác nhận của HDV và bộ phận điều hành.' },
+            { text: 'Chứng từ chi tiền chuyển khoản ngân hàng', subText: 'Sao kê giao dịch chuyển tiền trực tiếp vào tài khoản ngân hàng chính chủ của HDV/CTV.' },
+            { text: 'Khấu trừ 10% thuế TNCN hoặc Cam kết 08', subText: 'Khấu trừ tại nguồn nếu từ 2 triệu/lần trở lên (hoặc lưu trữ Bản cam kết 08/CK-TNCN).' },
+            { text: 'Cấp chứng từ khấu trừ thuế TNCN điện tử', subText: 'Xuất chứng từ điện tử cho HDV/CTV khi họ yêu cầu để phục vụ quyết toán thuế cuối năm.' }
+          ]
         },
         {
           heading: '4. Chi phí tiếp khách, quà tặng khách hàng và công tác phí',
-          text: '- Chi phí tiếp khách: Cần có hóa đơn GTGT hợp pháp, phiếu thanh toán kèm bảng kê chi tiết món ăn/đồ uống, giấy đề xuất tiếp khách hoặc kế hoạch làm việc với đối tác du lịch.\n- Chi phí quà tặng tour cho khách hàng: Doanh nghiệp phải lập hóa đơn GTGT đầu ra khi tặng quà cho khách hàng (dù giá trị 0 đồng) và hạch toán vào chi phí bán hàng hợp lý.'
+          badge: 'Chi phí tiếp khách & quà',
+          bullets: [
+            { text: 'Chi phí tiếp khách đối tác', subText: 'Hóa đơn GTGT hợp pháp, phiếu thanh toán kèm bảng kê chi tiết món ăn/đồ uống, giấy đề xuất tiếp khách hoặc kế hoạch làm việc.' },
+            { text: 'Chi phí quà tặng tour cho khách hàng', subText: 'Doanh nghiệp phải lập hóa đơn GTGT đầu ra khi tặng quà cho khách hàng (dù giá trị 0 đồng) và hạch toán vào chi phí bán hàng hợp lý.' }
+          ]
         }
       ]
     },
     {
       id: 'pit-ctv',
       category: 'Thuế TNCN',
+      badge: 'Chính sách thuế TNCN',
       title: 'Chính Sách Khấu Trừ Thuế TNCN Đối Với Hoa Hồng Đại Lý & CTV Ngoài',
       summary: 'Quy định khấu trừ 10%, điều kiện áp dụng bản cam kết mẫu 08/CK-TNCN và mức giảm trừ gia cảnh mới.',
-      content: [
+      sections: [
         {
-          heading: '1. Khấu trừ 10% tại nguồn',
-          text: 'Căn cứ Điều 25 Thông tư 111/2013/TT-BTC:\n- Các tổ chức, doanh nghiệp trả tiền hoa hồng, tiền công, tiền thù lao cho cá nhân cư trú không ký hợp đồng lao động hoặc ký hợp đồng lao động dưới 03 tháng có tổng mức chi trả thu nhập từ 2.000.000 đồng/lần trở lên thì phải khấu trừ thuế theo mức 10% trên tổng thu nhập trước khi chi trả cho cá nhân.\n- Từ ngày 01/07/2026 (theo Nghị định 253/2026/NĐ-CP), ngưỡng bắt đầu khấu trừ thuế đối với thu nhập vãng lai được điều chỉnh nâng lên từ 5.000.000 đồng/lần.'
+          heading: '1. Khấu trừ 10% tại nguồn đối với thu nhập vãng lai',
+          badge: 'Điều 25 Thông tư 111/2013/TT-BTC',
+          highlight: {
+            title: 'Khấu trừ 10% tại nguồn cho khoản chi trả từ 2.000.000 đ/lần',
+            description: 'Áp dụng cho cá nhân không ký hợp đồng lao động hoặc ký hợp đồng dưới 03 tháng (CTV bán tour, HDV freelance).',
+            type: 'purple' as const
+          },
+          paragraphs: [
+            'Lộ trình mới từ 01/07/2026: Theo Nghị định 253/2026/NĐ-CP, ngưỡng bắt đầu khấu trừ thuế 10% đối với thu nhập vãng lai được điều chỉnh nâng lên từ 5.000.000 đồng/lần chi trả.'
+          ]
         },
         {
-          heading: '2. Bản cam kết mẫu 08/CK-TNCN (trước đây là 02/CK-TNCN)',
-          text: 'Điều kiện để cá nhân được làm cam kết tạm không bị khấu trừ 10%:\n- Cá nhân chỉ có duy nhất thu nhập thuộc đối tượng phải khấu trừ thuế theo tỷ lệ nêu trên.\n- Ước tính tổng mức thu nhập chịu thuế của cá nhân sau khi trừ gia cảnh chưa đến mức phải nộp thuế trong cả năm tài chính.\n- Cá nhân phải đăng ký thuế và đã có mã số thuế cá nhân tại thời điểm cam kết.\n- Doanh nghiệp lưu giữ bản cam kết này để làm căn cứ không khấu trừ thuế và quyết toán thay.'
+          heading: '2. Bản cam kết mẫu 08/CK-TNCN (thay thế 02/CK-TNCN)',
+          badge: 'Cam kết miễn khấu trừ',
+          bullets: [
+            { text: 'Duy nhất một nguồn thu nhập', subText: 'Cá nhân chỉ có duy nhất thu nhập thuộc đối tượng khấu trừ tại công ty trong năm.' },
+            { text: 'Tổng thu nhập chưa đến ngưỡng nộp thuế', subText: 'Ước tính tổng thu nhập sau giảm trừ gia cảnh chưa đạt mức phải nộp thuế trong cả năm tài chính.' },
+            { text: 'Đã có mã số thuế cá nhân', subText: 'Cá nhân bắt buộc phải đăng ký thuế và đã được cấp MST cá nhân tại thời điểm làm cam kết.' },
+            { text: 'Trách nhiệm doanh nghiệp', subText: 'Lưu giữ bản cam kết 08 kèm bản sao CCCD để làm căn cứ miễn khấu trừ 10% và quyết toán thay.' }
+          ]
         },
         {
           heading: '3. Mức giảm trừ gia cảnh mới (Áp dụng từ kỳ tính thuế 2026)',
-          text: '- Mức giảm trừ cho bản thân người nộp thuế: 15.500.000 đồng/tháng (186 triệu đồng/năm).\n- Mức giảm trừ cho mỗi người phụ thuộc: 6.200.000 đồng/tháng (74,4 triệu đồng/năm).\n- (Kỳ tính thuế 2025 vẫn áp dụng mức cũ: Bản thân 11.000.000 đồng/tháng và người phụ thuộc 4.400.000 đồng/tháng).'
+          badge: 'Nghị quyết Ủy ban Thường vụ QH',
+          bullets: [
+            { text: 'Kỳ 2026 - Bản thân: 15.500.000 đ/tháng', subText: 'Mức giảm trừ cho bản thân người nộp thuế đạt 186.000.000 đ/năm (tăng thêm 4,5 triệu/tháng).' },
+            { text: 'Kỳ 2026 - Người phụ thuộc: 6.200.000 đ/tháng', subText: 'Mức giảm trừ cho mỗi người phụ thuộc đạt 74.400.000 đ/năm (tăng thêm 1,8 triệu/tháng).' },
+            { text: 'Kỳ 2025 (Mức hiện hành)', subText: 'Bản thân 11.000.000 đ/tháng (132 triệu/năm) và Người phụ thuộc 4.400.000 đ/tháng (52,8 triệu/năm).' }
+          ]
         }
       ]
     },
     {
       id: 'fct-ads',
       category: 'Thuế Nhà Thầu',
+      badge: 'Meta & Google Ads',
       title: 'Nghĩa Vụ Thuế Khi Chạy Quảng Cáo Facebook (Meta Ads) & Google Ads',
       summary: 'Cách xử lý hóa đơn receipt từ Meta, kê khai thuế nhà thầu và điều kiện để được trừ chi phí quảng cáo tour.',
-      content: [
+      sections: [
         {
           heading: '1. Meta & Google đã đăng ký thuế trực tiếp tại Việt Nam',
-          text: 'Hiện nay, Meta Platforms (Facebook, Instagram) và Google Asia Pacific đã đăng ký mã số thuế nhà thầu tại Việt Nam (thông qua Cổng thông tin điện tử dành cho Nhà cung cấp nước ngoài của Tổng cục Thuế).\n- Khi doanh nghiệp hoặc nhân viên thiết lập tài khoản quảng cáo và nhập Mã số thuế (MST) của công ty, Meta sẽ tự động tính và thu thêm 5% thuế GTGT trên từng hóa đơn quảng cáo (Receipt) trừ qua thẻ thanh toán quốc tế.'
+          badge: 'Cổng thông tin NCC nước ngoài',
+          highlight: {
+            title: 'Meta và Google thu trực tiếp 5% thuế GTGT trên từng Receipt',
+            description: 'Doanh nghiệp nhập MST công ty vào tài khoản Ads, Meta sẽ tự động tính và cộng 5% VAT vào thẻ. Doanh nghiệp không phải tự kê khai nộp thay.',
+            type: 'info' as const
+          },
+          paragraphs: [
+            'Toàn bộ số tiền thanh toán (bao gồm ngân sách chạy và 5% VAT Meta đã thu) được ghi nhận trọn vẹn vào chi phí hợp lý được trừ TNDN nếu có đầy đủ chứng từ hợp lệ.'
+          ]
         },
         {
-          heading: '2. Điều kiện để chi phí quảng cáo được tính vào chi phí hợp lý TNDN',
-          text: 'Để cơ quan thuế chấp thuận chi phí quảng cáo Meta/Google làm chi phí hợp lý được trừ:\n- 1. Tài khoản quảng cáo phải khai báo đúng tên công ty, địa chỉ và Mã số thuế của doanh nghiệp.\n- 2. Hóa đơn điện tử / Phiếu thu (Receipt) tải về từ trình quản lý quảng cáo có đầy đủ thông tin mã số thuế và tên công ty.\n- 3. Thanh toán bằng thẻ tín dụng / thẻ ghi nợ của công ty (mang tên công ty). Nếu thanh toán bằng thẻ cá nhân của giám đốc/nhân sự: Công ty phải có quy chế tài chính ủy quyền chi hộ và thực hiện hoàn ứng chuyển khoản qua ngân hàng cho cá nhân đó.'
+          heading: '2. 3 Điều kiện để chi phí quảng cáo được tính vào chi phí hợp lý TNDN',
+          badge: 'Điều kiện chứng từ',
+          bullets: [
+            { text: '1. Tài khoản Ads khai báo đúng thông tin công ty', subText: 'Tài khoản quảng cáo phải ghi đúng Tên công ty, Địa chỉ và Mã số thuế của doanh nghiệp.' },
+            { text: '2. Hóa đơn / Receipt tải từ Trình quản lý quảng cáo', subText: 'Tải hóa đơn (Receipt/Invoice) từng tháng có hiển thị đầy đủ thông tin MST và tên doanh nghiệp.' },
+            { text: '3. Chứng từ thanh toán ngân hàng', subText: 'Thanh toán bằng thẻ công ty. Nếu dùng thẻ cá nhân nhân sự: Cần có quy chế tài chính ủy quyền chi hộ và chứng từ hoàn ứng qua ngân hàng.' }
+          ]
         }
       ]
     }
@@ -442,17 +539,50 @@ export default function TaxHandbook() {
     }
   ];
 
-  // Filter articles based on search
-  const filteredArticles = useMemo(() => {
-    if (!searchQuery.trim()) return handbookArticles;
-    const query = searchQuery.toLowerCase().trim();
-    return handbookArticles.filter(art => 
-      art.title.toLowerCase().includes(query) ||
-      art.category.toLowerCase().includes(query) ||
-      art.summary.toLowerCase().includes(query) ||
-      art.content.some(c => c.heading.toLowerCase().includes(query) || c.text.toLowerCase().includes(query))
+  // Handbook categories list
+  const handbookCategories = [
+    { id: 'all', label: 'Tất cả quy chuẩn', count: handbookArticles.length },
+    { id: 'Thuế GTGT (VAT)', label: 'Thuế GTGT (VAT)', count: handbookArticles.filter(a => a.category === 'Thuế GTGT (VAT)').length },
+    { id: 'Thuế TNDN', label: 'Thuế TNDN & Chi phí', count: handbookArticles.filter(a => a.category === 'Thuế TNDN').length },
+    { id: 'Thuế TNCN', label: 'Thuế TNCN & CTV', count: handbookArticles.filter(a => a.category === 'Thuế TNCN').length },
+    { id: 'Thuế Nhà Thầu', label: 'Thuế Nhà Thầu Ads', count: handbookArticles.filter(a => a.category === 'Thuế Nhà Thầu').length },
+  ];
+
+  // Accordion toggle helpers
+  const toggleArticle = (id: string) => {
+    setExpandedArticleIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
-  }, [searchQuery]);
+  };
+
+  const handleToggleAllArticles = () => {
+    if (expandedArticleIds.length === handbookArticles.length) {
+      setExpandedArticleIds([]);
+    } else {
+      setExpandedArticleIds(handbookArticles.map(a => a.id));
+    }
+  };
+
+  // Filter articles based on search & category
+  const filteredArticles = useMemo(() => {
+    return handbookArticles.filter(art => {
+      const matchCategory = selectedCategory === 'all' || art.category === selectedCategory;
+      if (!matchCategory) return false;
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.toLowerCase().trim();
+      return (
+        art.title.toLowerCase().includes(query) ||
+        art.category.toLowerCase().includes(query) ||
+        art.summary.toLowerCase().includes(query) ||
+        art.sections.some(s =>
+          s.heading.toLowerCase().includes(query) ||
+          (s.paragraphs && s.paragraphs.some(p => p.toLowerCase().includes(query))) ||
+          (s.highlight && (s.highlight.title.toLowerCase().includes(query) || s.highlight.description.toLowerCase().includes(query))) ||
+          (s.bullets && s.bullets.some(b => b.text.toLowerCase().includes(query) || (b.subText && b.subText.toLowerCase().includes(query))))
+        )
+      );
+    });
+  }, [searchQuery, selectedCategory, handbookArticles]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -567,33 +697,36 @@ export default function TaxHandbook() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Form Input */}
               <div className="lg:col-span-6 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Loại hình tour
                     </label>
-                    <select
+                    <CustomSelect
                       value={vatTourType}
-                      onChange={(e) => setVatTourType(e.target.value as any)}
-                      className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="outbound">Tour Outbound (Đi nước ngoài)</option>
-                      <option value="inbound_domestic">Tour Nội địa / Inbound</option>
-                    </select>
+                      onChange={(val) => setVatTourType(val as any)}
+                      options={[
+                        { value: 'outbound', label: 'Tour Outbound (Đi nước ngoài)', icon: <Plane className="w-3.5 h-3.5 text-blue-500" /> },
+                        { value: 'inbound_domestic', label: 'Tour Nội địa / Inbound', icon: <MapPin className="w-3.5 h-3.5 text-emerald-500" /> }
+                      ]}
+                      className="w-full"
+                    />
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Kiểu giá nhập
                     </label>
-                    <select
+                    <CustomSelect
                       value={vatCalcMode}
-                      onChange={(e) => setVatCalcMode(e.target.value as any)}
-                      className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="gross_included">Giá đã gồm VAT (Bóc tách)</option>
-                      <option value="net_excluded">Giá chưa gồm VAT (Cộng thêm)</option>
-                    </select>
+                      onChange={(val) => setVatCalcMode(val as any)}
+                      options={[
+                        { value: 'gross_included', label: 'Giá đã gồm VAT (Bóc tách)', icon: <Receipt className="w-3.5 h-3.5 text-indigo-500" /> },
+                        { value: 'net_excluded', label: 'Giá chưa gồm VAT (Cộng thêm)', icon: <Plus className="w-3.5 h-3.5 text-slate-500" /> }
+                      ]}
+                      className="w-full"
+                      align="right"
+                    />
                   </div>
                 </div>
 
@@ -606,10 +739,10 @@ export default function TaxHandbook() {
                       type="text"
                       value={vatPriceInput}
                       onChange={(e) => setVatPriceInput(formatCurrency(parseCurrency(e.target.value)))}
-                      className="w-full text-sm font-bold px-3 py-2 pl-8 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full h-10 text-xs font-bold px-3 py-2 pl-8 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-2xs text-slate-900 bg-white transition-all"
                       placeholder="0"
                     />
-                    <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                    <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-3" />
                   </div>
                 </div>
 
@@ -626,10 +759,10 @@ export default function TaxHandbook() {
                         type="text"
                         value={vatOutboundDeductionInput}
                         onChange={(e) => setVatOutboundDeductionInput(formatCurrency(parseCurrency(e.target.value)))}
-                        className="w-full text-sm font-bold px-3 py-2 pl-8 border border-blue-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                        className="w-full h-10 text-xs font-bold px-3 py-2 pl-8 border border-blue-200 rounded-xl bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-2xs text-slate-900 transition-all"
                         placeholder="0"
                       />
-                      <Plane className="w-4 h-4 text-blue-500 absolute left-2.5 top-2.5" />
+                      <Plane className="w-4 h-4 text-blue-500 absolute left-2.5 top-3" />
                     </div>
                   </div>
                 )}
@@ -649,10 +782,10 @@ export default function TaxHandbook() {
                         type="button"
                         onClick={() => setVatRate(item.rate)}
                         className={cn(
-                          "py-2 px-2 text-xs font-bold rounded-lg border transition-all cursor-pointer text-center",
+                          "h-10 px-2 text-xs font-bold rounded-xl border transition-all cursor-pointer text-center shadow-2xs",
                           vatRate === item.rate
-                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
-                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                         )}
                       >
                         {item.label}
@@ -763,42 +896,43 @@ export default function TaxHandbook() {
                         type="text"
                         value={ctvCommissionInput}
                         onChange={(e) => setCtvCommissionInput(formatCurrency(parseCurrency(e.target.value)))}
-                        className="w-full text-sm font-bold px-3 py-2 pl-8 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        className="w-full h-10 text-xs font-bold px-3 py-2 pl-8 border border-slate-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-2xs text-slate-900 bg-white transition-all"
                         placeholder="0"
                       />
-                      <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                      <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-3" />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
                         Ngưỡng khấu trừ
                       </label>
-                      <select
+                      <CustomSelect
                         value={ctvThresholdOption}
-                        onChange={(e) => setCtvThresholdOption(e.target.value as any)}
-                        className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-lg bg-white"
-                      >
-                        <option value="current_2m">Từ 2.000.000 đ/lần</option>
-                        <option value="new_5m">Từ 5.000.000 đ/lần (từ 01/07/2026)</option>
-                      </select>
+                        onChange={(val) => setCtvThresholdOption(val as any)}
+                        options={[
+                          { value: 'current_2m', label: 'Từ 2.000.000 đ / lần', icon: <DollarSign className="w-3.5 h-3.5 text-purple-500" /> },
+                          { value: 'new_5m', label: 'Từ 5.000.000 đ / lần (từ 01/07/2026)', icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" /> }
+                        ]}
+                        className="w-full"
+                      />
                     </div>
 
                     <div className="flex flex-col justify-end">
-                      <label className="flex items-center gap-2 p-2 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                      <label className="h-10 flex items-center gap-2.5 px-3 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs">
                         <input
                           type="checkbox"
                           checked={hasCommitment08}
                           onChange={(e) => setHasCommitment08(e.target.checked)}
-                          className="w-4 h-4 text-purple-600 rounded"
+                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
                         />
-                        <span className="text-xs font-bold text-slate-700">Có Cam kết 08/CK-TNCN</span>
+                        <span className="text-xs font-bold text-slate-700 select-none">Có Cam kết 08/CK-TNCN</span>
                       </label>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 text-xs text-purple-900 leading-relaxed font-medium">
+                  <div className="p-3.5 bg-purple-50/60 rounded-xl border border-purple-100 text-xs text-purple-900 leading-relaxed font-medium">
                     {ctvResult.note}
                   </div>
                 </div>
@@ -836,19 +970,20 @@ export default function TaxHandbook() {
               /* Salary Calculator */
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
                         Kỳ tính thuế
                       </label>
-                      <select
+                      <CustomSelect
                         value={salaryTaxYear}
-                        onChange={(e) => setSalaryTaxYear(e.target.value as any)}
-                        className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-lg bg-white"
-                      >
-                        <option value="2026">Kỳ 2026 (Giảm trừ 15,5tr / 6,2tr - Biểu 5 bậc)</option>
-                        <option value="2025">Kỳ 2025 (Giảm trừ 11tr / 4,4tr - Biểu 7 bậc)</option>
-                      </select>
+                        onChange={(val) => setSalaryTaxYear(val as any)}
+                        options={[
+                          { value: '2026', label: 'Kỳ 2026 (Giảm trừ 15,5tr / 6,2tr)', icon: <Sparkles className="w-3.5 h-3.5 text-blue-500" /> },
+                          { value: '2025', label: 'Kỳ 2025 (Giảm trừ 11tr / 4,4tr)', icon: <Calendar className="w-3.5 h-3.5 text-slate-500" /> }
+                        ]}
+                        className="w-full"
+                      />
                     </div>
 
                     <div>
@@ -861,7 +996,7 @@ export default function TaxHandbook() {
                         max="10"
                         value={dependentsCount}
                         onChange={(e) => setDependentsCount(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full text-xs font-bold px-3 py-2 border border-slate-300 rounded-lg"
+                        className="w-full h-10 text-xs font-bold px-3 py-2 border border-slate-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-2xs text-slate-900 bg-white transition-all"
                       />
                     </div>
                   </div>
@@ -875,10 +1010,10 @@ export default function TaxHandbook() {
                         type="text"
                         value={salaryGrossInput}
                         onChange={(e) => setSalaryGrossInput(formatCurrency(parseCurrency(e.target.value)))}
-                        className="w-full text-sm font-bold px-3 py-2 pl-8 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        className="w-full h-10 text-xs font-bold px-3 py-2 pl-8 border border-slate-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-2xs text-slate-900 bg-white transition-all"
                         placeholder="0"
                       />
-                      <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                      <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-3" />
                     </div>
                   </div>
 
@@ -960,14 +1095,15 @@ export default function TaxHandbook() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Hình thức thanh toán quảng cáo
                   </label>
-                  <select
+                  <CustomSelect
                     value={fctType}
-                    onChange={(e) => setFctType(e.target.value as any)}
-                    className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-lg bg-white"
-                  >
-                    <option value="meta_collected">Meta/Google thu trực tiếp 5% thuế trên hóa đơn thẻ</option>
-                    <option value="company_withheld">Doanh nghiệp tự kê khai nộp thay (5% GTGT + 5% TNDN)</option>
-                  </select>
+                    onChange={(val) => setFctType(val as any)}
+                    options={[
+                      { value: 'meta_collected', label: 'Meta / Google thu trực tiếp 5% thuế trên hóa đơn thẻ', icon: <CreditCard className="w-3.5 h-3.5 text-amber-500" /> },
+                      { value: 'company_withheld', label: 'Doanh nghiệp tự kê khai nộp thay (5% GTGT + 5% TNDN)', icon: <Scale className="w-3.5 h-3.5 text-indigo-500" /> }
+                    ]}
+                    className="w-full"
+                  />
                 </div>
 
                 <div>
@@ -979,10 +1115,10 @@ export default function TaxHandbook() {
                       type="text"
                       value={fctExpenseInput}
                       onChange={(e) => setFctExpenseInput(formatCurrency(parseCurrency(e.target.value)))}
-                      className="w-full text-sm font-bold px-3 py-2 pl-8 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      className="w-full h-10 text-xs font-bold px-3 py-2 pl-8 border border-slate-200 rounded-xl focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-2xs text-slate-900 bg-white transition-all"
                       placeholder="0"
                     />
-                    <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                    <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-3" />
                   </div>
                 </div>
 
@@ -1033,67 +1169,265 @@ export default function TaxHandbook() {
 
       {/* TAB 2: HANDBOOK ARTICLES */}
       {activeTab === 'handbook' && (
-        <div className="space-y-6">
-          {/* Search Box */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
-            <Search className="w-5 h-5 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm quy định thuế: vé máy bay, hóa đơn 5 triệu, 8%, hoa hồng, giảm trừ gia cảnh, Facebook ads..."
-              className="w-full text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none"
-            />
-            {searchQuery && (
+        <div className="space-y-5">
+          {/* Search Box & Quick Controls */}
+          <div className="space-y-3">
+            <div className="bg-white h-11 px-3.5 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm nhanh: vé máy bay, hóa đơn 5 triệu, 8%, hoa hồng, giảm trừ gia cảnh, Facebook ads..."
+                className="w-full text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none bg-transparent"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs font-bold text-slate-400 hover:text-slate-600 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Xóa
+                </button>
+              )}
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {handbookCategories.map((cat) => {
+                  const isSelected = selectedCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1.5",
+                        isSelected
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+                      )}
+                    >
+                      <span>{cat.label}</span>
+                      <span className={cn(
+                        "px-1.5 py-0.2 rounded-full text-[10px] font-black",
+                        isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                      )}>
+                        {cat.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Toggle All Button */}
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1"
+                onClick={handleToggleAllArticles}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
               >
-                Xóa
+                {expandedArticleIds.length === handbookArticles.length ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Thu gọn tất cả</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Mở tất cả ({handbookArticles.length})</span>
+                  </>
+                )}
               </button>
-            )}
+            </div>
           </div>
 
           {/* Articles List */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {filteredArticles.length === 0 ? (
-              <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-500 text-sm">
-                Không tìm thấy quy định nào khớp với từ khóa "{searchQuery}".
+              <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-3">
+                <FileText className="w-10 h-10 text-slate-300 mx-auto" />
+                <div className="text-sm font-bold text-slate-800">Không tìm thấy nội dung phù hợp</div>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Không tìm thấy quy chuẩn thuế nào khớp với từ khóa "{searchQuery}". Bạn có thể thử từ khóa khác hoặc bấm nút "Tất cả quy chuẩn".
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
+                  className="px-4 py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-xl border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                >
+                  Xem tất cả quy chuẩn
+                </button>
               </div>
             ) : (
-              filteredArticles.map((article) => (
-                <div key={article.id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-md">
-                      {article.category}
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-medium">Quy chuẩn áp dụng 2025 - 2026</span>
-                  </div>
-
-                  <div>
-                    <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-                      {article.title}
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-1 font-medium">
-                      {article.summary}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 pt-2">
-                    {article.content.map((sec, idx) => (
-                      <div key={idx} className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-100 space-y-1">
-                        <div className="text-xs font-bold text-slate-800">
-                          {sec.heading}
+              filteredArticles.map((article) => {
+                const isExpanded = expandedArticleIds.includes(article.id);
+                return (
+                  <div
+                    key={article.id}
+                    className="bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden transition-all duration-200"
+                  >
+                    {/* Accordion Header */}
+                    <button
+                      type="button"
+                      onClick={() => toggleArticle(article.id)}
+                      className="w-full text-left p-5 sm:p-6 hover:bg-slate-50/60 transition-colors cursor-pointer flex flex-col gap-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-3 w-full">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-100">
+                            {article.category}
+                          </span>
+                          <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg border border-slate-200">
+                            {article.badge}
+                          </span>
                         </div>
-                        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line font-medium">
-                          {sec.text}
+
+                        <div className="flex items-center gap-1.5 text-slate-400 font-bold text-xs shrink-0">
+                          <span className="hidden sm:inline text-[11px] text-slate-400">
+                            {isExpanded ? 'Thu gọn' : 'Xem chi tiết'}
+                          </span>
+                          <div className={cn(
+                            "w-7 h-7 rounded-lg flex items-center justify-center transition-transform duration-200",
+                            isExpanded ? "rotate-180 bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"
+                          )}>
+                            <ChevronDown className="w-4 h-4" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                          {article.title}
+                        </h2>
+                        <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
+                          {article.summary}
                         </p>
                       </div>
-                    ))}
+                    </button>
+
+                    {/* Accordion Body */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 p-5 sm:p-6 bg-slate-50/40 space-y-4 animate-in fade-in duration-200">
+                        {article.sections.map((sec, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 shadow-2xs space-y-3.5"
+                          >
+                            {/* Section Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                              <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-black shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span>{sec.heading}</span>
+                              </h3>
+                              {sec.badge && (
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs flex items-center gap-1">
+                                  <Scale className="w-3 h-3 text-blue-600" />
+                                  <span>{sec.badge}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Highlight Box if present */}
+                            {sec.highlight && (
+                              <div className={cn(
+                                "p-3.5 rounded-xl border flex items-start gap-3",
+                                sec.highlight.type === 'warning' ? "bg-amber-50/80 border-amber-200 text-amber-950" :
+                                sec.highlight.type === 'success' ? "bg-emerald-50/80 border-emerald-200 text-emerald-950" :
+                                sec.highlight.type === 'purple' ? "bg-purple-50/80 border-purple-200 text-purple-950" :
+                                "bg-blue-50/80 border-blue-200 text-blue-950"
+                              )}>
+                                <div className="shrink-0 mt-0.5">
+                                  {sec.highlight.type === 'warning' ? <AlertTriangle className="w-4 h-4 text-amber-600" /> :
+                                   sec.highlight.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> :
+                                   sec.highlight.type === 'purple' ? <Sparkles className="w-4 h-4 text-purple-600" /> :
+                                   <Info className="w-4 h-4 text-blue-600" />}
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-bold">{sec.highlight.title}</div>
+                                  <div className="text-xs leading-relaxed opacity-90 font-medium">
+                                    {sec.highlight.description}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Formula Diagram if present */}
+                            {sec.formula && (
+                              <div className="p-3.5 bg-blue-50/40 rounded-xl border border-blue-100 shadow-2xs space-y-2">
+                                <div className="text-[11px] font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                                  <Calculator className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>{sec.formula.label}</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-800 pt-1">
+                                  {sec.formula.items.map((item, i) => (
+                                    <React.Fragment key={i}>
+                                      <div className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-900 shadow-2xs">
+                                        {item.label}
+                                      </div>
+                                      {item.sign && (
+                                        <span className="text-base font-black text-blue-600 px-1">
+                                          {item.sign}
+                                        </span>
+                                      )}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                                {sec.formula.note && (
+                                  <div className="text-[11px] text-slate-500 font-medium pt-1 leading-relaxed">
+                                    💡 {sec.formula.note}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Bullets List Cards if present */}
+                            {sec.bullets && sec.bullets.length > 0 && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                                {sec.bullets.map((b, bIdx) => (
+                                  <div
+                                    key={bIdx}
+                                    className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50/60 border border-slate-200/80 shadow-2xs hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                    <div className="space-y-0.5 min-w-0">
+                                      <div className="text-xs font-bold text-slate-800 leading-snug">
+                                        {b.text}
+                                      </div>
+                                      {b.subText && (
+                                        <div className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                                          {b.subText}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Paragraphs text */}
+                            {sec.paragraphs && sec.paragraphs.map((p, pIdx) => (
+                              <p key={pIdx} className="text-xs text-slate-700 leading-relaxed font-medium">
+                                {p}
+                              </p>
+                            ))}
+
+                            {/* Note Box if present */}
+                            {sec.note && (
+                              <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[11px] text-amber-900 leading-relaxed flex items-start gap-2 font-medium">
+                                <span className="text-sm shrink-0">📌</span>
+                                <div>{sec.note}</div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

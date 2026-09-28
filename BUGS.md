@@ -6,6 +6,58 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.70 Tái Cấu Trúc Toàn Diện UI & Trải Nghiệm Đọc Cẩm Nang Quy Chuẩn Thuế Du Lịch
+- **Mô tả yêu cầu:**
+  - Điều chỉnh giao diện toàn bộ phần văn bản ở tab Cẩm nang quy chuẩn thuế du lịch (`/tax-handbook`), khắc phục tình trạng quá nhiều text thô gây khó nhìn và mỏi mắt khi tra cứu.
+- **Các bước triển khai:**
+  1. **Tích Hợp Bộ Lọc Nhanh Theo Chủ Đề (Category Filter Pills):**
+     - Bổ sung 5 nút lọc danh mục ở đầu tab: *Tất cả quy chuẩn (4)*, *Thuế GTGT (VAT)*, *Thuế TNDN & Chi phí*, *Thuế TNCN & CTV*, *Thuế Nhà Thầu Ads*.
+     - Giúp nhân sự lọc trúng chủ đề cần tìm ngay lập tức mà không phải cuộn trang dài.
+  2. **Chế Độ Thu Gọn / Mở Rộng Thông Minh (Accordion):**
+     - Đóng gói mỗi bài quy chuẩn vào thẻ card lớn có thể nhấp để Mở rộng / Thu gọn chi tiết, có nút *"Mở tất cả / Thu gọn tất cả"* ở góc trên.
+     - Giúp trang gọn gàng, người dùng lướt nhanh tiêu đề & tóm tắt trước khi mở xem chi tiết.
+  3. **Bóc Tách Văn Bản Thành Các Khối Trực Quan (Structured Cards):**
+     - *Huy hiệu pháp lý (Legal Badges):* Gắn tag căn cứ pháp luật rõ ràng (Nghị định 174/2025/NĐ-CP, Thông tư 219/2013/TT-BTC, Luật 67/2025/QH15...).
+     - *Thẻ điểm nhấn (Highlight Callout):* Khung nổi bật có icon và màu pastel theo chủ đề cảnh báo (Hạ ngưỡng tiền mặt 5 triệu, Thuế suất 8% đến 2026, Giảm trừ gia cảnh mới 15,5 triệu...).
+     - *Sơ đồ công thức tính toán (Formula Diagram):* Trực quan hóa công thức bóc tách VAT tour Outbound thành các khối thẻ toán học đẹp mắt.
+     - *Danh sách thẻ con (Bullet Cards):* Chia danh sách hồ sơ chứng từ (vé máy bay, HDV freelance, hóa đơn Ads) thành lưới 2 cột thẻ nhỏ kèm icon tích xanh `CheckCircle2`, loại bỏ các đoạn văn bản dài thô.
+  4. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 bài kiểm thử unit tests, linter không lỗi, biên dịch hoàn thành sạch sẽ.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
+### 1.69 Mở Quyền Truy Cập Tab Tra Cứu Thuế Cho Toàn Bộ Nhân Sự Công Ty
+- **Mô tả yêu cầu:**
+  - Cho phép tất cả mọi người trong công ty đều xem và sử dụng được tab Tra cứu thuế (`/tax-handbook`), đồng thời bảo vệ bí mật nội bộ trước đối tác bên ngoài (Đại lý & CTV) và khách vãng lai.
+- **Các bước triển khai:**
+  1. **Cập nhật danh sách vai trò được cấp quyền (`src/components/Layout.tsx`):**
+     - Mở rộng cấu hình `roleAccess` của tab "Tra cứu thuế" cho toàn bộ 11 vai trò nội bộ của công ty:
+       `['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'tour_guide', 'marketing_leader', 'marketing']`.
+     - Bổ sung thêm các vai trò: Bộ phận Visa (`visa`), Hướng dẫn viên (`tour_guide`), Trưởng nhóm Marketing (`marketing_leader`), Chuyên viên Marketing (`marketing`).
+     - Tiếp tục ẩn hoàn toàn tab này đối với đối tác bên ngoài (`agent` - Đại lý & CTV) và khách vãng lai chưa đăng nhập.
+  2. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 unit tests, linter không lỗi, biên dịch hoàn thành sạch sẽ.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
+### 1.68 Đồng Bộ Hóa Toàn Diện UI & Dropdown Tab Tra Cứu Thuế Theo Tiêu Chuẩn Hệ Thống Tour CRM
+- **Mô tả yêu cầu:**
+  - Kiểm tra và chuẩn hóa giao diện của tab Tra cứu thuế (`TaxHandbook.tsx`), thay thế các thẻ `<select>` nguyên thủy bằng `CustomSelect` chuẩn hệ thống, đồng bộ hóa các ô nhập liệu số tiền và thanh tìm kiếm.
+- **Các bước triển khai:**
+  1. **Chuẩn Hóa 5 Dropdown Bằng Component `CustomSelect`:**
+     - *Dropdown 1 - Loại hình tour:* Chuyển sang `CustomSelect` kèm icon máy bay `Plane` và `MapPin` (Tour Outbound / Tour Nội địa & Inbound).
+     - *Dropdown 2 - Kiểu giá nhập:* Chuyển sang `CustomSelect` kèm icon hóa đơn `Receipt` và `Plus` (Giá đã gồm VAT / Giá chưa gồm VAT).
+     - *Dropdown 3 - Ngưỡng khấu trừ CTV:* Chuyển sang `CustomSelect` kèm icon `DollarSign` và `Sparkles` (Từ 2.000.000đ / Từ 5.000.000đ).
+     - *Dropdown 4 - Kỳ tính thuế TNCN:* Chuyển sang `CustomSelect` kèm icon `Sparkles` và `Calendar` (Kỳ 2026 giảm trừ 15,5tr / Kỳ 2025).
+     - *Dropdown 5 - Hình thức thuế Nhà thầu Ads:* Chuyển sang `CustomSelect` kèm icon `CreditCard` và `Scale` (Meta thu trực tiếp / Doanh nghiệp nộp thay).
+     - Đảm bảo độ rộng dropdown phủ kín cột form (`w-full`), menu popup hiển thị thoáng đãng không bị cắt cụt ký tự, có animation mở mượt mà và checkmark khi chọn.
+  2. **Đồng Bộ Hóa Ô Nhập Liệu (Input Fields) & Nút Bấm:**
+     - Thiết lập chiều cao chuẩn `h-10`, bo góc mềm `rounded-xl`, viền `border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20` và bóng mờ `shadow-2xs` cho toàn bộ các ô nhập tiền, số người phụ thuộc.
+     - Ô chọn "Cam kết 08/CK-TNCN" được nâng cấp thành thẻ card click tiện dụng với chiều cao chuẩn `h-10` đồng bộ với ô dropdown bên cạnh.
+     - Chuẩn hóa nút chọn thuế suất VAT (8%, 10%, 0%) với chiều cao `h-10` và trạng thái active sắc nét.
+     - Tối ưu hóa thanh tìm kiếm tại tab Cẩm nang thuế với `h-11 rounded-xl` và nút Xóa tinh chỉnh.
+  3. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua 100% 35 unit tests, linter không lỗi, biên dịch hoàn thành sạch sẽ.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.67 Tích Hợp Cơ Chế Kiểm Tra Cập Nhật & Đồng Bộ Dữ Liệu Thuế Tự Động Từ MCP Server
 - **Mô tả yêu cầu:**
   - Bổ sung cơ chế tự động kết nối và đồng bộ phiên bản mới nhất từ MCP Server (`https://go.noti.vn/api/skill-mcp/...`) cho phân hệ Tra cứu thuế.

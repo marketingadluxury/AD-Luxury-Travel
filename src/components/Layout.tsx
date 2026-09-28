@@ -158,7 +158,7 @@ export const mainSidebarNav: MainTabItem[] = [
     groupRef: navigationTree[2]
   },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
-  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr'] },
+  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'tour_guide', 'marketing_leader', 'marketing'] },
   { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
   {
     name: 'Đối tác & Khách hàng',
@@ -184,7 +184,7 @@ const allNavItems: NavItem[] = [
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
   { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
-  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr'] },
+  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'tour_guide', 'marketing_leader', 'marketing'] },
   { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
   { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
