@@ -348,48 +348,53 @@ export default function LeaveRequestPrintModal({
                   <span className="font-semibold text-black">{employeePhone || '0986.977.010'}</span>
                   <span className="italic text-[11px] text-slate-600 ml-2">(Chỉ liên lạc với nhân viên khi có tình huống khẩn cấp)</span>
                 </div>
-
-                {/* Applicant Signature */}
-                <div className="pt-3 flex justify-between items-end">
-                  <div className="text-[12px]">
-                    <span className="font-bold">Signature of Applicant </span>
-                    <span className="italic text-[11px] text-slate-700">(Chữ ký nhân viên xin nghỉ phép): </span>
-                  </div>
-                  <div className="text-right border-b border-black min-w-[200px] text-center font-bold uppercase text-[12px] pb-1">
-                    {leaveRequest.user_name}
-                  </div>
-                </div>
               </div>
             </div>
 
-            {/* Section D: APPROVALS */}
-            <div className="pt-3 border-t border-black mt-2">
-              <div className="font-bold text-[12px] sm:text-[13px] uppercase tracking-wide text-black mb-2">
-                D. APPROVALS <span className="font-normal italic normal-case">(NGƯỜI PHÊ DUYỆT)</span>
+            {/* Bottom Section: Applicant Signature & Approvals */}
+            <div className="pt-4">
+              {/* Applicant Signature */}
+              <div className="flex items-end mb-5">
+                <div className="text-[12px] sm:text-[13px] whitespace-nowrap text-black">
+                  Signature of Applicant <span className="italic">(Chữ ký nhân viên xin nghỉ phép):</span>
+                </div>
+                <div className="border-b border-black flex-1 ml-2 text-center sm:text-right sm:pr-8 font-serif text-[13px] sm:text-[14px] text-black pb-0.5 min-h-[24px]">
+                  {leaveRequest.user_name}
+                </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-center text-[11px] sm:text-[11.5px]">
-                <div>
-                  <div className="font-bold italic">Signature of Superior</div>
-                  <div className="italic text-[10px] text-slate-600">Chữ ký của cấp trên</div>
-                  <div className="h-16 sm:h-20 flex items-end justify-center font-bold uppercase text-[11px] pb-1">
-                    {leaveRequest.approver_level_1_name || (leaveRequest.status !== 'pending' ? 'HÙNG TRUNG' : '')}
-                  </div>
+              {/* Section D: APPROVALS */}
+              <div className="mb-2">
+                <div className="font-bold text-[12px] sm:text-[13px] uppercase tracking-wide text-black mb-4">
+                  D. APPROVALS <span className="italic font-bold">(NGƯỜI PHÊ DUYỆT)</span>
                 </div>
 
-                <div>
-                  <div className="font-bold italic">Signature of Head of Division</div>
-                  <div className="italic text-[10px] text-slate-600">Chữ ký của Trưởng phòng</div>
-                  <div className="h-16 sm:h-20 flex items-end justify-center font-bold uppercase text-[11px] pb-1">
-                    {leaveRequest.approver_level_1_name || (leaveRequest.status !== 'pending' ? 'HÙNG TRUNG' : '')}
+                <div className="grid grid-cols-3 gap-6 sm:gap-8 text-center text-[12px] sm:text-[13px]">
+                  <div>
+                    <div className="h-16 sm:h-20 flex items-end justify-center font-serif text-xs pb-1 text-black">
+                      {leaveRequest.approver_level_1_name || (leaveRequest.status !== 'pending' ? 'HÙNG TRUNG' : '')}
+                    </div>
+                    <div className="border-b border-black w-full mb-1.5"></div>
+                    <div className="italic text-black leading-snug">Signature of Superior</div>
+                    <div className="italic text-black leading-snug">Chữ ký của cấp trên</div>
                   </div>
-                </div>
 
-                <div>
-                  <div className="font-bold italic">Signature of Senior Manager, HR</div>
-                  <div className="italic text-[10px] text-slate-600">Chữ ký Trưởng phòng nhân sự</div>
-                  <div className="h-16 sm:h-20 flex items-end justify-center font-bold uppercase text-[11px] pb-1">
-                    {leaveRequest.approver_final_name || (leaveRequest.status === 'approved_final' ? 'BOD / NHÂN SỰ' : '')}
+                  <div>
+                    <div className="h-16 sm:h-20 flex items-end justify-center font-serif text-xs pb-1 text-black">
+                      {leaveRequest.approver_level_1_name || (leaveRequest.status !== 'pending' ? 'HÙNG TRUNG' : '')}
+                    </div>
+                    <div className="border-b border-black w-full mb-1.5"></div>
+                    <div className="italic text-black leading-snug">Signature of Head of Division</div>
+                    <div className="italic text-black leading-snug">Chữ ký của Trưởng phòng</div>
+                  </div>
+
+                  <div>
+                    <div className="h-16 sm:h-20 flex items-end justify-center font-serif text-xs pb-1 text-black">
+                      {leaveRequest.approver_final_name || (leaveRequest.status === 'approved_final' ? 'BOD / NHÂN SỰ' : '')}
+                    </div>
+                    <div className="border-b border-black w-full mb-1.5"></div>
+                    <div className="italic text-black leading-snug">Signature of Senior Manager, HR</div>
+                    <div className="italic text-black leading-snug">Chữ ký của Trưởng phòng nhân sự</div>
                   </div>
                 </div>
               </div>

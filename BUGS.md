@@ -6,6 +6,25 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.73 Đồng Bộ Định Dạng Chữ Ký & Phê Duyệt Cuối Đơn Xin Nghỉ Phép Theo Mẫu Chuẩn
+- **Mô tả yêu cầu:**
+  - Định dạng lại khu vực chữ ký nhân viên và Mục D (Người phê duyệt) ở phần dưới cùng của Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`), đồng thời gom khối "Signature of Applicant" xuống nằm sát ngay phía trên "D. APPROVALS" để loại bỏ khoảng trắng thừa giữa 2 phần.
+- **Các bước triển khai:**
+  1. **Tối Ưu Vị Trí Dòng Chữ Ký Nhân Viên (Signature of Applicant):**
+     - Gom dòng chữ ký nhân viên vào cùng khối đáy với Mục D, đặt cách `D. APPROVALS` một khoảng cách vừa vặn (`mb-5`), đường kẻ gạch ngang kéo dài liền mạch sang mép phải với họ tên nhân viên nằm trang trọng trên đường kẻ.
+  2. **Tiêu Đề Mục D (D. APPROVALS):**
+     - Định dạng tiêu đề `D. APPROVALS (NGƯỜI PHÊ DUYỆT)` (chữ đậm in hoa kèm ngoặc đơn in nghiêng), bỏ đường kẻ phân cách ngang phía trên theo đúng ảnh mẫu.
+  3. **3 Cột Phê Duyệt (Superior, Head of Division, Senior Manager, HR):**
+     - Dành khoảng trống rộng rãi phía trên để ký tên hoặc hiển thị tên người duyệt.
+     - Phía dưới là đường kẻ ngang màu đen riêng biệt cho từng cột (`border-b border-black`).
+     - Dưới mỗi đường kẻ là 2 dòng chức danh in nghiêng font Times New Roman chuẩn xác:
+       * Cột 1: *Signature of Superior / Chữ ký của cấp trên*
+       * Cột 2: *Signature of Head of Division / Chữ ký của Trưởng phòng*
+       * Cột 3: *Signature of Senior Manager, HR / Chữ ký của Trưởng phòng nhân sự*
+  4. **Kiểm thử tự động & Xác thực:**
+     - Vượt qua toàn bộ linter và build applet thành công 100%.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.72 Tối Ưu Hóa Đơn Xin Nghỉ Phép Gói Gọn Chuẩn 1 Trang A4 Dọc (Chống Tràn, Cân Bằng Dòng & Bỏ Dòng Footer)
 - **Mô tả yêu cầu:**
   - Tối ưu lại biểu mẫu in Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`): loại bỏ dòng text footer `Hệ thống Tour CRM AD Luxury Travel · Trang 1/1`, giãn cách hợp lý các khối dòng thông tin trên khổ giấy A4 dọc để bố cục trải đều đẹp mắt, loại bỏ khoảng trắng thừa lớn phía dưới và chống tràn sang trang thứ 2.
