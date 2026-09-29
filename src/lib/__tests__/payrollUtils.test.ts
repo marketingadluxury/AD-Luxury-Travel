@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateDefaultAccruedLeaveDays } from '../payrollUtils';
+import { calculateDefaultAccruedLeaveDays, calculateSeniority } from '../payrollUtils';
 
 describe('Phần 2: Automation Tests - Kiểm thử quỹ phép tích lũy (payrollUtils)', () => {
   const currentYear = new Date().getFullYear();
@@ -70,4 +70,53 @@ describe('Phần 2: Automation Tests - Kiểm thử quỹ phép tích lũy (payr
     const accruedDays = calculateDefaultAccruedLeaveDays(currentYear, resignedEmployee, 8);
     expect(accruedDays).toBe(0);
   });
+
+  it('Nhân sự có thâm niên trên 5 năm được cộng thêm ngày phép thâm niên (+1 ngày / 5 năm)', () => {
+    const seniorEmployee = {
+      join_date: `${currentYear - 6}-01-01`, // 6 năm thâm niên
+      employment_status: 'official' as const
+    };
+    // Tháng 8 hạch toán: 8 ngày cơ bản + 1 ngày phép thâm niên (Math.floor(6/5) = 1) = 9 ngày
+    const accruedDays = calculateDefaultAccruedLeaveDays(currentYear, seniorEmployee, 8);
+    expect(accruedDays).toBe(9);
+  });
 });
+
+describe('Phần 2.2: Automation Tests - Kiểm thử tính thâm niên công tác (calculateSeniority)', () => {
+  it('Xử lý trường hợp không có ngày vào làm', () => {
+    const res = calculateSeniority(null);
+    expect(res.years).toBe(0);
+    expect(res.text).toBe('Chưa cập nhật ngày vào làm');
+  });
+
+  it('Tính chính xác nhân sự mới gia nhập trong tháng', () => {
+    const res = calculateSeniority('2026-09-15', new Date('2026-09-29'));
+    expect(res.years).toBe(0);
+    expect(res.months).toBe(0);
+    expect(res.days).toBe(14);
+    expect(res.text).toContain('Mới gia nhập (14 ngày)');
+  });
+
+  it('Tính chính xác thâm niên theo năm và tháng', () => {
+    const res = calculateSeniority('2024-03-10', new Date('2026-09-29'));
+    expect(res.years).toBe(2);
+    expect(res.months).toBe(6);
+    expect(res.text).toBe('2 năm 6 tháng');
+  });
+
+  it('Tính ngày phép thưởng thâm niên (seniorityBonusDays) theo Luật lao động', () => {
+    const res5yr = calculateSeniority('2021-01-01', new Date('2026-09-29'));
+    expect(res5yr.seniorityBonusDays).toBe(1); // 5 năm -> +1 ngày
+
+    const res11yr = calculateSeniority('2015-01-01', new Date('2026-09-29'));
+    expect(res11yr.seniorityBonusDays).toBe(2); // 11 năm -> +2 ngày
+  });
+
+  it('Tính đúng thâm niên đến ngày thôi việc nếu nhân viên đã nghỉ việc (resignedAt)', () => {
+    const res = calculateSeniority('2023-01-01', null, '2025-06-15');
+    expect(res.years).toBe(2);
+    expect(res.months).toBe(5);
+    expect(res.text).toBe('2 năm 5 tháng');
+  });
+});
+

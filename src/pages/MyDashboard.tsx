@@ -6,14 +6,15 @@ import {
   CheckCircle2, Clock, XCircle, TrendingUp, 
   ChevronRight, Plus, 
   Building2, Phone, Mail, Sparkles, 
-  BarChart3, Check, AlertCircle, LayoutDashboard
+  BarChart3, Check, AlertCircle, LayoutDashboard, PartyPopper
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
   getEffectiveLeaveBalance,
   calculateDefaultAccruedLeaveDays,
   calculateEmployeeTimesheet,
-  calculateTotalUsedAnnualDays
+  calculateTotalUsedAnnualDays,
+  calculateSeniority
 } from '../lib/payrollUtils';
 import { 
   EMPLOYMENT_STATUS_LABELS,
@@ -56,21 +57,9 @@ export default function MyDashboard() {
 
   const userId = myProfile?.id || user?.id || '';
 
-  // Tính thâm niên công tác
-  const seniorityText = useMemo(() => {
-    const joinDateStr = (myProfile as any)?.join_date || myProfile?.created_at;
-    if (!joinDateStr) return 'Chưa ghi nhận ngày vào làm';
-    const startDate = new Date(joinDateStr);
-    const now = new Date();
-    const diffMonths = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
-    
-    if (diffMonths < 1) return 'Mới gia nhập trong tháng này';
-    const years = Math.floor(diffMonths / 12);
-    const months = diffMonths % 12;
-    
-    if (years === 0) return `${months} tháng làm việc`;
-    if (months === 0) return `${years} năm làm việc`;
-    return `${years} năm ${months} tháng làm việc`;
+  // Tính thâm niên công tác chuẩn hóa
+  const seniority = useMemo(() => {
+    return calculateSeniority(myProfile?.join_date || myProfile?.created_at, null, myProfile?.resigned_at);
   }, [myProfile]);
 
   // Quỹ phép năm hiệu dụng
@@ -250,7 +239,17 @@ export default function MyDashboard() {
                 )}
                 <span className="flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>{seniorityText}</span>
+                  <span>{seniority.text}</span>
+                  {seniority.seniorityBonusDays > 0 && (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1 rounded font-bold">
+                      +{seniority.seniorityBonusDays} ngày phép
+                    </span>
+                  )}
+                  {seniority.isAnniversaryMonth && (
+                    <span className="text-[10px] text-pink-600 font-black flex items-center gap-0.5 ml-1 animate-pulse" title="Tháng kỷ niệm gia nhập công ty">
+                      <PartyPopper className="w-3 h-3" />
+                    </span>
+                  )}
                 </span>
               </div>
             </div>

@@ -1160,6 +1160,7 @@ export default function LeaveRequestsPage() {
         onClose={() => setSelectedLeaveForPrint(null)}
         leaveRequest={selectedLeaveForPrint}
         employeePhone={profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.phone || profile?.phone}
+        hireDate={profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.join_date || profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.created_at || profile?.join_date || profile?.created_at}
         departmentName={
           profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'marketing' || profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'marketing_leader' ? 'Marketing' :
           profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'sale' || profilesList.find(p => p.id === selectedLeaveForPrint?.user_id)?.role === 'sale_leader' ? 'Kinh doanh (Sales)' :

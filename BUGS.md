@@ -6,6 +6,66 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.77 Khắc Phục Lỗi Chồng Chéo Giao Diện Lịch (`DatePicker`) Và Dropdown Trong Modal Nhân Sự
+- **Mô tả lỗi:**
+  - Khi mở bộ chọn ngày (`DatePicker`) cho trường *Ngày vào làm chính thức (Join Date)* trong modal tạo/sửa nhân sự, popover lịch bung xuống đè lên các dropdown phía dưới (*Thuộc Team*, *Leader phụ trách*) và thanh nút bấm (*Hủy bỏ*, *Cập nhật*).
+  - Do lỗi xếp tầng ngữ cảnh (Stacking Context & z-index inversion), các viền, icon của `CustomSelect` và nút *Cập nhật* ở lớp DOM phía sau đè ngược lên trên mặt của lịch, gây hiện tượng chồng chéo, lộn xộn các thành phần giao diện.
+- **Nguyên nhân kỹ thuật:**
+  1. Thẻ container bọc ngoài của `DatePicker.tsx` có `position: relative` nhưng thiếu `z-index` khi mở lịch (mặc định là `z-index: auto` hoặc 0). Trong khi đó, các component `CustomSelect` phía dưới lại có `position: relative; z-index: 10`. Theo quy tắc xếp tầng CSS, phần tử có `z-index: 10` sẽ đè lên phần tử trước có `z-index: auto`, khiến các selector bên dưới đè xuyên qua lịch.
+  2. `DatePicker` cố định hướng mở xuống dưới (`mt-1.5`) mà không phát hiện khoảng cách với đáy modal/màn hình. Khi ô nhập liệu ở gần cuối modal, lịch dài 320px sẽ đè qua đáy và che khuất toàn bộ các nút điều khiển.
+- **Giải pháp xử lý:**
+  1. **Tự Động Đảo Hướng Mở Lịch (Auto-flip placement - `openUpward`):**
+     - Bổ sung hook tính toán khoảng trống thông minh (`getBoundingClientRect`) trong `DatePicker.tsx`. Nếu khoảng trống bên dưới nhỏ hơn 330px và phía trên đủ rộng, lịch sẽ tự động bung lên trên (`bottom-full mb-1.5`).
+     - Áp dụng cơ chế tương tự cho `CustomSelect.tsx` để dropdown tự động mở lên khi ở sát đáy modal/màn hình.
+  2. **Chuẩn Hóa Ngữ Cảnh Xếp Tầng (Stacking Context & Z-Index):**
+     - Nâng cấp `z-index` cho container wrapper của `DatePicker` thành `z-[60]` khi mở (`isOpen ? 'z-[60]' : ''`), và popover lịch lên `z-[70] shadow-2xl`.
+     - Phân tầng rõ rệt trong User Form Modal: Khối Ngày vào làm & Thâm niên (`relative z-20`), Khối Thuộc Team (`relative z-10`), Khối Leader (`relative z-0`).
+  3. **Kiểm Thử & Xác Thực:**
+     - Chạy `lint_applet` và `compile_applet` thành công 100%, toàn bộ 44/44 unit tests vượt qua xuất sắc.
+- **Trạng thái:** Đã khắc phục hoàn toàn triệt để.
+
+### 1.76 Chuẩn Hóa Toàn Diện UI/UX Dropdown & Calendar Trong Tab Quản Lý Nhân Sự (Zero Native Inputs)
+- **Mô tả yêu cầu & vấn đề:**
+  - Trước đây, trong phân hệ Quản lý Nhân sự (`UserManagement.tsx`), nhiều bộ lọc và trường nhập liệu vẫn sử dụng thẻ `<select>` và `<input type="date">` thô của HTML.
+  - Giao diện chưa đồng bộ thiết kế hệ thống, không có icon đi kèm, chiều cao không khớp chuẩn `h-10`, và dễ bị lỗi cắt cụt chữ (truncation) trên các màn hình nhỏ.
+- **Các bước triển khai:**
+  1. **Chuyển đổi 100% Dropdown sang `CustomSelect.tsx`:**
+     - Thanh bộ lọc nhân sự: Bộ lọc Trạng thái làm việc (icon `Briefcase`), Bộ lọc Thâm niên (icon `Clock`), Bộ lọc Vai trò CRM (icon `Shield`), Bộ lọc Team (icon `Building2`).
+     - Form tạo/sửa nhân sự: Dropdown Role CRM, Trạng thái làm việc & Chế độ, Thuộc Team, Leader phụ trách.
+     - Modal Quản lý Team & Phân quyền vai trò: Dropdown Chọn Leader phụ trách Team, Dropdown Chọn tông màu huy hiệu (Badge).
+     - Thiết lập độ rộng an toàn từ `w-48` đến `w-64`, đồng bộ chuẩn chiều cao `h-10`, bo viền `rounded-xl`, đổ bóng mềm và chống cắt chữ tuyệt đối.
+  2. **Chuyển đổi 100% Ô Chọn Ngày sang `DatePicker.tsx` Chuẩn Tiếng Việt:**
+     - Thay thế toàn bộ `<input type="date">` tại: Ngày vào làm việc chính thức (`join_date`), Ngày chính thức thôi việc (`resigned_at`) trong User Form Modal và Quick Status Change Modal.
+     - Hỗ trợ nhập định dạng `dd/mm/yyyy`, mở lịch Tiếng Việt trực quan, nút *Hôm nay*, *Xóa ngày*.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
+### 1.75 Chuẩn Hóa Quản Lý Ngày Vào Làm Việc Chính Thức (`join_date`) & Cơ Chế Tính Thâm Niên Công Tác Nhân Sự
+- **Mô tả yêu cầu:**
+  - Bổ sung trường quản lý **Ngày vào làm việc chính thức (`join_date`)** cho toàn bộ cán bộ nhân viên công ty.
+  - Chuẩn hóa thuật toán tính thâm niên công tác chính xác (năm, tháng, ngày làm việc) và cơ chế cộng ngày phép thâm niên (+1 ngày cho mỗi 5 năm cống hiến theo Điều 114 Bộ luật Lao động Việt Nam).
+  - Tích hợp xuyên suốt từ form tạo/sửa nhân sự, bảng danh sách nhân sự, bộ lọc thâm niên, hồ sơ cá nhân, dashboard, quản lý quỹ phép năm đến biểu mẫu in Đơn xin nghỉ phép.
+- **Các bước triển khai:**
+  1. **Bộ Hàm Chuẩn Hóa Tính Thâm Niên (`src/lib/payrollUtils.ts`):**
+     - Xây dựng hàm `calculateSeniority(joinDateStr, referenceDate, resignedAtStr)` tính chính xác số năm, số tháng, số ngày làm việc, tổng tháng, định dạng Tiếng Việt (`2 năm 6 tháng`, `Mới gia nhập (14 ngày)`), ngày kỷ niệm công tác và số ngày phép thâm niên được hưởng (`seniorityBonusDays`).
+     - Tích hợp ngày phép thâm niên vào `calculateDefaultAccruedLeaveDays` để tự động cộng dồn vào quỹ phép năm của nhân sự.
+  2. **Quản Lý Nhân Sự & Bộ Lọc Thâm Niên (`UserManagement.tsx`):**
+     - Thêm trường chọn `join_date` trong modal Thêm/Sửa nhân sự kèm hộp preview thâm niên và ngày phép thâm niên tức thì.
+     - Bổ sung cột *"Ngày Vào Làm & Thâm Niên"* trên bảng danh sách nhân sự công ty với badge thời gian công tác, huy hiệu +ngày phép thâm niên và icon tháng kỷ niệm.
+     - Bổ sung bộ lọc Thâm niên trên thanh Filter Bar: *Dưới 1 năm*, *1 - 3 năm*, *3 - 5 năm*, *Trên 5 năm*.
+  3. **Hồ Sơ Cá Nhân (`Profile.tsx`) & Bảng Điều Khiển (`MyDashboard.tsx`):**
+     - Thêm Thẻ thông tin công tác & thâm niên nổi bật trên trang Profile của nhân viên.
+     - Hiển thị ngày vào làm, thâm niên và huy hiệu tháng kỷ niệm công tác trên header Dashboard cá nhân.
+  4. **Quản Lý Quỹ Phép (`LeaveBalanceManagement.tsx`) & In Đơn Nghỉ Phép (`LeaveRequestPrintModal.tsx`):**
+     - Hiển thị ngày vào làm và thâm niên của từng nhân sự trong danh sách và modal điều chỉnh quỹ phép của HR.
+     - Tự động điền Ngày vào làm (`join_date`) lên Mục A. Thông tin nhân viên trên mẫu in A4 Đơn xin nghỉ phép.
+  5. **Backend & Database Schema:**
+     - Cập nhật API POST/PUT `/api/admin/users` trên backend Express để lưu và đồng bộ `join_date`.
+     - Cập nhật `supabase-schema.sql` với cột `join_date DATE` trong bảng `profiles`.
+  6. **Kiểm Thử Tự Động & Xác Thực:**
+     - Viết mới 5 unit tests trong `src/lib/__tests__/payrollUtils.test.ts`, vượt qua toàn bộ 44/44 unit tests và 21/21 kịch bản simulation.
+     - Chạy `lint_applet` và `compile_applet` thành công 100%.
+- **Trạng thái:** Đã hoàn thành và xác thực hoạt động ổn định.
+
 ### 1.74 Bổ Sung Vai Trò Trưởng Bộ Phận Visa (`visa_leader`) & Phân Hệ Quản Lý Chức Danh Động (Dynamic Roles) Ở Front-End
 - **Mô tả yêu cầu:**
   - Bổ sung vai trò **Trưởng bộ phận Visa (`visa_leader`)** vào hệ thống phân quyền, hỗ trợ quản lý toàn diện hồ sơ visa, duyệt nghỉ phép Cấp 1 và điều phối nhân sự.
@@ -1937,6 +1997,16 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
     - `isHRorBODorAdmin` / `canApproveFinal`: Giữ lại `hr`, `bod`, `admin` (loại bỏ `accounting`).
   - Ghi nhận quy chuẩn vào `AGENTS.md`.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
+### 1.110 Chuẩn Hóa Phòng Tránh Lỗi Chồng Chéo (Z-Index / Stacking Context) & 100% Zero Native Inputs
+- **Mô tả quy chuẩn & bài học kinh nghiệm:**
+  - **Bài học 1 (Tránh dùng input thô):** Không bao giờ sử dụng `<select>` hay `<input type="date">` thô của HTML trong bất kỳ phân hệ nào. Tất cả đều phải dùng component chuẩn hóa `CustomSelect.tsx` và `DatePicker.tsx` để đồng bộ UI, icon, font, border, shadow và tránh cắt chữ.
+  - **Bài học 2 (Tránh lỗi chồng chéo Z-Index):** Mọi component có popover hoặc dropdown (`DatePicker`, `CustomSelect`) khi mở (`isOpen === true`) phải luôn có:
+    1. Container bọc ngoài nâng lên `z-[60]` (thay vì để mặc định).
+    2. Menu/lịch bên trong có `z-[70]` đến `z-[100]`.
+    3. Cơ chế tự động đảo hướng mở lên trên (`openUpward`) khi khoảng trống bên dưới không đủ (dưới 250px - 330px), ngăn hoàn toàn việc popup bị tràn qua đáy modal hoặc che khuất thanh nút bấm hành động.
+    4. Thiết lập thứ tự phân tầng (`relative z-20`, `relative z-10`, `relative z-0`) cho các trường form nằm kề nhau theo chiều dọc.
+- **Trạng thái:** Đã ban hành thành quy tắc bắt buộc trong `AGENTS.md` và `BUGS.md`.
 
 ---
 

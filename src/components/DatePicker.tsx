@@ -20,12 +20,27 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [openUpward, setOpenUpward] = useState(false);
   
   // Current calendar view state
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-detect whether to open calendar upward if not enough space below
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      // Calendar popover height is ~330px
+      if (spaceBelow < 330 && rect.top > spaceBelow) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [isOpen]);
 
   // Parse yyyy-mm-dd to dd/mm/yyyy for input display
   useEffect(() => {
@@ -231,7 +246,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   };
 
   return (
-    <div ref={containerRef} className="relative w-full font-sans">
+    <div ref={containerRef} className={`relative w-full font-sans ${isOpen ? 'z-[60]' : ''}`}>
       <div className="relative flex items-center">
         <input
           type="text"
@@ -254,7 +269,11 @@ export const DatePicker: React.FC<DatePickerProps> = ({
       </div>
 
       {isOpen && !disabled && (
-        <div className={`absolute ${align === 'right' ? 'right-0' : align === 'auto' ? 'left-0 md:left-auto md:right-0' : 'left-0'} mt-1.5 w-72 bg-white rounded-xl shadow-xl border border-slate-150 p-4 z-50 animate-fade-in`}>
+        <div 
+          className={`absolute ${align === 'right' ? 'right-0' : align === 'auto' ? 'left-0 md:left-auto md:right-0' : 'left-0'} ${
+            openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+          } w-72 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 z-[70] animate-fade-in`}
+        >
           {/* Calendar Header with Month/Year selection */}
           <div className="flex items-center justify-between mb-3 gap-1">
             <button

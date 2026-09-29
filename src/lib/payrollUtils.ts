@@ -1,8 +1,142 @@
 import { Holiday, LeaveRequest, HolidayType, LeaveBalance, EmploymentStatus } from '../types';
 
+export interface SeniorityResult {
+  years: number;
+  months: number;
+  days: number;
+  totalMonths: number;
+  totalDays: number;
+  text: string;
+  shortText: string;
+  seniorityBonusDays: number; // Cứ đủ 5 năm làm việc -> +1 ngày phép năm theo Điều 114 BLLĐ
+  isAnniversaryMonth: boolean;
+  joinDateFormatted: string;
+}
+
 /**
- * Tính số ngày phép năm tích lũy mặc định theo Luật Lao Động (1 ngày cho mỗi tháng làm việc):
- * - Đối với năm trong quá khứ (< năm hiện tại): Đủ 12 ngày phép (nếu không có điều chỉnh HR).
+ * Tính toán thâm niên công tác chuẩn xác từ ngày vào làm việc chính thức (join_date)
+ * @param joinDateStr - Chuỗi ngày vào làm (YYYY-MM-DD hoặc ISO string)
+ * @param referenceDate - Ngày mốc tính toán (mặc định là hôm nay)
+ * @param resignedAtStr - Ngày thôi việc nếu nhân sự đã nghỉ việc
+ */
+export function calculateSeniority(
+  joinDateStr?: string | null,
+  referenceDate?: Date | string | null,
+  resignedAtStr?: string | null
+): SeniorityResult {
+  if (!joinDateStr) {
+    return {
+      years: 0,
+      months: 0,
+      days: 0,
+      totalMonths: 0,
+      totalDays: 0,
+      text: 'Chưa cập nhật ngày vào làm',
+      shortText: 'Chưa có',
+      seniorityBonusDays: 0,
+      isAnniversaryMonth: false,
+      joinDateFormatted: '---'
+    };
+  }
+
+  const startDate = new Date(joinDateStr);
+  if (isNaN(startDate.getTime())) {
+    return {
+      years: 0,
+      months: 0,
+      days: 0,
+      totalMonths: 0,
+      totalDays: 0,
+      text: 'Ngày vào làm không hợp lệ',
+      shortText: 'Không hợp lệ',
+      seniorityBonusDays: 0,
+      isAnniversaryMonth: false,
+      joinDateFormatted: '---'
+    };
+  }
+
+  // Format dd/mm/yyyy
+  const day = String(startDate.getDate()).padStart(2, '0');
+  const month = String(startDate.getMonth() + 1).padStart(2, '0');
+  const year = startDate.getFullYear();
+  const joinDateFormatted = `${day}/${month}/${year}`;
+
+  const endDate = resignedAtStr 
+    ? new Date(resignedAtStr) 
+    : (referenceDate ? (typeof referenceDate === 'string' ? new Date(referenceDate) : referenceDate) : new Date());
+
+  if (endDate < startDate) {
+    return {
+      years: 0,
+      months: 0,
+      days: 0,
+      totalMonths: 0,
+      totalDays: 0,
+      text: 'Chưa đến ngày bắt đầu',
+      shortText: '0 tháng',
+      seniorityBonusDays: 0,
+      isAnniversaryMonth: false,
+      joinDateFormatted
+    };
+  }
+
+  let years = endDate.getFullYear() - startDate.getFullYear();
+  let months = endDate.getMonth() - startDate.getMonth();
+  let days = endDate.getDate() - startDate.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    const prevMonthLastDay = new Date(endDate.getFullYear(), endDate.getMonth(), 0).getDate();
+    days += prevMonthLastDay;
+  }
+
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  const totalMonths = years * 12 + months;
+  const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+  const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  // Cứ đủ 5 năm làm việc -> +1 ngày phép thâm niên theo Điều 114 BLLĐ
+  const seniorityBonusDays = Math.floor(years / 5);
+
+  const isAnniversaryMonth = endDate.getMonth() === startDate.getMonth() && years > 0;
+
+  let text = '';
+  let shortText = '';
+  if (years === 0 && months === 0) {
+    text = totalDays <= 1 ? 'Mới gia nhập hôm nay' : `Mới gia nhập (${days} ngày)`;
+    shortText = `${days} ngày`;
+  } else if (years === 0) {
+    text = days > 0 ? `${months} tháng ${days} ngày` : `${months} tháng làm việc`;
+    shortText = `${months} tháng`;
+  } else if (months === 0) {
+    text = days > 0 ? `${years} năm ${days} ngày` : `${years} năm làm việc`;
+    shortText = `${years} năm`;
+  } else {
+    text = `${years} năm ${months} tháng`;
+    shortText = `${years} năm ${months} th`;
+  }
+
+  return {
+    years,
+    months,
+    days,
+    totalMonths,
+    totalDays,
+    text,
+    shortText,
+    seniorityBonusDays,
+    isAnniversaryMonth,
+    joinDateFormatted
+  };
+}
+
+/**
+ * Tính số ngày phép năm tích lũy mặc định theo Luật Lao Động (1 ngày cho mỗi tháng làm việc + thâm niên):
+ * - Đối với năm trong quá khứ (< năm hiện tại): Đủ 12 ngày phép (nếu không có điều chỉnh HR) + ngày phép thâm niên nếu có.
  * - Đối với năm trong tương lai (> năm hiện tại): 0 ngày (hoặc tích lũy dần khi tới năm đó).
  * - Đối với năm hiện tại:
  *   + Mặc định: Số tháng đã trôi qua tính đến thời điểm hiện tại (ví dụ: đang ở tháng 8 thì mặc định có 8 ngày).
@@ -10,6 +144,7 @@ import { Holiday, LeaveRequest, HolidayType, LeaveBalance, EmploymentStatus } fr
  *     tính từ tháng vào làm đến tháng hiện tại (hoặc tháng hạch toán).
  *     Ví dụ: Vào làm tháng 3/2026, hiện tại tháng 8/2026 -> 8 - 3 + 1 = 6 ngày.
  *   + Nếu ngày vào làm trong tương lai (sau tháng hiện tại): 0 ngày.
+ *   + Thâm niên (Điều 114 BLLĐ): Cứ đủ 5 năm làm việc -> +1 ngày phép năm.
  *
  * @param year - Năm cần tính quỹ phép (vd: 2026)
  * @param profile - Thông tin nhân viên (chứa join_date, created_at)
@@ -42,6 +177,7 @@ export function calculateDefaultAccruedLeaveDays(
 
   // Xác định tháng bắt đầu làm việc của nhân viên
   let startMonth = 1;
+  let seniorityBonus = 0;
   const joinDateStr = profile?.join_date || profile?.created_at;
   if (joinDateStr) {
     try {
@@ -55,6 +191,10 @@ export function calculateDefaultAccruedLeaveDays(
           return 0;
         } else if (joinYear === year) {
           startMonth = joinMonth;
+        } else if (year > joinYear) {
+          // Nhân viên đã làm việc qua các năm trước, tính thêm ngày phép thâm niên
+          const yearsOfService = year - joinYear;
+          seniorityBonus = Math.floor(yearsOfService / 5);
         }
       }
     } catch (e) {
@@ -67,7 +207,8 @@ export function calculateDefaultAccruedLeaveDays(
   }
 
   const accrued = effectiveMonth - startMonth + 1;
-  return Math.max(0, Math.min(12, accrued));
+  const baseLeave = Math.max(0, Math.min(12, accrued));
+  return baseLeave + seniorityBonus;
 }
 
 /**

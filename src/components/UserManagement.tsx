@@ -2,13 +2,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCRM } from '../context/CRMContext';
 import { supabase } from '../lib/supabase';
+import { calculateSeniority } from '../lib/payrollUtils';
+import { DatePicker } from './DatePicker';
+import { CustomSelect } from './CustomSelect';
 import { Role, Team, EmploymentStatus, EMPLOYMENT_STATUS_LABELS, CustomRole } from '../types';
 import { 
   Users, UserPlus, Edit2, Trash2, Shield, Key, Mail, Phone, 
   Building2, Search, X, Check, AlertCircle, RefreshCw, Eye, EyeOff,
   Target, Plus, Award, UserCheck, ShieldAlert, Briefcase,
   UserMinus, Calendar, FileText, CheckCircle2, RotateCcw,
-  Sparkles, Layers, Sliders, Palette, Info
+  Sparkles, Layers, Sliders, Palette, Info, Clock, PartyPopper
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -22,6 +25,7 @@ interface ManagedUser {
   employment_status?: EmploymentStatus;
   resigned_at?: string | null;
   resigned_note?: string | null;
+  join_date?: string | null;
   leader_id?: string | null;
   team_id?: string | null;
   team_name?: string | null;
@@ -101,6 +105,7 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [employmentFilter, setEmploymentFilter] = useState<string>('all');
+  const [seniorityFilter, setSeniorityFilter] = useState<string>('all');
   
   // User Modal state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -178,6 +183,7 @@ export default function UserManagement() {
     employment_status: 'official' as EmploymentStatus,
     resigned_at: '',
     resigned_note: '',
+    join_date: '',
     leader_id: '',
     team_id: '',
     team_name: ''
@@ -325,6 +331,7 @@ export default function UserManagement() {
       employment_status: 'official',
       resigned_at: '',
       resigned_note: '',
+      join_date: new Date().toISOString().split('T')[0],
       leader_id: '',
       team_id: '',
       team_name: ''
@@ -345,6 +352,7 @@ export default function UserManagement() {
       employment_status: user.employment_status || 'official',
       resigned_at: user.resigned_at ? user.resigned_at.split('T')[0] : '',
       resigned_note: user.resigned_note || '',
+      join_date: user.join_date ? user.join_date.split('T')[0] : (user.created_at ? user.created_at.split('T')[0] : ''),
       leader_id: user.leader_id || '',
       team_id: user.team_id || '',
       team_name: user.team_name || ''
@@ -379,12 +387,30 @@ export default function UserManagement() {
       const bodyData: any = {
         ...formData,
         team_name: selectedTeam ? selectedTeam.name : (formData.team_id ? formData.team_name : ''),
+        join_date: formData.join_date || null,
         resigned_at: formData.employment_status === 'resigned' ? (formData.resigned_at || new Date().toISOString()) : null,
         resigned_note: formData.employment_status === 'resigned' ? (formData.resigned_note || null) : null
       };
 
       if (editingUser && !bodyData.password) {
         delete bodyData.password;
+      }
+
+      // Also update directly in Supabase profiles for realtime resilience
+      if (editingUser) {
+        await updateUserProfile(editingUser.id, {
+          full_name: formData.full_name,
+          phone: formData.phone,
+          company_name: formData.company_name,
+          role: formData.role,
+          employment_status: formData.employment_status,
+          resigned_at: bodyData.resigned_at,
+          resigned_note: bodyData.resigned_note,
+          join_date: bodyData.join_date,
+          leader_id: formData.leader_id || null,
+          team_id: formData.team_id || null,
+          team_name: bodyData.team_name || null
+        });
       }
 
       const response = await fetch(url, {
@@ -750,7 +776,23 @@ export default function UserManagement() {
       matchesEmployment = empStatus === employmentFilter;
     }
 
-    return matchesSearch && matchesRole && matchesTeam && matchesEmployment;
+    // Seniority Filter
+    let matchesSeniority = true;
+    if (seniorityFilter !== 'all') {
+      const joinStr = user.join_date || user.created_at;
+      const sen = calculateSeniority(joinStr, null, user.resigned_at);
+      if (seniorityFilter === 'lt_1yr') {
+        matchesSeniority = sen.years === 0;
+      } else if (seniorityFilter === '1_to_3yr') {
+        matchesSeniority = sen.years >= 1 && sen.years < 3;
+      } else if (seniorityFilter === '3_to_5yr') {
+        matchesSeniority = sen.years >= 3 && sen.years < 5;
+      } else if (seniorityFilter === 'gte_5yr') {
+        matchesSeniority = sen.years >= 5;
+      }
+    }
+
+    return matchesSearch && matchesRole && matchesTeam && matchesEmployment && matchesSeniority;
   });
 
   return (
@@ -776,7 +818,7 @@ export default function UserManagement() {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-xl flex-wrap">
           <button
-            onClick={() => { setActiveTab('company'); setRoleFilter('all'); setEmploymentFilter('all'); }}
+            onClick={() => { setActiveTab('company'); setRoleFilter('all'); setEmploymentFilter('all'); setSeniorityFilter('all'); }}
             className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'company' 
                 ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80' 
@@ -791,10 +833,10 @@ export default function UserManagement() {
           </button>
 
           <button
-            onClick={() => { setActiveTab('agents'); setRoleFilter('all'); setEmploymentFilter('all'); }}
+            onClick={() => { setActiveTab('agents'); setRoleFilter('all'); setEmploymentFilter('all'); setSeniorityFilter('all'); }}
             className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'agents' 
-                ? 'bg-white text-amber-800 shadow-sm border border-slate-200/80' 
+                ? 'bg-white text-amber-700 shadow-sm border border-slate-200/80' 
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
@@ -891,65 +933,88 @@ export default function UserManagement() {
 
             <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
               {/* Employment Status Filter */}
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                <Briefcase className="w-3.5 h-3.5 text-slate-500" />
-                <span className="text-xs font-bold text-gray-500">Trạng thái:</span>
-                <select
+              <div className="w-56 sm:w-60">
+                <CustomSelect
                   value={employmentFilter}
-                  onChange={(e) => setEmploymentFilter(e.target.value)}
-                  className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
-                >
-                  <option value="all">Tất cả ({baseUsersForTab.length})</option>
-                  <option value="working">🟢 Đang làm việc ({baseUsersForTab.filter(u => u.employment_status !== 'resigned' && u.employment_status !== 'suspended').length})</option>
-                  <option value="official">Chính thức ({baseUsersForTab.filter(u => !u.employment_status || u.employment_status === 'official').length})</option>
-                  <option value="probation">Thử việc ({baseUsersForTab.filter(u => u.employment_status === 'probation').length})</option>
-                  <option value="resigned">⚪ Đã nghỉ việc ({baseUsersForTab.filter(u => u.employment_status === 'resigned').length})</option>
-                  <option value="suspended">🔴 Tạm nghỉ ({baseUsersForTab.filter(u => u.employment_status === 'suspended').length})</option>
-                </select>
+                  onChange={(val) => setEmploymentFilter(val)}
+                  options={[
+                    { value: 'all', label: `Tất cả trạng thái (${baseUsersForTab.length})` },
+                    { value: 'working', label: `🟢 Đang làm việc (${baseUsersForTab.filter(u => u.employment_status !== 'resigned' && u.employment_status !== 'suspended').length})` },
+                    { value: 'official', label: `Chính thức (${baseUsersForTab.filter(u => !u.employment_status || u.employment_status === 'official').length})` },
+                    { value: 'probation', label: `Thử việc (${baseUsersForTab.filter(u => u.employment_status === 'probation').length})` },
+                    { value: 'resigned', label: `⚪ Đã nghỉ việc (${baseUsersForTab.filter(u => u.employment_status === 'resigned').length})` },
+                    { value: 'suspended', label: `🔴 Tạm nghỉ (${baseUsersForTab.filter(u => u.employment_status === 'suspended').length})` },
+                  ]}
+                  icon={<Briefcase className="w-3.5 h-3.5 text-slate-500" />}
+                  placeholder="Trạng thái làm việc..."
+                  buttonClassName="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs hover:border-slate-300 w-full"
+                />
               </div>
 
+              {/* Seniority Filter (for Company staff) */}
+              {activeTab === 'company' && (
+                <div className="w-56 sm:w-64">
+                  <CustomSelect
+                    value={seniorityFilter}
+                    onChange={(val) => setSeniorityFilter(val)}
+                    options={[
+                      { value: 'all', label: 'Tất cả thâm niên' },
+                      { value: 'lt_1yr', label: 'Dưới 1 năm (Mới vào)' },
+                      { value: '1_to_3yr', label: '1 - 3 năm công tác' },
+                      { value: '3_to_5yr', label: '3 - 5 năm công tác' },
+                      { value: 'gte_5yr', label: '⭐️ Trên 5 năm (+Phép thâm niên)' },
+                    ]}
+                    icon={<Clock className="w-3.5 h-3.5 text-emerald-600" />}
+                    placeholder="Thâm niên công tác..."
+                    buttonClassName="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs hover:border-slate-300 w-full"
+                  />
+                </div>
+              )}
+
               {/* Role filter */}
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                <Shield className="w-3.5 h-3.5 text-gray-400" />
-                <span className="text-xs font-bold text-gray-500">Vai trò:</span>
-                <select
+              <div className="w-52 sm:w-60">
+                <CustomSelect
                   value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                  className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
-                >
-                  <option value="all">Tất cả ({baseUsersForTab.length})</option>
-                  {Object.entries(mergedRoleLabels)
-                    .filter(([roleKey]) => activeTab === 'agents' ? ['agent', 'CTV'].includes(roleKey) : !['agent', 'CTV'].includes(roleKey))
-                    .map(([roleKey, roleVal]) => (
-                      <option key={roleKey} value={roleKey}>
-                        {roleVal.label} ({users.filter(u => u.role === roleKey).length})
-                      </option>
-                    ))}
-                </select>
+                  onChange={(val) => setRoleFilter(val)}
+                  options={[
+                    { value: 'all', label: `Tất cả vai trò (${baseUsersForTab.length})` },
+                    ...Object.entries(mergedRoleLabels)
+                      .filter(([roleKey]) => activeTab === 'agents' ? ['agent', 'CTV'].includes(roleKey) : !['agent', 'CTV'].includes(roleKey))
+                      .map(([roleKey, roleVal]) => ({
+                        value: roleKey,
+                        label: `${roleVal.label} (${users.filter(u => u.role === roleKey).length})`
+                      }))
+                  ]}
+                  icon={<Shield className="w-3.5 h-3.5 text-gray-400" />}
+                  placeholder="Vai trò CRM..."
+                  buttonClassName="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs hover:border-slate-300 w-full"
+                />
               </div>
 
               {/* Team filter */}
               {activeTab === 'company' && (
-                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                  <span className="text-xs font-bold text-gray-500">Team:</span>
-                  <select
+                <div className="w-48 sm:w-56">
+                  <CustomSelect
                     value={teamFilter}
-                    onChange={(e) => setTeamFilter(e.target.value)}
-                    className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
-                  >
-                    <option value="all">Tất cả Team</option>
-                    <option value="none">Chưa gán Team</option>
-                    {teams.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setTeamFilter(val)}
+                    options={[
+                      { value: 'all', label: 'Tất cả Team' },
+                      { value: 'none', label: 'Chưa gán Team' },
+                      ...teams.map(t => ({
+                        value: t.id,
+                        label: t.name
+                      }))
+                    ]}
+                    icon={<Building2 className="w-3.5 h-3.5 text-indigo-500" />}
+                    placeholder="Chọn Team..."
+                    buttonClassName="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs hover:border-slate-300 w-full"
+                  />
                 </div>
               )}
 
               <button
                 onClick={fetchUsers}
-                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all cursor-pointer"
+                className="h-10 w-10 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl shadow-2xs transition-all cursor-pointer shrink-0"
                 title="Làm mới danh sách"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -978,6 +1043,7 @@ export default function UserManagement() {
                       <th className="py-3.5 px-4">SĐT</th>
                       <th className="py-3.5 px-4">Vai Trò (Role)</th>
                       <th className="py-3.5 px-4">Trạng Thái Làm Việc</th>
+                      {activeTab === 'company' && <th className="py-3.5 px-4">Ngày Vào Làm & Thâm Niên</th>}
                       <th className="py-3.5 px-4">Team Kinh Doanh</th>
                       <th className="py-3.5 px-4">Leader Phụ Trách</th>
                       <th className="py-3.5 px-4 text-right">Thao tác</th>
@@ -997,6 +1063,7 @@ export default function UserManagement() {
                       const teamObj = teams.find(t => t.id === u.team_id) || (u.team_name ? { name: u.team_name } : null);
                       const empStatus = u.employment_status || 'official';
                       const statusConfig = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
+                      const seniority = calculateSeniority(u.join_date || u.created_at, null, u.resigned_at);
 
                       return (
                         <tr 
@@ -1081,10 +1148,47 @@ export default function UserManagement() {
                             </div>
                           </td>
 
+                          {/* Ngày vào làm & Thâm niên (Company Staff only) */}
+                          {activeTab === 'company' && (
+                            <td className="py-3.5 px-4">
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{seniority.joinDateFormatted !== '---' ? seniority.joinDateFormatted : (u.created_at ? new Date(u.created_at).toLocaleDateString('vi-VN') : '---')}</span>
+                                </span>
+                                
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                    seniority.years >= 5 
+                                      ? 'bg-amber-50 text-amber-800 border-amber-300' 
+                                      : seniority.years >= 1 
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                                  }`}>
+                                    <Clock className="w-2.5 h-2.5" />
+                                    <span>{seniority.text}</span>
+                                  </span>
+
+                                  {seniority.seniorityBonusDays > 0 && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black" title="Cộng thêm ngày phép thâm niên theo Điều 114 BLLĐ">
+                                      +{seniority.seniorityBonusDays} ngày phép
+                                    </span>
+                                  )}
+
+                                  {seniority.isAnniversaryMonth && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-pink-50 text-pink-700 border border-pink-200 text-[10px] font-black animate-pulse" title="Tháng kỷ niệm gia nhập công ty">
+                                      <PartyPopper className="w-2.5 h-2.5" />
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          )}
+
                           <td className="py-3.5 px-4 font-bold">
                             {teamObj ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                <Building2 className="w-3 h-3 text-indigo-500" />
+                                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
                                 <span>{teamObj.name}</span>
                               </span>
                             ) : (
@@ -1502,15 +1606,14 @@ export default function UserManagement() {
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <Calendar className="w-3.5 h-3.5 text-cyan-600" />
                         <span>Ngày chính thức nghỉ việc *</span>
                       </label>
-                      <input
-                        type="date"
-                        required
+                      <DatePicker
                         value={quickResignedAt}
-                        onChange={(e) => setQuickResignedAt(e.target.value)}
-                        className="w-full px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all cursor-pointer"
+                        onChange={(val) => setQuickResignedAt(val)}
+                        placeholder="dd/mm/yyyy"
+                        className="w-full"
                       />
                     </div>
 
@@ -1681,15 +1784,18 @@ export default function UserManagement() {
                     <Shield className="w-3.5 h-3.5 text-gray-400" />
                     <span>Phân vai trò (Role CRM)</span>
                   </label>
-                  <select
+                  <CustomSelect
                     value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                    className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-                  >
-                    {Object.entries(mergedRoleLabels).map(([key, val]) => (
-                      <option key={key} value={key}>{val.label}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, role: val as Role })}
+                    options={Object.entries(mergedRoleLabels).map(([key, val]) => ({
+                      value: key,
+                      label: val.label
+                    }))}
+                    icon={<Shield className="w-3.5 h-3.5 text-gray-400" />}
+                    placeholder="Chọn vai trò..."
+                    buttonClassName="h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 shadow-2xs hover:border-blue-500 w-full"
+                    className="w-full"
+                  />
                 </div>
 
                 {/* Trạng thái làm việc */}
@@ -1698,28 +1804,76 @@ export default function UserManagement() {
                     <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Trạng thái làm việc & Chế độ nhân sự *</span>
                   </label>
-                  <select
+                  <CustomSelect
                     value={formData.employment_status || 'official'}
-                    onChange={(e) => setFormData({ ...formData, employment_status: e.target.value as EmploymentStatus })}
-                    className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="official">Chính thức (Tích lũy phép 1 ngày/tháng)</option>
-                    <option value="probation">Thử việc (Mặc định 0 ngày phép)</option>
-                    <option value="resigned">Đã nghỉ việc (Khóa quyền truy cập, bảo toàn dữ liệu)</option>
-                    <option value="suspended">Tạm nghỉ / Đình chỉ</option>
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, employment_status: val as EmploymentStatus })}
+                    options={[
+                      { value: 'official', label: 'Chính thức (Tích lũy phép 1 ngày/tháng)' },
+                      { value: 'probation', label: 'Thử việc (Mặc định 0 ngày phép)' },
+                      { value: 'resigned', label: 'Đã nghỉ việc (Khóa quyền truy cập, bảo toàn dữ liệu)' },
+                      { value: 'suspended', label: 'Tạm nghỉ / Đình chỉ' },
+                    ]}
+                    icon={<Briefcase className="w-3.5 h-3.5 text-emerald-600" />}
+                    placeholder="Chọn trạng thái làm việc..."
+                    buttonClassName="h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 shadow-2xs hover:border-emerald-500 w-full"
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Ngày vào làm việc chính thức & Thâm niên */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 relative z-20">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Ngày vào làm chính thức (Join Date)</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium lowercase">tính thâm niên & quỹ phép</span>
+                    </label>
+                    <DatePicker
+                      value={formData.join_date}
+                      onChange={(val) => setFormData({ ...formData, join_date: val })}
+                      placeholder="dd/mm/yyyy"
+                      className="w-full"
+                    />
+                  </div>
+
+                  {formData.join_date && (() => {
+                    const sen = calculateSeniority(formData.join_date, null, formData.employment_status === 'resigned' ? formData.resigned_at : null);
+                    return (
+                      <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                        <span className="flex items-center gap-1 text-slate-500">
+                          <Clock className="w-3 h-3 text-emerald-600" />
+                          <span>Thâm niên ước tính:</span>
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {sen.text}
+                          </span>
+                          {sen.seniorityBonusDays > 0 && (
+                            <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[10px]">
+                              +{sen.seniorityBonusDays} ngày phép thâm niên
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Resigned Details in User Form */}
                 {formData.employment_status === 'resigned' && (
                   <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-700 uppercase">Ngày chính thức nghỉ việc</label>
-                      <input
-                        type="date"
+                      <label className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Ngày chính thức nghỉ việc</span>
+                      </label>
+                      <DatePicker
                         value={formData.resigned_at}
-                        onChange={(e) => setFormData({ ...formData, resigned_at: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white outline-none cursor-pointer"
+                        onChange={(val) => setFormData({ ...formData, resigned_at: val })}
+                        placeholder="dd/mm/yyyy"
+                        className="w-full"
                       />
                     </div>
                     <div className="space-y-1">
@@ -1729,60 +1883,65 @@ export default function UserManagement() {
                         placeholder="VD: Bàn giao khách cho Sale B..."
                         value={formData.resigned_note}
                         onChange={(e) => setFormData({ ...formData, resigned_note: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white outline-none"
+                        className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 bg-white outline-none focus:border-cyan-500"
                       />
                     </div>
                   </div>
                 )}
 
                 {/* Team SELECT */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 relative z-10">
                   <label className="text-xs font-bold text-indigo-700 uppercase tracking-wide flex items-center gap-1">
                     <Building2 className="w-3.5 h-3.5 text-indigo-500" />
                     <span>Thuộc Team / Nhóm kinh doanh</span>
                   </label>
-                  <select
+                  <CustomSelect
                     value={formData.team_id || ''}
-                    onChange={(e) => {
-                      const tId = e.target.value;
-                      const selectedT = teams.find(t => t.id === tId);
+                    onChange={(val) => {
+                      const selectedT = teams.find(t => t.id === val);
                       setFormData({ 
                         ...formData, 
-                        team_id: tId,
+                        team_id: val,
                         team_name: selectedT ? selectedT.name : ''
                       });
                     }}
-                    className="w-full h-9 px-3 py-1.5 border border-indigo-200 bg-indigo-50/50 rounded-lg text-xs font-semibold text-indigo-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="">-- Chưa gán Team nào --</option>
-                    {teams.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} (Leader: {t.leader_name || 'Chưa chỉ định'})
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: '', label: '-- Chưa gán Team nào --' },
+                      ...teams.map(t => ({
+                        value: t.id,
+                        label: `${t.name} (Leader: ${t.leader_name || 'Chưa chỉ định'})`
+                      }))
+                    ]}
+                    icon={<Building2 className="w-3.5 h-3.5 text-indigo-500" />}
+                    placeholder="Chọn Team..."
+                    buttonClassName="h-10 px-3.5 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900 shadow-2xs hover:border-indigo-400 w-full"
+                    className="w-full"
+                  />
                 </div>
 
                 {/* Leader SELECT */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 relative z-0">
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
                     <Users className="w-3.5 h-3.5 text-blue-500" />
                     <span>Leader phụ trách (Trưởng nhóm trực tiếp)</span>
                   </label>
-                  <select
+                  <CustomSelect
                     value={formData.leader_id || ''}
-                    onChange={(e) => setFormData({ ...formData, leader_id: e.target.value })}
-                    className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="">-- Không chọn (Tự do / Top Leader) --</option>
-                    {users
-                      .filter(u => u.id !== editingUser?.id && (u.role === 'sale_leader' || u.role === 'marketing_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'visa_leader'))
-                      .map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.full_name} ({mergedRoleLabels[u.role]?.label || u.role})
-                        </option>
-                      ))}
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, leader_id: val })}
+                    options={[
+                      { value: '', label: '-- Không chọn (Tự do / Top Leader) --' },
+                      ...users
+                        .filter(u => u.id !== editingUser?.id && (u.role === 'sale_leader' || u.role === 'marketing_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'visa_leader'))
+                        .map(u => ({
+                          value: u.id,
+                          label: `${u.full_name} (${mergedRoleLabels[u.role]?.label || u.role})`
+                        }))
+                    ]}
+                    icon={<Users className="w-3.5 h-3.5 text-blue-500" />}
+                    placeholder="Chọn Leader phụ trách..."
+                    buttonClassName="h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 shadow-2xs hover:border-blue-500 w-full"
+                    className="w-full"
+                  />
                 </div>
 
                 {/* Modal Footer */}
@@ -1862,28 +2021,30 @@ export default function UserManagement() {
                     <Award className="w-3.5 h-3.5 text-amber-500" />
                     <span>Trưởng Nhóm (Leader)</span>
                   </label>
-                  <select
+                  <CustomSelect
                     value={teamFormData.leader_id}
-                    onChange={(e) => {
-                      const lId = e.target.value;
-                      const u = users.find(x => x.id === lId);
+                    onChange={(val) => {
+                      const u = users.find(x => x.id === val);
                       setTeamFormData({
                         ...teamFormData,
-                        leader_id: lId,
+                        leader_id: val,
                         leader_name: u ? u.full_name : ''
                       });
                     }}
-                    className="w-full px-3.5 py-2 border border-slate-300 bg-white rounded-xl text-xs font-extrabold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="">-- Chưa chọn Leader --</option>
-                    {users
-                      .filter(u => u.role === 'sale_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'marketing_leader' || u.role === 'visa_leader')
-                      .map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.full_name} ({mergedRoleLabels[u.role]?.label || u.role}) - {u.email}
-                        </option>
-                      ))}
-                  </select>
+                    options={[
+                      { value: '', label: '-- Chưa chọn Leader --' },
+                      ...users
+                        .filter(u => u.role === 'sale_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'marketing_leader' || u.role === 'visa_leader')
+                        .map(u => ({
+                          value: u.id,
+                          label: `${u.full_name} (${mergedRoleLabels[u.role]?.label || u.role}) - ${u.email}`
+                        }))
+                    ]}
+                    icon={<Award className="w-3.5 h-3.5 text-amber-500" />}
+                    placeholder="Chọn Leader phụ trách..."
+                    buttonClassName="h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 shadow-2xs hover:border-indigo-500 w-full"
+                    className="w-full"
+                  />
                 </div>
 
                 {/* KPI Target */}
@@ -2029,10 +2190,10 @@ export default function UserManagement() {
                       <Palette className="w-3.5 h-3.5 text-pink-500" />
                       <span>Tông màu huy hiệu (Badge)</span>
                     </label>
-                    <select
+                    <CustomSelect
                       value={COLOR_PALETTES.find(c => c.bg === roleFormData.bg)?.key || 'indigo'}
-                      onChange={(e) => {
-                        const palette = COLOR_PALETTES.find(c => c.key === e.target.value);
+                      onChange={(val) => {
+                        const palette = COLOR_PALETTES.find(c => c.key === val);
                         if (palette) {
                           setRoleFormData({
                             ...roleFormData,
@@ -2042,12 +2203,16 @@ export default function UserManagement() {
                           });
                         }
                       }}
-                      className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-xl text-xs font-semibold text-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all cursor-pointer"
-                    >
-                      {COLOR_PALETTES.map(p => (
-                        <option key={p.key} value={p.key}>{p.label}</option>
-                      ))}
-                    </select>
+                      options={COLOR_PALETTES.map(p => ({
+                        value: p.key,
+                        label: p.label,
+                        icon: <span className={`w-3.5 h-3.5 rounded-full ${p.bg} ${p.border} border shrink-0`} />
+                      }))}
+                      icon={<Palette className="w-3.5 h-3.5 text-pink-500" />}
+                      placeholder="Chọn màu huy hiệu..."
+                      buttonClassName="h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 shadow-2xs hover:border-purple-500 w-full"
+                      className="w-full"
+                    />
                   </div>
                 </div>
 

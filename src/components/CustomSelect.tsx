@@ -33,10 +33,25 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value);
   const displayIcon = selectedOption?.icon || icon;
+
+  // Auto-detect whether to open dropdown upward if not enough space below
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      // Dropdown menu height is ~240px
+      if (spaceBelow < 250 && rect.top > spaceBelow) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -49,7 +64,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   }, []);
 
   return (
-    <div ref={containerRef} className={`relative inline-flex flex-col gap-1 ${isOpen ? 'z-50' : 'z-10'} ${className}`}>
+    <div ref={containerRef} className={`relative inline-flex flex-col gap-1 ${isOpen ? 'z-[60]' : 'z-10'} ${className}`}>
       {label && (
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
           {label}
@@ -87,9 +102,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
       {isOpen && !disabled && (
         <div
-          className={`absolute top-full ${
+          className={`absolute ${openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${
             align === 'right' ? 'right-0' : 'left-0'
-          } mt-1.5 z-[100] bg-white border border-slate-200 shadow-xl rounded-xl p-1 text-xs min-w-full w-max max-w-xs sm:max-w-md max-h-64 overflow-y-auto flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150`}
+          } z-[100] bg-white border border-slate-200 shadow-2xl rounded-xl p-1 text-xs min-w-full w-max max-w-xs sm:max-w-md max-h-64 overflow-y-auto flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150`}
         >
           {options.map((opt) => {
             const isSelected = value === opt.value;

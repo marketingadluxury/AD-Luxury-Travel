@@ -11,12 +11,14 @@ import {
   X,
   History,
   ShieldCheck,
-  Shield
+  Shield,
+  Clock,
+  PartyPopper
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { LeaveBalance, Profile, getRoleConfig, ROLE_DEPARTMENT_ORDER, EMPLOYMENT_STATUS_LABELS, EmploymentStatus } from '../types';
-import { getEffectiveLeaveBalance } from '../lib/payrollUtils';
+import { getEffectiveLeaveBalance, calculateSeniority } from '../lib/payrollUtils';
 import { CustomSelect } from './CustomSelect';
 
 export const LeaveBalanceManagement: React.FC = () => {
@@ -280,6 +282,7 @@ export const LeaveBalanceManagement: React.FC = () => {
                   const note = eff.note;
                   const updatedBy = eff.updatedBy;
                   const isManual = eff.isManualOverride;
+                  const staffSeniority = calculateSeniority(staff.join_date || staff.created_at, null, staff.resigned_at);
 
                   return (
                     <tr key={staff.id} className="hover:bg-slate-50/70 transition-colors">
@@ -289,6 +292,17 @@ export const LeaveBalanceManagement: React.FC = () => {
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="font-bold text-slate-800">{staff.full_name || 'Chưa cập nhật'}</div>
                         <div className="text-[11px] text-slate-400">{staff.email || staff.phone || '-'}</div>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-0.5">
+                            <Calendar className="w-2.5 h-2.5 text-slate-400" />
+                            <span>{staffSeniority.joinDateFormatted !== '---' ? staffSeniority.joinDateFormatted : (staff.created_at ? new Date(staff.created_at).toLocaleDateString('vi-VN') : '-')}</span>
+                          </span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                            staffSeniority.years >= 5 ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {staffSeniority.text}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Role / Bộ phận & Trạng thái làm việc */}
@@ -429,6 +443,31 @@ export const LeaveBalanceManagement: React.FC = () => {
                   <div className="text-[10px] text-emerald-600">ngày</div>
                 </div>
               </div>
+
+              {/* Thông tin Thâm Niên & Ngày Vào Làm của nhân sự */}
+              {(() => {
+                const sen = calculateSeniority(editingStaff.join_date || editingStaff.created_at, null, editingStaff.resigned_at);
+                return (
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Ngày vào làm & Thâm niên</div>
+                        <div className="font-extrabold text-slate-800 mt-0.5">
+                          {sen.joinDateFormatted !== '---' ? sen.joinDateFormatted : 'Chưa ghi nhận'} • <span className="text-emerald-700">{sen.text}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {sen.seniorityBonusDays > 0 ? (
+                      <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 font-extrabold text-[11px] border border-amber-300">
+                        +{sen.seniorityBonusDays} ngày phép thâm niên
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">Chưa đủ mốc 5 năm</span>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Lựa Chọn Trạng Thái Làm Việc (Dành cho HR, BOD, Admin) */}
               {canManageEmploymentStatus && (

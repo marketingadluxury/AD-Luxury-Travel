@@ -23,7 +23,13 @@ Tài liệu này lưu trữ toàn bộ thông tin cốt lõi, quy tắc phát tr
 - **Định dạng hiển thị phép tính & công thức:** Tuyệt đối **KHÔNG** sử dụng công thức KaTeX/LaTeX hay các ký tự khối hệ thống như `$$`, `\text`, `\math`. Tất cả số liệu, phép tính, chiết khấu và giải thích số tiền phải được trình bày dưới dạng văn bản Tiếng Việt thuần túy, rõ ràng, trực quan (dùng văn bản Markdown thông thường, gạch đầu dòng, dấu trừ `-`, dấu cộng `+`, dấu bằng `=`) để đảm bảo dễ đọc và thân thiện trên mọi giao diện.
 - **Định dạng Thời gian & Lịch:**
   - **Định dạng hiển thị thời gian:** Tất cả thời gian trên hệ thống phải luôn tuân thủ chuẩn **`hh:mm dd/mm/yyyy`** (hoặc `dd/mm/yyyy` đối với ngày thuần túy).
-  - **Lịch chọn ngày (Calendar):** Luôn sử dụng bộ chọn ngày chuẩn hóa Tiếng Việt (Thứ 2 - CN, Tháng 1 - Tháng 12, Hôm nay, Xóa ngày...) thông qua component `DatePicker.tsx` để đảm bảo trải nghiệm thuần Việt trên mọi thiết bị và trình duyệt.
+  - **Lịch chọn ngày (Calendar):** Luôn sử dụng bộ chọn ngày chuẩn hóa Tiếng Việt (Thứ 2 - CN, Tháng 1 - Tháng 12, Hôm nay, Xóa ngày...) thông qua component `DatePicker.tsx` để đảm bảo trải nghiệm thuần Việt trên mọi thiết bị và trình duyệt. Tuyệt đối KHÔNG sử dụng thẻ `<input type="date">` thô của trình duyệt.
+- **Quy tắc Chuẩn Hóa 100% Calendar & Dropdown (Zero Native Inputs):**
+  - **Không dùng native `<select>` & `<input type="date">`:** 100% các ô chọn lựa và chọn ngày trên toàn hệ thống (bộ lọc, form tạo, form sửa, modal) phải sử dụng bộ component chuẩn hóa `CustomSelect.tsx` và `DatePicker.tsx`.
+  - **Tính đồng bộ thiết kế:** Tất cả các ô nhập liệu, dropdown và datepicker phải đồng bộ chiều cao `h-10`, bo góc mềm `rounded-xl`, viền `border-slate-200/300`, hiệu ứng shadow và icon trực quan.
+- **Quy tắc Chống Chồng Chéo & Phân Tầng Z-Index (Anti-Overlap & Stacking Context Discipline):**
+  - **Tự động đảo hướng mở thông minh (Auto-flip Placement):** Toàn bộ popup, menu chọn (`CustomSelect`) và bộ lịch (`DatePicker`) phải luôn duy trì cơ chế tự động đo khoảng trống so với đáy viewport/modal (`openUpward`). Khi khoảng trống bên dưới không đủ (< 250px đối với Select, < 330px đối với DatePicker), component BẮT BUỘC phải tự động bung ngược lên trên (`bottom-full mb-1.5`) để tránh tuyệt đối việc tràn qua đáy modal hoặc che khuất thanh nút bấm hành động (Hủy / Lưu / Cập nhật).
+  - **Phân tầng Z-Index triệt để:** Container bọc ngoài của `DatePicker` và `CustomSelect` khi kích hoạt (`isOpen === true`) phải luôn được nâng lên `z-[60]` (thay vì để mặc định `z-index: auto`), và khung popover phải có `z-[70]` đến `z-[100]`. Các khối form nằm liên tiếp theo chiều dọc phải được thiết lập thứ tự giảm dần (`relative z-20`, `relative z-10`, `relative z-0`) để triệt tiêu vĩnh viễn hiện tượng viền, icon hay nút bấm phía dưới đè xuyên qua bề mặt lịch/menu đang mở.
 - **Quy tắc Thiết kế Nút Bấm & Tránh Double Icon / Duplicate CTA (Bắt Buộc):**
   - **Tránh Double Icon:** Tuyệt đối không thêm các ký tự biểu tượng thủ công (như `+`, `*`, `-`) vào chuỗi text khi button/component đã sử dụng Icon tương ứng từ `lucide-react` (ví dụ: dùng `<Plus />` kèm `<span>Tạo đơn</span>`, tuyệt đối không viết `<span>+ Tạo đơn</span>`).
   - **Tránh trùng lặp nút:** Không đặt 2 nút hành động chính (Call-to-Action) có cùng chức năng nằm cạnh nhau trong cùng một cụm màn hình/khối giao diện.
@@ -384,6 +390,19 @@ Khi thực hiện nâng cấp hoặc sửa đổi bất kỳ file nào trong h�
   - **Nhân viên thông thường:** Chỉ xem dữ liệu chấm công và quỹ phép của chính mình.
   - **Trưởng nhóm (Leader):** Xem dữ liệu của chính mình và các thành viên trực thuộc nhóm phụ trách.
   - **HR / BOD / Admin:** Xem toàn bộ nhân sự công ty.
+- **Chuẩn Hóa UI/UX Toàn Bộ Calendar và Dropdown Trong Phân Hệ Nhân Sự:**
+  - **Lịch chọn ngày (Calendar):** Thay thế toàn bộ các thẻ `<input type="date">` thô bằng component `DatePicker.tsx` chuẩn Tiếng Việt (hỗ trợ nhập `dd/mm/yyyy`, chọn ngày lịch trực quan, nút Hôm nay, Xóa ngày) tại tất cả các modal: Ngày vào làm việc chính thức (`join_date`), Ngày chính thức thôi việc (`resigned_at`) và modal Thay đổi trạng thái nhanh.
+  - **Hộp chọn Dropdown (CustomSelect):** Chuyển đổi 100% các thẻ `<select>` native sang component `CustomSelect.tsx` với biểu tượng đi kèm, độ rộng an toàn chống cắt chữ (`w-52` đến `w-64`), đồng bộ chiều cao `h-10` và hiệu ứng dropdown mềm mại:
+    + Bộ lọc Trạng thái làm việc (`employmentFilter` - icon `Briefcase`).
+    + Bộ lọc Thâm niên công tác (`seniorityFilter` - icon `Clock`).
+    + Bộ lọc Vai trò CRM (`roleFilter` - icon `Shield`).
+    + Bộ lọc Team / Nhóm kinh doanh (`teamFilter` - icon `Building2`).
+    + Dropdown Phân vai trò trong form Nhân sự.
+    + Dropdown Trạng thái làm việc & Chế độ trong form Nhân sự.
+    + Dropdown Thuộc Team / Nhóm trong form Nhân sự.
+    + Dropdown Leader phụ trách trực tiếp trong form Nhân sự.
+    + Dropdown Chọn Leader phụ trách Team trong modal Quản lý Team.
+    + Dropdown Chọn tông màu huy hiệu trong modal Phân quyền vai trò.
 
 ---
 

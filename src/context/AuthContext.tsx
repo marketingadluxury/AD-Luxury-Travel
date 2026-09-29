@@ -12,6 +12,7 @@ export interface UserProfile {
   employment_status?: EmploymentStatus;
   resigned_at?: string | null;
   resigned_note?: string | null;
+  join_date?: string | null;
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;
