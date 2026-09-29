@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCRM } from '../context/CRMContext';
 import { supabase } from '../lib/supabase';
-import { Role, Team, EmploymentStatus, EMPLOYMENT_STATUS_LABELS } from '../types';
+import { Role, Team, EmploymentStatus, EMPLOYMENT_STATUS_LABELS, CustomRole } from '../types';
 import { 
   Users, UserPlus, Edit2, Trash2, Shield, Key, Mail, Phone, 
   Building2, Search, X, Check, AlertCircle, RefreshCw, Eye, EyeOff,
   Target, Plus, Award, UserCheck, ShieldAlert, Briefcase,
-  UserMinus, Calendar, FileText, CheckCircle2, RotateCcw
+  UserMinus, Calendar, FileText, CheckCircle2, RotateCcw,
+  Sparkles, Layers, Sliders, Palette, Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,25 +28,53 @@ interface ManagedUser {
   created_at?: string;
 }
 
-const ROLE_LABELS: Record<Role, { label: string; color: string; bg: string; border: string }> = {
-  admin: { label: 'Quản trị viên (Full)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
-  sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
-  sale: { label: 'Sale', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
-  operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
-  visa: { label: 'Bộ phận Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
-  accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-  tour_guide: { label: 'Hướng Dẫn Viên (HDV)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
-  agent: { label: 'Đại lý (Agent)', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200' },
-  bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
-  hr: { label: 'Nhân sự (HR)', color: 'text-cyan-800', bg: 'bg-cyan-50', border: 'border-cyan-200' },
-  marketing_leader: { label: 'Trưởng phòng Marketing', color: 'text-fuchsia-800', bg: 'bg-fuchsia-100', border: 'border-fuchsia-300' },
-  marketing: { label: 'Nhân viên Marketing', color: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200' },
-  CTV: { label: 'Cộng Tác Viên (CTV)', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' }
+const DEFAULT_ROLE_LABELS: Record<string, { label: string; color: string; bg: string; border: string; department?: string; is_system?: boolean; description?: string }> = {
+  admin: { label: 'Quản trị viên (Full)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200', department: 'Ban Quản Trị', is_system: true, description: 'Toàn quyền cấu hình, quản trị người dùng, phân quyền và dữ liệu' },
+  bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200', department: 'Ban Giám Đốc', is_system: true, description: 'Xem toàn bộ báo cáo doanh thu, lãi lỗ và phê duyệt thu chi/nghỉ phép' },
+  sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300', department: 'Kinh doanh & Sale', is_system: true, description: 'Quản lý nhóm Sale, theo dõi KPI, duyệt chỗ và tạo tour gửi đối tác' },
+  sale: { label: 'Sale', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', department: 'Kinh doanh & Sale', is_system: true, description: 'Tư vấn, giữ chỗ và tạo đơn hàng cho khách hàng cá nhân/đoàn' },
+  operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', department: 'Phòng Điều hành', is_system: true, description: 'Tạo tour, điều phối booking, duyệt chốt chỗ và quản lý giá tour' },
+  visa_leader: { label: 'Trưởng bộ phận Visa', color: 'text-indigo-900', bg: 'bg-indigo-100', border: 'border-indigo-300', department: 'Phòng Visa', is_system: true, description: 'Quản lý toàn diện hồ sơ và chuyên viên bộ phận Visa, phân công và duyệt hồ sơ visa' },
+  visa: { label: 'Bộ phận Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200', department: 'Phòng Visa', is_system: true, description: 'Tiếp nhận, xử lý, nộp và cập nhật kết quả hồ sơ visa cho khách' },
+  accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', department: 'Kế toán & Tài chính', is_system: true, description: 'Quản lý thu chi, duyệt phiếu thu, hạch toán chi phí và công nợ' },
+  hr: { label: 'Nhân sự (HR)', color: 'text-cyan-800', bg: 'bg-cyan-50', border: 'border-cyan-200', department: 'Hành chính nhân sự', is_system: true, description: 'Quản lý hồ sơ nhân sự, chấm công, nghỉ phép và chính sách nhân sự' },
+  tour_guide: { label: 'Hướng Dẫn Viên (HDV)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200', department: 'Điều hành & HDV', is_system: true, description: 'Dẫn tour, quản lý danh sách đoàn và đăng tải album ảnh kỷ niệm' },
+  marketing_leader: { label: 'Trưởng phòng Marketing', color: 'text-fuchsia-800', bg: 'bg-fuchsia-100', border: 'border-fuchsia-300', department: 'Phòng Marketing', is_system: true, description: 'Quản lý chiến dịch quảng cáo, phân bổ ngân sách và trưởng nhóm Marketing' },
+  marketing: { label: 'Nhân viên Marketing', color: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200', department: 'Phòng Marketing', is_system: true, description: 'Chạy ads, theo dõi chuyển đổi Meta/Google và sáng tạo nội dung' },
+  agent: { label: 'Đại lý (Agent)', color: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200', department: 'Đối tác ngoài', is_system: true, description: 'Đối tác đại lý phân phối sản phẩm tour và dịch vụ visa' },
+  CTV: { label: 'Cộng Tác Viên (CTV)', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', department: 'Đối tác ngoài', is_system: true, description: 'Cộng tác viên bán hàng và giới thiệu khách hàng' }
 };
+
+const COLOR_PALETTES = [
+  { key: 'indigo', label: 'Chàm Tím (Indigo)', color: 'text-indigo-900', bg: 'bg-indigo-100', border: 'border-indigo-300' },
+  { key: 'blue', label: 'Xanh Dương (Blue)', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+  { key: 'purple', label: 'Tím (Purple)', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
+  { key: 'emerald', label: 'Xanh Lá (Emerald)', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  { key: 'rose', label: 'Đỏ Hồng (Rose)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
+  { key: 'amber', label: 'Cam Vàng (Amber)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
+  { key: 'cyan', label: 'Xanh Lơ (Cyan)', color: 'text-cyan-800', bg: 'bg-cyan-50', border: 'border-cyan-200' },
+  { key: 'fuchsia', label: 'Hồng Đậm (Fuchsia)', color: 'text-fuchsia-800', bg: 'bg-fuchsia-100', border: 'border-fuchsia-300' },
+  { key: 'teal', label: 'Xanh Mòng Két (Teal)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
+  { key: 'orange', label: 'Cam Đậm (Orange)', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' },
+  { key: 'slate', label: 'Xám Đậm (Slate)', color: 'text-slate-800', bg: 'bg-slate-100', border: 'border-slate-300' }
+];
+
+const AVAILABLE_PERMISSIONS = [
+  { key: 'visa_processing', label: 'Quản lý & Xử lý hồ sơ Visa', desc: 'Xem, phân công và cập nhật trạng thái Visa toàn công ty' },
+  { key: 'visa_orders', label: 'Quản lý Đơn Visa lẻ', desc: 'Tiếp nhận và quản lý các đơn đặt dịch vụ Visa' },
+  { key: 'visa_services', label: 'Bảng giá & Dịch vụ Visa', desc: 'Quản lý danh mục và chính sách giá làm Visa' },
+  { key: 'leave_requests_approve', label: 'Duyệt Đơn xin nghỉ phép (Cấp 1)', desc: 'Thẩm quyền ký duyệt đơn nghỉ phép của nhân viên trực thuộc' },
+  { key: 'payment_proposals_approve', label: 'Duyệt Giấy đề nghị thanh toán', desc: 'Thẩm quyền ký duyệt đề xuất chi trả kinh phí' },
+  { key: 'tours_manage', label: 'Quản lý Lịch khởi hành Tour', desc: 'Thêm, sửa lịch tour và điều phối số chỗ' },
+  { key: 'orders_manage', label: 'Quản lý Booking & Giữ chỗ', desc: 'Kiểm soát đơn đặt tour của khách hàng' },
+  { key: 'tax_handbook', label: 'Tra cứu Sổ tay Thuế Lữ hành', desc: 'Truy cập sổ tay và công cụ tính thuế GTGT/TNCN' },
+  { key: 'accounting_access', label: 'Quản lý Thu/Chi & Kế toán', desc: 'Xem sổ sách kế toán và duyệt phiếu thu' },
+  { key: 'hr_access', label: 'Quản lý Hành chính Nhân sự', desc: 'Quản lý hồ sơ nhân viên, phòng ban và chức vụ' }
+];
 
 export default function UserManagement() {
   const { session } = useAuth();
-  const { currentRole, deleteUser, refreshProfiles, updateUserProfile } = useCRM();
+  const { currentRole, deleteUser, refreshProfiles, updateUserProfile, customRoles = [], addCustomRole, updateCustomRole, deleteCustomRole } = useCRM();
 
   const canAccess = ['admin', 'bod', 'hr'].includes(currentRole);
 
@@ -63,7 +92,7 @@ export default function UserManagement() {
     );
   }
 
-  const [activeTab, setActiveTab] = useState<'company' | 'agents' | 'teams'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'agents' | 'teams' | 'roles'>('company');
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,11 +124,48 @@ export default function UserManagement() {
     kpi_target: 800000000
   });
 
+  // Role Modal state (Dynamic Roles)
+  const [isRoleFormOpen, setIsRoleFormOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<CustomRole | null>(null);
+  const [roleFormData, setRoleFormData] = useState({
+    label: '',
+    role_key: '',
+    department: 'Phòng Visa',
+    color: 'text-indigo-900',
+    bg: 'bg-indigo-100',
+    border: 'border-indigo-300',
+    description: '',
+    permissions: [] as string[]
+  });
+  const [deleteRoleTarget, setDeleteRoleTarget] = useState<CustomRole | null>(null);
+
   // Delete confirm modal state
   const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
   const [deleteTeamTarget, setDeleteTeamTarget] = useState<Team | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Merged Role Labels Map
+  const mergedRoleLabels = useMemo(() => {
+    const res: Record<string, { label: string; color: string; bg: string; border: string; department?: string; is_system?: boolean; description?: string }> = {
+      ...DEFAULT_ROLE_LABELS
+    };
+
+    if (customRoles && customRoles.length > 0) {
+      customRoles.forEach(cr => {
+        res[cr.role_key] = {
+          label: cr.label,
+          color: cr.color || 'text-slate-800',
+          bg: cr.bg || 'bg-slate-100',
+          border: cr.border || 'border-slate-300',
+          department: cr.department || 'Tùy chỉnh',
+          is_system: cr.is_system || false,
+          description: cr.description || ''
+        };
+      });
+    }
+    return res;
+  }, [customRoles]);
 
   // User Form states
   const [formData, setFormData] = useState({
@@ -497,7 +563,7 @@ export default function UserManagement() {
       const selectedLeader = users.find(u => u.id === teamFormData.leader_id);
       const bodyData = {
         ...teamFormData,
-        leader_name: selectedLeader ? `${selectedLeader.full_name} (${ROLE_LABELS[selectedLeader.role]?.label || selectedLeader.role})` : teamFormData.leader_name
+        leader_name: selectedLeader ? `${selectedLeader.full_name} (${mergedRoleLabels[selectedLeader.role]?.label || selectedLeader.role})` : teamFormData.leader_name
       };
 
       const response = await fetch(url, {
@@ -551,10 +617,117 @@ export default function UserManagement() {
     }
   };
 
+  // Role Management Handlers (Dynamic Roles)
+  const handleOpenAddRole = () => {
+    setEditingRole(null);
+    setRoleFormData({
+      label: '',
+      role_key: '',
+      department: 'Phòng Visa',
+      color: 'text-indigo-900',
+      bg: 'bg-indigo-100',
+      border: 'border-indigo-300',
+      description: '',
+      permissions: ['visa_processing', 'visa_orders', 'leave_requests_approve']
+    });
+    setIsRoleFormOpen(true);
+  };
+
+  const handleOpenEditRole = (role: CustomRole) => {
+    setEditingRole(role);
+    setRoleFormData({
+      label: role.label,
+      role_key: role.role_key,
+      department: role.department || 'Phòng Visa',
+      color: role.color || 'text-indigo-900',
+      bg: role.bg || 'bg-indigo-100',
+      border: role.border || 'border-indigo-300',
+      description: role.description || '',
+      permissions: role.permissions || []
+    });
+    setIsRoleFormOpen(true);
+  };
+
+  const handleRoleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!roleFormData.label.trim()) {
+      setError('Tên chức danh là bắt buộc.');
+      return;
+    }
+
+    let finalRoleKey = (roleFormData.role_key || '').trim().toLowerCase();
+    if (!finalRoleKey) {
+      finalRoleKey = roleFormData.label
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    }
+
+    if (!finalRoleKey) {
+      setError('Mã vai trò không hợp lệ.');
+      return;
+    }
+
+    try {
+      if (editingRole && editingRole.id) {
+        await updateCustomRole(editingRole.id, {
+          ...roleFormData,
+          role_key: finalRoleKey
+        });
+      } else {
+        await addCustomRole({
+          ...roleFormData,
+          role_key: finalRoleKey
+        });
+      }
+
+      setIsRoleFormOpen(false);
+      setActionSuccess(editingRole ? 'Cập nhật chức danh thành công!' : 'Thêm chức danh mới thành công!');
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi lưu chức danh.');
+    }
+  };
+
+  const handleDeleteRole = async () => {
+    if (!deleteRoleTarget) return;
+    try {
+      setIsDeleting(true);
+      setError(null);
+      const success = await deleteCustomRole(deleteRoleTarget.id || '', deleteRoleTarget.role_key);
+      if (success) {
+        setDeleteRoleTarget(null);
+        setActionSuccess('Xóa chức danh thành công!');
+        setTimeout(() => setActionSuccess(null), 3000);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra khi xóa chức danh.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Filter and search users
   const companyUsers = users.filter(u => !['agent', 'CTV'].includes(u.role));
   const agentUsers = users.filter(u => ['agent', 'CTV'].includes(u.role));
   const baseUsersForTab = activeTab === 'agents' ? agentUsers : companyUsers;
+
+  const allRolesList = useMemo(() => {
+    return Object.entries(mergedRoleLabels).map(([key, config]) => {
+      const staffCount = users.filter(u => u.role === key && u.employment_status !== 'resigned').length;
+      const customRoleObj = customRoles.find(cr => cr.role_key === key);
+      return {
+        key,
+        ...config,
+        staffCount,
+        customRoleObj
+      };
+    });
+  }, [mergedRoleLabels, users, customRoles]);
 
   const filteredUsers = baseUsersForTab.filter(user => {
     const matchesSearch = 
@@ -646,24 +819,47 @@ export default function UserManagement() {
               {teams.length}
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('roles')}
+            className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'roles' 
+                ? 'bg-white text-purple-700 shadow-sm border border-slate-200/80' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Shield className="w-4 h-4 text-purple-600" />
+            <span>Chức danh & Vai trò</span>
+            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-extrabold">
+              {allRolesList.length}
+            </span>
+          </button>
         </div>
 
         <div>
-          {activeTab !== 'teams' ? (
+          {activeTab === 'roles' ? (
             <button
-              onClick={handleOpenAddUser}
-              className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              onClick={handleOpenAddRole}
+              className="w-full sm:w-auto px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-purple-600/15 flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
-              <UserPlus className="w-4 h-4" />
-              <span>{activeTab === 'agents' ? 'Thêm Đại lý / CTV Mới' : 'Thêm Nhân sự Mới'}</span>
+              <Plus className="w-4 h-4" />
+              <span>Thêm Chức Danh / Role Mới</span>
             </button>
-          ) : (
+          ) : activeTab === 'teams' ? (
             <button
               onClick={handleOpenAddTeam}
               className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/15 flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Tạo Team Mới</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleOpenAddUser}
+              className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{activeTab === 'agents' ? 'Thêm Đại lý / CTV Mới' : 'Thêm Nhân sự Mới'}</span>
             </button>
           )}
         </div>
@@ -722,7 +918,7 @@ export default function UserManagement() {
                   className="bg-transparent text-xs font-extrabold text-slate-800 outline-none cursor-pointer"
                 >
                   <option value="all">Tất cả ({baseUsersForTab.length})</option>
-                  {Object.entries(ROLE_LABELS)
+                  {Object.entries(mergedRoleLabels)
                     .filter(([roleKey]) => activeTab === 'agents' ? ['agent', 'CTV'].includes(roleKey) : !['agent', 'CTV'].includes(roleKey))
                     .map(([roleKey, roleVal]) => (
                       <option key={roleKey} value={roleKey}>
@@ -790,7 +986,7 @@ export default function UserManagement() {
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {filteredUsers.map((u) => {
                       const isResigned = u.employment_status === 'resigned';
-                      const roleConfig = ROLE_LABELS[u.role] || { 
+                      const roleConfig = mergedRoleLabels[u.role] || { 
                         label: u.role, 
                         color: 'text-gray-700', 
                         bg: 'bg-gray-100', 
@@ -1052,6 +1248,133 @@ export default function UserManagement() {
                         </div>
                       )}
                     </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: ROLES & PERMISSIONS MANAGEMENT (DYNAMIC ROLES) */}
+      {activeTab === 'roles' && (
+        <div className="space-y-4">
+          {/* Header Card */}
+          <div className="bg-gradient-to-r from-purple-900 to-indigo-950 p-6 rounded-2xl text-white shadow-md relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-80 h-full bg-gradient-to-l from-purple-500/10 to-transparent pointer-events-none" />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="p-1.5 rounded-lg bg-white/10 text-purple-300">
+                    <Shield className="w-5 h-5" />
+                  </span>
+                  <h2 className="text-lg font-black tracking-tight">Cơ Cấu Chức Danh & Vai Trò Hệ Thống</h2>
+                </div>
+                <p className="text-xs text-purple-200/80 font-medium max-w-2xl">
+                  Quản lý danh mục chức danh, phân quyền truy cập tính năng và bổ sung các vai trò mới linh hoạt cho toàn bộ cán bộ nhân viên công ty.
+                </p>
+              </div>
+
+              <button
+                onClick={handleOpenAddRole}
+                className="px-4 py-2.5 bg-white text-purple-950 hover:bg-purple-50 font-black text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4 text-purple-700" />
+                <span>Thêm Chức Danh Mới</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Roles Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {allRolesList.map((role) => {
+              const isCustom = !role.is_system || !!role.customRoleObj;
+              const permissions = role.customRoleObj?.permissions || [];
+
+              return (
+                <div 
+                  key={role.key}
+                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative"
+                >
+                  <div>
+                    {/* Role Header */}
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black border shadow-2xs ${role.bg} ${role.color} ${role.border}`}>
+                          <Shield className="w-3.5 h-3.5" />
+                          <span>{role.label}</span>
+                        </span>
+                        <div className="text-[11px] font-mono text-slate-400 mt-1.5 font-bold">
+                          Key: <span className="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">{role.key}</span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons if custom role */}
+                      {isCustom && role.customRoleObj && (
+                        <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100">
+                          <button
+                            onClick={() => handleOpenEditRole(role.customRoleObj!)}
+                            className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all cursor-pointer"
+                            title="Chỉnh sửa Chức danh"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          {currentRole === 'admin' && (
+                            <button
+                              onClick={() => setDeleteRoleTarget(role.customRoleObj!)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                              title="Xóa Chức danh"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Department & Description */}
+                    <div className="space-y-2 py-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-400">Phòng ban:</span>
+                        <span className="font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-150">
+                          {role.department || 'Chung'}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-600 leading-relaxed font-normal line-clamp-2">
+                        {role.description || 'Chức danh nghiệp vụ trong cơ cấu tổ chức công ty.'}
+                      </p>
+                    </div>
+
+                    {/* Permissions tags */}
+                    {permissions.length > 0 && (
+                      <div className="pt-2 border-t border-slate-100 mt-2">
+                        <div className="text-[10px] font-black uppercase text-slate-400 mb-1.5">Quyền hạn chính:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {permissions.slice(0, 3).map(pKey => {
+                            const pObj = AVAILABLE_PERMISSIONS.find(p => p.key === pKey);
+                            return (
+                              <span key={pKey} className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200">
+                                {pObj ? pObj.label : pKey}
+                              </span>
+                            );
+                          })}
+                          {permissions.length > 3 && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+                              +{permissions.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Staff count footer */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-3 text-xs">
+                    <span className="text-[11px] font-bold text-slate-400">Nhân sự đang giữ vai trò:</span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 font-black text-[11px]">
+                      {role.staffCount} nhân sự
+                    </span>
                   </div>
                 </div>
               );
@@ -1363,7 +1686,7 @@ export default function UserManagement() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
                     className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
                   >
-                    {Object.entries(ROLE_LABELS).map(([key, val]) => (
+                    {Object.entries(mergedRoleLabels).map(([key, val]) => (
                       <option key={key} value={key}>{val.label}</option>
                     ))}
                   </select>
@@ -1453,10 +1776,10 @@ export default function UserManagement() {
                   >
                     <option value="">-- Không chọn (Tự do / Top Leader) --</option>
                     {users
-                      .filter(u => u.id !== editingUser?.id && (u.role === 'sale_leader' || u.role === 'marketing_leader' || u.role === 'admin' || u.role === 'bod'))
+                      .filter(u => u.id !== editingUser?.id && (u.role === 'sale_leader' || u.role === 'marketing_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'visa_leader'))
                       .map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.full_name} ({ROLE_LABELS[u.role]?.label || u.role})
+                          {u.full_name} ({mergedRoleLabels[u.role]?.label || u.role})
                         </option>
                       ))}
                   </select>
@@ -1554,10 +1877,10 @@ export default function UserManagement() {
                   >
                     <option value="">-- Chưa chọn Leader --</option>
                     {users
-                      .filter(u => u.role === 'sale_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'marketing_leader')
+                      .filter(u => u.role === 'sale_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'marketing_leader' || u.role === 'visa_leader')
                       .map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.full_name} ({ROLE_LABELS[u.role]?.label || u.role}) - {u.email}
+                          {u.full_name} ({mergedRoleLabels[u.role]?.label || u.role}) - {u.email}
                         </option>
                       ))}
                   </select>
@@ -1596,6 +1919,286 @@ export default function UserManagement() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ROLE / TITLE EDIT & ADD MODAL (DYNAMIC ROLES) */}
+      <AnimatePresence>
+        {isRoleFormOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-xl overflow-hidden my-8"
+            >
+              <div className="p-5 bg-gradient-to-r from-purple-950 to-indigo-950 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-purple-300" />
+                  <h3 className="font-black text-sm">
+                    {editingRole ? 'Chỉnh Sửa Chức Danh / Vai Trò' : 'Thêm Chức Danh / Vai Trò Mới'}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsRoleFormOpen(false)}
+                  className="p-1 text-purple-300 hover:text-white rounded-lg transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleRoleFormSubmit} className="p-6 space-y-4 font-sans">
+                {error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {/* Role Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                    <Shield className="w-3.5 h-3.5 text-purple-500" />
+                    <span>Tên Chức Danh / Vai Trò *</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="VD: Trưởng bộ phận Visa, Chuyên viên Digital Ads..."
+                    required
+                    value={roleFormData.label}
+                    onChange={(e) => {
+                      const newLabel = e.target.value;
+                      // Auto slug role_key if not editing existing role or key was empty
+                      const autoKey = newLabel
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '_')
+                        .replace(/^_+|_+$/g, '');
+                      
+                      setRoleFormData(prev => ({
+                        ...prev,
+                        label: newLabel,
+                        role_key: editingRole ? prev.role_key : autoKey
+                      }));
+                    }}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Role Key (Slug) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                      <Key className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Mã định danh (Role Key)</span>
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-mono">Dùng trong code & database</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="VD: visa_leader, marketing_spec..."
+                    required
+                    disabled={!!editingRole && !!editingRole.is_system}
+                    value={roleFormData.role_key}
+                    onChange={(e) => setRoleFormData({ ...roleFormData, role_key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                    className="w-full px-4 py-2 border border-slate-300 bg-slate-50 font-mono rounded-xl text-xs font-bold text-purple-950 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all disabled:opacity-60"
+                  />
+                </div>
+
+                {/* Department & Color Selection */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Phòng ban trực thuộc</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="VD: Phòng Visa, Ban Quản Trị..."
+                      value={roleFormData.department}
+                      onChange={(e) => setRoleFormData({ ...roleFormData, department: e.target.value })}
+                      className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                      <Palette className="w-3.5 h-3.5 text-pink-500" />
+                      <span>Tông màu huy hiệu (Badge)</span>
+                    </label>
+                    <select
+                      value={COLOR_PALETTES.find(c => c.bg === roleFormData.bg)?.key || 'indigo'}
+                      onChange={(e) => {
+                        const palette = COLOR_PALETTES.find(c => c.key === e.target.value);
+                        if (palette) {
+                          setRoleFormData({
+                            ...roleFormData,
+                            color: palette.color,
+                            bg: palette.bg,
+                            border: palette.border
+                          });
+                        }
+                      }}
+                      className="w-full h-9 px-3 py-1.5 border border-slate-300 bg-white rounded-xl text-xs font-semibold text-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all cursor-pointer"
+                    >
+                      {COLOR_PALETTES.map(p => (
+                        <option key={p.key} value={p.key}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Role Preview Badge */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500">Xem trước hiển thị:</span>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black border shadow-2xs ${roleFormData.bg} ${roleFormData.color} ${roleFormData.border}`}>
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>{roleFormData.label || 'Chức danh mới'}</span>
+                  </span>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                    Mô tả chức năng & Trách nhiệm
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Mô tả tóm tắt phạm vi công việc của chức danh này..."
+                    value={roleFormData.description}
+                    onChange={(e) => setRoleFormData({ ...roleFormData, description: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Permissions checklist */}
+                <div className="space-y-2 pt-2 border-t border-slate-150">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Phân quyền tính năng hệ thống</span>
+                    </span>
+                    <span className="text-[11px] text-purple-700 font-bold">
+                      Đã chọn {roleFormData.permissions.length} quyền
+                    </span>
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+                    {AVAILABLE_PERMISSIONS.map(perm => {
+                      const isChecked = roleFormData.permissions.includes(perm.key);
+                      return (
+                        <label
+                          key={perm.key}
+                          className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
+                            isChecked
+                              ? 'bg-purple-50/80 border-purple-300 text-purple-950 shadow-2xs ring-1 ring-purple-400/30'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setRoleFormData({
+                                  ...roleFormData,
+                                  permissions: [...roleFormData.permissions, perm.key]
+                                });
+                              } else {
+                                setRoleFormData({
+                                  ...roleFormData,
+                                  permissions: roleFormData.permissions.filter(k => k !== perm.key)
+                                });
+                              }
+                            }}
+                            className="mt-0.5 w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold leading-tight truncate">{perm.label}</div>
+                            <div className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{perm.desc}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="pt-4 border-t border-slate-150 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsRoleFormOpen(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-black shadow-lg shadow-purple-700/15 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{editingRole ? 'Lưu Thay Đổi' : 'Thêm Chức Danh'}</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DELETE ROLE CONFIRM MODAL */}
+      <AnimatePresence>
+        {deleteRoleTarget && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 text-center space-y-4">
+                <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-200">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Xác nhận xóa Chức danh?</h3>
+                  <p className="text-xs text-gray-500 font-semibold mt-1.5 leading-relaxed">
+                    Xóa chức danh <strong className="text-rose-600">{deleteRoleTarget.label}</strong> (Key: {deleteRoleTarget.role_key}).
+                  </p>
+                </div>
+
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 text-left font-medium">
+                  ⚠️ <strong>Lưu ý:</strong> Nhân sự đang giữ chức danh này sẽ cần được gán lại vai trò mới phù hợp.
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl text-left">
+                    {error}
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-center gap-3">
+                  <button
+                    disabled={isDeleting}
+                    onClick={() => setDeleteRoleTarget(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all cursor-pointer disabled:opacity-55"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    disabled={isDeleting}
+                    onClick={handleDeleteRole}
+                    className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md shadow-rose-600/15 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-55"
+                  >
+                    {isDeleting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Xác nhận Xóa</span>
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

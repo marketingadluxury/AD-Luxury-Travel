@@ -1,6 +1,6 @@
 import toast from 'react-hot-toast';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Tour, Order, Passenger, Role, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem, ChatMessage, ChatChannel, MetaConversionLog, Holiday, LeaveRequest, LeaveBalance, LeaveStatus, LeaveType } from '../types';
+import { Tour, Order, Passenger, Role, CustomRole, MembershipSettings, Invoice, TourCost, PartnerPayment, ActivityLog, PaymentProposal, TourMedia, SurchargeItem, ChatMessage, ChatChannel, MetaConversionLog, Holiday, LeaveRequest, LeaveBalance, LeaveStatus, LeaveType } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 import { triggerMetaCapiEvent, fetchMetaConversionLogs, fetchMetaCapiConfig } from '../lib/metaCapiService';
@@ -194,6 +194,12 @@ interface CRMContextType {
   leaveBalances: LeaveBalance[];
   fetchLeaveBalances: (year?: number) => Promise<void>;
   updateLeaveBalance: (userId: string, year: number, balanceData: Partial<LeaveBalance>) => Promise<void>;
+  // Quản lý Vai trò tùy chỉnh (Dynamic Roles)
+  customRoles: CustomRole[];
+  addCustomRole: (roleData: Omit<CustomRole, 'id' | 'created_at'>) => Promise<boolean>;
+  updateCustomRole: (id: string, roleData: Partial<CustomRole>) => Promise<boolean>;
+  deleteCustomRole: (id: string, roleKey: string) => Promise<boolean>;
+  refreshCustomRoles: () => Promise<void>;
 }
 
 export const DEFAULT_CHAT_CHANNELS: ChatChannel[] = [
@@ -201,7 +207,7 @@ export const DEFAULT_CHAT_CHANNELS: ChatChannel[] = [
   { id: 'dieu-hanh', name: 'Phòng Điều hành', description: 'Kênh Điều hành Tour, Lịch trình, HDV & Đối tác', icon: '🧭', type: 'preset', role_access: ['operator', 'admin', 'bod'] },
   { id: 'kinh-doanh', name: 'Kinh doanh & Sale', description: 'Kênh Kinh doanh, Sale & Giữ chỗ Booking', icon: '📈', type: 'preset', role_access: ['sale', 'sale_leader', 'admin', 'bod'] },
   { id: 'ke-toan', name: 'Kế toán & Tài chính', description: 'Kênh Kế toán, Phiếu thu, Chi & Hoàn tiền', icon: '💰', type: 'preset', role_access: ['accounting', 'admin', 'bod'] },
-  { id: 'visa', name: 'Dịch vụ Visa', description: 'Kênh Hồ sơ & Dịch vụ Visa', icon: '📑', type: 'preset', role_access: ['visa', 'admin', 'bod'] },
+  { id: 'visa', name: 'Dịch vụ Visa', description: 'Kênh Hồ sơ & Dịch vụ Visa', icon: '📑', type: 'preset', role_access: ['visa', 'visa_leader', 'admin', 'bod'] },
   { id: 'hdv-doan', name: 'Hướng dẫn viên & Tour', description: 'Kênh Hướng dẫn viên, Ảnh đoàn & Nhật ký Tour', icon: '📸', type: 'preset', role_access: ['tour_guide', 'operator', 'admin', 'bod'] },
 ];
 
@@ -449,6 +455,21 @@ export const canUnlockOrder = (
   return false;
 };
 
+const DEFAULT_SYSTEM_CUSTOM_ROLES: CustomRole[] = [
+  {
+    id: 'role-visa-leader',
+    role_key: 'visa_leader',
+    label: 'Trưởng bộ phận Visa',
+    department: 'Visa',
+    color: 'text-indigo-900',
+    bg: 'bg-indigo-100',
+    border: 'border-indigo-300',
+    description: 'Quản lý toàn diện hồ sơ và chuyên viên bộ phận Visa, phân bổ và duyệt hồ sơ visa',
+    permissions: ['visa_processing', 'visa_orders', 'visa_services', 'leave_requests_approve', 'tax_handbook', 'tours_view'],
+    is_system: true
+  }
+];
+
 export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Role }> = ({ children, initialRole = 'admin' }) => {
   const { user, profile } = useAuth();
   const [tours, setTours] = useState<Tour[]>([]);
@@ -456,6 +477,137 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [profilesList, setProfilesList] = useState<UserProfile[]>([]);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>(() => {
+    try {
+      const cached = localStorage.getItem('tour_crm_custom_roles');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi đọc custom_roles từ localStorage:', e);
+    }
+    return DEFAULT_SYSTEM_CUSTOM_ROLES;
+  });
+
+  const refreshCustomRoles = async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { data, error } = await supabase
+        .from('custom_roles')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (!error && data && Array.isArray(data)) {
+        const merged = [...data];
+        DEFAULT_SYSTEM_CUSTOM_ROLES.forEach(def => {
+          if (!merged.some(r => r.role_key === def.role_key)) {
+            merged.unshift(def);
+          }
+        });
+        setCustomRoles(merged);
+        localStorage.setItem('tour_crm_custom_roles', JSON.stringify(merged));
+      }
+    } catch (err) {
+      console.warn('Lỗi fetch custom_roles:', err);
+    }
+  };
+
+  const addCustomRole = async (roleData: Omit<CustomRole, 'id' | 'created_at'>): Promise<boolean> => {
+    const newRole: CustomRole = {
+      ...roleData,
+      id: generateSafeUUID(),
+      created_at: new Date().toISOString()
+    };
+
+    setCustomRoles(prev => {
+      const filtered = prev.filter(r => r.role_key !== newRole.role_key);
+      const updated = [...filtered, newRole];
+      localStorage.setItem('tour_crm_custom_roles', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('custom_roles').upsert([newRole], { onConflict: 'role_key' });
+        if (error) {
+          console.warn('Lỗi upsert custom_role lên Supabase:', error);
+        }
+      } catch (err) {
+        console.warn('Lỗi lưu custom_role:', err);
+      }
+    }
+    toast.success(`Đã thêm vai trò "${newRole.label}" thành công!`);
+    return true;
+  };
+
+  const updateCustomRole = async (id: string, roleData: Partial<CustomRole>): Promise<boolean> => {
+    setCustomRoles(prev => {
+      const updated = prev.map(r => (r.id === id || r.role_key === roleData.role_key) ? { ...r, ...roleData } : r);
+      localStorage.setItem('tour_crm_custom_roles', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (id && isRealUUID(id)) {
+          await supabase.from('custom_roles').update(roleData).eq('id', id);
+        } else if (roleData.role_key) {
+          await supabase.from('custom_roles').update(roleData).eq('role_key', roleData.role_key);
+        }
+      } catch (err) {
+        console.warn('Lỗi cập nhật custom_role lên Supabase:', err);
+      }
+    }
+    toast.success('Đã cập nhật vai trò thành công!');
+    return true;
+  };
+
+  const deleteCustomRole = async (id: string, roleKey: string): Promise<boolean> => {
+    const hasUsers = profilesList.some(p => (p.role as string) === roleKey);
+    if (hasUsers) {
+      toast.error(`Không thể xóa vai trò "${roleKey}" vì đang có nhân sự sử dụng vai trò này!`);
+      return false;
+    }
+
+    setCustomRoles(prev => {
+      const updated = prev.filter(r => r.id !== id && r.role_key !== roleKey);
+      localStorage.setItem('tour_crm_custom_roles', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (id && isRealUUID(id)) {
+          await supabase.from('custom_roles').delete().eq('id', id);
+        } else if (roleKey) {
+          await supabase.from('custom_roles').delete().eq('role_key', roleKey);
+        }
+      } catch (err) {
+        console.warn('Lỗi xóa custom_role trên Supabase:', err);
+      }
+    }
+    toast.success('Đã xóa vai trò thành công!');
+    return true;
+  };
+
+  useEffect(() => {
+    refreshCustomRoles();
+    if (isSupabaseConfigured()) {
+      const channel = supabase
+        .channel('realtime:custom_roles')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_roles' }, () => {
+          refreshCustomRoles();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, []);
 
   const saveProfilesToLocalStorage = (list: UserProfile[]) => {
     try {
@@ -6446,7 +6598,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       deleteLeaveRequest,
       leaveBalances,
       fetchLeaveBalances,
-      updateLeaveBalance
+      updateLeaveBalance,
+      customRoles,
+      addCustomRole,
+      updateCustomRole,
+      deleteCustomRole,
+      refreshCustomRoles
     }}>
       {children}
     </CRMContext.Provider>

@@ -6,6 +6,27 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.74 Bổ Sung Vai Trò Trưởng Bộ Phận Visa (`visa_leader`) & Phân Hệ Quản Lý Chức Danh Động (Dynamic Roles) Ở Front-End
+- **Mô tả yêu cầu:**
+  - Bổ sung vai trò **Trưởng bộ phận Visa (`visa_leader`)** vào hệ thống phân quyền, hỗ trợ quản lý toàn diện hồ sơ visa, duyệt nghỉ phép Cấp 1 và điều phối nhân sự.
+  - Thiết kế phân hệ quản lý chức danh động ở Front-end cho phép Quản trị viên/HR tạo, chỉnh sửa và cấu hình quyền hạn cho các vai trò mới linh hoạt ngay trên giao diện mà không cần can thiệp code.
+- **Các bước triển khai:**
+  1. **Khởi Tạo Role Trưởng Bộ Phận Visa (`visa_leader`):**
+     - Mở rộng union type `Role` và `UserRole` trong `src/types.ts` và `src/utils/permissionUtils.ts`.
+     - Cấu hình bộ nhận diện thương hiệu cho `visa_leader`: Badge màu chàm đậm (`bg-indigo-100 text-indigo-900 border-indigo-300`), icon Globe, bộ phận Phòng Visa.
+     - Thiết lập quyền duyệt Đơn xin nghỉ phép Cấp 1 (`canApproveLeaveLevel1`), truy cập quản lý Visa, Booking, Khách hàng và Sổ tay thuế.
+  2. **Kiến Trúc Quản Lý Vai Trò Động (Dynamic Roles) Trong `CRMContext.tsx`:**
+     - Tạo interface `CustomRole` và cơ chế lưu trữ đồng bộ 2 chiều (Supabase `custom_roles` table kết hợp fallback localStorage).
+     - Cung cấp các hàm `addCustomRole`, `updateCustomRole`, `deleteCustomRole`, `refreshCustomRoles`.
+  3. **Giao Diện Quản Lý Cơ Cấu Chức Danh & Vai Trò (`UserManagement.tsx`):**
+     - Thêm Tab **"Cơ Cấu Chức Danh & Vai Trò"** hiển thị danh sách tất cả vai trò hệ thống và vai trò tùy chỉnh.
+     - Modal tạo/chỉnh sửa chức danh: Nhập tên chức danh, tự động sinh mã định danh (Role Key), chọn phòng ban, chọn bảng màu hiển thị và chọn phân quyền chi tiết (Checklist quyền hạn).
+     - Modal xác nhận xóa chức danh an toàn.
+  4. **Tích Hợp Vào Toàn Bộ Dropdown Phân Quyền & Header Role Switcher:**
+     - Đồng bộ danh sách chức danh tùy chỉnh vào tất cả dropdown chọn vai trò, bộ lọc người dùng và hộp chọn xem trước vai trò trên Header/Sidebar.
+  5. **Kiểm thử tự động & Xác thực:**
+     - Chạy `lint_applet` và `compile_applet` đạt chuẩn 100% không lỗi.
+
 ### 1.73 Đồng Bộ Định Dạng Chữ Ký & Phê Duyệt Cuối Đơn Xin Nghỉ Phép Theo Mẫu Chuẩn
 - **Mô tả yêu cầu:**
   - Định dạng lại khu vực chữ ký nhân viên và Mục D (Người phê duyệt) ở phần dưới cùng của Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`), đồng thời gom khối "Signature of Applicant" xuống nằm sát ngay phía trên "D. APPROVALS" để loại bỏ khoảng trắng thừa giữa 2 phần.

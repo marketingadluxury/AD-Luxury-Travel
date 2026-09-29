@@ -57,6 +57,7 @@ const roleOptions = [
   { value: 'operator', label: 'Điều hành Tour', icon: <Sliders className="w-4 h-4 text-purple-600" /> },
   { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)', icon: <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> },
   { value: 'sale', label: 'Sale', icon: <Briefcase className="w-4 h-4 text-blue-600" /> },
+  { value: 'visa_leader', label: 'Trưởng bộ phận Visa', icon: <Globe className="w-4 h-4 text-indigo-900" /> },
   { value: 'visa', label: 'Bộ phận Visa', icon: <Globe className="w-4 h-4 text-indigo-600" /> },
   { value: 'accounting', label: 'Kế toán', icon: <Calculator className="w-4 h-4 text-emerald-600" /> },
   { value: 'hr', label: 'Nhân sự (HR)', icon: <UserCheck className="w-4 h-4 text-cyan-600" /> },
@@ -88,25 +89,25 @@ export const navigationTree: NavGroup[] = [
     icon: Map,
     items: [
       { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'accounting'] },
-      { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
+      { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'admin', 'hr'] },
     ]
   },
   {
     groupName: 'Bookings',
     icon: ShoppingCart,
     items: [
-      { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['operator', 'agent', 'bod', 'sale', 'sale_leader', 'admin'] },
-      { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
-      { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
+      { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['operator', 'agent', 'bod', 'sale', 'sale_leader', 'admin', 'visa_leader'] },
+      { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'visa_leader', 'bod'] },
+      { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'visa_leader', 'admin'] },
     ]
   },
   {
     groupName: 'Hành chính nhân sự',
     icon: FileCheck,
     items: [
-      { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
-      { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
-      { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+      { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+      { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+      { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod', 'hr'] },
       { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
     ]
   },
@@ -114,7 +115,7 @@ export const navigationTree: NavGroup[] = [
     groupName: 'Đối tác & Khách hàng',
     icon: Users,
     items: [
-      { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
+      { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod'] },
       { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
     ]
   },
@@ -131,12 +132,12 @@ export interface MainTabItem {
 
 export const mainSidebarNav: MainTabItem[] = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'admin', 'hr'] },
   {
     name: 'Quản lý tour',
     href: '/tours',
     icon: Map,
-    roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'sale', 'visa', 'accounting', 'hr'],
+    roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'sale', 'visa', 'visa_leader', 'accounting', 'hr'],
     matchPaths: ['/tours', '/tour-media'],
     groupRef: navigationTree[0]
   },
@@ -144,27 +145,27 @@ export const mainSidebarNav: MainTabItem[] = [
     name: 'Bookings',
     href: '/orders',
     icon: ShoppingCart,
-    roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin', 'operator', 'visa'],
+    roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'admin', 'operator', 'visa', 'visa_leader'],
     matchPaths: ['/orders', '/visa-services', '/visa-orders'],
     groupRef: navigationTree[1]
   },
-  { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },
+  { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'visa_leader', 'admin', 'bod'] },
   {
     name: 'Hành chính nhân sự',
     href: '/my-dashboard',
     icon: FileCheck,
-    roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'],
+    roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'],
     matchPaths: ['/my-dashboard', '/leave-requests', '/payment-proposals', '/employees'],
     groupRef: navigationTree[2]
   },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
-  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'tour_guide', 'marketing_leader', 'marketing'] },
+  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'visa_leader', 'tour_guide', 'marketing_leader', 'marketing'] },
   { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
   {
     name: 'Đối tác & Khách hàng',
     href: '/customers',
     icon: Users,
-    roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'visa', 'tour_guide'],
+    roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'visa', 'visa_leader', 'tour_guide'],
     matchPaths: ['/customers', '/passengers'],
     groupRef: navigationTree[3]
   },
@@ -172,23 +173,23 @@ export const mainSidebarNav: MainTabItem[] = [
 
 const allNavItems: NavItem[] = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'admin', 'hr'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'accounting'] },
-  { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'admin', 'hr'] },
-  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['operator', 'agent', 'bod', 'sale', 'sale_leader', 'admin'] },
-  { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'bod'] },
-  { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'admin'] },
-  { name: 'Xử lý visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'admin', 'bod'] },
-  { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
-  { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
-  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'tour_guide', 'admin', 'bod', 'hr'] },
+  { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'admin', 'hr'] },
+  { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['operator', 'agent', 'bod', 'sale', 'sale_leader', 'admin', 'visa_leader'] },
+  { name: 'Dịch vụ Visa (Bảng giá)', href: '/visa-services', icon: FileText, roleAccess: ['operator', 'admin', 'sale', 'sale_leader', 'visa', 'visa_leader', 'bod'] },
+  { name: 'Booking Visa (Đơn lẻ)', href: '/visa-orders', icon: Ticket, roleAccess: ['agent', 'bod', 'sale', 'sale_leader', 'visa', 'visa_leader', 'admin'] },
+  { name: 'Xử lý Visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'visa_leader', 'admin', 'bod'] },
+  { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+  { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod', 'hr'] },
   { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
-  { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
-  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'tour_guide', 'marketing_leader', 'marketing'] },
-  { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
-  { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'tour_guide', 'admin', 'bod'] },
+  { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
-  { name: 'Tài liệu & Hướng dẫn', href: '/docs', icon: BookOpen, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
+  { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
+  { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'visa_leader', 'tour_guide', 'marketing_leader', 'marketing'] },
+  { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },
+  { name: 'Tài liệu & Hướng dẫn', href: '/docs', icon: BookOpen, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Cài đặt hệ thống', href: '/settings', icon: Settings, roleAccess: ['admin'] },
   { name: 'Nhật ký hệ thống', href: '/activity-logs', icon: History, roleAccess: ['admin', 'bod'] },
 ];
@@ -196,7 +197,7 @@ const allNavItems: NavItem[] = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole, displayRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [], leaveRequests = [], tours = [] } = useCRM();
+  const { currentRole, setCurrentRole, displayRole, notifications: allNotifications, markNotificationAsRead, markAllNotificationsAsRead, orders, passengers, paymentProposals = [], profilesList = [], leaveRequests = [], tours = [], customRoles = [] } = useCRM();
   const { signOut, user, profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -277,7 +278,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     if (isLeaveNotif) {
       let targetTab: 'my_leaves' | 'team_approval' | 'final_approval' = 'my_leaves';
-      const isLeader = ['sale_leader', 'operator', 'marketing_leader'].includes(currentRole);
+      const isLeader = ['sale_leader', 'operator', 'marketing_leader', 'visa_leader'].includes(currentRole);
       const isHRorAdmin = ['hr', 'admin', 'bod'].includes(currentRole);
 
       if (isHRorAdmin) {
@@ -609,19 +610,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return undefined;
   }, [location.pathname]);
 
+  const mergedRoleOptions = React.useMemo(() => {
+    const base = [...roleOptions];
+    if (customRoles && customRoles.length > 0) {
+      customRoles.forEach(cr => {
+        if (!base.some(r => r.value === cr.role_key)) {
+          base.push({
+            value: cr.role_key,
+            label: cr.label,
+            icon: <Globe className="w-4 h-4 text-indigo-700" />
+          });
+        }
+      });
+    }
+    return base;
+  }, [customRoles]);
+
   const getRoleLabel = (role: Role) => {
+    const foundCustom = customRoles?.find(cr => cr.role_key === role);
+    if (foundCustom) return foundCustom.label;
+
     switch (role) {
       case 'agent': return 'Đại lý (Agent)';
       case 'bod': return 'BOD (Ban Giám đốc)';
       case 'operator': return 'Điều hành Tour';
       case 'sale_leader': return 'Sale Leader';
       case 'sale': return 'Sale';
+      case 'visa_leader': return 'Trưởng bộ phận Visa';
       case 'visa': return 'Bộ phận Visa';
       case 'accounting': return 'Kế toán';
       case 'hr': return 'Nhân sự (HR)';
       case 'admin': return 'Quản trị viên';
       case 'marketing_leader': return 'Trưởng phòng Marketing';
       case 'marketing': return 'Nhân viên Marketing';
+      case 'tour_guide': return 'Hướng Dẫn Viên';
+      case 'CTV': return 'Cộng Tác Viên';
       default: return role;
     }
   };
@@ -646,7 +669,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const pendingLeavesBadgeCount = React.useMemo(() => {
     const currentUserId = profile?.id || user?.id || '';
-    if (['sale_leader', 'operator', 'marketing_leader'].includes(currentRole)) {
+    if (['sale_leader', 'operator', 'marketing_leader', 'visa_leader'].includes(currentRole)) {
       return leaveRequests.filter(r => r.status === 'pending').length;
     }
     if (['hr', 'bod', 'admin', 'accounting'].includes(currentRole)) {
@@ -716,7 +739,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Vai trò đang xem</span>
             </div>
             <CustomSelect
-              options={roleOptions}
+              options={mergedRoleOptions}
               value={displayRole}
               onChange={(val) => setCurrentRole(val as Role)}
               disabled={profile?.role !== 'admin' && user?.email !== 'marketing.adluxury@gmail.com' && user?.email !== 'marketing@adluxury.net'}

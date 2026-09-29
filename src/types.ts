@@ -1,10 +1,39 @@
-export type Role = 'sale' | 'sale_leader' | 'operator' | 'visa' | 'accounting' | 'admin' | 'bod' | 'tour_guide' | 'marketing' | 'marketing_leader' | 'agent' | 'CTV' | 'hr';
+export type Role = 
+  | 'sale' 
+  | 'sale_leader' 
+  | 'operator' 
+  | 'visa' 
+  | 'visa_leader'
+  | 'accounting' 
+  | 'admin' 
+  | 'bod' 
+  | 'tour_guide' 
+  | 'marketing' 
+  | 'marketing_leader' 
+  | 'agent' 
+  | 'CTV' 
+  | 'hr'
+  | string;
 
 export interface RoleConfig {
   label: string;
   color: string;
   bg: string;
   border: string;
+}
+
+export interface CustomRole {
+  id?: string;
+  role_key: string;
+  label: string;
+  department?: string;
+  color: string;
+  bg: string;
+  border: string;
+  description?: string;
+  permissions?: string[];
+  is_system?: boolean;
+  created_at?: string;
 }
 
 export type EmploymentStatus = 'official' | 'probation' | 'resigned' | 'suspended';
@@ -23,11 +52,12 @@ export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, EmploymentStatus
   suspended: { label: 'Tạm nghỉ / Đình chỉ', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' }
 };
 
-export const ROLE_LABELS: Record<Role, RoleConfig> = {
+export const ROLE_LABELS: Record<string, RoleConfig> = {
   admin: { label: 'Quản trị viên (Admin)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
   sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
   sale: { label: 'Sale', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
   operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
+  visa_leader: { label: 'Trưởng bộ phận Visa', color: 'text-indigo-900', bg: 'bg-indigo-100', border: 'border-indigo-300' },
   visa: { label: 'Bộ phận Visa', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
   accounting: { label: 'Kế toán', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
   tour_guide: { label: 'Hướng Dẫn Viên (HDV)', color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' },
@@ -48,18 +78,32 @@ export const ROLE_DEPARTMENT_ORDER: Record<string, number> = {
   marketing: 6,
   operator: 7,
   accounting: 8,
-  visa: 9,
-  tour_guide: 10,
-  admin: 11,
-  agent: 12,
-  CTV: 13,
+  visa_leader: 9,
+  visa: 10,
+  tour_guide: 11,
+  admin: 12,
+  agent: 13,
+  CTV: 14,
 };
 
-export const getRoleConfig = (role?: string | null): RoleConfig => {
+export const getRoleConfig = (role?: string | null, customRoles?: CustomRole[]): RoleConfig => {
   if (!role) {
     return { label: 'Nhân sự', color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' };
   }
-  const normalized = role.toLowerCase() as Role;
+  const normalized = role.toLowerCase();
+  
+  if (customRoles && customRoles.length > 0) {
+    const found = customRoles.find(r => r.role_key.toLowerCase() === normalized);
+    if (found) {
+      return {
+        label: found.label,
+        color: found.color,
+        bg: found.bg,
+        border: found.border
+      };
+    }
+  }
+
   return ROLE_LABELS[normalized] || {
     label: role,
     color: 'text-slate-700',

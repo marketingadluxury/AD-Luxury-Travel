@@ -9,13 +9,15 @@ export type UserRole =
   | 'operator'
   | 'accounting'
   | 'visa'
+  | 'visa_leader'
   | 'agent'
   | 'CTV'
   | 'bod'
   | 'tour_guide'
   | 'hr'
   | 'marketing'
-  | 'marketing_leader';
+  | 'marketing_leader'
+  | string;
 
 /**
  * Kiểm tra quyền quản lý tour (Thêm ngày khởi hành, Sửa, Xóa, Tạo hàng loạt)
@@ -80,7 +82,7 @@ export function canApproveReceipt(role?: string | null): boolean {
  */
 export function canApproveLeaveLevel1(role?: string | null): boolean {
   if (!role) return false;
-  return ['sale_leader', 'marketing_leader', 'hr', 'admin', 'bod'].includes(role);
+  return ['sale_leader', 'marketing_leader', 'visa_leader', 'hr', 'admin', 'bod'].includes(role);
 }
 
 /**
@@ -114,7 +116,7 @@ export function isUserAuthorizedToApproveLeaveL1(
   if (['admin', 'bod'].includes(currentUserRole)) return true;
 
   // Nếu vai trò không thuộc nhóm có quyền duyệt C1
-  if (!['sale_leader', 'marketing_leader', 'hr'].includes(currentUserRole)) return false;
+  if (!['sale_leader', 'marketing_leader', 'visa_leader', 'hr'].includes(currentUserRole)) return false;
 
   // Nếu người tạo có gán leader_id cụ thể: Chỉ đúng leader đó mới được duyệt
   if (creatorProfile?.leader_id) {
