@@ -6,20 +6,20 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
-### 1.78 Tích Hợp Đồng Bộ Dữ Liệu Tour Với Website WordPress (WooCommerce REST API + ACF)
+### 1.78 Tích Hợp Đồng Bộ Dữ Liệu Tour Với Website WordPress (WooCommerce REST API + ACF) & Quản Lý ACF Động Ngoài Frontend
 - **Mô tả yêu cầu:**
   - Khách hàng sử dụng website WordPress + WooCommerce + ACF để bán tour trực tuyến và cần kết nối tự động với Tour CRM để đồng bộ giá bán, ngày khởi hành, mã tour, số chỗ còn lại và các trường thông tin chi tiết sang website.
+  - Hỗ trợ thêm mới, xóa và tùy chỉnh danh sách các trường ACF trực tiếp ngoài giao diện Frontend mà không bị giới hạn cứng vào danh sách cố định.
 - **Giải pháp triển khai:**
-  1. **Backend Service & REST API v3 (`server/services/woocommerceService.ts` & `server/routes/woocommerceRoutes.ts`):**
+  1. **Backend Service & REST API v3 Động 100% (`server/services/woocommerceService.ts` & `server/routes/woocommerceRoutes.ts`):**
      - Xây dựng module kết nối WooCommerce REST API chuẩn quốc tế bằng native `fetch`, hỗ trợ xác thực Basic Auth và query parameters `consumer_key` & `consumer_secret`.
-     - Hỗ trợ kiểm tra kết nối (`/api/woocommerce/test-connection`), lấy phiên bản WooCommerce, số lượng sản phẩm.
-     - Hàm đồng bộ 1 tour (`syncTourToWooCommerce`): Tự động tìm kiếm theo mã tour (SKU), thực hiện tạo mới (`POST`) hoặc cập nhật (`PUT`), đẩy các trường ACF tùy biến qua mảng `meta_data`.
-     - Hàm đồng bộ toàn bộ tour (`syncAllToursToWooCommerce`).
-     - Lưu kết quả đồng bộ (`wp_product_id`, `wp_sync_status`, `wp_last_synced_at`, `wp_sync_message`) vào database.
-  2. **Giao Diện Cài Đặt Kết Nối (`src/components/WooCommerceSettingsSection.tsx` & `Settings.tsx`):**
-     - Tab **"Kết nối Website WordPress (WooCommerce)"** trong Cài đặt hệ thống: Nhập URL, Consumer Key, Consumer Secret, nút Kiểm tra kết nối tức thì kèm thông báo trạng thái realtime.
-     - Bảng ánh xạ trường tùy biến (ACF Field Mapping): Cho phép tùy biến tên slug trường ACF (khởi hành, ngày về, thời lượng, giá trẻ em, em bé, phòng đơn, visa, hãng bay, khách sạn, link PDF...).
-     - Tùy chọn tự động hóa: *Tự động đồng bộ khi tạo/sửa Tour* (`auto_sync_on_save`) và nút *Đồng bộ toàn bộ Tour*.
+     - Hàm `buildWooCommercePayload`: Quét động toàn bộ các cặp cấu hình trong `field_mappings` để tự động bốc dữ liệu thực tế từ Tour CRM sang WordPress `meta_data`, hỗ trợ cả các trường tùy biến do người dùng thêm mới ngoài Frontend.
+     - Hàm đồng bộ 1 tour (`syncTourToWooCommerce`) và đồng bộ hàng loạt (`syncAllToursToWooCommerce`).
+  2. **Giao Diện Thêm / Xóa / Tùy Biến Trường ACF Ngoài Frontend (`src/components/WooCommerceSettingsSection.tsx`):**
+     - **Nút "+ Thêm trường ACF":** Mở modal trực quan cho phép chọn trường nguồn từ Tour CRM (hơn 24 trường tiêu chuẩn hoặc nhập key CRM tùy biến), nhập tên ACF Slug và tự động tạo thẻ mapping mới.
+     - **Nút Xóa (Thùng rác):** Cho phép xóa tức thì bất kỳ trường ACF nào không muốn đồng bộ nữa, có thông báo xác nhận an toàn.
+     - **Sửa trực tiếp (Inline Edit):** Ô input cho phép thay đổi ACF Slug trực tiếp trên thẻ.
+     - **Nút "Khôi phục mặc định":** Giúp nạp lại cấu hình trường chuẩn ban đầu nếu cần.
   3. **Tích Hợp Quản Lý Tour (`src/pages/ToursManagement.tsx`):**
      - Hiển thị badge liên kết WooCommerce (`WC #1234`) trên từng tour ở cả 2 chế độ Grouped Table và Flat Table.
      - Nút 1-Click đồng bộ tour trực tiếp trên từng dòng tour.

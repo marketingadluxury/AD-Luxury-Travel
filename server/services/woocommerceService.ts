@@ -273,26 +273,30 @@ function buildWooCommercePayload(tour: any, mappings: Record<string, string>) {
   // Mảng ACF metadata
   const metaData: { key: string; value: any }[] = [];
 
-  const addMeta = (fieldKey: string, val: any) => {
-    const acfKey = mappings[fieldKey] || fieldKey;
-    if (acfKey && val !== undefined && val !== null) {
-      metaData.push({ key: acfKey, value: val });
-    }
-  };
+  // Duyệt qua tất cả các cặp cấu hình trong mappings (hỗ trợ thêm/xóa trường linh hoạt từ Frontend)
+  if (mappings && typeof mappings === 'object') {
+    for (const [crmField, acfSlug] of Object.entries(mappings)) {
+      if (!acfSlug || typeof acfSlug !== 'string' || !acfSlug.trim()) continue;
+      const cleanSlug = acfSlug.trim();
+      let val = tour[crmField];
 
-  addMeta('start_date', tour.start_date || '');
-  addMeta('end_date', tour.end_date || '');
-  addMeta('duration', tour.duration || '');
-  addMeta('price_child', Number(tour.price_child || 0));
-  addMeta('price_infant', Number(tour.price_infant || 0));
-  addMeta('single_room_surcharge', Number(tour.single_room_surcharge || 0));
-  addMeta('price_visa_tour', Number(tour.price_visa_tour || 0));
-  addMeta('airline', tour.airline || '');
-  addMeta('hotel', tour.hotel || '');
-  addMeta('destination', tour.destination || '');
-  addMeta('itinerary_pdf_url', tour.itinerary_pdf_url || '');
-  addMeta('flight_out', tour.flight_out || '');
-  addMeta('flight_in', tour.flight_in || '');
+      // Nếu là trường đặc biệt hoặc chưa có trực tiếp, map linh hoạt:
+      if (val === undefined || val === null) {
+        if (crmField === 'price_adult') val = tour.price_adult || tour.price || 0;
+        else if (crmField === 'available_seats') val = tour.available_seats ?? tour.total_seats ?? 0;
+        else if (crmField === 'total_seats') val = tour.total_seats || 0;
+      }
+
+      // Xử lý kiểu số cho các trường tiền tệ / số chỗ
+      if (typeof val === 'number') {
+        val = Number(val);
+      } else if (val === undefined || val === null) {
+        val = '';
+      }
+
+      metaData.push({ key: cleanSlug, value: val });
+    }
+  }
 
   // Thêm cờ nhận diện từ Tour CRM
   metaData.push({ key: '_synced_by_tour_crm', value: 'yes' });

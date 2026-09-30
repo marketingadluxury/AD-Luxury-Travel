@@ -14,9 +14,15 @@ import {
   Layers, 
   ShieldCheck, 
   Database,
-  Share2
+  Share2,
+  Plus,
+  Trash2,
+  X,
+  Sparkles,
+  Info
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { CustomSelect } from './CustomSelect';
 
 interface WooCommerceConfigState {
   site_url: string;
@@ -29,20 +35,48 @@ interface WooCommerceConfigState {
   has_secret?: boolean;
 }
 
-const DEFAULT_MAPPINGS: Record<string, { label: string; desc: string; defaultKey: string }> = {
-  start_date: { label: 'Ngày khởi hành', desc: 'Lưu ngày đi (định dạng YYYY-MM-DD)', defaultKey: 'ngay_khoi_hanh' },
-  end_date: { label: 'Ngày kết thúc / Ngày về', desc: 'Lưu ngày về', defaultKey: 'ngay_ve' },
-  duration: { label: 'Thời lượng tour', desc: 'Số ngày đêm (VD: 5 ngày 4 đêm)', defaultKey: 'thoi_luong' },
-  price_child: { label: 'Giá vé trẻ em', desc: 'Giá tour cho trẻ em (VNĐ)', defaultKey: 'gia_tre_em' },
-  price_infant: { label: 'Giá vé em bé', desc: 'Giá tour cho em bé dưới 2 tuổi (VNĐ)', defaultKey: 'gia_em_be' },
-  single_room_surcharge: { label: 'Phụ thu phòng đơn', desc: 'Chi phí ở phòng đơn (VNĐ)', defaultKey: 'phu_thu_phong_don' },
-  price_visa_tour: { label: 'Phí dịch vụ Visa', desc: 'Chi phí làm visa nếu có', defaultKey: 'phi_visa' },
-  airline: { label: 'Hãng hàng không', desc: 'Hãng bay phụ trách (Vietnam Airlines, Bamboo...)', defaultKey: 'hang_hang_khong' },
-  hotel: { label: 'Khách sạn / Tiêu chuẩn', desc: 'Khách sạn lưu trú (3 sao, 4 sao, 5 sao...)', defaultKey: 'khach_san' },
-  destination: { label: 'Điểm đến / Quốc gia', desc: 'Quốc gia hoặc thành phố tour đến', defaultKey: 'diem_den' },
-  itinerary_pdf_url: { label: 'Link file PDF lịch trình', desc: 'Đường dẫn file PDF chương trình chi tiết', defaultKey: 'link_lich_trinh' },
-  flight_out: { label: 'Chuyến bay đi', desc: 'Mã chuyến bay đi & giờ bay', defaultKey: 'chuyen_bay_di' },
-  flight_in: { label: 'Chuyến bay về', desc: 'Mã chuyến bay về & giờ bay', defaultKey: 'chuyen_bay_ve' },
+// Danh mục các trường dữ liệu tiêu chuẩn từ Tour CRM
+const AVAILABLE_CRM_FIELDS: { key: string; label: string; desc: string; defaultSlug: string }[] = [
+  { key: 'start_date', label: 'Ngày khởi hành', desc: 'Ngày xuất phát của đoàn (YYYY-MM-DD)', defaultSlug: 'ngay_khoi_hanh' },
+  { key: 'end_date', label: 'Ngày kết thúc / Ngày về', desc: 'Ngày về đến điểm xuất phát', defaultSlug: 'ngay_ve' },
+  { key: 'duration', label: 'Thời lượng tour', desc: 'Số ngày và đêm (VD: 5 ngày 4 đêm)', defaultSlug: 'thoi_luong' },
+  { key: 'price_adult', label: 'Giá vé người lớn', desc: 'Giá tour tiêu chuẩn cho người lớn (VNĐ)', defaultSlug: 'gia_nguoi_lon' },
+  { key: 'price_child', label: 'Giá vé trẻ em', desc: 'Giá tour cho trẻ em (VNĐ)', defaultSlug: 'gia_tre_em' },
+  { key: 'price_infant', label: 'Giá vé em bé', desc: 'Giá tour em bé dưới 2 tuổi (VNĐ)', defaultSlug: 'gia_em_be' },
+  { key: 'single_room_surcharge', label: 'Phụ thu phòng đơn', desc: 'Chi phí phát sinh khi ở phòng đơn (VNĐ)', defaultSlug: 'phu_thu_phong_don' },
+  { key: 'price_visa_tour', label: 'Phí dịch vụ Visa', desc: 'Chi phí làm thủ tục visa trọn gói (VNĐ)', defaultSlug: 'phi_visa' },
+  { key: 'airline', label: 'Hãng hàng không', desc: 'Hãng hàng không vận chuyển (VD: Vietnam Airlines)', defaultSlug: 'hang_hang_khong' },
+  { key: 'hotel', label: 'Khách sạn / Tiêu chuẩn', desc: 'Khách sạn lưu trú (VD: Khách sạn 4 sao)', defaultSlug: 'khach_san' },
+  { key: 'destination', label: 'Điểm đến / Quốc gia', desc: 'Quốc gia hoặc thành phố tour ghé thăm', defaultSlug: 'diem_den' },
+  { key: 'total_seats', label: 'Tổng số chỗ mở bán', desc: 'Số chỗ tối đa của đoàn', defaultSlug: 'tong_so_cho' },
+  { key: 'available_seats', label: 'Số chỗ còn trống', desc: 'Số lượng chỗ khả dụng có thể nhận thêm', defaultSlug: 'so_cho_trong' },
+  { key: 'itinerary_pdf_url', label: 'Link file PDF lịch trình', desc: 'Đường dẫn mở file PDF chương trình tour', defaultSlug: 'link_lich_trinh' },
+  { key: 'guide_name', label: 'Tên Hướng dẫn viên', desc: 'Họ tên HDV trưởng đoàn phụ trách tour', defaultSlug: 'ten_hdv' },
+  { key: 'guide_phone', label: 'Số điện thoại HDV', desc: 'SĐT liên lạc của HDV trưởng đoàn', defaultSlug: 'sdt_hdv' },
+  { key: 'flight_out', label: 'Chuyến bay đi (Chặng 1)', desc: 'Mã hiệu chuyến bay và giờ cất cánh đi', defaultSlug: 'chuyen_bay_di' },
+  { key: 'flight_out_transit', label: 'Chuyến bay đi (Quá cảnh)', desc: 'Chuyến bay chuyển tiếp chặng 2', defaultSlug: 'chuyen_bay_di_qua_canh' },
+  { key: 'flight_in', label: 'Chuyến bay về (Chặng 1)', desc: 'Mã hiệu chuyến bay và giờ cất cánh về', defaultSlug: 'chuyen_bay_ve' },
+  { key: 'flight_in_transit', label: 'Chuyến bay về (Quá cảnh)', desc: 'Chuyến bay chuyển tiếp về', defaultSlug: 'chuyen_bay_ve_qua_canh' },
+  { key: 'transit_info', label: 'Ghi chú quá cảnh', desc: 'Thông tin thời gian và sân bay quá cảnh', defaultSlug: 'ghi_chu_qua_canh' },
+  { key: 'ticket_deadline', label: 'Hạn xuất vé đoàn', desc: 'Hạn chót thanh toán và xuất vé máy bay', defaultSlug: 'han_xuat_ve' },
+  { key: 'visa_deadline', label: 'Hạn nhận hồ sơ Visa', desc: 'Hạn cuối nộp hồ sơ xin visa', defaultSlug: 'han_nop_visa' },
+  { key: 'category', label: 'Tuyến / Danh mục tour', desc: 'Nhóm sản phẩm (VD: Du lịch Châu Âu)', defaultSlug: 'danh_muc_tour' }
+];
+
+const DEFAULT_MAPPINGS: Record<string, string> = {
+  start_date: 'ngay_khoi_hanh',
+  end_date: 'ngay_ve',
+  duration: 'thoi_luong',
+  price_child: 'gia_tre_em',
+  price_infant: 'gia_em_be',
+  single_room_surcharge: 'phu_thu_phong_don',
+  price_visa_tour: 'phi_visa',
+  airline: 'hang_hang_khong',
+  hotel: 'khach_san',
+  destination: 'diem_den',
+  itinerary_pdf_url: 'link_lich_trinh',
+  flight_out: 'chuyen_bay_di',
+  flight_in: 'chuyen_bay_ve'
 };
 
 export default function WooCommerceSettingsSection() {
@@ -53,9 +87,7 @@ export default function WooCommerceSettingsSection() {
     is_active: true,
     auto_sync_on_save: false,
     auto_sync_on_booking: false,
-    field_mappings: Object.fromEntries(
-      Object.entries(DEFAULT_MAPPINGS).map(([k, v]) => [k, v.defaultKey])
-    )
+    field_mappings: { ...DEFAULT_MAPPINGS }
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +102,13 @@ export default function WooCommerceSettingsSection() {
   } | null>(null);
 
   const [activeSubTab, setActiveSubTab] = useState<'connection' | 'acf_mapping' | 'bulk_sync'>('connection');
+
+  // Modal / Form Thêm trường ACF mới
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedCrmField, setSelectedCrmField] = useState<string>('start_date');
+  const [customCrmFieldKey, setCustomCrmFieldKey] = useState<string>('');
+  const [newAcfSlug, setNewAcfSlug] = useState<string>('');
+  const [newFieldLabel, setNewFieldLabel] = useState<string>('');
 
   // Load config on mount
   useEffect(() => {
@@ -90,7 +129,7 @@ export default function WooCommerceSettingsSection() {
           auto_sync_on_save: json.data.auto_sync_on_save ?? false,
           auto_sync_on_booking: json.data.auto_sync_on_booking ?? false,
           field_mappings: {
-            ...Object.fromEntries(Object.entries(DEFAULT_MAPPINGS).map(([k, v]) => [k, v.defaultKey])),
+            ...DEFAULT_MAPPINGS,
             ...(json.data.field_mappings || {})
           },
           has_secret: json.data.has_secret
@@ -181,6 +220,87 @@ export default function WooCommerceSettingsSection() {
     }
   };
 
+  // Thao tác Xóa 1 trường ACF mapping
+  const handleDeleteFieldMapping = (crmKey: string) => {
+    const meta = AVAILABLE_CRM_FIELDS.find(f => f.key === crmKey);
+    const displayName = meta ? meta.label : crmKey;
+    if (!window.confirm(`Bạn có chắc muốn xóa trường ACF "${displayName}" (${crmKey})? Sau khi xóa, trường này sẽ không được đồng bộ sang website WordPress nữa.`)) {
+      return;
+    }
+
+    setConfig(prev => {
+      const updated = { ...prev.field_mappings };
+      delete updated[crmKey];
+      return {
+        ...prev,
+        field_mappings: updated
+      };
+    });
+    toast.success(`Đã xóa trường "${displayName}" khỏi bảng đồng bộ`);
+  };
+
+  // Mở modal Thêm trường ACF mới
+  const handleOpenAddModal = () => {
+    // Tìm trường CRM đầu tiên chưa có trong field_mappings
+    const unused = AVAILABLE_CRM_FIELDS.find(f => !(f.key in config.field_mappings));
+    const defaultField = unused || AVAILABLE_CRM_FIELDS[0];
+    setSelectedCrmField(defaultField.key);
+    setNewAcfSlug(defaultField.defaultSlug);
+    setNewFieldLabel(defaultField.label);
+    setCustomCrmFieldKey('');
+    setShowAddModal(true);
+  };
+
+  // Khi chọn trường CRM khác trong modal
+  const handleCrmFieldChange = (crmKey: string) => {
+    setSelectedCrmField(crmKey);
+    if (crmKey === 'custom') {
+      setNewAcfSlug('');
+      setNewFieldLabel('');
+    } else {
+      const found = AVAILABLE_CRM_FIELDS.find(f => f.key === crmKey);
+      if (found) {
+        setNewAcfSlug(found.defaultSlug);
+        setNewFieldLabel(found.label);
+      }
+    }
+  };
+
+  // Thao tác Lưu thêm trường ACF mới
+  const handleConfirmAddField = (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalCrmKey = selectedCrmField === 'custom' ? customCrmFieldKey.trim() : selectedCrmField;
+    const finalAcfSlug = newAcfSlug.trim();
+
+    if (!finalCrmKey) {
+      toast.error('Vui lòng chọn hoặc nhập tên trường dữ liệu Tour CRM.');
+      return;
+    }
+
+    if (!finalAcfSlug) {
+      toast.error('Vui lòng nhập tên định danh ACF (Slug / Field Name).');
+      return;
+    }
+
+    // Kiểm tra xem trường đã tồn tại chưa
+    if (finalCrmKey in config.field_mappings) {
+      if (!window.confirm(`Trường "${finalCrmKey}" đã tồn tại với ACF Slug "${config.field_mappings[finalCrmKey]}". Bạn có muốn ghi đè bằng Slug mới "${finalAcfSlug}" không?`)) {
+        return;
+      }
+    }
+
+    setConfig(prev => ({
+      ...prev,
+      field_mappings: {
+        ...prev.field_mappings,
+        [finalCrmKey]: finalAcfSlug
+      }
+    }));
+
+    setShowAddModal(false);
+    toast.success(`Đã thêm trường ACF "${finalAcfSlug}" (${finalCrmKey}) thành công! Nhớ bấm "Lưu bảng ghép trường ACF" để áp dụng.`);
+  };
+
   if (isLoading) {
     return (
       <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center">
@@ -189,6 +309,8 @@ export default function WooCommerceSettingsSection() {
       </div>
     );
   }
+
+  const mappingCount = Object.keys(config.field_mappings).length;
 
   return (
     <div className="space-y-6">
@@ -283,6 +405,9 @@ export default function WooCommerceSettingsSection() {
         >
           <ArrowRightLeft className="w-3.5 h-3.5" />
           <span>2. Ghép trường ACF (Field Mapping)</span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+            {mappingCount}
+          </span>
         </button>
 
         <button
@@ -329,7 +454,7 @@ export default function WooCommerceSettingsSection() {
                   className="w-full h-10 px-3.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all shadow-2xs"
                 />
                 <p className="text-[11px] text-slate-500">
-                  Nhập địa chỉ website có giao thức HTTPS đầy đủ (Ví dụ: <code className="text-blue-600">https://adluxury.vn</code>).
+                  Nhập địa chỉ website có giao thức HTTPS đầy đủ (Ví dụ: <code className="text-blue-600 font-bold">https://adluxury.vn</code>).
                 </p>
               </div>
 
@@ -429,66 +554,117 @@ export default function WooCommerceSettingsSection() {
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
             <div>
-              <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-blue-600" />
-                <span>Bảng Ghép Trường Thông Tin ACF (Advanced Custom Fields)</span>
-              </h4>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Khớp nối các trường dữ liệu của Tour CRM sang đúng tên định danh (Field Name / Slug) của plugin ACF trên website WordPress.
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-blue-600" />
+                  <span>Bảng Ghép Trường Thông Tin ACF (Advanced Custom Fields)</span>
+                </h4>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  {mappingCount} trường đang đồng bộ
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Tự do thêm hoặc xóa các trường ACF để khớp chính xác với slug custom field đang lưu trên website WordPress của bạn.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setConfig(prev => ({
-                  ...prev,
-                  field_mappings: Object.fromEntries(
-                    Object.entries(DEFAULT_MAPPINGS).map(([k, v]) => [k, v.defaultKey])
-                  )
-                }));
-                toast.success('Đã khôi phục về tên trường ACF mặc định');
-              }}
-              className="text-xs text-slate-500 hover:text-blue-600 font-bold transition-colors underline cursor-pointer"
-            >
-              Khôi phục về mặc định
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Bạn có chắc muốn khôi phục lại danh sách các trường ACF mặc định không?')) {
+                    setConfig(prev => ({
+                      ...prev,
+                      field_mappings: { ...DEFAULT_MAPPINGS }
+                    }));
+                    toast.success('Đã khôi phục về danh sách trường ACF mặc định');
+                  }
+                }}
+                className="text-xs text-slate-500 hover:text-slate-800 font-bold transition-colors underline cursor-pointer"
+              >
+                Khôi phục mặc định
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Thêm trường ACF</span>
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(DEFAULT_MAPPINGS).map(([fieldKey, meta]) => {
-              const currentValue = config.field_mappings[fieldKey] || '';
-              return (
-                <div key={fieldKey} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 hover:border-slate-300 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                      <span>{meta.label}</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">CRM: {fieldKey}</span>
-                  </div>
+          {mappingCount === 0 ? (
+            <div className="p-10 border-2 border-dashed border-slate-200 rounded-2xl text-center space-y-3">
+              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h5 className="text-sm font-bold text-slate-800">Chưa có trường ACF nào được ghép nối</h5>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Bấm vào nút <strong>"Thêm trường ACF"</strong> ở trên hoặc khôi phục danh sách mặc định để bắt đầu đồng bộ dữ liệu sang website.
+              </p>
+              <button
+                type="button"
+                onClick={() => setConfig(prev => ({ ...prev, field_mappings: { ...DEFAULT_MAPPINGS } }))}
+                className="px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Tải lại danh sách trường mặc định
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(config.field_mappings).map(([fieldKey, acfSlug]) => {
+                const meta = AVAILABLE_CRM_FIELDS.find(f => f.key === fieldKey);
+                const labelText = meta ? meta.label : `Trường: ${fieldKey}`;
+                const descText = meta ? meta.desc : `Dữ liệu trường tùy biến: ${fieldKey}`;
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-500 whitespace-nowrap">ACF Slug:</span>
-                    <input
-                      type="text"
-                      value={currentValue}
-                      placeholder={meta.defaultKey}
-                      onChange={(e) => {
-                        const newMappings = { ...config.field_mappings, [fieldKey]: e.target.value.trim() };
-                        setConfig({ ...config, field_mappings: newMappings });
-                      }}
-                      className="w-full h-8 px-2.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-blue-700 focus:border-blue-500 outline-none"
-                    />
-                  </div>
+                return (
+                  <div key={fieldKey} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 hover:border-slate-300 transition-colors relative group">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-600" />
+                        <span>{labelText}</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400 font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                          CRM: {fieldKey}
+                        </span>
+                        {/* Nút Xóa trường ACF */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteFieldMapping(fieldKey)}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title={`Xóa trường ${labelText} khỏi bảng đồng bộ`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
 
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    {meta.desc}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500 whitespace-nowrap">ACF Slug:</span>
+                      <input
+                        type="text"
+                        value={acfSlug}
+                        placeholder={meta ? meta.defaultSlug : fieldKey}
+                        onChange={(e) => {
+                          const newMappings = { ...config.field_mappings, [fieldKey]: e.target.value.trim() };
+                          setConfig({ ...config, field_mappings: newMappings });
+                        }}
+                        className="w-full h-8 px-2.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-blue-700 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      {descText}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="pt-3 border-t border-slate-100 flex justify-end">
             <button
@@ -590,6 +766,112 @@ export default function WooCommerceSettingsSection() {
               <RefreshCw className={`w-4 h-4 ${isSyncingAll ? 'animate-spin' : ''}`} />
               <span>{isSyncingAll ? 'Đang đồng bộ toàn bộ Tour...' : 'Bắt đầu đồng bộ toàn bộ Tour sang Website'}</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÊM TRƯỜNG ACF MỚI */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Thêm Trường ACF Đồng Bộ Mới</h3>
+                  <p className="text-[11px] text-slate-500">Khớp nối thêm dữ liệu từ Tour CRM sang WordPress</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmAddField} className="p-6 space-y-4">
+              {/* Chọn nguồn dữ liệu CRM */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">
+                  1. Chọn trường thông tin nguồn từ Tour CRM *
+                </label>
+                <CustomSelect
+                  options={[
+                    ...AVAILABLE_CRM_FIELDS.map(f => ({
+                      value: f.key,
+                      label: `${f.label} (${f.key})`
+                    })),
+                    { value: 'custom', label: '➕ Trường tùy biến khác (Tự nhập key CRM)' }
+                  ]}
+                  value={selectedCrmField}
+                  onChange={handleCrmFieldChange}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Nếu chọn custom key */}
+              {selectedCrmField === 'custom' && (
+                <div className="space-y-1.5 animate-in fade-in duration-150">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Nhập tên trường trong Tour CRM (Key) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ví dụ: custom_field_name"
+                    value={customCrmFieldKey}
+                    onChange={(e) => setCustomCrmFieldKey(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
+                    className="w-full h-10 px-3.5 border border-slate-300 rounded-xl text-xs font-mono font-bold text-blue-700 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Nhập tên ACF Slug */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">
+                  2. Tên định danh trường ACF trên WordPress (Field Name / Slug) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: ngay_khoi_hanh, thoi_luong, gia_tre_em..."
+                  value={newAcfSlug}
+                  onChange={(e) => setNewAcfSlug(e.target.value.trim().toLowerCase().replace(/\s+/g, '_'))}
+                  className="w-full h-10 px-3.5 border border-slate-300 rounded-xl text-xs font-mono font-bold text-blue-700 focus:border-blue-500 outline-none"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Tên này phải trùng khớp với <strong>Field Name</strong> đã khai báo trong plugin ACF trên website WordPress.
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-blue-50 rounded-xl border border-blue-150 text-xs text-blue-800 flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed text-[11px]">
+                  Sau khi thêm, trường mới sẽ xuất hiện ngay trong danh sách. Bạn có thể bấm lưu cấu hình để cập nhật vào cơ sở dữ liệu.
+                </span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="h-10 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Xác nhận thêm</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
