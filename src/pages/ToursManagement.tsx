@@ -516,6 +516,66 @@ export default function ToursManagement() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
+  // WooCommerce Sync states
+  const [isSyncingTourId, setIsSyncingTourId] = useState<string | null>(null);
+  const [isBulkSyncing, setIsBulkSyncing] = useState<boolean>(false);
+
+  const handleSyncSingleTourToWooCommerce = async (tour: Tour) => {
+    try {
+      setIsSyncingTourId(tour.id);
+      const res = await fetch(`/api/woocommerce/sync-tour/${tour.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message || 'Đồng bộ sang Website thành công!');
+        updateTour({
+          ...tour,
+          wp_product_id: json.product_id,
+          wp_sync_status: 'synced',
+          wp_last_synced_at: new Date().toISOString(),
+          wp_sync_message: json.message
+        });
+      } else {
+        toast.error(json.message || 'Đồng bộ thất bại');
+        updateTour({
+          ...tour,
+          wp_sync_status: 'failed',
+          wp_last_synced_at: new Date().toISOString(),
+          wp_sync_message: json.message
+        });
+      }
+    } catch (err: any) {
+      toast.error('Lỗi khi gọi đồng bộ: ' + err.message);
+    } finally {
+      setIsSyncingTourId(null);
+    }
+  };
+
+  const handleBulkSyncToWooCommerce = async () => {
+    if (!window.confirm('Bạn có muốn đồng bộ toàn bộ danh sách Tour hiện có sang Website WordPress (WooCommerce) không? Quá trình này sẽ mất từ 10 - 30 giây.')) {
+      return;
+    }
+    try {
+      setIsBulkSyncing(true);
+      const res = await fetch('/api/woocommerce/sync-all-tours', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Đã đồng bộ ${json.synced}/${json.total} tour sang Website thành công!`);
+      } else {
+        toast.error(json.message || 'Đồng bộ thất bại');
+      }
+    } catch (err: any) {
+      toast.error('Lỗi khi đồng bộ hàng loạt: ' + err.message);
+    } finally {
+      setIsBulkSyncing(false);
+    }
+  };
+
   const toggleGroup = (groupName: string) => {
     setExpandedGroups(prev => ({
       ...prev,
@@ -1922,6 +1982,19 @@ export default function ToursManagement() {
                 </button>
               )}
             </div>
+
+            {(currentRole === 'admin' || currentRole === 'operator') && (
+              <button
+                type="button"
+                onClick={handleBulkSyncToWooCommerce}
+                disabled={isBulkSyncing}
+                className="inline-flex items-center h-9 px-3.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+                title="Đồng bộ toàn bộ danh sách tour sang website WordPress (WooCommerce)"
+              >
+                <Globe className={`w-3.5 h-3.5 mr-1.5 text-indigo-600 ${isBulkSyncing ? 'animate-spin' : ''}`} />
+                <span>{isBulkSyncing ? 'Đang đồng bộ...' : 'Đồng bộ Website'}</span>
+              </button>
+            )}
 
             {(currentRole === 'admin' || currentRole === 'operator' || currentRole === 'sale_leader') && (
               <button
@@ -3479,6 +3552,11 @@ export default function ToursManagement() {
                                             Tự vận hành
                                           </span>
                                         )}
+                                        {t.wp_product_id && (
+                                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1" title={`Đã đồng bộ WooCommerce Product ID #${t.wp_product_id}`}>
+                                            <Globe className="w-3 h-3 text-emerald-600" /> WC #{t.wp_product_id}
+                                          </span>
+                                        )}
                                       </div>
                                     </td>
                                     <td className="px-5 py-3">
@@ -3525,6 +3603,31 @@ export default function ToursManagement() {
                                         >
                                           <Info className="w-4 h-4" />
                                         </button>
+
+                                        {/* WooCommerce Sync */}
+                                        {canManageTours && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSyncSingleTourToWooCommerce(t)}
+                                            disabled={isSyncingTourId === t.id}
+                                            className={`p-1.5 rounded-lg transition-colors border cursor-pointer ${
+                                              t.wp_sync_status === 'synced'
+                                                ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                                                : t.wp_sync_status === 'failed'
+                                                ? 'text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100'
+                                                : 'text-blue-600 bg-blue-50/60 border-blue-200 hover:bg-blue-100'
+                                            }`}
+                                            title={
+                                              t.wp_sync_status === 'synced'
+                                                ? `Đã đồng bộ sang Website (WC #${t.wp_product_id}). Bấm để cập nhật lại.`
+                                                : t.wp_sync_status === 'failed'
+                                                ? `Đồng bộ lỗi: ${t.wp_sync_message || ''}. Bấm để thử lại.`
+                                                : 'Đồng bộ tour này sang Website WordPress (WooCommerce)'
+                                            }
+                                          >
+                                            <Globe className={`w-4 h-4 ${isSyncingTourId === t.id ? 'animate-spin' : ''}`} />
+                                          </button>
+                                        )}
 
                                         {/* Duplicate/Clone */}
                                         {canManageTours && t.tour_type !== 'private' && (
@@ -3637,6 +3740,11 @@ export default function ToursManagement() {
                                   </span>
                                 )}
                               </div>
+                              {t.wp_product_id && (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Đã đồng bộ WooCommerce Product ID #${t.wp_product_id}`}>
+                                  <Globe className="w-3 h-3 text-emerald-600" /> WC #{t.wp_product_id}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-3.5 min-w-[300px] max-w-md">
@@ -3762,6 +3870,31 @@ export default function ToursManagement() {
                             >
                               <Info className="w-4 h-4" />
                             </button>
+
+                            {/* WooCommerce Sync */}
+                            {canManageTours && (
+                              <button
+                                type="button"
+                                onClick={() => handleSyncSingleTourToWooCommerce(t)}
+                                disabled={isSyncingTourId === t.id}
+                                className={`p-1.5 rounded-lg transition-colors border cursor-pointer ${
+                                  t.wp_sync_status === 'synced'
+                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                                    : t.wp_sync_status === 'failed'
+                                    ? 'text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100'
+                                    : 'text-blue-600 bg-blue-50/60 border-blue-200 hover:bg-blue-100'
+                                }`}
+                                title={
+                                  t.wp_sync_status === 'synced'
+                                    ? `Đã đồng bộ sang Website (WC #${t.wp_product_id}). Bấm để cập nhật lại.`
+                                    : t.wp_sync_status === 'failed'
+                                    ? `Đồng bộ lỗi: ${t.wp_sync_message || ''}. Bấm để thử lại.`
+                                    : 'Đồng bộ tour này sang Website WordPress (WooCommerce)'
+                                }
+                              >
+                                <Globe className={`w-4 h-4 ${isSyncingTourId === t.id ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
 
                             {/* Duplicate/Clone action */}
                             {canManageTours && t.tour_type !== 'private' && (

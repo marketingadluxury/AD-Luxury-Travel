@@ -256,6 +256,11 @@ export interface Tour {
   visa_service_type?: string;
   visa_speed?: 'standard' | 'urgent';
   price_visa_tour?: number;
+  // WooCommerce & WordPress Sync
+  wp_product_id?: number | null;
+  wp_sync_status?: 'synced' | 'failed' | 'not_synced';
+  wp_last_synced_at?: string | null;
+  wp_sync_message?: string | null;
   created_at?: string;
 }
 

@@ -133,6 +133,17 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - `caption` (text)
 - `created_at` (timestamp)
 
+### 4.7 Bảng `woocommerce_configs` (Cấu Hình Tích Hợp WordPress & ACF)
+- `id` (uuid, primary key)
+- `site_url` (text - tên miền website WordPress có HTTPS)
+- `consumer_key` (text - khóa WooCommerce API ck_...)
+- `consumer_secret` (text - mã bí mật WooCommerce API cs_...)
+- `is_active` (boolean)
+- `auto_sync_on_save` (boolean - tự động đồng bộ khi tạo/sửa tour)
+- `auto_sync_on_booking` (boolean - tự động cập nhật số chỗ trống khi có booking)
+- `field_mappings` (jsonb - bảng ánh xạ trường ACF)
+- `created_at`, `updated_at` (timestamp)
+
 ---
 
 ## 5. Cấu Hình Supabase Storage (Yêu Cầu)

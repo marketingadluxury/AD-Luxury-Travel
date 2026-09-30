@@ -6,6 +6,32 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.78 Tích Hợp Đồng Bộ Dữ Liệu Tour Với Website WordPress (WooCommerce REST API + ACF)
+- **Mô tả yêu cầu:**
+  - Khách hàng sử dụng website WordPress + WooCommerce + ACF để bán tour trực tuyến và cần kết nối tự động với Tour CRM để đồng bộ giá bán, ngày khởi hành, mã tour, số chỗ còn lại và các trường thông tin chi tiết sang website.
+- **Giải pháp triển khai:**
+  1. **Backend Service & REST API v3 (`server/services/woocommerceService.ts` & `server/routes/woocommerceRoutes.ts`):**
+     - Xây dựng module kết nối WooCommerce REST API chuẩn quốc tế bằng native `fetch`, hỗ trợ xác thực Basic Auth và query parameters `consumer_key` & `consumer_secret`.
+     - Hỗ trợ kiểm tra kết nối (`/api/woocommerce/test-connection`), lấy phiên bản WooCommerce, số lượng sản phẩm.
+     - Hàm đồng bộ 1 tour (`syncTourToWooCommerce`): Tự động tìm kiếm theo mã tour (SKU), thực hiện tạo mới (`POST`) hoặc cập nhật (`PUT`), đẩy các trường ACF tùy biến qua mảng `meta_data`.
+     - Hàm đồng bộ toàn bộ tour (`syncAllToursToWooCommerce`).
+     - Lưu kết quả đồng bộ (`wp_product_id`, `wp_sync_status`, `wp_last_synced_at`, `wp_sync_message`) vào database.
+  2. **Giao Diện Cài Đặt Kết Nối (`src/components/WooCommerceSettingsSection.tsx` & `Settings.tsx`):**
+     - Tab **"Kết nối Website WordPress (WooCommerce)"** trong Cài đặt hệ thống: Nhập URL, Consumer Key, Consumer Secret, nút Kiểm tra kết nối tức thì kèm thông báo trạng thái realtime.
+     - Bảng ánh xạ trường tùy biến (ACF Field Mapping): Cho phép tùy biến tên slug trường ACF (khởi hành, ngày về, thời lượng, giá trẻ em, em bé, phòng đơn, visa, hãng bay, khách sạn, link PDF...).
+     - Tùy chọn tự động hóa: *Tự động đồng bộ khi tạo/sửa Tour* (`auto_sync_on_save`) và nút *Đồng bộ toàn bộ Tour*.
+  3. **Tích Hợp Quản Lý Tour (`src/pages/ToursManagement.tsx`):**
+     - Hiển thị badge liên kết WooCommerce (`WC #1234`) trên từng tour ở cả 2 chế độ Grouped Table và Flat Table.
+     - Nút 1-Click đồng bộ tour trực tiếp trên từng dòng tour.
+     - Nút *Đồng bộ Website* hàng loạt trên thanh công cụ Header.
+     - Tự động kích hoạt đồng bộ ngầm khi Lưu/Cập nhật tour trong `CRMContext.tsx` nếu cấu hình `auto_sync_on_save` bật.
+  4. **Database & Realtime Script (`supabase-schema.sql`):**
+     - Tạo bảng `woocommerce_configs` kèm kích hoạt Realtime publication.
+     - Bổ sung các cột theo dõi `wp_product_id`, `wp_sync_status`, `wp_last_synced_at`, `wp_sync_message` vào bảng `tours`.
+  5. **Kiểm Thử & Biên Dịch:**
+     - `lint_applet` và `compile_applet` đạt chuẩn 100% không lỗi, vượt qua toàn bộ 44/44 unit tests.
+- **Trạng thái:** Đã hoàn thành và sẵn sàng sử dụng.
+
 ### 1.77 Khắc Phục Lỗi Chồng Chéo Giao Diện Lịch (`DatePicker`) Và Dropdown Trong Modal Nhân Sự
 - **Mô tả lỗi:**
   - Khi mở bộ chọn ngày (`DatePicker`) cho trường *Ngày vào làm chính thức (Join Date)* trong modal tạo/sửa nhân sự, popover lịch bung xuống đè lên các dropdown phía dưới (*Thuộc Team*, *Leader phụ trách*) và thanh nút bấm (*Hủy bỏ*, *Cập nhật*).

@@ -1141,6 +1141,53 @@ END $$;
 -- Bổ sung cột employment_status cho bảng profiles (Quản lý Thử việc / Chính thức)
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS employment_status TEXT DEFAULT 'official';
 
+-- ==============================================================================
+-- 29. BẢNG CẤU HÌNH TÍCH HỢP WOOCOMMERCE & ACF (WORDPRESS)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS woocommerce_configs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_url TEXT NOT NULL,
+  consumer_key TEXT NOT NULL,
+  consumer_secret TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  auto_sync_on_save BOOLEAN DEFAULT false,
+  auto_sync_on_booking BOOLEAN DEFAULT false,
+  field_mappings JSONB DEFAULT '{
+    "start_date": "ngay_khoi_hanh",
+    "end_date": "ngay_ve",
+    "duration": "thoi_luong",
+    "price_child": "gia_tre_em",
+    "price_infant": "gia_em_be",
+    "single_room_surcharge": "phu_thu_phong_don",
+    "price_visa_tour": "phi_visa",
+    "airline": "hang_hang_khong",
+    "hotel": "khach_san",
+    "destination": "diem_den",
+    "itinerary_pdf_url": "link_lich_trinh",
+    "flight_out": "chuyen_bay_di",
+    "flight_in": "chuyen_bay_ve"
+  }'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Kích hoạt Realtime cho bảng woocommerce_configs
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE woocommerce_configs;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+  END IF;
+END $$;
+
+-- Bổ sung các cột trạng thái đồng bộ WordPress vào bảng tours
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_product_id BIGINT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_sync_status TEXT DEFAULT 'not_synced';
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_last_synced_at TIMESTAMPTZ;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_sync_message TEXT;
+
 
 
 

@@ -3214,6 +3214,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         setTours(prev => prev.filter(t => t.id !== id));
       }
     }
+
+    if (newTour?.id) {
+      // Kích hoạt đồng bộ tự động sang WooCommerce nếu được bật
+      fetch('/api/woocommerce/config')
+        .then(r => r.json())
+        .then(cfg => {
+          if (cfg?.success && cfg?.data?.is_active && cfg?.data?.auto_sync_on_save) {
+            fetch(`/api/woocommerce/sync-tour/${newTour.id}`, { method: 'POST' }).catch(() => {});
+          }
+        }).catch(() => {});
+    }
+
     return newTour;
   };
 
@@ -3546,6 +3558,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             toast.error(`Lỗi cập nhật CSDL: ${errorMsg}`);
           }
           throw new Error(`Lỗi khi cập nhật Tour trên Supabase: ${errorMsg}`);
+        } else if (success) {
+          // Kích hoạt đồng bộ tự động sang WooCommerce nếu được bật
+          fetch('/api/woocommerce/config')
+            .then(r => r.json())
+            .then(cfg => {
+              if (cfg?.success && cfg?.data?.is_active && cfg?.data?.auto_sync_on_save) {
+                fetch(`/api/woocommerce/sync-tour/${updatedTour.id}`, { method: 'POST' }).catch(() => {});
+              }
+            }).catch(() => {});
         }
       } catch (err: any) {
         console.error('Lỗi hệ thống khi cập nhật Tour:', err);

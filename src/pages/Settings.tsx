@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useCRM } from '../context/CRMContext';
-import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database, History } from 'lucide-react';
+import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database, History, Globe } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
 import DatabaseKeepAliveSettings from '../components/DatabaseKeepAliveSettings';
+import WooCommerceSettingsSection from '../components/WooCommerceSettingsSection';
 import ActivityLogs from './ActivityLogs';
 
 export default function Settings() {
@@ -18,8 +19,8 @@ export default function Settings() {
     }
   }, [currentRole, navigate]);
 
-  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database' | 'logs'>(
-    tabFromUrl && ['membership', 'users', 'database', 'logs'].includes(tabFromUrl)
+  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'database' | 'logs' | 'woocommerce'>(
+    tabFromUrl && ['membership', 'users', 'database', 'logs', 'woocommerce'].includes(tabFromUrl)
       ? tabFromUrl
       : 'membership'
   );
@@ -112,6 +113,22 @@ export default function Settings() {
           >
             <Database className="w-4 h-4" />
             <span>Cơ sở dữ liệu & Tự động giữ ấm</span>
+          </button>
+        )}
+        {['admin', 'bod'].includes(currentRole) && (
+          <button
+            onClick={() => {
+              setActiveTab('woocommerce');
+              setSearchParams({ tab: 'woocommerce' });
+            }}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              activeTab === 'woocommerce'
+                ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Kết nối Website WordPress (WooCommerce)</span>
           </button>
         )}
         {['admin', 'bod'].includes(currentRole) && (
@@ -280,6 +297,7 @@ export default function Settings() {
 
       {activeTab === 'users' && <UserManagement />}
       {activeTab === 'database' && <DatabaseKeepAliveSettings />}
+      {activeTab === 'woocommerce' && <WooCommerceSettingsSection />}
       {activeTab === 'logs' && <ActivityLogs embedded />}
     </div>
   );
