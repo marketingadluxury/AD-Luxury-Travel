@@ -34,6 +34,11 @@ const generateSafeUUID = () => {
   });
 };
 
+function isValidUuid(val?: string | null): boolean {
+  if (!val) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+}
+
 function toUuid(id: string): string {
   if (!id) return generateSafeUUID();
   if (idMap[id]) return idMap[id];
@@ -1067,11 +1072,48 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     try {
       const { data, error } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
       if (!error && data) {
+        // Đọc dữ liệu local hiện tại để thực hiện Smart Merge
+        let localRequests: LeaveRequest[] = [];
+        try {
+          const saved = localStorage.getItem('crm_leave_requests');
+          if (saved) localRequests = JSON.parse(saved);
+        } catch {}
+
+        const localMap = new Map<string, LeaveRequest>();
+        localRequests.forEach(r => localMap.set(r.id, r));
+
         const enriched = data.map((item: any) => {
           const userProf = profilesList.find(p => p.id === item.user_id);
           const handoverProf = profilesList.find(p => p.id === item.handover_user_id);
+          const localItem = localMap.get(item.id);
+
+          // Nếu local đã được duyệt (approved_level_1, approved_final hoặc rejected) mà trên Supabase vẫn là pending
+          // thì ưu tiên trạng thái đã duyệt từ local để không bao giờ bị ghi đè mất trạng thái khi F5!
+          let finalStatus = item.status;
+          let level1By = item.level_1_approved_by || localItem?.approver_level_1_id;
+          let level1Name = item.level_1_approved_name || localItem?.approver_level_1_name;
+          let finalBy = item.final_approved_by || localItem?.approver_final_id;
+          let finalName = item.final_approved_name || localItem?.approver_final_name;
+
+          if (localItem && localItem.status && localItem.status !== 'pending' && item.status === 'pending') {
+            finalStatus = localItem.status;
+            // Tự động đồng bộ ngược lên Supabase để tự sửa lỗi lưu trữ
+            const approverL1Uuid = isValidUuid(localItem.approver_level_1_id) ? localItem.approver_level_1_id : null;
+            const approverFinalUuid = isValidUuid(localItem.approver_final_id) ? localItem.approver_final_id : null;
+            supabase.from('leave_requests').update({
+              status: localItem.status,
+              ...(approverL1Uuid ? { level_1_approved_by: approverL1Uuid } : {}),
+              ...(approverFinalUuid ? { final_approved_by: approverFinalUuid } : {})
+            }).eq('id', item.id).then();
+          }
+
           return {
             ...item,
+            status: finalStatus,
+            approver_level_1_id: level1By,
+            approver_level_1_name: level1Name,
+            approver_final_id: finalBy,
+            approver_final_name: finalName,
             user_name: item.user_name || userProf?.full_name || 'Nhân viên',
             user_email: item.user_email || userProf?.email || '',
             user_role: item.user_role || userProf?.role || 'sale',
@@ -1080,8 +1122,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             leave_session: item.leave_session || 'all_day'
           };
         });
-        setLeaveRequests(enriched as LeaveRequest[]);
-        localStorage.setItem('crm_leave_requests', JSON.stringify(enriched));
+
+        // Bổ sung các đơn chỉ có trong local mà Supabase chưa có (ví dụ tạo offline hoặc mạng chậm)
+        const remoteIds = new Set(enriched.map((e: any) => e.id));
+        const missingLocal = localRequests.filter(lr => !remoteIds.has(lr.id));
+        const combined = [...enriched, ...missingLocal];
+
+        setLeaveRequests(combined as LeaveRequest[]);
+        localStorage.setItem('crm_leave_requests', JSON.stringify(combined));
       } else if (error) {
         console.warn('Lỗi fetch leave_requests từ Supabase:', error.message);
       }
@@ -1281,9 +1329,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
+        const safeUserId = isValidUuid(requestData.user_id) ? requestData.user_id : null;
+        const safeHandoverId = isValidUuid(requestData.handover_user_id) ? requestData.handover_user_id : null;
+
         const fullPayload = {
           id: newId,
-          user_id: requestData.user_id,
+          user_id: safeUserId,
           user_name: requestData.user_name || null,
           user_email: requestData.user_email || null,
           user_role: requestData.user_role || null,
@@ -1294,7 +1345,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           type: requestData.type,
           status: 'pending',
           reason: requestData.reason,
-          handover_user_id: requestData.handover_user_id || null,
+          handover_user_id: safeHandoverId,
           handover_user_name: requestData.handover_user_name || null,
           created_at: newReq.created_at
         };
@@ -1304,13 +1355,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           console.warn('Lỗi insert leave_requests đầy đủ (thử fallback):', insertErr.message);
           const fallbackPayload = {
             id: newId,
-            user_id: requestData.user_id,
+            user_id: safeUserId,
             start_date: requestData.start_date,
             end_date: requestData.end_date,
             type: requestData.type,
             status: 'pending',
             reason: `${requestData.leave_session && requestData.leave_session !== 'all_day' ? `[Nghỉ ${requestData.leave_session === 'morning' ? 'Buổi sáng (0.5 ngày)' : 'Buổi chiều (0.5 ngày)'}] ` : ''}${requestData.reason}`,
-            handover_user_id: requestData.handover_user_id || null
+            handover_user_id: safeHandoverId
           };
           const { error: fbErr } = await supabase.from('leave_requests').insert([fallbackPayload]);
           if (fbErr) {
@@ -1371,18 +1422,53 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.from('leave_requests').update({
+        const approverUuid = isValidUuid(currentUserId) ? currentUserId : null;
+        let updateSuccess = false;
+
+        // Thử cập nhật đầy đủ các trường
+        const fullPayload: any = {
           status: 'approved_level_1',
-          level_1_approved_by: currentUserId,
           level_1_approved_name: approverName,
           level_1_approved_at: new Date().toISOString()
-        }).eq('id', id);
+        };
+        if (approverUuid) {
+          fullPayload.level_1_approved_by = approverUuid;
+        }
 
-        if (error) {
-          await supabase.from('leave_requests').update({
+        const { error: fullErr } = await supabase.from('leave_requests').update(fullPayload).eq('id', id);
+        if (!fullErr) {
+          updateSuccess = true;
+        } else {
+          console.warn('Thử cập nhật tối giản status cấp 1 do bảng DB có thể thiếu cột:', fullErr.message);
+          const simplePayload: any = { status: 'approved_level_1' };
+          if (approverUuid) simplePayload.level_1_approved_by = approverUuid;
+          const { error: simpleErr } = await supabase.from('leave_requests').update(simplePayload).eq('id', id);
+          if (!simpleErr) {
+            updateSuccess = true;
+          }
+        }
+
+        // Nếu đơn chưa tồn tại trên Supabase, thử upsert toàn bộ đơn
+        if (!updateSuccess && targetReq) {
+          const userUuid = isValidUuid(targetReq.user_id) ? targetReq.user_id : null;
+          const reqId = isValidUuid(id) ? id : generateSafeUUID();
+          await supabase.from('leave_requests').upsert({
+            id: reqId,
+            user_id: userUuid,
+            user_name: targetReq.user_name || null,
+            user_email: targetReq.user_email || null,
+            user_role: targetReq.user_role || null,
+            start_date: targetReq.start_date,
+            end_date: targetReq.end_date,
+            leave_session: targetReq.leave_session || 'all_day',
+            total_days: targetReq.total_days || 1,
+            type: targetReq.type,
             status: 'approved_level_1',
-            level_1_approved_by: currentUserId
-          }).eq('id', id);
+            reason: targetReq.reason,
+            level_1_approved_by: approverUuid,
+            level_1_approved_name: approverName,
+            level_1_approved_at: new Date().toISOString()
+          }, { onConflict: 'id' });
         }
       } catch (err: any) {
         console.warn('Lỗi approve cấp 1 leave_requests:', err?.message || err);
@@ -1467,18 +1553,53 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.from('leave_requests').update({
+        const approverUuid = isValidUuid(currentUserId) ? currentUserId : null;
+        let updateSuccess = false;
+
+        // Thử cập nhật đầy đủ các trường
+        const fullPayload: any = {
           status: 'approved_final',
-          final_approved_by: currentUserId,
           final_approved_name: approverName,
           final_approved_at: new Date().toISOString()
-        }).eq('id', id);
+        };
+        if (approverUuid) {
+          fullPayload.final_approved_by = approverUuid;
+        }
 
-        if (error) {
-          await supabase.from('leave_requests').update({
+        const { error: fullErr } = await supabase.from('leave_requests').update(fullPayload).eq('id', id);
+        if (!fullErr) {
+          updateSuccess = true;
+        } else {
+          console.warn('Thử cập nhật tối giản status cấp cuối do bảng DB có thể thiếu cột:', fullErr.message);
+          const simplePayload: any = { status: 'approved_final' };
+          if (approverUuid) simplePayload.final_approved_by = approverUuid;
+          const { error: simpleErr } = await supabase.from('leave_requests').update(simplePayload).eq('id', id);
+          if (!simpleErr) {
+            updateSuccess = true;
+          }
+        }
+
+        // Nếu đơn chưa tồn tại trên Supabase, thử upsert toàn bộ đơn
+        if (!updateSuccess && targetReq) {
+          const userUuid = isValidUuid(targetReq.user_id) ? targetReq.user_id : null;
+          const reqId = isValidUuid(id) ? id : generateSafeUUID();
+          await supabase.from('leave_requests').upsert({
+            id: reqId,
+            user_id: userUuid,
+            user_name: targetReq.user_name || null,
+            user_email: targetReq.user_email || null,
+            user_role: targetReq.user_role || null,
+            start_date: targetReq.start_date,
+            end_date: targetReq.end_date,
+            leave_session: targetReq.leave_session || 'all_day',
+            total_days: targetReq.total_days || 1,
+            type: targetReq.type,
             status: 'approved_final',
-            final_approved_by: currentUserId
-          }).eq('id', id);
+            reason: targetReq.reason,
+            final_approved_by: approverUuid,
+            final_approved_name: approverName,
+            final_approved_at: new Date().toISOString()
+          }, { onConflict: 'id' });
         }
       } catch (err: any) {
         console.warn('Lỗi approve final leave_requests:', err?.message || err);
@@ -1518,8 +1639,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
         if (error) {
           await supabase.from('leave_requests').update({
-            status: 'rejected',
-            reason: reason
+            status: 'rejected'
           }).eq('id', id);
         }
       } catch (err: any) {

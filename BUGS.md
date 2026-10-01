@@ -6,6 +6,19 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.79 Khắc Phục Lỗi Mất Trạng Thái Duyệt Đơn Xin Nghỉ Phép Khi Load Lại Trang (F5)
+- **Mô tả lỗi:**
+  - Sau khi Trưởng nhóm / BOD / HR bấm duyệt đơn xin nghỉ phép (Duyệt C1 hoặc Duyệt Cuối), giao diện hiển thị trạng thái đã duyệt thành công. Tuy nhiên, khi tải lại trang (F5) hoặc mở lại phiên làm việc thì đơn xin nghỉ phép lại quay trở về trạng thái ban đầu "Cần duyệt" (pending).
+- **Nguyên nhân kỹ thuật:**
+  1. Cột `level_1_approved_by` và `final_approved_by` trong bảng `leave_requests` trên Supabase được định nghĩa kiểu `UUID`. Khi `currentUserId` không phải UUID chuẩn (hoặc bị rỗng), lệnh UPDATE của Supabase ném lỗi kiểu dữ liệu (`invalid input syntax for type uuid`).
+  2. Bảng `leave_requests` trên Supabase có thể chưa được chạy câu lệnh `ALTER TABLE` bổ sung các cột mở rộng (`level_1_approved_name`, `level_1_approved_at`, `final_approved_name`, `final_approved_at`), dẫn đến lỗi `column does not exist`.
+  3. Lệnh cập nhật database bị lỗi ngầm, trong khi hàm `fetchLeaveRequests()` khi F5 nạp dữ liệu từ Supabase về (vẫn là `pending`) và ghi đè thẳng lên `localStorage`, làm mất trạng thái đã duyệt ở client.
+- **Giải pháp triển khai:**
+  1. **Chuẩn hóa UUID An Toàn:** Bổ sung hàm `isValidUuid()` kiểm tra trước khi gán vào `level_1_approved_by` và `final_approved_by`. Nếu ID không phải UUID hợp lệ, tự động truyền `null` để Postgres không báo lỗi kiểu.
+  2. **Cơ Chế Self-Healing Fallback:** Trong `approveLeaveRequestLevel1` và `approveLeaveRequestFinal`, nếu cập nhật đầy đủ các trường bị lỗi (do thiếu cột DB), hệ thống tự động fallback chỉ cập nhật `status`. Nếu đơn chưa từng tồn tại trên Supabase, hệ thống tự động `upsert` cả đơn với trạng thái đã duyệt.
+  3. **Cơ Chế Smart Merge khi Load Trang (`fetchLeaveRequests`):** So sánh dữ liệu Supabase với `localStorage`. Nếu ở máy đơn này đã có trạng thái tiến xa hơn (`approved_level_1`, `approved_final`, `rejected`) mà Supabase vẫn là `pending`, hệ thống giữ nguyên trạng thái duyệt mới nhất và tự động đồng bộ ngược lên Supabase để tự chữa lành dữ liệu.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.78 Tích Hợp Đồng Bộ Dữ Liệu Tour Với Website WordPress (WooCommerce REST API + ACF) & Quản Lý ACF Động Ngoài Frontend
 - **Mô tả yêu cầu:**
   - Khách hàng sử dụng website WordPress + WooCommerce + ACF để bán tour trực tuyến và cần kết nối tự động với Tour CRM để đồng bộ giá bán, ngày khởi hành, mã tour, số chỗ còn lại và các trường thông tin chi tiết sang website.
