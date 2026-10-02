@@ -31,12 +31,15 @@ interface WooCommerceConfigState {
   is_active: boolean;
   auto_sync_on_save: boolean;
   auto_sync_on_booking: boolean;
+  repeater_slug?: string;
+  sync_mode?: 'repeater' | 'simple';
   field_mappings: Record<string, string>;
   has_secret?: boolean;
 }
 
 // Danh mục các trường dữ liệu tiêu chuẩn từ Tour CRM
 const AVAILABLE_CRM_FIELDS: { key: string; label: string; desc: string; defaultSlug: string }[] = [
+  { key: 'code', label: 'Mã lịch trình / Mã tour (SKU)', desc: 'Mã định danh riêng cho từng ngày khởi hành (VD: OBAM140626)', defaultSlug: 'ma_lich_trinh' },
   { key: 'start_date', label: 'Ngày khởi hành', desc: 'Ngày xuất phát của đoàn (YYYY-MM-DD)', defaultSlug: 'ngay_khoi_hanh' },
   { key: 'end_date', label: 'Ngày kết thúc / Ngày về', desc: 'Ngày về đến điểm xuất phát', defaultSlug: 'ngay_ve' },
   { key: 'duration', label: 'Thời lượng tour', desc: 'Số ngày và đêm (VD: 5 ngày 4 đêm)', defaultSlug: 'thoi_luong' },
@@ -48,8 +51,8 @@ const AVAILABLE_CRM_FIELDS: { key: string; label: string; desc: string; defaultS
   { key: 'airline', label: 'Hãng hàng không', desc: 'Hãng hàng không vận chuyển (VD: Vietnam Airlines)', defaultSlug: 'hang_hang_khong' },
   { key: 'hotel', label: 'Khách sạn / Tiêu chuẩn', desc: 'Khách sạn lưu trú (VD: Khách sạn 4 sao)', defaultSlug: 'khach_san' },
   { key: 'destination', label: 'Điểm đến / Quốc gia', desc: 'Quốc gia hoặc thành phố tour ghé thăm', defaultSlug: 'diem_den' },
-  { key: 'total_seats', label: 'Tổng số chỗ mở bán', desc: 'Số chỗ tối đa của đoàn', defaultSlug: 'tong_so_cho' },
-  { key: 'available_seats', label: 'Số chỗ còn trống', desc: 'Số lượng chỗ khả dụng có thể nhận thêm', defaultSlug: 'so_cho_trong' },
+  { key: 'total_seats', label: 'Tổng số chỗ mở bán', desc: 'Số chỗ tối đa của đoàn', defaultSlug: 'tong_so_cho_mo_ban' },
+  { key: 'available_seats', label: 'Số chỗ còn trống', desc: 'Số lượng chỗ khả dụng có thể nhận thêm', defaultSlug: 'so_cho_con_lai' },
   { key: 'itinerary_pdf_url', label: 'Link file PDF lịch trình', desc: 'Đường dẫn mở file PDF chương trình tour', defaultSlug: 'link_lich_trinh' },
   { key: 'guide_name', label: 'Tên Hướng dẫn viên', desc: 'Họ tên HDV trưởng đoàn phụ trách tour', defaultSlug: 'ten_hdv' },
   { key: 'guide_phone', label: 'Số điện thoại HDV', desc: 'SĐT liên lạc của HDV trưởng đoàn', defaultSlug: 'sdt_hdv' },
@@ -58,19 +61,24 @@ const AVAILABLE_CRM_FIELDS: { key: string; label: string; desc: string; defaultS
   { key: 'flight_in', label: 'Chuyến bay về (Chặng 1)', desc: 'Mã hiệu chuyến bay và giờ cất cánh về', defaultSlug: 'chuyen_bay_ve' },
   { key: 'flight_in_transit', label: 'Chuyến bay về (Quá cảnh)', desc: 'Chuyến bay chuyển tiếp về', defaultSlug: 'chuyen_bay_ve_qua_canh' },
   { key: 'transit_info', label: 'Ghi chú quá cảnh', desc: 'Thông tin thời gian và sân bay quá cảnh', defaultSlug: 'ghi_chu_qua_canh' },
+  { key: 'tour_status', label: 'Tình trạng Tour (No shop / Giờ chót / Giảm giá)', desc: 'Phân loại trạng thái mở bán của tour', defaultSlug: 'tinh_trang_tour' },
+  { key: 'description', label: 'Lưu ý đặc biệt / Ghi chú đợt khởi hành', desc: 'Ghi chú điều kiện nhận khách', defaultSlug: 'luu_y_dac_biet' },
   { key: 'ticket_deadline', label: 'Hạn xuất vé đoàn', desc: 'Hạn chót thanh toán và xuất vé máy bay', defaultSlug: 'han_xuat_ve' },
   { key: 'visa_deadline', label: 'Hạn nhận hồ sơ Visa', desc: 'Hạn cuối nộp hồ sơ xin visa', defaultSlug: 'han_nop_visa' },
   { key: 'category', label: 'Tuyến / Danh mục tour', desc: 'Nhóm sản phẩm (VD: Du lịch Châu Âu)', defaultSlug: 'danh_muc_tour' }
 ];
 
 const DEFAULT_MAPPINGS: Record<string, string> = {
+  code: 'ma_lich_trinh',
   start_date: 'ngay_khoi_hanh',
   end_date: 'ngay_ve',
   duration: 'thoi_luong',
+  price_adult: 'gia_nguoi_lon',
   price_child: 'gia_tre_em',
   price_infant: 'gia_em_be',
   single_room_surcharge: 'phu_thu_phong_don',
-  price_visa_tour: 'phi_visa',
+  total_seats: 'tong_so_cho_mo_ban',
+  available_seats: 'so_cho_con_lai',
   airline: 'hang_hang_khong',
   hotel: 'khach_san',
   destination: 'diem_den',
@@ -87,6 +95,8 @@ export default function WooCommerceSettingsSection() {
     is_active: true,
     auto_sync_on_save: false,
     auto_sync_on_booking: false,
+    repeater_slug: 'lich_trinh_khoi_hanh',
+    sync_mode: 'repeater',
     field_mappings: { ...DEFAULT_MAPPINGS }
   });
 
@@ -552,12 +562,45 @@ export default function WooCommerceSettingsSection() {
       {/* SUB-TAB 2: GHÉP TRƯỜNG ACF (FIELD MAPPING) */}
       {activeSubTab === 'acf_mapping' && (
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
+          {/* Hộp cấu hình ACF Repeater Lịch Khởi Hành */}
+          <div className="p-4 bg-linear-to-r from-blue-50/80 to-indigo-50/60 rounded-2xl border border-blue-200/80 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+                  <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    Cấu Hình Bảng Lịch Khởi Hành (ACF Repeater)
+                  </h5>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white shadow-2xs">
+                    Mô hình 1 Tour nhiều ngày khởi hành
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium">
+                  Hệ thống tự động gom các lịch khởi hành có chung tên tour thành một bảng Repeater trên website. 
+                  <strong className="text-blue-900 font-bold ml-1">Mã lịch trình (ví dụ: OBAM140626)</strong> là chìa khóa duy nhất để cập nhật đúng từng ngày và giá bán tương ứng.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <label className="text-xs font-bold text-slate-700 whitespace-nowrap">Tên Slug trường Repeater:</label>
+                <input
+                  type="text"
+                  value={config.repeater_slug || 'lich_trinh_khoi_hanh'}
+                  onChange={(e) => setConfig(prev => ({ ...prev, repeater_slug: e.target.value.trim() }))}
+                  placeholder="lich_trinh_khoi_hanh"
+                  className="h-9 px-3 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-blue-950 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden w-52 sm:w-60"
+                  title="Nhập tên trường Field Name của Repeater trong WordPress ACF (ví dụ: lich_trinh_khoi_hanh hoặc departures)"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
                   <Layers className="w-4 h-4 text-blue-600" />
-                  <span>Bảng Ghép Trường Thông Tin ACF (Advanced Custom Fields)</span>
+                  <span>Bảng Ghép Trường Thông Tin ACF (Field Mapping)</span>
                 </h4>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                   {mappingCount} trường đang đồng bộ

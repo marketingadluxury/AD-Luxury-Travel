@@ -254,7 +254,19 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
       + Ví dụ: Trưởng phòng tạo đơn và có `leader_id` là Ban Giám Đốc (BOD) -> Trưởng phòng không thể tự duyệt đơn của mình, nút duyệt C1 sẽ chỉ hiển thị cho Ban Giám Đốc (BOD) hoặc Admin.
     - **Cấp 1 (Quản lý trực tiếp):** Trưởng nhóm Sale (`sale_leader`), Trưởng nhóm Marketing (`marketing_leader`), Nhân sự (`hr`), Quản trị viên (`admin`), Ban Giám Đốc (`bod`). *Lưu ý: Vai trò Điều hành tour (`operator`) là nhân viên điều hành tour, không có quyền duyệt cấp 1 đơn nghỉ phép*.
     - **Cấp 2 (Duyệt Cấp Cuối & Trừ Phép):** Chỉ có **Nhân sự (`hr`)**, **Ban Giám Đốc (`bod`)** và **Quản trị viên (`admin`)** mới có quyền duyệt cấp cuối và trừ vào quỹ phép năm. *Lưu ý: Kế toán (`accounting`) không có quyền duyệt cấp cuối*.
-  - **Cấu Trúc Tab Quản Lý Người Dùng & Phân Quyền (`UserManagement.tsx`):**
+  - **Đồng Bộ Tour Sang Website WordPress (WooCommerce REST API + ACF Repeater):**
+  - **Mô Hình 1 Tour Nhiều Ngày Khởi Hành (ACF Repeater):**
+    + Trên website WordPress, mỗi chương trình tour là 1 sản phẩm chứa trường ACF Repeater (mặc định: `lich_trinh_khoi_hanh`).
+    + CRM tự động gom nhóm các đợt khởi hành có cùng tên tour (`name`) lại khi đồng bộ.
+    + Khóa định danh duy nhất: Sử dụng **Mã lịch trình** (`code` ➔ `ma_lich_trinh`) để đối chiếu từng dòng trong bảng Repeater. Khi đồng bộ, CRM cập nhật giá và chỗ của đúng đợt đó nếu đã có, hoặc tự động append thêm dòng mới nếu là đợt mới, tuyệt đối không đè mất các ngày khởi hành khác.
+    + Sinh đồng thời 2 chuẩn metadata của ACF Pro (`meta_data` array và indexed meta `repeater_slug_N_subfield`) để tương thích 100% với hàm `get_field()` và `have_rows()` trong PHP của theme WordPress.
+    + Giá đại diện `regular_price` ngoài trang chủ tự động lấy mức giá người lớn thấp nhất của các đợt đang mở bán (giá "Chỉ từ ...").
+    + Cập nhật tồn kho tự động khi có booking đặt tour đúng theo mã lịch trình.
+  - **Giao Diện Ghép Trường ACF Ngoài Frontend (`WooCommerceSettingsSection.tsx`):**
+    + Cho phép cấu hình tên slug của trường Repeater trên WordPress.
+    + Thêm/xóa/sửa trường ACF linh hoạt, có sẵn trường `code` (Mã lịch trình / Mã tour) gợi ý mặc định `ma_lich_trinh`.
+
+- **Cấu Trúc Tab Quản Lý Người Dùng & Phân Quyền (`UserManagement.tsx`):**
     - Trang Quản lý người dùng trong Cài đặt hệ thống được phân tách thành **3 tab** chuyên biệt:
       1. **🏢 Quản lý Nhân sự Công ty (`company`):** Quản lý tất cả tài khoản nội bộ công ty (Admin, BOD, Sale Leader, Sale, Điều hành, Visa, Kế toán, HDV, HR, Marketing).
       2. **🤝 Tài khoản Đại lý & CTV (`agents`):** Chuyên quản lý danh sách tài khoản đối tác ngoài (Đại lý, CTV).

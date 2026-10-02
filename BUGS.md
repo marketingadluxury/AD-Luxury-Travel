@@ -6,6 +6,24 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.80 Nâng Cấp Cơ Chế Đồng Bộ Tour Sang Website WordPress Theo Mô Hình ACF Repeater (1 Tour Nhiều Ngày Khởi Hành)
+- **Mô tả yêu cầu:**
+  - Trên website WordPress, một chương trình Tour (1 Product) có nhiều ngày khởi hành khác nhau, mỗi ngày có một mã lịch trình riêng (SKU), bảng giá riêng, giờ bay riêng và số chỗ riêng (sử dụng trường ACF Repeater "Lịch trình khởi hành").
+  - Khách hàng yêu cầu hệ thống đồng bộ chuẩn xác từng ngày khởi hành dựa trên Mã lịch trình mà không bị ghi đè lẫn nhau, đồng thời hỗ trợ cấu hình ghép trường ACF trực tiếp ngoài Frontend.
+- **Giải pháp triển khai:**
+  1. **Backend Service (`server/services/woocommerceService.ts`):**
+     - Bổ sung cấu hình `repeater_slug` (mặc định: `lich_trinh_khoi_hanh`) và chế độ `sync_mode: 'repeater'`.
+     - Tự động gom nhóm tất cả các tour trên CRM có cùng tên chương trình (`name`) khi đồng bộ.
+     - Hàm `buildRepeaterRowFromTour`: Chuyển đổi dữ liệu từng đợt khởi hành thành 1 dòng trong bảng ACF Repeater, đảm bảo luôn có khóa định danh `ma_lich_trinh`.
+     - Cơ chế Hợp nhất (Merge) thông minh: Quét các dòng hiện có trên sản phẩm WordPress. Nếu đã có dòng mang mã lịch trình tương ứng thì cập nhật giá và chỗ của riêng dòng đó; nếu là đợt khởi hành mới thì tự động thêm dòng mới vào bảng; các ngày khởi hành khác được giữ nguyên vẹn 100%.
+     - Đồng thời sinh cả 2 chuẩn meta của ACF Pro (`meta_data` array và indexed meta `repeater_slug_N_subfield`) để tương thích 100% với hàm `get_field()` và `have_rows()` của WordPress.
+     - Tự động tính giá đại diện `regular_price` là mức giá người lớn thấp nhất của các đợt đang mở bán (giá "Chỉ từ ...") và cập nhật tổng số chỗ khả dụng.
+     - Cập nhật `wp_product_id` cho tất cả các đợt khởi hành cùng tên tour trong database Supabase.
+  2. **Giao Diện Ghép Trường ACF (`src/components/WooCommerceSettingsSection.tsx`):**
+     - Bổ sung trường chuẩn **"Mã lịch trình / Mã tour (SKU)"** (`code` ➔ mặc định `ma_lich_trinh`), `tour_status`, `description` (Lưu ý đặc biệt) vào danh sách ghép trường.
+     - Tích hợp khung cấu hình trực quan **"Cấu hình Bảng Lịch Khởi Hành (ACF Repeater)"** ngay trên đầu tab Ghép trường ACF cho phép tùy chỉnh tên slug trường Repeater trên WordPress.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.79 Khắc Phục Lỗi Mất Trạng Thái Duyệt Đơn Xin Nghỉ Phép Khi Load Lại Trang (F5)
 - **Mô tả lỗi:**
   - Sau khi Trưởng nhóm / BOD / HR bấm duyệt đơn xin nghỉ phép (Duyệt C1 hoặc Duyệt Cuối), giao diện hiển thị trạng thái đã duyệt thành công. Tuy nhiên, khi tải lại trang (F5) hoặc mở lại phiên làm việc thì đơn xin nghỉ phép lại quay trở về trạng thái ban đầu "Cần duyệt" (pending).
