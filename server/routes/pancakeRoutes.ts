@@ -42,6 +42,21 @@ router.post(WEBHOOK_PATHS, async (req, res) => {
   console.log('======================================================\n');
 
   try {
+    const config = await getPancakeConfig();
+    
+    // Kiểm tra khóa bảo vệ webhook nếu đã được cấu hình
+    if (config.webhook_secret && config.webhook_secret.trim()) {
+      const incomingSecret = (req.headers['x-webhook-secret'] as string) || 
+                             (req.headers['x-hub-signature'] as string) ||
+                             (req.query['token'] as string) || 
+                             (req.query['secret'] as string) ||
+                             (req.query['key'] as string);
+
+      if (incomingSecret && incomingSecret !== config.webhook_secret.trim()) {
+        console.warn('[Pancake Webhook] Cảnh báo: Khóa webhook không khớp!', { incomingSecret });
+      }
+    }
+
     let payload = req.body;
     
     // Nếu payload là dạng chuỗi thô (do header Content-Type chưa set application/json ở Botcake/POS)
@@ -81,14 +96,23 @@ router.get('/api/pancake/config', async (req, res) => {
           : '******')
       : '';
 
+    const maskedSecret = config.webhook_secret
+      ? (config.webhook_secret.length > 8
+          ? `${config.webhook_secret.substring(0, 4)}••••••••${config.webhook_secret.substring(config.webhook_secret.length - 4)}`
+          : '••••••••')
+      : '';
+
     res.json({
       success: true,
       data: {
         api_key_masked: maskedKey,
         has_api_key: Boolean(config.api_key),
-        is_active: config.is_active,
-        auto_sync: config.auto_sync,
-        last_synced_at: config.last_synced_at
+        webhook_secret_masked: maskedSecret,
+        has_webhook_secret: Boolean(config.webhook_secret),
+        is_active: config.is_active !== false,
+        auto_sync: config.auto_sync !== false,
+        last_synced_at: config.last_synced_at,
+        last_lead_at: config.last_lead_at
       }
     });
   } catch (error: any) {
@@ -101,15 +125,22 @@ router.get('/api/pancake/config', async (req, res) => {
  */
 router.post('/api/pancake/config', async (req, res) => {
   try {
-    const { api_key, is_active, auto_sync } = req.body;
+    const { api_key, webhook_secret, is_active, auto_sync } = req.body;
     let finalKey = api_key;
-    if (!finalKey || finalKey.includes('...')) {
+    if (finalKey === undefined || finalKey.includes('...')) {
       const current = await getPancakeConfig();
       finalKey = current.api_key;
     }
 
+    let finalSecret = webhook_secret;
+    if (finalSecret === undefined || finalSecret.includes('••••')) {
+      const current = await getPancakeConfig();
+      finalSecret = current.webhook_secret;
+    }
+
     const result = await savePancakeConfig({
       api_key: finalKey,
+      webhook_secret: finalSecret,
       is_active: is_active !== false,
       auto_sync: auto_sync !== false
     });

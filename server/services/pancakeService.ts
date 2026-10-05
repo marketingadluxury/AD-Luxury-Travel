@@ -5,9 +5,11 @@ import { sendInternalSystemNotification } from './botcakeService.js';
 
 export interface PancakeConfig {
   api_key?: string;
+  webhook_secret?: string;
   is_active?: boolean;
   auto_sync?: boolean;
   last_synced_at?: string;
+  last_lead_at?: string;
 }
 
 /**
@@ -22,25 +24,47 @@ export async function getPancakeConfig(): Promise<PancakeConfig> {
       .eq('integration_type', 'pancake')
       .maybeSingle();
 
+    // Lấy thời gian lead Pancake gần nhất
+    let lastLeadTime: string | undefined = undefined;
+    try {
+      const { data: latestLead } = await supabase
+        .from('meta_leads')
+        .select('created_at')
+        .or('source_channel.ilike.%pancake%,utm_source.ilike.%pancake%,source_channel.ilike.%pos%')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestLead?.created_at) {
+        lastLeadTime = latestLead.created_at;
+      }
+    } catch (e) {
+      console.warn('[Pancake Service] Không thể lấy last_lead_at:', e);
+    }
+
     if (error || !data) {
       // Fallback: check environment variable
       return {
         api_key: process.env.PANCAKE_PUBLIC_API_TOKEN || '',
+        webhook_secret: process.env.PANCAKE_WEBHOOK_SECRET || '',
         is_active: Boolean(process.env.PANCAKE_PUBLIC_API_TOKEN),
-        auto_sync: true
+        auto_sync: true,
+        last_lead_at: lastLeadTime
       };
     }
 
     return {
       api_key: data.config?.api_key || '',
+      webhook_secret: data.config?.webhook_secret || '',
       is_active: data.is_active !== false,
       auto_sync: data.config?.auto_sync !== false,
-      last_synced_at: data.updated_at
+      last_synced_at: data.updated_at,
+      last_lead_at: lastLeadTime || data.config?.last_lead_at
     };
   } catch (err: any) {
     console.warn('[Pancake Service] Lỗi khi lấy config:', err.message);
     return {
       api_key: process.env.PANCAKE_PUBLIC_API_TOKEN || '',
+      webhook_secret: process.env.PANCAKE_WEBHOOK_SECRET || '',
       is_active: false
     };
   }
@@ -55,14 +79,18 @@ export async function savePancakeConfig(config: PancakeConfig): Promise<{ succes
   try {
     const { data: existing } = await supabase
       .from('system_integrations')
-      .select('id')
+      .select('id, config')
       .eq('integration_type', 'pancake')
       .maybeSingle();
+
+    const currentConfig = existing?.config || {};
 
     const payload = {
       integration_type: 'pancake',
       config: {
-        api_key: config.api_key ? config.api_key.trim() : '',
+        ...currentConfig,
+        api_key: config.api_key !== undefined ? config.api_key.trim() : (currentConfig.api_key || ''),
+        webhook_secret: config.webhook_secret !== undefined ? config.webhook_secret.trim() : (currentConfig.webhook_secret || ''),
         auto_sync: config.auto_sync !== false
       },
       is_active: config.is_active !== false,

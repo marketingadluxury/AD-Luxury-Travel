@@ -311,12 +311,11 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 ## 8. Tích hợp & Quy Trình Lưu Trữ File, Hình Ảnh (Google Drive & Supabase Storage)
 - **Cơ chế hoạt động & Quản lý Tài khoản Google Drive từ Frontend (`/settings?tab=drive`):**
   - Hệ thống tích hợp lưu trữ file hoàn toàn ở phía **Backend** thông qua các API endpoint (`/api/upload`, `/api/upload-invoice-receipt`, `/api/delete`).
-  - **Quản lý & Đổi tài khoản Google Drive trực tiếp từ Frontend:** Quản trị viên (`admin`) và Ban Giám Đốc (`bod`) có thể xem, thay đổi và cấu hình tài khoản Google Drive (Client ID, Client Secret, Refresh Token, Parent Folder ID) trực tiếp tại trang **Cài đặt hệ thống > Tab "Lưu trữ Google Drive"** (`GoogleDriveSettingsSection.tsx`).
+  - **Quản lý & Đổi tài khoản Google Drive 1-Click trực tiếp từ Frontend:** Quản trị viên (`admin`) và Ban Giám Đốc (`bod`) có thể xem danh sách tài khoản đã kết nối (`connected_accounts`), chọn radio tài khoản muốn dùng làm kho chính (hiển thị badge xanh `● Đang dùng`), bấm nút *"Kết nối tài khoản Google khác"* để mở màn hình Google OAuth 2.0 (chọn tài khoản Google 1-click), bấm *"Lưu và kiểm tra kết nối"* hoặc *"Tải lại"*.
   - **Cơ chế nạp cấu hình 3 tầng:**
-    1. **Tầng 1 (CSDL Supabase `app_settings`):** Khi Admin lưu cấu hình trên giao diện, thông tin được lưu an toàn vào `app_settings` (key `google_drive_config`) và áp dụng ngay lập tức cho toàn bộ hệ thống mà không cần build lại.
+    1. **Tầng 1 (CSDL Supabase `app_settings`):** Khi Admin lưu cấu hình trên giao diện, danh sách tài khoản và `active_email` được lưu an toàn vào `app_settings` (key `google_drive_config`) và áp dụng ngay lập tức cho toàn bộ hệ thống.
     2. **Tầng 2 (Biến môi trường `.env`):** Nếu chưa có cấu hình tùy chỉnh trên CSDL, hệ thống tự động fallback về biến môi trường `.env` (`GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_REFRESH_TOKEN`...).
-    3. **Tầng 3 (Khôi phục mặc định):** Nút *"Khôi phục về .env"* cho phép Admin hoàn tác về cấu hình mặc định bất kỳ lúc nào.
-  - **Kiểm tra kết nối Realtime (Test Connection):** Endpoint `/api/drive/test-connection` cho phép xác thực trực tiếp với Google Drive API, trả về tên chủ sở hữu, email tài khoản, dung lượng đã dùng/tổng dung lượng và quyền ghi của thư mục cha.
+  - **Tích hợp Pancake Webhook (`/settings?tab=ads`):** Cấu hình Pancake Public API Token, Khóa bảo vệ webhook (`webhook_secret`), nút *"Tạo khóa ngẫu nhiên"*, ô sao chép URL Webhook (`/api/pancake/webhook`), checkbox kích hoạt và kiểm tra token.
 
 - **Cấu trúc Thư mục & Định dạng Tên File:**
   1. **Hóa đơn, Phiếu Thu, Phiếu Chi, Minh chứng chuyển khoản & Hợp đồng Tour:**

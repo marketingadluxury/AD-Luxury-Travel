@@ -831,6 +831,63 @@ export default function PaymentProposals() {
                                       )}
                                     </span>
                                   </div>
+
+                                  {/* CỤM NÚT DUYỆT TRỰC TIẾP TRÊN KANBAN CARD */}
+                                  {isLeader && proposal.status === 'pending_leader' && (
+                                    <div className="pt-2 mt-2 border-t border-slate-100 flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        title="Leader Duyệt Đề Nghị"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActionModal({ isOpen: true, proposal, type: 'leader_approve' });
+                                        }}
+                                        className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-2xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                      >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>Duyệt</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        title="Leader Từ Chối"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActionModal({ isOpen: true, proposal, type: 'leader_reject' });
+                                        }}
+                                        className="py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg text-[11px] border border-rose-200 transition-all cursor-pointer flex items-center justify-center"
+                                      >
+                                        <XCircle className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {isAccountingOrAdmin && proposal.status === 'approved_leader' && (
+                                    <div className="pt-2 mt-2 border-t border-slate-100 flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        title="Kế toán Duyệt & Chi Tiền"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActionModal({ isOpen: true, proposal, type: 'accounting_approve' });
+                                        }}
+                                        className="flex-1 py-1.5 px-2 bg-[#0038A8] hover:bg-blue-900 text-white font-bold rounded-lg text-[11px] shadow-2xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                      >
+                                        <DollarSign className="w-3.5 h-3.5" />
+                                        <span>Chi tiền</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        title="Kế toán Từ chối"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActionModal({ isOpen: true, proposal, type: 'accounting_reject' });
+                                        }}
+                                        className="py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg text-[11px] border border-rose-200 transition-all cursor-pointer flex items-center justify-center"
+                                      >
+                                        <XCircle className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             ))
@@ -1646,6 +1703,77 @@ export default function PaymentProposals() {
                     </a>
                   </div>
                 )}
+              </div>
+
+              {/* DETAIL MODAL ACTION FOOTER */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDetailModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 border border-slate-300 transition-colors cursor-pointer"
+                  >
+                    Đóng
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Leader actions */}
+                  {isLeader && selectedProposal.status === 'pending_leader' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDetailModal(false);
+                          setActionModal({ isOpen: true, proposal: selectedProposal, type: 'leader_reject' });
+                        }}
+                        className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        <span>Leader Từ chối</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDetailModal(false);
+                          setActionModal({ isOpen: true, proposal: selectedProposal, type: 'leader_approve' });
+                        }}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Leader Duyệt Đề Nghị</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* Accounting actions */}
+                  {isAccountingOrAdmin && selectedProposal.status === 'approved_leader' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDetailModal(false);
+                          setActionModal({ isOpen: true, proposal: selectedProposal, type: 'accounting_reject' });
+                        }}
+                        className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        <span>Kế toán Từ chối</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDetailModal(false);
+                          setActionModal({ isOpen: true, proposal: selectedProposal, type: 'accounting_approve' });
+                        }}
+                        className="px-4 py-2 bg-[#0038A8] hover:bg-blue-900 text-white font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        <span>Kế toán Chi Tiền</span>
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useCRM } from '../context/CRMContext';
-import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database, History, Globe, HardDrive } from 'lucide-react';
+import { Settings as SettingsIcon, Award, ShieldAlert, Save, Sparkles, Users, Database, History, Globe, Cloud, Zap } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
 import DatabaseKeepAliveSettings from '../components/DatabaseKeepAliveSettings';
 import WooCommerceSettingsSection from '../components/WooCommerceSettingsSection';
 import { GoogleDriveSettingsSection } from '../components/GoogleDriveSettingsSection';
+import { PancakeSettingsSection } from '../components/PancakeSettingsSection';
 import ActivityLogs from './ActivityLogs';
 
 export default function Settings() {
@@ -20,8 +21,8 @@ export default function Settings() {
     }
   }, [currentRole, navigate]);
 
-  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'drive' | 'database' | 'logs' | 'woocommerce'>(
-    tabFromUrl && ['membership', 'users', 'drive', 'database', 'logs', 'woocommerce'].includes(tabFromUrl)
+  const [activeTab, setActiveTab] = useState<'membership' | 'users' | 'ads' | 'drive' | 'database' | 'logs' | 'woocommerce'>(
+    tabFromUrl && ['membership', 'users', 'ads', 'drive', 'database', 'logs', 'woocommerce'].includes(tabFromUrl)
       ? tabFromUrl
       : 'membership'
   );
@@ -103,6 +104,22 @@ export default function Settings() {
         {['admin', 'bod'].includes(currentRole) && (
           <button
             onClick={() => {
+              setActiveTab('ads');
+              setSearchParams({ tab: 'ads' });
+            }}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              activeTab === 'ads'
+                ? 'bg-white text-blue-600 shadow-sm font-extrabold border border-slate-150'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-amber-500" />
+            <span>Tích hợp quảng cáo</span>
+          </button>
+        )}
+        {['admin', 'bod'].includes(currentRole) && (
+          <button
+            onClick={() => {
               setActiveTab('drive');
               setSearchParams({ tab: 'drive' });
             }}
@@ -112,7 +129,7 @@ export default function Settings() {
                 : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
             }`}
           >
-            <HardDrive className="w-4 h-4" />
+            <Cloud className="w-4 h-4 text-blue-500" />
             <span>Lưu trữ Google Drive</span>
           </button>
         )}
@@ -313,6 +330,7 @@ export default function Settings() {
       )}
 
       {activeTab === 'users' && <UserManagement />}
+      {activeTab === 'ads' && <PancakeSettingsSection />}
       {activeTab === 'drive' && <GoogleDriveSettingsSection />}
       {activeTab === 'database' && <DatabaseKeepAliveSettings />}
       {activeTab === 'woocommerce' && <WooCommerceSettingsSection />}

@@ -1,100 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  HardDrive, 
-  CheckCircle2, 
-  AlertCircle, 
-  RefreshCw, 
-  Save, 
-  ExternalLink, 
-  HelpCircle, 
-  Zap, 
-  RotateCcw, 
-  Eye, 
-  EyeOff, 
-  Folder, 
-  Key, 
+  Cloud, 
   ShieldCheck, 
-  Database,
-  Cloud,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  Mail,
-  User,
-  PieChart
+  CheckCircle2, 
+  RefreshCw, 
+  Check, 
+  Plus, 
+  Trash2,
+  AlertCircle,
+  X,
+  Key,
+  ExternalLink,
+  Copy,
+  Info
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
-interface GoogleDriveConfigData {
-  source: 'database' | 'env';
-  is_active: boolean;
-  client_id: string;
-  client_secret_masked: string;
-  has_client_secret: boolean;
-  refresh_token_masked: string;
-  has_refresh_token: boolean;
-  parent_folder_id: string;
-  service_account_email: string;
-  has_service_key: boolean;
-  account_email: string;
-  updated_at: string | null;
-  updated_by: string | null;
-  env_fallback_available: boolean;
-}
-
-interface TestConnectionResult {
-  success: boolean;
-  message?: string;
-  error?: string;
-  account?: {
-    displayName: string;
-    emailAddress: string;
-    photoLink?: string;
-  };
-  storage?: {
-    limit: number | null;
-    usage: number;
-    usageInDrive: number;
-    usageInDriveTrash: number;
-  };
-  folder?: {
-    id: string;
-    name: string;
-    canAddChildren: boolean;
-  } | null;
+interface ConnectedAccount {
+  email: string;
+  display_name?: string;
+  connected_at?: string;
+  is_active?: boolean;
 }
 
 export const GoogleDriveSettingsSection: React.FC = () => {
-  const { session, profile } = useAuth();
+  const { session } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
-  const [config, setConfig] = useState<GoogleDriveConfigData | null>(null);
-  const [authType, setAuthType] = useState<'oauth' | 'service_account'>('oauth');
-
-  // Form states
-  const [clientId, setClientId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
-  const [refreshToken, setRefreshToken] = useState('');
-  const [parentFolderId, setParentFolderId] = useState('');
-  const [serviceEmail, setServiceEmail] = useState('');
-  const [serviceKey, setServiceKey] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
+  const [selectedEmail, setSelectedEmail] = useState<string>('');
 
-  // Show/hide passwords
-  const [showSecret, setShowSecret] = useState(false);
-  const [showRefresh, setShowRefresh] = useState(false);
-  const [showServiceKey, setShowServiceKey] = useState(false);
+  // Modal Connect Account
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'token' | 'oauth'>('token');
 
-  // Test status
-  const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
-  const [showGuide, setShowGuide] = useState(false);
+  // Form Token state
+  const [formEmail, setFormEmail] = useState('tranconghau1509@gmail.com');
+  const [formDisplayName, setFormDisplayName] = useState('Hậu Trần');
+  const [formRefreshToken, setFormRefreshToken] = useState('');
+  const [formSetActive, setFormSetActive] = useState(true);
+  const [isAddingToken, setIsAddingToken] = useState(false);
 
-  // Nạp cấu hình hiện tại
+  // Copy state
+  const [copiedUrl1, setCopiedUrl1] = useState(false);
+  const [copiedUrl2, setCopiedUrl2] = useState(false);
+
+  const currentOrigin = window.location.origin;
+  const callbackUrlDev = `${currentOrigin}/api/drive/oauth/callback`;
+  const callbackUrlProd = `https://tours-agency.vercel.app/api/drive/oauth/callback`;
+
   const fetchConfig = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
@@ -103,33 +62,18 @@ export const GoogleDriveSettingsSection: React.FC = () => {
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/drive/config', { headers });
-      if (!res.ok) {
-        throw new Error('Không thể nạp cấu hình Google Drive từ máy chủ.');
+      const data = await res.json();
+      if (data.success) {
+        setIsActive(data.is_active !== false);
+        const list: ConnectedAccount[] = data.connected_accounts || [];
+        setAccounts(list);
+        
+        const active = data.active_email || list[0]?.email || '';
+        setSelectedEmail(active);
       }
-
-      const data: GoogleDriveConfigData = await res.json();
-      setConfig(data);
-
-      setClientId(data.client_id || '');
-      setParentFolderId(data.parent_folder_id || '');
-      setServiceEmail(data.service_account_email || '');
-      setIsActive(data.is_active !== false);
-
-      if (data.service_account_email && !data.client_id) {
-        setAuthType('service_account');
-      } else {
-        setAuthType('oauth');
-      }
-
-      // Xóa form password để không ghi đè nếu người dùng không sửa
-      setClientSecret('');
-      setRefreshToken('');
-      setServiceKey('');
     } catch (err: any) {
-      console.error('Fetch Drive config error:', err);
-      if (!silent) {
-        toast.error(err.message || 'Lỗi nạp cấu hình Google Drive');
-      }
+      console.error('Lỗi nạp danh sách tài khoản Google Drive:', err);
+      if (!silent) toast.error('Không thể nạp thông tin tài khoản Google Drive.');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -137,65 +81,107 @@ export const GoogleDriveSettingsSection: React.FC = () => {
 
   useEffect(() => {
     fetchConfig();
+
+    // Lắng nghe sự kiện từ cửa sổ Popup OAuth
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_DRIVE_OAUTH_SUCCESS') {
+        const userEmail = event.data.email;
+        toast.success(`🎉 Đã kết nối tài khoản Google ${userEmail} thành công!`, { duration: 4000 });
+        setIsModalOpen(false);
+        fetchConfig(true);
+      } else if (event.data?.type === 'GOOGLE_DRIVE_OAUTH_FAILED') {
+        toast.error(`❌ Kết nối thất bại: ${event.data.error || 'Đã hủy đăng nhập'}`);
+      }
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
   }, []);
 
-  // Format dung lượng bytes sang GB / MB
-  const formatBytes = (bytes: number) => {
-    if (!bytes || bytes === 0) return '0 MB';
-    const gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) return `${gb.toFixed(2)} GB`;
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
-  };
+  // 1. Thêm tài khoản bằng Refresh Token (Cách nhanh & chắc chắn 100%)
+  const handleAddAccountByToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formEmail.trim() || !formRefreshToken.trim()) {
+      toast.error('Vui lòng nhập đầy đủ Email tài khoản và Refresh Token.');
+      return;
+    }
 
-  // 1. Kiểm tra kết nối realtime
-  const handleTestConnection = async () => {
     try {
-      setTesting(true);
-      setTestResult(null);
-
+      setIsAddingToken(true);
       const token = session?.access_token;
       const headers: HeadersInit = {
         'Content-Type': 'application/json'
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const payload = {
-        client_id: authType === 'oauth' ? clientId : undefined,
-        client_secret: authType === 'oauth' && clientSecret ? clientSecret : undefined,
-        refresh_token: authType === 'oauth' && refreshToken ? refreshToken : undefined,
-        parent_folder_id: parentFolderId || undefined,
-        service_account_email: authType === 'service_account' ? serviceEmail : undefined,
-        service_account_private_key: authType === 'service_account' && serviceKey ? serviceKey : undefined
-      };
-
-      const res = await fetch('/api/drive/test-connection', {
+      const res = await fetch('/api/drive/add-account', {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          email: formEmail.trim(),
+          display_name: formDisplayName.trim() || undefined,
+          refresh_token: formRefreshToken.trim(),
+          set_active: formSetActive
+        })
       });
 
       const data = await res.json();
-      setTestResult(data);
-
-      if (data.success) {
-        toast.success(`🎉 Kết nối thành công tới tài khoản ${data.account?.emailAddress || 'Google Drive'}!`);
-      } else {
-        toast.error(`❌ Kiểm tra thất bại: ${data.error || 'Không thể kết nối'}`);
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Xác thực thất bại.');
       }
+
+      toast.success(`🎉 ${data.message || 'Đã kết nối tài khoản thành công!'}`);
+      setIsModalOpen(false);
+      setFormRefreshToken('');
+      await fetchConfig(true);
     } catch (err: any) {
-      console.error('Test connection error:', err);
-      const errObj = { success: false, error: err.message || 'Không thể gửi yêu cầu kiểm tra kết nối.' };
-      setTestResult(errObj);
-      toast.error(errObj.error);
+      console.error('Add account error:', err);
+      toast.error(err.message || 'Lỗi khi kết nối tài khoản Google Drive.');
     } finally {
-      setTesting(false);
+      setIsAddingToken(false);
     }
   };
 
-  // 2. Lưu cấu hình vào Supabase
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 2. Mở popup Google OAuth 1-Click
+  const handleStartOAuth = async () => {
+    try {
+      setConnecting(true);
+      const res = await fetch('/api/drive/oauth/auth-url');
+      const data = await res.json();
+
+      if (!data.success || !data.auth_url) {
+        throw new Error(data.error || 'Không thể tạo liên kết đăng nhập Google.');
+      }
+
+      const width = 560;
+      const height = 660;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+
+      const popup = window.open(
+        data.auth_url,
+        'google_drive_oauth_window',
+        `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+      );
+
+      if (!popup) {
+        window.open(data.auth_url, '_blank');
+      }
+    } catch (err: any) {
+      console.error('Lỗi khởi động kết nối Google:', err);
+      toast.error(err.message || 'Lỗi khi mở đăng nhập Google.');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  // 3. Lưu và kiểm tra kết nối (Chọn tài khoản active)
+  const handleSaveAndTest = async () => {
+    if (!selectedEmail) {
+      toast.error('Vui lòng chọn một tài khoản Google Drive.');
+      return;
+    }
+
     try {
       setSaving(true);
       const token = session?.access_token;
@@ -204,68 +190,59 @@ export const GoogleDriveSettingsSection: React.FC = () => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const payload = {
-        client_id: authType === 'oauth' ? clientId.trim() : '',
-        client_secret: authType === 'oauth' && clientSecret ? clientSecret.trim() : undefined,
-        refresh_token: authType === 'oauth' && refreshToken ? refreshToken.trim() : undefined,
-        parent_folder_id: parentFolderId.trim(),
-        service_account_email: authType === 'service_account' ? serviceEmail.trim() : '',
-        service_account_private_key: authType === 'service_account' && serviceKey ? serviceKey.trim() : undefined,
-        account_email: testResult?.account?.emailAddress || profile?.email || '',
-        is_active: isActive
-      };
-
-      const res = await fetch('/api/drive/config', {
+      const res = await fetch('/api/drive/select-account', {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          email: selectedEmail,
+          is_active: isActive
+        })
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Lỗi khi lưu cấu hình Google Drive.');
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Không thể lưu cấu hình.');
       }
 
-      toast.success('🎉 Đã cập nhật tài khoản Google Drive thành công!');
+      toast.success(`🎉 Đã lưu và kích hoạt tài khoản ${selectedEmail} thành công!`);
       await fetchConfig(true);
     } catch (err: any) {
-      console.error('Save Drive config error:', err);
-      toast.error(err.message || 'Lỗi lưu cấu hình Google Drive');
+      console.error('Lỗi lưu tài khoản Google Drive:', err);
+      toast.error(err.message || 'Lỗi khi lưu cấu hình.');
     } finally {
       setSaving(false);
     }
   };
 
-  // 3. Khôi phục về biến môi trường (.env)
-  const handleResetToEnv = async () => {
-    if (!window.confirm('Bạn có chắc chắn muốn khôi phục về cấu hình Google Drive mặc định từ file môi trường (.env) không?')) {
+  // 4. Xóa tài khoản khỏi danh sách
+  const handleRemoveAccount = async (email: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Bạn có chắc muốn xóa tài khoản ${email} khỏi danh sách liên kết không?`)) {
       return;
     }
 
     try {
-      setResetting(true);
       const token = session?.access_token;
-      const headers: HeadersInit = {};
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('/api/drive/reset-config', {
+      const res = await fetch('/api/drive/remove-account', {
         method: 'POST',
-        headers
+        headers,
+        body: JSON.stringify({ email })
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Không thể khôi phục cấu hình.');
+      if (data.success) {
+        toast.success(`Đã xóa tài khoản ${email}.`);
+        await fetchConfig(true);
+      } else {
+        toast.error(data.error || 'Lỗi khi xóa.');
       }
-
-      toast.success('Đã khôi phục về cấu hình Google Drive mặc định (.env)!');
-      setTestResult(null);
-      await fetchConfig();
     } catch (err: any) {
-      console.error('Reset config error:', err);
-      toast.error(err.message || 'Lỗi khôi phục cấu hình');
-    } finally {
-      setResetting(false);
+      toast.error('Lỗi kết nối máy chủ.');
     }
   };
 
@@ -273,492 +250,375 @@ export const GoogleDriveSettingsSection: React.FC = () => {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs">
         <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
-        <p className="text-xs font-bold text-slate-600">Đang nạp thông tin kết nối Google Drive...</p>
+        <p className="text-xs font-bold text-slate-600">Đang nạp danh sách tài khoản Google Drive...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header card */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 backdrop-blur-xs">
-                <Cloud className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                  <span>Tài Khoản Lưu Trữ Google Drive</span>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-500/30 text-blue-200 border border-blue-400/40">
-                    Kho Đám Mây Chính
-                  </span>
-                </h2>
-                <p className="text-xs text-blue-200/80 font-medium">
-                  Quản lý tài khoản Google Drive dùng để lưu trữ ảnh đoàn tour, chứng từ thanh toán, hóa đơn kế toán và hồ sơ visa.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleTestConnection()}
-              disabled={testing}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer backdrop-blur-xs shadow-xs disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
-              <span>{testing ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}</span>
-            </button>
-            <button
-              onClick={() => setShowGuide(!showGuide)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-500 hover:bg-blue-600 text-white transition-all cursor-pointer shadow-xs"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              <span>Hướng dẫn lấy Token</span>
-              {showGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Status Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card 1: Nguồn cấu hình */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-blue-600" />
-              <span>Nguồn lưu trữ</span>
-            </span>
-            <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md border ${
-              config?.source === 'database' 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                : 'bg-slate-100 text-slate-700 border-slate-200'
-            }`}>
-              {config?.source === 'database' ? 'CSDL Supabase (Tùy chỉnh)' : 'Biến môi trường (.env)'}
-            </span>
-          </div>
-          <div className="text-xs font-black text-slate-800">
-            {config?.updated_at ? (
-              <span className="text-[11px] text-slate-500 font-semibold block">
-                Cập nhật lần cuối: {new Date(config.updated_at).toLocaleString('vi-VN')} {config.updated_by ? `bởi ${config.updated_by}` : ''}
-              </span>
-            ) : (
-              <span className="text-[11px] text-slate-400 font-normal">Cấu hình khởi tạo mặc định</span>
-            )}
-          </div>
-        </div>
-
-        {/* Card 2: Tài khoản Drive */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Tài khoản Google</span>
-            </span>
-            {testResult?.success ? (
-              <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                <span>Hoạt động</span>
-              </span>
-            ) : (
-              <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                Chờ kiểm tra
-              </span>
-            )}
-          </div>
-          <div className="text-xs font-extrabold text-slate-800 truncate">
-            {testResult?.account?.emailAddress || config?.account_email || 'Chưa kiểm tra'}
-          </div>
-        </div>
-
-        {/* Card 3: Thư mục cha & Quyền ghi */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-              <Folder className="w-3.5 h-3.5 text-amber-600" />
-              <span>Thư mục gốc (Root Folder)</span>
-            </span>
-            {testResult?.folder ? (
-              <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md border ${
-                testResult.folder.canAddChildren 
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                  : 'bg-rose-50 text-rose-700 border-rose-200'
-              }`}>
-                {testResult.folder.canAddChildren ? 'Toàn quyền ghi' : 'Chỉ xem'}
-              </span>
-            ) : (
-              <span className="text-[11px] font-bold text-slate-400">Tự động tạo</span>
-            )}
-          </div>
-          <div className="text-xs font-extrabold text-slate-800 truncate">
-            {testResult?.folder?.name || (parentFolderId ? `ID: ${parentFolderId}` : 'Mặc định /AD Luxury Travel/')}
-          </div>
-        </div>
-      </div>
-
-      {/* Test Connection Details Banner (Nếu vừa test) */}
-      {testResult && (
-        <div className={`p-4 rounded-2xl border ${
-          testResult.success 
-            ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900' 
-            : 'bg-rose-50/70 border-rose-200 text-rose-900'
-        }`}>
-          <div className="flex items-start gap-3">
-            {testResult.success ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            )}
-            <div className="space-y-2 flex-1">
-              <div>
-                <h4 className="text-xs font-black uppercase tracking-wider">
-                  {testResult.success ? 'Kiểm tra xác thực Google Drive thành công' : 'Lỗi kết nối Google Drive'}
-                </h4>
-                <p className="text-xs font-medium mt-0.5">
-                  {testResult.success 
-                    ? `Đã xác thực thành công với tài khoản ${testResult.account?.displayName} (${testResult.account?.emailAddress}). Hệ thống sẵn sàng lưu trữ!` 
-                    : testResult.error}
-                </p>
-              </div>
-
-              {testResult.success && testResult.storage && (
-                <div className="pt-2 border-t border-emerald-200/60 flex flex-wrap items-center gap-4 text-xs font-semibold">
-                  <div className="flex items-center gap-1.5 text-slate-700">
-                    <PieChart className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Dung lượng đã dùng:</span>
-                    <strong className="text-slate-900">{formatBytes(testResult.storage.usage)}</strong>
-                    {testResult.storage.limit && (
-                      <span className="text-slate-500">/ {formatBytes(testResult.storage.limit)}</span>
-                    )}
-                  </div>
-                  {testResult.folder && (
-                    <div className="flex items-center gap-1.5 text-slate-700">
-                      <Folder className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Thư mục cha:</span>
-                      <strong className="text-emerald-800">{testResult.folder.name}</strong>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hướng dẫn 4 bước (Collapse) */}
-      {showGuide && (
-        <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-2xl border border-blue-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-blue-200/80">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              <span>Hướng dẫn 4 bước lấy Client ID, Secret &amp; Refresh Token</span>
+      {/* Khung Card chính */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-6">
+        {/* Header box */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-150 gap-3">
+          <div className="space-y-1">
+            <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <Cloud className="w-5 h-5 text-blue-600" />
+              <span>Lưu trữ Google Drive</span>
             </h3>
-            <button
-              onClick={() => setShowGuide(false)}
-              className="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
-            >
-              Đóng
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2">
-              <div className="font-extrabold text-blue-700 flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">1</span>
-                <span>Tạo OAuth 2.0 Credentials trên Google Cloud</span>
-              </div>
-              <p className="text-slate-600 font-medium leading-relaxed">
-                Truy cập <strong>Google Cloud Console</strong> &gt; Bật <strong>Google Drive API</strong> &gt; Tạo <strong>OAuth Client ID</strong> (Loại Web Application).
-              </p>
-              <a
-                href="https://console.cloud.google.com/apis/credentials"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
-              >
-                <span>Mở Google Cloud Console</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2">
-              <div className="font-extrabold text-blue-700 flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">2</span>
-                <span>Cấu hình Redirect URI trong Google Cloud</span>
-              </div>
-              <p className="text-slate-600 font-medium leading-relaxed">
-                Trong mục <em>Authorized redirect URIs</em>, thêm địa chỉ:
-                <br />
-                <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-slate-800 select-all">
-                  https://developers.google.com/oauthplayground
-                </code>
-              </p>
-            </div>
-
-            <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2">
-              <div className="font-extrabold text-blue-700 flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">3</span>
-                <span>Lấy Refresh Token tại OAuth Playground</span>
-              </div>
-              <p className="text-slate-600 font-medium leading-relaxed">
-                Mở <strong>Google OAuth Playground</strong> &gt; Bấm biểu tượng ⚙️ (góc phải) &gt; Tick chọn <em>Use your own OAuth credentials</em> &gt; Điền Client ID &amp; Secret &gt; Chọn scope <code>https://www.googleapis.com/auth/drive</code> &gt; Bấm <em>Authorize APIs</em> &gt; Đăng nhập và bấm <em>Exchange authorization code for tokens</em>.
-              </p>
-              <a
-                href="https://developers.google.com/oauthplayground"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
-              >
-                <span>Mở Google OAuth Playground</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2">
-              <div className="font-extrabold text-blue-700 flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px]">4</span>
-                <span>Lưu và Kiểm Tra Kết Nối</span>
-              </div>
-              <p className="text-slate-600 font-medium leading-relaxed">
-                Dán <strong>Client ID</strong>, <strong>Client Secret</strong>, <strong>Refresh Token</strong> và <strong>ID Thư Mục Gốc</strong> (tùy chọn) vào form bên dưới &gt; Bấm <strong>Kiểm tra kết nối</strong> &gt; Bấm <strong>Lưu cấu hình</strong>.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Form cấu hình */}
-      <form onSubmit={handleSaveConfig} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
-          <div>
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-blue-600" />
-              <span>Cấu Hình Thông Tin Xác Thực Google Drive</span>
-            </h3>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Cập nhật thông tin tài khoản Google Drive để toàn bộ hệ thống lưu trữ trực tiếp.
+            <p className="text-xs text-slate-600 font-medium">
+              Chỉ quản trị viên được kết nối và chọn tài khoản nhận file mới.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
-              />
-              <span>Kích hoạt lưu trữ Google Drive</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Lựa chọn phương thức xác thực */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setAuthType('oauth')}
-            className={`flex-1 py-2.5 px-4 rounded-xl border text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              authType === 'oauth'
-                ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-2xs'
-                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Key className="w-3.5 h-3.5" />
-            <span>OAuth 2.0 (Khuyên Dùng - Tài Khoản Cá Nhân / Google Workspace)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setAuthType('service_account')}
-            className={`flex-1 py-2.5 px-4 rounded-xl border text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              authType === 'service_account'
-                ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-2xs'
-                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Service Account (JSON Key Dịch Vụ)</span>
-          </button>
-        </div>
-
-        {/* Các trường nhập liệu OAuth 2.0 */}
-        {authType === 'oauth' && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
-                Google Client ID *
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  placeholder="Ví dụ: 123456789-abcdefgh.apps.googleusercontent.com"
-                  className="w-full h-10 px-3.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required={isActive}
-                />
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Client ID được tạo trong mục Credentials của Google Cloud Console.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                  <span>Google Client Secret {config?.has_client_secret ? '(Đã lưu)' : '*'}</span>
-                  {config?.has_client_secret && !clientSecret && (
-                    <span className="text-[10px] text-emerald-600 lowercase font-medium">giữ nguyên nếu không đổi</span>
-                  )}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                    placeholder={config?.has_client_secret ? '•••••••••••••••• (Đã cấu hình)' : 'Nhập Client Secret...'}
-                    className="w-full h-10 pl-3.5 pr-10 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
-                    required={isActive && !config?.has_client_secret}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                  <span>Refresh Token {config?.has_refresh_token ? '(Đã lưu)' : '*'}</span>
-                  {config?.has_refresh_token && !refreshToken && (
-                    <span className="text-[10px] text-emerald-600 lowercase font-medium">giữ nguyên nếu không đổi</span>
-                  )}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showRefresh ? 'text' : 'password'}
-                    value={refreshToken}
-                    onChange={(e) => setRefreshToken(e.target.value)}
-                    placeholder={config?.has_refresh_token ? '•••••••••••••••• (Đã cấu hình)' : 'Nhập Refresh Token 1//...'}
-                    className="w-full h-10 pl-3.5 pr-10 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
-                    required={isActive && !config?.has_refresh_token}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRefresh(!showRefresh)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showRefresh ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Các trường nhập liệu Service Account */}
-        {authType === 'service_account' && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
-                Service Account Email *
-              </label>
-              <input
-                type="email"
-                value={serviceEmail}
-                onChange={(e) => setServiceEmail(e.target.value)}
-                placeholder="Ví dụ: drive-storage@ad-luxury-tour.iam.gserviceaccount.com"
-                className="w-full h-10 px-3.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                required={isActive && authType === 'service_account'}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                <span>Private Key (PEM) {config?.has_service_key ? '(Đã lưu)' : '*'}</span>
-                {config?.has_service_key && !serviceKey && (
-                  <span className="text-[10px] text-emerald-600 lowercase font-medium">giữ nguyên nếu không đổi</span>
-                )}
-              </label>
-              <textarea
-                value={serviceKey}
-                onChange={(e) => setServiceKey(e.target.value)}
-                placeholder={config?.has_service_key ? '-----BEGIN PRIVATE KEY-----\n••••••••••••••••\n-----END PRIVATE KEY-----' : '-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'}
-                rows={3}
-                className="w-full p-3 rounded-xl border border-slate-300 text-xs font-mono text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                required={isActive && authType === 'service_account' && !config?.has_service_key}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Thư mục cha (Parent Folder ID) */}
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-          <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Folder className="w-3.5 h-3.5 text-amber-600" />
-              <span>ID Thư Mục Gốc Lưu Trữ (Google Drive Parent Folder ID)</span>
-            </span>
-            <span className="text-[10px] text-slate-400 font-medium lowercase">tùy chọn (để trống sẽ tạo thư mục mặc định)</span>
-          </label>
-          <input
-            type="text"
-            value={parentFolderId}
-            onChange={(e) => setParentFolderId(e.target.value)}
-            placeholder="Ví dụ: 1a2B3c4D5e6F7g8H9i0JkLmNoPqRsTuVw"
-            className="w-full h-10 px-3.5 bg-white rounded-xl border border-slate-300 text-xs font-bold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
-          />
-          <p className="text-[11px] text-slate-500 font-medium">
-            💡 Mở thư mục trên Google Drive bằng trình duyệt, copy chuỗi ký tự ở cuối đường link sau <code>/folders/<strong>[ID-THƯ-MỤC]</strong></code>.
-          </p>
-        </div>
-
-        {/* Nút hành động */}
-        <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            {config?.source === 'database' && (
-              <button
-                type="button"
-                onClick={handleResetToEnv}
-                disabled={resetting}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin' : ''}`} />
-                <span>Khôi phục về cấu hình .env</span>
-              </button>
+          <div className="shrink-0">
+            {isActive ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span>Đang hoạt động</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                <span>Tạm dừng lưu trữ</span>
+              </span>
             )}
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleTestConnection}
-              disabled={testing}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
-              <span>{testing ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}</span>
-            </button>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black text-white bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
-            >
-              <Save className={`w-4 h-4 ${saving ? 'animate-spin' : ''}`} />
-              <span>{saving ? 'Đang lưu...' : 'Lưu và Áp Dụng Cấu Hình'}</span>
-            </button>
+        {/* Hộp bảo mật: Kết nối an toàn qua Google */}
+        <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 text-blue-900 flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-black uppercase tracking-wide text-blue-950">
+              Kết nối an toàn qua Google
+            </h4>
+            <p className="text-xs text-blue-800/90 font-medium leading-relaxed">
+              Bạn đăng nhập trên trang Google; CRM chỉ giữ quyền truy cập ở backend, không hiển thị mã bảo mật. Khi đổi tài khoản, file cũ vẫn được đọc qua kết nối trước đó.
+            </p>
           </div>
         </div>
-      </form>
+
+        {/* Danh sách Tài khoản đã kết nối (Radio Select) */}
+        <div className="space-y-3">
+          <label className="block text-xs font-bold text-slate-800">
+            Tài khoản đã kết nối
+          </label>
+
+          <div className="space-y-2.5">
+            {accounts.map((acc) => {
+              const isSelected = selectedEmail === acc.email;
+
+              return (
+                <div
+                  key={acc.email}
+                  onClick={() => setSelectedEmail(acc.email)}
+                  className={`p-3.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer select-none ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500/20 shadow-2xs'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="selectedDriveAccount"
+                      checked={isSelected}
+                      onChange={() => setSelectedEmail(acc.email)}
+                      className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                        <span>{acc.email}</span>
+                        {acc.display_name && (
+                          <span className="text-[11px] font-medium text-slate-500">
+                            ({acc.display_name})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {acc.is_active && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>Đang dùng</span>
+                      </span>
+                    )}
+
+                    {accounts.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleRemoveAccount(acc.email, e)}
+                        title="Xóa kết nối tài khoản này"
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Checkbox Kích hoạt Google Drive cho file tải lên mới */}
+        <div className="flex items-center gap-2.5 pt-1">
+          <input
+            type="checkbox"
+            id="driveActiveCheckbox"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+          />
+          <label htmlFor="driveActiveCheckbox" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
+            Kích hoạt Google Drive cho file tải lên mới
+          </label>
+        </div>
+
+        {/* Nhóm 3 nút thao tác chuẩn */}
+        <div className="pt-2 flex flex-wrap items-center gap-3">
+          {/* Nút 1: Mở Modal kết nối tài khoản Google khác */}
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-blue-700 bg-white hover:bg-blue-50 border border-blue-600 transition-all cursor-pointer shadow-2xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Kết nối tài khoản Google khác</span>
+          </button>
+
+          {/* Nút 2: Lưu và kiểm tra kết nối */}
+          <button
+            type="button"
+            onClick={handleSaveAndTest}
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
+          >
+            <Check className={`w-4 h-4 ${saving ? 'animate-spin' : ''}`} />
+            <span>{saving ? 'Đang lưu & kiểm tra...' : 'Lưu và kiểm tra kết nối'}</span>
+          </button>
+
+          {/* Nút 3: Tải lại */}
+          <button
+            type="button"
+            onClick={() => fetchConfig()}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 transition-all cursor-pointer shadow-2xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Tải lại</span>
+          </button>
+        </div>
+
+        {/* Dòng ghi chú chân trang */}
+        <p className="text-[11px] text-slate-500 font-medium leading-relaxed pt-2 border-t border-slate-150">
+          Tắt lưu trữ sẽ dừng upload Drive mới; không xóa kết nối hoặc file. Nếu tài khoản cũ bị thu hồi quyền, các file trên tài khoản đó sẽ không thể mở cho đến khi quyền được khôi phục.
+        </p>
+      </div>
+
+      {/* ================= MODAL KẾT NỐI TÀI KHOẢN GOOGLE ================= */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 font-bold">
+                  <Cloud className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Kết nối tài khoản Google Drive</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Thêm tài khoản lưu trữ hồ sơ và hóa đơn</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Tab Buttons */}
+            <div className="flex bg-slate-100 p-1 rounded-xl gap-1 my-4">
+              <button
+                type="button"
+                onClick={() => setModalTab('token')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  modalTab === 'token'
+                    ? 'bg-white text-blue-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5 text-blue-600" />
+                <span>Nhập Refresh Token (Khuyên dùng)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('oauth')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  modalTab === 'oauth'
+                    ? 'bg-white text-blue-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Đăng nhập 1-Click</span>
+              </button>
+            </div>
+
+            {/* TAB 1: NHẬP REFRESH TOKEN */}
+            {modalTab === 'token' && (
+              <form onSubmit={handleAddAccountByToken} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Email tài khoản Google <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    placeholder="ví dụ: tranconghau1509@gmail.com"
+                    className="w-full h-10 px-3.5 rounded-xl border border-slate-300 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Tên hiển thị / Ghi chú (Tùy chọn)
+                  </label>
+                  <input
+                    type="text"
+                    value={formDisplayName}
+                    onChange={(e) => setFormDisplayName(e.target.value)}
+                    placeholder="ví dụ: Hậu Trần (Marketing)"
+                    className="w-full h-10 px-3.5 rounded-xl border border-slate-300 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Google OAuth Refresh Token <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={formRefreshToken}
+                    onChange={(e) => setFormRefreshToken(e.target.value)}
+                    placeholder="1//04... (Dán Refresh Token tại đây)"
+                    className="w-full h-10 px-3.5 rounded-xl border border-slate-300 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="formSetActiveCheckbox"
+                    checked={formSetActive}
+                    onChange={(e) => setFormSetActive(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <label htmlFor="formSetActiveCheckbox" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
+                    Kích hoạt làm tài khoản lưu trữ chính ngay sau khi thêm
+                  </label>
+                </div>
+
+                {/* Hướng dẫn lấy Token nhanh */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600 space-y-1">
+                  <div className="font-bold text-slate-800 flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Cách lấy Refresh Token trong 1 phút qua OAuth Playground:</span>
+                  </div>
+                  <ol className="list-decimal list-inside space-y-0.5 text-slate-600 pl-1">
+                    <li>Mở <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">developers.google.com/oauthplayground</a></li>
+                    <li>Ở góc phải bấm bánh răng ⚙️, tick <strong>Use your own OAuth credentials</strong> (nhập Client ID & Secret nếu có).</li>
+                    <li>Tìm mục <strong>Drive API v3</strong>, chọn <code>https://www.googleapis.com/auth/drive</code> ➔ Bấm <strong>Authorize APIs</strong> và đăng nhập tài khoản Google.</li>
+                    <li>Bấm <strong>Exchange authorization code for tokens</strong> và copy chuỗi <strong>Refresh token</strong> dán vào ô trên.</li>
+                  </ol>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAddingToken}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm disabled:opacity-50"
+                  >
+                    <Check className={`w-3.5 h-3.5 ${isAddingToken ? 'animate-spin' : ''}`} />
+                    <span>{isAddingToken ? 'Đang xác thực...' : 'Thêm vào danh sách tài khoản'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 2: ĐĂNG NHẬP 1-CLICK */}
+            {modalTab === 'oauth' && (
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-amber-950">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Để tránh lỗi 400 redirect_uri_mismatch:</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Hãy truy cập <strong>Google Cloud Console ➔ Credentials</strong> của Client ID và thêm 2 địa chỉ Callback sau vào mục <strong>Authorized redirect URIs</strong>:
+                  </p>
+
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-1.5 bg-white p-2 rounded-lg border border-amber-200 text-[11px] font-mono select-all">
+                      <span className="flex-1 truncate">{callbackUrlProd}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(callbackUrlProd);
+                          setCopiedUrl1(true);
+                          setTimeout(() => setCopiedUrl1(false), 2000);
+                        }}
+                        className="p-1 hover:bg-amber-50 rounded text-amber-800 shrink-0 font-sans text-[10px] font-bold"
+                      >
+                        {copiedUrl1 ? '✓ Đã chép' : 'Chép'}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-white p-2 rounded-lg border border-amber-200 text-[11px] font-mono select-all">
+                      <span className="flex-1 truncate">{callbackUrlDev}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(callbackUrlDev);
+                          setCopiedUrl2(true);
+                          setTimeout(() => setCopiedUrl2(false), 2000);
+                        }}
+                        className="p-1 hover:bg-amber-50 rounded text-amber-800 shrink-0 font-sans text-[10px] font-bold"
+                      >
+                        {copiedUrl2 ? '✓ Đã chép' : 'Chép'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={handleStartOAuth}
+                    disabled={connecting}
+                    className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <ExternalLink className={`w-4 h-4 ${connecting ? 'animate-spin' : ''}`} />
+                    <span>{connecting ? 'Đang mở đăng nhập Google...' : 'Mở trang đăng nhập & chọn tài khoản Google'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

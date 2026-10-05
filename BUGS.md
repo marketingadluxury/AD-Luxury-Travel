@@ -6,6 +6,35 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.92 Tích Hợp Nút Phê Duyệt Trực Tiếp Trên Kanban & Modal Đề Nghị Thanh Toán
+- **Mô tả yêu cầu:**
+  - Ở chế độ xem Kanban (`viewMode === 'kanban'`) và trong Modal xem chi tiết đề nghị thanh toán (`showDetailModal`), người dùng có quyền Leader và Kế toán không thấy các nút hành động để phê duyệt hoặc từ chối đề nghị.
+- **Giải pháp triển khai:**
+  1. **Trên từng thẻ Card Kanban (`PaymentProposals.tsx`):**
+     - Cột *Chờ Leader duyệt*: Bổ sung nút `[✓ Duyệt]` (xanh lá) và nút `[✗]` (đỏ) cho các Leader (`sale_leader`, `marketing_leader`, `visa_leader`, `operator`, `hr`, `admin`, `bod`).
+     - Cột *Chờ Kế toán chi*: Bổ sung nút `[💵 Chi tiền]` (xanh dương đậm) và nút `[✗]` (đỏ) cho Kế toán (`accounting`), Admin và BOD.
+  2. **Trong Modal Chi tiết Đề nghị thanh toán:**
+     - Bổ sung thanh Action Footer ở đáy modal với đầy đủ nút `Leader Duyệt`, `Leader Từ chối`, `Kế toán Chi Tiền`, `Kế toán Từ chối` và `Đóng`.
+  3. **Kiểm thử tự động:** Vượt qua 100% các bài test (`npm test`, `npm run test:simulation`, `lint_applet`, `compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.91 Nâng Cấp Tích Hợp Pancake Webhook & Quản Lý Tài Khoản Google Drive 1-Click
+- **Mô tả yêu cầu:**
+  - Triển khai giao diện cấu hình Pancake Webhook (`PancakeSettingsSection.tsx`) trên tab "⚡ Tích hợp quảng cáo" theo đúng Hình 1: Token API, Khóa bảo vệ webhook, URL Webhook, nút Tạo khóa ngẫu nhiên, Kiểm tra token.
+  - Triển khai giao diện quản lý và chuyển đổi tài khoản Google Drive 1-Click (`GoogleDriveSettingsSection.tsx`) trên tab "☁️ Lưu trữ Google Drive" theo đúng Hình 2 & Hình 3: Danh sách Radio các tài khoản đã kết nối (`konghaucrypto@gmail.com` [Đang dùng], `tranconghau1509@gmail.com`), nút "Kết nối tài khoản Google khác", nút "Lưu và kiểm tra kết nối", "Tải lại".
+  - Xử lý triệt để lỗi Google OAuth `Lỗi 400: redirect_uri_mismatch` khi kết nối tài khoản khác: Tích hợp Modal kết nối thông minh hỗ trợ cả 2 phương thức (1-Click Google OAuth kèm copy URI callback, và Nhập nhanh Email & Refresh Token qua OAuth Playground).
+- **Giải pháp triển khai:**
+  1. **Tích hợp Pancake Webhook (`PancakeSettingsSection.tsx`, `pancakeRoutes.ts`, `pancakeService.ts`):**
+     - Bổ sung `webhook_secret`, `last_lead_at` vào `PancakeConfig` và kiểm tra secret khi webhook gửi tới.
+     - Tích hợp khung URL Webhook kèm nút Copy và nút sinh khóa ngẫu nhiên.
+  2. **Quản lý Tài khoản Google Drive & Xử lý Redirect URI Mismatch (`GoogleDriveSettingsSection.tsx`, `googleDriveConfigRoutes.ts`, `googleDriveService.ts`):**
+     - Lưu mảng `connected_accounts` và `active_email` trong database Supabase `app_settings`.
+     - Tích hợp endpoint `/api/drive/add-account` nhận Email & Refresh Token, kiểm tra kết nối với Google API và thêm ngay vào danh sách tài khoản liên kết.
+     - Tích hợp endpoint OAuth URL (`/api/drive/oauth/auth-url`) và Callback (`/api/drive/oauth/callback`) hỗ trợ đăng nhập 1-click.
+     - Xây dựng giao diện Radio Selector hiển thị huy hiệu "Đang dùng" cho tài khoản active.
+  3. **Kiểm thử tự động:** Vượt qua 100% các bài test (`npm test`, `npm run test:simulation`, `lint_applet`, `compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.90 Khắc Phục Phân Quyền Truy Cập Đề Nghị Thanh Toán Cho Phòng Marketing
 - **Mô tả sự cố:**
   - Nhân sự thuộc phòng Marketing (`marketing` và `marketing_leader`) không nhìn thấy và không truy cập được vào trang Đề nghị thanh toán (`/payment-proposals`) trong nhóm menu Hành chính nhân sự trên thanh Sidebar.

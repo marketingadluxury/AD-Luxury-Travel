@@ -42,18 +42,41 @@ export async function getActiveDriveConfig(): Promise<GoogleDriveConfig> {
 
     if (!error && settingData && settingData.value && settingData.value.is_active !== false) {
       const dbVal = settingData.value;
+      
+      // 1. Kiểm tra nếu có danh sách connected_accounts
+      if (Array.isArray(dbVal.connected_accounts) && dbVal.connected_accounts.length > 0) {
+        const activeEmail = dbVal.active_email;
+        const targetAcc = (activeEmail ? dbVal.connected_accounts.find((a: any) => a.email === activeEmail) : null) 
+                          || dbVal.connected_accounts[0];
+
+        if (targetAcc && targetAcc.refresh_token) {
+          cachedDriveConfig = {
+            client_id: targetAcc.client_id || dbVal.client_id || process.env.GOOGLE_DRIVE_CLIENT_ID,
+            client_secret: targetAcc.client_secret || dbVal.client_secret || process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+            refresh_token: targetAcc.refresh_token,
+            parent_folder_id: dbVal.parent_folder_id || process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID,
+            account_email: targetAcc.email,
+            is_active: dbVal.is_active !== false,
+            source: 'database'
+          };
+          lastConfigFetchTime = now;
+          return cachedDriveConfig;
+        }
+      }
+
+      // 2. Cấu hình đơn lẻ cũ
       const hasDbOAuth = !!(dbVal.client_id && dbVal.client_secret && dbVal.refresh_token);
       const hasDbService = !!(dbVal.service_account_email && dbVal.service_account_private_key);
 
       if (hasDbOAuth || hasDbService) {
         cachedDriveConfig = {
-          client_id: dbVal.client_id,
-          client_secret: dbVal.client_secret,
+          client_id: dbVal.client_id || process.env.GOOGLE_DRIVE_CLIENT_ID,
+          client_secret: dbVal.client_secret || process.env.GOOGLE_DRIVE_CLIENT_SECRET,
           refresh_token: dbVal.refresh_token,
           parent_folder_id: dbVal.parent_folder_id,
           service_account_email: dbVal.service_account_email,
           service_account_private_key: dbVal.service_account_private_key,
-          account_email: dbVal.account_email,
+          account_email: dbVal.account_email || dbVal.active_email,
           is_active: true,
           source: 'database'
         };
@@ -77,7 +100,7 @@ export async function getActiveDriveConfig(): Promise<GoogleDriveConfig> {
                       process.env.DRIVE_ROOT_ID,
     service_account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     service_account_private_key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
-    account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'Mặc định (.env)',
+    account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'konghaucrypto@gmail.com',
     is_active: true,
     source: 'env'
   };
