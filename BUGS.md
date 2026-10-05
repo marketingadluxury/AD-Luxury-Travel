@@ -6,6 +6,37 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.90 Khắc Phục Phân Quyền Truy Cập Đề Nghị Thanh Toán Cho Phòng Marketing
+- **Mô tả sự cố:**
+  - Nhân sự thuộc phòng Marketing (`marketing` và `marketing_leader`) không nhìn thấy và không truy cập được vào trang Đề nghị thanh toán (`/payment-proposals`) trong nhóm menu Hành chính nhân sự trên thanh Sidebar.
+- **Nguyên nhân:**
+  - Trong `Layout.tsx`, mảng `roleAccess` của mục "Đề nghị thanh toán" (cả trong `navigationTree` và `allNavItems`) bị sót 2 vai trò `marketing` và `marketing_leader`.
+- **Giải pháp triển khai:**
+  - Cập nhật `roleAccess` của mục Đề nghị thanh toán trong `Layout.tsx` để hỗ trợ đầy đủ 12 vai trò nội bộ: `['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr']`.
+  - Đảm bảo Trưởng phòng Marketing (`marketing_leader`) có đầy đủ quyền ký duyệt đề xuất cấp Leader (`LEADER_ROLES`) và nhân viên Marketing (`marketing`) có quyền tạo đề xuất kinh phí chạy quảng cáo/ấn phẩm/sự kiện.
+  - Vượt qua 100% các bài test (`npm test`, `npm run test:simulation`, `lint_applet`, `compile_applet`).
+- **Trạng thái:** Đã khắc phục và kiểm thử thành công 100%.
+
+### 1.89 Tích Hợp Giao Diện Quản Lý & Đổi Tài Khoản Google Drive Trực Tiếp Từ Frontend
+- **Mô tả yêu cầu:**
+  - Cho phép Quản trị viên (Admin) và Ban Giám Đốc (BOD) trực tiếp xem, thay đổi và quản lý tài khoản Google Drive lưu trữ (Client ID, Client Secret, Refresh Token, Parent Folder ID) ngay trên giao diện Cài đặt hệ thống (`Settings.tsx` -> tab "Lưu trữ Google Drive").
+  - Cho phép kiểm tra kết nối realtime (Test Connection) để xem email tài khoản, dung lượng đã dùng và quyền ghi thư mục gốc.
+- **Giải pháp triển khai:**
+  1. **Backend Endpoints (`googleDriveConfigRoutes.ts`):**
+     - `GET /api/drive/config`: Lấy thông tin cấu hình hiện tại (che mờ secret & refresh_token).
+     - `POST /api/drive/test-connection`: Kiểm tra xác thực tức thì với Google Drive API (`drive.about.get`).
+     - `POST /api/drive/config`: Lưu cấu hình vào bảng `app_settings` (key `google_drive_config`) trên Supabase.
+     - `POST /api/drive/reset-config`: Khôi phục về biến môi trường `.env`.
+  2. **Cơ chế Nạp Cấu Hình Động (`googleDriveService.ts`):**
+     - Bổ sung hàm `getActiveDriveConfig()` ưu tiên đọc cấu hình từ Supabase `app_settings` trước khi fallback về `process.env.*`.
+     - Tích hợp hàm `clearDriveConfigCache()` để xóa cache runtime khi người dùng cập nhật cấu hình mới.
+  3. **Giao Diện Frontend (`GoogleDriveSettingsSection.tsx`):**
+     - Tích hợp tab **"Lưu trữ Google Drive"** trong trang Cài đặt hệ thống (`Settings.tsx`).
+     - Hiển thị thẻ trạng thái kết nối, email tài khoản, dung lượng bộ nhớ Google Drive, form nhập liệu OAuth 2.0 / Service Account.
+     - Tích hợp các nút hành động *Kiểm tra kết nối*, *Lưu và Áp Dụng Cấu Hình*, *Khôi phục về .env*, cùng khung hướng dẫn 4 bước tạo Client ID & Refresh Token từ Google Cloud Console và OAuth Playground.
+  4. **Kiểm thử tự động:** Vượt qua 100% các bài test (`npm test`, `npm run test:simulation`, `lint_applet`, `compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.88 Bổ Sung Trường Ngày Làm Chính Thức & Tính Quỹ Phép Năm 2026 Theo Ngày Làm Chính Thức
 - **Mô tả yêu cầu:**
   - Tích hợp trường Ngày vào làm chính thức (`official_start_date`) cho nhân sự để phân biệt với Ngày vào làm thử việc (`join_date`).

@@ -2,12 +2,97 @@ import { JWT, OAuth2Client } from 'google-auth-library';
 import { uploadFileToSupabase, getAdminSupabaseClient } from './supabaseService.js';
 import express from 'express';
 
+export interface GoogleDriveConfig {
+  client_id?: string;
+  client_secret?: string;
+  refresh_token?: string;
+  parent_folder_id?: string;
+  service_account_email?: string;
+  service_account_private_key?: string;
+  account_email?: string;
+  is_active?: boolean;
+  source?: 'database' | 'env';
+}
+
+let cachedDriveConfig: GoogleDriveConfig | null = null;
+let lastConfigFetchTime = 0;
+const CACHE_TTL_MS = 30000; // 30s cache
+
+export function clearDriveConfigCache() {
+  cachedDriveConfig = null;
+  lastConfigFetchTime = 0;
+}
+
+/**
+ * Lấy cấu hình Google Drive kích hoạt (ưu tiên từ Supabase app_settings, sau đó fallback về process.env)
+ */
+export async function getActiveDriveConfig(): Promise<GoogleDriveConfig> {
+  const now = Date.now();
+  if (cachedDriveConfig && now - lastConfigFetchTime < CACHE_TTL_MS) {
+    return cachedDriveConfig;
+  }
+
+  try {
+    const supabase = getAdminSupabaseClient();
+    const { data: settingData, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'google_drive_config')
+      .maybeSingle();
+
+    if (!error && settingData && settingData.value && settingData.value.is_active !== false) {
+      const dbVal = settingData.value;
+      const hasDbOAuth = !!(dbVal.client_id && dbVal.client_secret && dbVal.refresh_token);
+      const hasDbService = !!(dbVal.service_account_email && dbVal.service_account_private_key);
+
+      if (hasDbOAuth || hasDbService) {
+        cachedDriveConfig = {
+          client_id: dbVal.client_id,
+          client_secret: dbVal.client_secret,
+          refresh_token: dbVal.refresh_token,
+          parent_folder_id: dbVal.parent_folder_id,
+          service_account_email: dbVal.service_account_email,
+          service_account_private_key: dbVal.service_account_private_key,
+          account_email: dbVal.account_email,
+          is_active: true,
+          source: 'database'
+        };
+        lastConfigFetchTime = now;
+        return cachedDriveConfig;
+      }
+    }
+  } catch (err) {
+    console.warn('[Drive Service] Lỗi khi nạp cấu hình từ database app_settings, sử dụng .env:', err);
+  }
+
+  // Fallback về process.env
+  cachedDriveConfig = {
+    client_id: process.env.GOOGLE_DRIVE_CLIENT_ID,
+    client_secret: process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+    refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+    parent_folder_id: process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || 
+                      process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || 
+                      process.env.GOOGLE_DRIVE_FOLDER_ID ||
+                      process.env.DRIVE_PARENT_FOLDER_ID ||
+                      process.env.DRIVE_ROOT_ID,
+    service_account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    service_account_private_key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
+    account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'Mặc định (.env)',
+    is_active: true,
+    source: 'env'
+  };
+  lastConfigFetchTime = now;
+  return cachedDriveConfig;
+}
+
 export async function getGoogleDriveAccessToken(): Promise<string> {
-  const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  let serviceKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  const config = await getActiveDriveConfig();
+
+  const serviceEmail = config.service_account_email;
+  let serviceKey = config.service_account_private_key;
+  const clientId = config.client_id;
+  const clientSecret = config.client_secret;
+  const refreshToken = config.refresh_token;
 
   const hasOAuth = !!(clientId && clientSecret && refreshToken);
   const hasServiceAccount = !!(serviceEmail && serviceKey && serviceKey.includes('PRIVATE KEY'));
@@ -15,7 +100,7 @@ export async function getGoogleDriveAccessToken(): Promise<string> {
   // 1. OAuth 2.0
   if (hasOAuth) {
     try {
-      console.log('[Drive] Authorizing using OAuth 2.0 Refresh Token...');
+      console.log(`[Drive] Authorizing using OAuth 2.0 Refresh Token (Source: ${config.source})...`);
       const oauth2Client = new OAuth2Client(clientId, clientSecret);
       oauth2Client.setCredentials({ refresh_token: refreshToken });
       const tokenResponse = await oauth2Client.getAccessToken();
@@ -29,7 +114,7 @@ export async function getGoogleDriveAccessToken(): Promise<string> {
       if (hasServiceAccount) {
         console.log('[Drive] OAuth 2.0 failed, falling back to Service Account...');
       } else {
-        throw new Error(`Xác thực OAuth 2.0 thất bại (${errMsg}). Vui lòng kiểm tra lại Refresh Token trong OAuth Playground.`);
+        throw new Error(`Xác thực OAuth 2.0 thất bại (${errMsg}). Vui lòng kiểm tra lại Refresh Token trong phần Cài đặt Google Drive.`);
       }
     }
   }
@@ -37,7 +122,7 @@ export async function getGoogleDriveAccessToken(): Promise<string> {
   // 2. Service Account
   if (hasServiceAccount) {
     try {
-      console.log('[Drive] Authorizing using Service Account...');
+      console.log(`[Drive] Authorizing using Service Account (Source: ${config.source})...`);
       if (serviceKey && serviceKey.includes('\\n')) {
         serviceKey = serviceKey.replace(/\\n/g, '\n');
       }
@@ -59,7 +144,7 @@ export async function getGoogleDriveAccessToken(): Promise<string> {
     }
   }
 
-  throw new Error('Chưa cấu hình Google Drive credentials (vui lòng cấu hình GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET và GOOGLE_DRIVE_REFRESH_TOKEN).');
+  throw new Error('Chưa cấu hình Google Drive credentials (vui lòng cấu hình tài khoản Google Drive trong phần Cài đặt hệ thống hoặc file .env).');
 }
 
 export async function searchFolder(folderName: string, parentId?: string, token?: string): Promise<string | null> {
@@ -176,6 +261,9 @@ export async function getFolderWebViewLink(fileId: string, token?: string): Prom
 }
 
 export function getDriveRootParentId(): string | undefined {
+  if (cachedDriveConfig && cachedDriveConfig.parent_folder_id !== undefined) {
+    return cachedDriveConfig.parent_folder_id || undefined;
+  }
   return process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || 
          process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || 
          process.env.GOOGLE_DRIVE_FOLDER_ID ||

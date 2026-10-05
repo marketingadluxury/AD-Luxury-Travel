@@ -15,6 +15,7 @@ import poscakeRoutes from './server/routes/poscakeRoutes.js';
 import keepAliveRoutes from './server/routes/keepAliveRoutes.js';
 import taxRoutes from './server/routes/taxRoutes.js';
 import woocommerceRoutes from './server/routes/woocommerceRoutes.js';
+import googleDriveConfigRoutes from './server/routes/googleDriveConfigRoutes.js';
 import { errorHandler } from './server/middleware/errorHandler.js';
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/', poscakeRoutes);
 app.use('/', keepAliveRoutes);
 app.use('/', taxRoutes);
 app.use('/', woocommerceRoutes);
+app.use('/', googleDriveConfigRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

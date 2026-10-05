@@ -114,7 +114,7 @@ export const navigationTree: NavGroup[] = [
     items: [
       { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
       { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
-      { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod', 'hr'] },
+      { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
       { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
     ]
   },
@@ -189,7 +189,7 @@ const allNavItems: NavItem[] = [
   { name: 'Xử lý Visa', href: '/visa', icon: Globe, roleAccess: ['visa', 'visa_leader', 'admin', 'bod'] },
   { name: 'Dashboard Cá Nhân', href: '/my-dashboard', icon: User, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
-  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod', 'hr'] },
+  { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
   { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'bod'] },
   { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'marketing_leader', 'marketing'] },
