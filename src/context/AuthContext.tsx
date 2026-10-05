@@ -13,6 +13,7 @@ export interface UserProfile {
   resigned_at?: string | null;
   resigned_note?: string | null;
   join_date?: string | null;
+  official_start_date?: string | null;
   team_id?: string | null;
   team_name?: string | null;
   leader_id?: string | null;

@@ -25,9 +25,11 @@ import {
   RefreshCw,
   MapPin,
   Sparkles,
-  Plus
+  Plus,
+  Sliders
 } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
+import { TaxMcpConfigModal } from '@/components/TaxMcpConfigModal';
 import { cn } from '@/lib/utils';
 
 // Helper format currency
@@ -48,6 +50,7 @@ export default function TaxHandbook() {
   const [expandedArticleIds, setExpandedArticleIds] = useState<string[]>(['vat-tour']);
 
   // MCP Sync State
+  const [isMcpConfigOpen, setIsMcpConfigOpen] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [lastCheckedTime, setLastCheckedTime] = useState<string>('Vừa xong');
   const [mcpStatus, setMcpStatus] = useState<{
@@ -613,6 +616,16 @@ export default function TaxHandbook() {
 
           <div className="flex flex-col sm:items-end gap-3 shrink-0">
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMcpConfigOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 active:scale-95 text-white text-xs font-bold rounded-xl border border-white/20 transition-all cursor-pointer backdrop-blur-md shadow-sm"
+                title="Cấu hình địa chỉ MCP Endpoint URL"
+              >
+                <Sliders className="w-3.5 h-3.5 text-blue-200" />
+                <span>Cấu hình MCP</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleCheckMcpUpdate(true)}
@@ -1487,6 +1500,13 @@ export default function TaxHandbook() {
           </div>
         </div>
       )}
+
+      {/* Modal Cấu Hình MCP Server */}
+      <TaxMcpConfigModal
+        isOpen={isMcpConfigOpen}
+        onClose={() => setIsMcpConfigOpen(false)}
+        onSaved={() => handleCheckMcpUpdate(true)}
+      />
     </div>
   );
 }

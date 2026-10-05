@@ -18,8 +18,9 @@ import {
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { LeaveBalance, Profile, getRoleConfig, ROLE_DEPARTMENT_ORDER, EMPLOYMENT_STATUS_LABELS, EmploymentStatus } from '../types';
-import { getEffectiveLeaveBalance, calculateSeniority } from '../lib/payrollUtils';
+import { getEffectiveLeaveBalance, calculateSeniority, calculateDefaultAccruedLeaveDays } from '../lib/payrollUtils';
 import { CustomSelect } from './CustomSelect';
+import { DatePicker } from './DatePicker';
 
 export const LeaveBalanceManagement: React.FC = () => {
   const { profile } = useAuth();
@@ -38,6 +39,8 @@ export const LeaveBalanceManagement: React.FC = () => {
   const [modalTotalDays, setModalTotalDays] = useState<number>(12);
   const [modalUsedDays, setModalUsedDays] = useState<number>(0);
   const [modalEmploymentStatus, setModalEmploymentStatus] = useState<EmploymentStatus>('official');
+  const [modalJoinDate, setModalJoinDate] = useState<string>('');
+  const [modalOfficialStartDate, setModalOfficialStartDate] = useState<string>('');
   const [modalNote, setModalNote] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -82,6 +85,8 @@ export const LeaveBalanceManagement: React.FC = () => {
     setModalTotalDays(eff.total);
     setModalUsedDays(eff.used);
     setModalEmploymentStatus((staff.employment_status as EmploymentStatus) || 'official');
+    setModalJoinDate(staff.join_date ? staff.join_date.split('T')[0] : (staff.created_at ? staff.created_at.split('T')[0] : ''));
+    setModalOfficialStartDate(staff.official_start_date ? staff.official_start_date.split('T')[0] : (staff.join_date ? staff.join_date.split('T')[0] : ''));
     setModalNote(eff.note || '');
   };
 
@@ -97,10 +102,12 @@ export const LeaveBalanceManagement: React.FC = () => {
 
     setIsSaving(true);
     try {
-      // 1. Cập nhật trạng thái làm việc nếu có quyền và trạng thái thay đổi
-      if (canManageEmploymentStatus && modalEmploymentStatus !== (editingStaff.employment_status || 'official')) {
+      // 1. Cập nhật trạng thái làm việc và ngày chính thức nếu có quyền
+      if (canManageEmploymentStatus) {
         await updateUserProfile(editingStaff.id, {
           employment_status: modalEmploymentStatus,
+          join_date: modalJoinDate || null,
+          official_start_date: modalEmploymentStatus === 'official' ? (modalOfficialStartDate || modalJoinDate || null) : null,
         });
       }
 
@@ -566,6 +573,37 @@ export const LeaveBalanceManagement: React.FC = () => {
                   <p className="text-[11px] text-slate-400 mt-1.5">
                     Khi chuyển sang <strong>Chính thức</strong>, nhân viên bắt đầu được tích lũy ngày phép tự động mỗi tháng làm việc.
                   </p>
+
+                  {/* Ngày làm chính thức khi trạng thái là Chính thức */}
+                  {modalEmploymentStatus === 'official' && (
+                    <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-1 relative z-20">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Ngày vào làm chính thức (Official Date)</span>
+                        </span>
+                        <span className="text-[10px] text-emerald-600 font-medium lowercase">công thức tính ngày phép năm</span>
+                      </label>
+                      <DatePicker
+                        value={modalOfficialStartDate || modalJoinDate}
+                        onChange={(val) => {
+                          setModalOfficialStartDate(val);
+                          // Tính thử số ngày phép tích lũy chuẩn theo ngày chính thức mới
+                          const testAccrued = calculateDefaultAccruedLeaveDays(selectedYear, {
+                            employment_status: 'official',
+                            official_start_date: val,
+                            join_date: modalJoinDate
+                          });
+                          setModalTotalDays(testAccrued);
+                        }}
+                        placeholder="dd/mm/yyyy"
+                        className="w-full"
+                      />
+                      <span className="text-[10px] text-slate-400 font-medium block">
+                        Số ngày phép năm 2026 sẽ được tự động tích lũy từ tháng làm chính thức đến tháng hiện tại (1 ngày / tháng).
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

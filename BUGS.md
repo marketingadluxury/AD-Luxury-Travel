@@ -6,6 +6,70 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.88 Bổ Sung Trường Ngày Làm Chính Thức & Tính Quỹ Phép Năm 2026 Theo Ngày Làm Chính Thức
+- **Mô tả yêu cầu:**
+  - Tích hợp trường Ngày vào làm chính thức (`official_start_date`) cho nhân sự để phân biệt với Ngày vào làm thử việc (`join_date`).
+  - Số ngày phép năm 2026 sẽ được tự động tính lũy kế dựa trên tháng bắt đầu làm việc chính thức (`official_start_date`) đến tháng hiện tại/tháng hạch toán (1 ngày / tháng).
+- **Giải pháp triển khai:**
+  1. **Cập nhật Schema & Interface (`types.ts`, `AuthContext.tsx`):**
+     - Bổ sung `official_start_date?: string | null` vào `Profile`, `UserProfile`, `ManagedUser`.
+     - Cung cấp câu lệnh SQL `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS official_start_date DATE;` để đồng bộ CSDL Supabase.
+  2. **Nâng cấp Thuật toán Tích lũy Phép (`payrollUtils.ts`):**
+     - Trong `calculateDefaultAccruedLeaveDays`: Ưu tiên bóc tách tháng làm việc chính thức từ `official_start_date`. Nếu làm chính thức từ tháng 5/2026 ➔ Tháng 10 hạch toán: `10 - 5 + 1 = 6 ngày`.
+     - Nếu đã làm chính thức từ các năm trước: Tính đủ từ tháng 1 đến tháng hạch toán (+ ngày phép thâm niên tính từ `join_date`).
+     - Tích hợp đồng bộ vào `calculateEffectiveTotalLeaveDays`.
+  3. **Giao diện Người dùng (`UserManagement.tsx`, `LeaveBalanceManagement.tsx`):**
+     - Tích hợp bộ chọn ngày `DatePicker` chuẩn hóa Tiếng Việt cho trường *Ngày làm chính thức* khi nhân sự ở trạng thái *Chính thức* (`official`).
+     - Khi thay đổi ngày làm chính thức trong modal Quỹ phép năm, hệ thống tự động tính thử số ngày phép tương ứng theo công thức.
+  4. **Automation Tests:** Bổ sung các test cases kiểm thử và pass 100% (50/50 unit tests).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.87 Nâng Cấp Cơ Chế Tự Động Cộng +1 Ngày Phép Khi Sang Tháng Mới Kể Cả Sau Khi HR Điều Chỉnh
+- **Mô tả yêu cầu:**
+  - Hệ thống tự động tích lũy thêm 1 ngày phép khi bước qua tháng mới. Đối với các nhân sự đã từng được HR điều chỉnh quỹ phép thủ công trước đó, khi bước sang tháng mới sau tháng điều chỉnh, hệ thống vẫn phải tiếp tục tự động cộng thêm +1 ngày phép cho mỗi tháng mới trôi qua.
+- **Nguyên nhân trước đây:**
+  - Logic cũ coi số ngày `total_days` trong bản ghi `leave_balances` của HR là một con số cố định tuyệt đối, dẫn tới việc khi bước sang tháng tiếp theo (ví dụ từ tháng 9 sang tháng 10), hệ thống không tự động tăng thêm 1 ngày phép.
+- **Giải pháp triển khai:**
+  1. **Xây dựng hàm chuẩn hóa `calculateEffectiveTotalLeaveDays` (`payrollUtils.ts`):**
+     - Nhận diện thời điểm HR điều chỉnh (`updated_at` hoặc `created_at` trong `leaveBalance`).
+     - Khi tháng hiện tại hoặc tháng hạch toán (`effectiveMonth`) lớn hơn tháng HR điều chỉnh (`adjustedMonth`), hệ thống tự động cộng thêm số tháng chênh lệch: `total = baseManualTotal + (effectiveMonth - adjustedMonth)`.
+     - Nếu HR chưa từng can thiệp thủ công: Tính tích lũy lũy kế theo thời gian thực (1 ngày/tháng + thâm niên nếu có).
+     - Nhân sự thử việc (`probation`) hoặc đã nghỉ việc (`resigned`) luôn nhận 0 ngày phép theo Luật Lao Động.
+  2. **Đồng bộ hóa toàn bộ hệ thống:**
+     - Cập nhật cả `getEffectiveLeaveBalance` (dùng trong Quỹ phép năm, Dashboard, Modal tạo đơn) và `calculateEmployeeTimesheet` (dùng trong Bảng Chấm công hàng tháng).
+     - Viết bộ Automation Tests kiểm thử toàn diện các trường hợp tích lũy tháng và vượt qua 100% các bài test (`npm test`, `npm run test:simulation`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.86 Tích Hợp Giao Diện Cấu Hình & Cập Nhật MCP Endpoint Thuế Trực Tiếp Từ Frontend
+- **Mô tả yêu cầu:**
+  - Cho phép người dùng cấu hình, kiểm tra kết nối và cập nhật Endpoint URL của MCP Server tra cứu thuế Việt Nam ngay trên giao diện web (thay vì cố định trong mã nguồn backend).
+- **Giải pháp triển khai:**
+  1. **Backend Dynamic Endpoint & Persistence (`taxRoutes.ts`):**
+     - Bổ sung hàm `getActiveMcpEndpoint` với cơ chế ưu tiên 3 tầng: `req.body.endpoint` (khi test nhanh) > Supabase `app_settings` (key `tax_mcp_config`) > `DEFAULT_MCP_ENDPOINT`.
+     - Cung cấp API `GET /api/tax/mcp-config` để lấy cấu hình hiện hành.
+     - Cung cấp API `POST /api/tax/mcp-config` để lưu URL endpoint MCP mới vào cơ sở dữ liệu Supabase `app_settings`.
+     - Cho phép `POST /api/tax/check-mcp-update` kiểm tra trực tiếp với endpoint tùy chỉnh.
+  2. **Modal Cấu Hình Trực Quan (`TaxMcpConfigModal.tsx`):**
+     - Tích hợp modal cho phép nhập Endpoint URL mới.
+     - Nút "Kiểm tra kết nối tới Endpoint này" giúp kiểm tra và nhận diện phản hồi tức thì từ MCP Server (hiển thị trạng thái Online hoặc thông báo lỗi nếu key bị thu hồi).
+     - Nút "Lưu cấu hình MCP" đồng bộ lên database Supabase và `localStorage`.
+     - Nút "Khôi phục mặc định" giúp reset nhanh về cấu hình ban đầu.
+  3. **Tích Hợp Giao Diện (`TaxHandbook.tsx`):**
+     - Đặt nút **"Cấu hình MCP"** (icon `Sliders`) ngay trên thanh Header banner Sổ tay thuế lữ hành cạnh nút "Kiểm tra cập nhật MCP".
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.85 Khắc Phục Lỗi SyntaxError Phản Hồi Từ MCP Server Tra Cứu Thuế (`taxRoutes.ts`)
+- **Mô tả lỗi:**
+  - Route kiểm tra cập nhật luật thuế MCP (`/api/tax/check-mcp-update`) bị lỗi: `[Tax Route] Không parse được danh sách skill: SyntaxError: Unexpected token 'K', "Key này đã"... is not valid JSON`.
+- **Nguyên nhân kỹ thuật:**
+  - Khóa truy cập API của MCP Server trả về thông báo lỗi dạng văn bản thuần: `"Key này đã được chính bạn thu hồi. Mọi yêu cầu truy cập skill bằng key này đã bị vô hiệu hóa."` kèm cờ `isError: true`.
+  - Backend cố gắng thực hiện `JSON.parse()` trên chuỗi văn bản này dẫn tới ngoại lệ cú pháp JSON và bắn log cảnh báo `console.warn` làm kích hoạt cơ chế bắt lỗi của hệ thống.
+- **Giải pháp triển khai:**
+  1. Thêm cơ chế nhận diện cờ `isError` từ MCP response.
+  2. Bổ sung kiểm tra cấu trúc chuỗi trước khi parse (`startsWith('[') || startsWith('{')`), bắt ngoại lệ an toàn không ghi log cảnh báo làm gián đoạn runtime.
+  3. Khi khóa MCP bị thu hồi hoặc server tạm bận, backend tự động chuyển sang chế độ dự phòng an toàn (`serverStatus: 'cached'`), trả về phiên bản quy chuẩn thuế v2.2.0 đóng gói sẵn cho giao diện tra cứu `/tax-handbook`.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.84 Cấp Quyền Truy Cập Lịch Khởi Hành & Phân Hệ Đối Tác - Khách Hàng Cho Team Marketing
 - **Mô tả yêu cầu:**
   - Team Marketing (bao gồm `marketing_leader` - Trưởng phòng Marketing và `marketing` - Nhân viên Marketing) cần xem được **Lịch khởi hành tour** và phân hệ **Đối tác & Khách hàng** (Hành khách đoàn, Đại lý & CTV) để nắm thông tin lịch trình, tình trạng chỗ trống, nghiên cứu thị trường, remarketing và phân tích tệp khách hàng.

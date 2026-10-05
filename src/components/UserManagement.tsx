@@ -26,6 +26,7 @@ interface ManagedUser {
   resigned_at?: string | null;
   resigned_note?: string | null;
   join_date?: string | null;
+  official_start_date?: string | null;
   leader_id?: string | null;
   team_id?: string | null;
   team_name?: string | null;
@@ -184,6 +185,7 @@ export default function UserManagement() {
     resigned_at: '',
     resigned_note: '',
     join_date: '',
+    official_start_date: '',
     leader_id: '',
     team_id: '',
     team_name: ''
@@ -332,6 +334,7 @@ export default function UserManagement() {
       resigned_at: '',
       resigned_note: '',
       join_date: new Date().toISOString().split('T')[0],
+      official_start_date: new Date().toISOString().split('T')[0],
       leader_id: '',
       team_id: '',
       team_name: ''
@@ -353,6 +356,7 @@ export default function UserManagement() {
       resigned_at: user.resigned_at ? user.resigned_at.split('T')[0] : '',
       resigned_note: user.resigned_note || '',
       join_date: user.join_date ? user.join_date.split('T')[0] : (user.created_at ? user.created_at.split('T')[0] : ''),
+      official_start_date: user.official_start_date ? user.official_start_date.split('T')[0] : '',
       leader_id: user.leader_id || '',
       team_id: user.team_id || '',
       team_name: user.team_name || ''
@@ -388,6 +392,7 @@ export default function UserManagement() {
         ...formData,
         team_name: selectedTeam ? selectedTeam.name : (formData.team_id ? formData.team_name : ''),
         join_date: formData.join_date || null,
+        official_start_date: formData.employment_status === 'official' ? (formData.official_start_date || formData.join_date || null) : null,
         resigned_at: formData.employment_status === 'resigned' ? (formData.resigned_at || new Date().toISOString()) : null,
         resigned_note: formData.employment_status === 'resigned' ? (formData.resigned_note || null) : null
       };
@@ -407,6 +412,7 @@ export default function UserManagement() {
           resigned_at: bodyData.resigned_at,
           resigned_note: bodyData.resigned_note,
           join_date: bodyData.join_date,
+          official_start_date: bodyData.official_start_date,
           leader_id: formData.leader_id || null,
           team_id: formData.team_id || null,
           team_name: bodyData.team_name || null
@@ -1820,22 +1826,42 @@ export default function UserManagement() {
                   />
                 </div>
 
-                {/* Ngày vào làm việc chính thức & Thâm niên */}
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 relative z-20">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Ngày vào làm chính thức (Join Date)</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium lowercase">tính thâm niên & quỹ phép</span>
-                    </label>
-                    <DatePicker
-                      value={formData.join_date}
-                      onChange={(val) => setFormData({ ...formData, join_date: val })}
-                      placeholder="dd/mm/yyyy"
-                      className="w-full"
-                    />
+                {/* Ngày vào làm việc & Ngày làm chính thức */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3 relative z-20">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Ngày vào làm (Join Date)</span>
+                        </span>
+                      </label>
+                      <DatePicker
+                        value={formData.join_date}
+                        onChange={(val) => setFormData({ ...formData, join_date: val, official_start_date: formData.official_start_date || val })}
+                        placeholder="dd/mm/yyyy"
+                        className="w-full"
+                      />
+                      <span className="text-[10px] text-slate-400 font-medium block">Dùng tính thâm niên công tác</span>
+                    </div>
+
+                    {formData.employment_status === 'official' && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center justify-between">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Ngày làm chính thức</span>
+                          </span>
+                        </label>
+                        <DatePicker
+                          value={formData.official_start_date || formData.join_date}
+                          onChange={(val) => setFormData({ ...formData, official_start_date: val })}
+                          placeholder="dd/mm/yyyy"
+                          className="w-full"
+                        />
+                        <span className="text-[10px] text-emerald-600 font-medium block">Dùng tính tích lũy ngày phép năm</span>
+                      </div>
+                    )}
                   </div>
 
                   {formData.join_date && (() => {

@@ -182,6 +182,10 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - **Module Tra Cứu Thuế & Sổ Tay Thuế Lữ Hành 2025 – 2026 (`/tax-handbook`):**
   - **Truy cập & Phân quyền:** Được hiển thị trên thanh điều hướng Sidebar cho toàn bộ 11 vai trò nhân sự nội bộ công ty (`admin`, `bod`, `accounting`, `operator`, `sale`, `sale_leader`, `hr`, `visa`, `tour_guide`, `marketing_leader`, `marketing`) nhằm hỗ trợ báo giá khách, tính toán hoa hồng, tra cứu pháp lý và hạch toán thuế. Khách vãng lai và đại lý ngoài (`agent`) không truy cập được.
   - **Cơ chế Tự động Đồng bộ & Cập nhật từ MCP Server:** Tích hợp proxy endpoint `/api/tax/check-mcp-update` kết nối trực tiếp đến MCP Server (`thue-vietnam`), hiển thị trạng thái kết nối realtime (chấm xanh `●`), phiên bản skill hiện hành (`v2.2.0`), ngày phát hành và nút *"Kiểm tra cập nhật MCP"*. Hệ thống tự động kiểm tra ngầm khi mở trang và hỗ trợ đồng bộ thủ công 1-click.
+  - **Cấu hình & Cập nhật MCP Endpoint Trực Tiếp Từ Frontend:**
+    + Tích hợp nút **"Cấu hình MCP"** và modal `TaxMcpConfigModal.tsx` trên trang Sổ tay thuế lữ hành.
+    + Cho phép người dùng nhập địa chỉ MCP Endpoint URL mới, kiểm tra kết nối realtime (Test Connection) để xem phản hồi của máy chủ trước khi lưu.
+    + Lưu cấu hình đồng bộ lên database Supabase (`app_settings`) và `localStorage`, cho phép khôi phục về URL mặc định bất kỳ lúc nào mà không cần can thiệp mã nguồn backend.
   - **3 Công cụ tính thuế nhanh (Interactive Calculators):**
     1. *Tính thuế GTGT (VAT) Tour:* Hỗ trợ bóc tách VAT theo mức 8% (ưu đãi đến 31/12/2026) hoặc 10%, tự động trừ chi phí thực tế tại nước ngoài đối với tour Outbound theo Điều 7 Thông tư 219.
     2. *Tính thuế TNCN & Hoa hồng CTV:* Tính khấu trừ 10% tại nguồn cho CTV ngoài (kèm kiểm tra điều kiện Cam kết 08/CK-TNCN), hoặc tính thuế lũy tiến theo bảng lương nhân sự công ty với mức giảm trừ gia cảnh mới (15,5 triệu bản thân / 6,2 triệu người phụ thuộc).
@@ -235,8 +239,14 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - **Cơ Chế Tính Quỹ Phép Năm Tích Lũy Động (1 Ngày / Tháng):**
   - **Quy tắc tích lũy:** Số ngày phép năm mặc định được tích lũy theo số tháng làm việc trong năm (1 ngày / 1 tháng). Ví dụ: Hiện tại là Tháng 8 thì quỹ phép năm mặc định là 8 ngày (thay vì cấp sẵn 12 ngày ngay từ đầu năm).
   - **Năm quá khứ & tương lai:** Đối với các năm trước, số ngày phép mặc định là 12 ngày; đối với các năm tương lai là 0 ngày (tích lũy dần theo từng tháng khi năm đó đến).
-  - **Nhân viên mới:** Nếu nhân viên mới vào làm trong năm, quỹ phép sẽ được tính từ tháng bắt đầu làm việc đến thời điểm hiện tại.
-  - **Ưu tiên điều chỉnh thủ công của HR:** Mọi điều chỉnh thủ công từ bộ phận HR (trong bảng `leave_balances` / Quản lý quỹ phép) luôn được ưu tiên áp dụng tuyệt đối hơn công thức tích lũy tự động.
+  - **Tích Lũy Phép Dựa Trên Ngày Làm Chính Thức (`official_start_date`):**
+    + Quỹ phép năm trong năm được tự động tính lũy kế dựa trên **Tháng làm việc chính thức** (`official_start_date`) đến tháng hiện tại/tháng hạch toán (`accrued = effectiveMonth - officialStartMonth + 1`).
+    + *Ví dụ:* Nhân viên vào thử việc từ Tháng 3/2026 nhưng ký hợp đồng chính thức từ Tháng 5/2026: Đến Tháng 10 sẽ được tự động tích lũy `10 - 5 + 1 = 6 ngày phép`.
+    + Nếu nhân viên đã làm chính thức từ các năm trước: Tính đủ 1 ngày/tháng từ Tháng 1 đến tháng hạch toán (+ ngày phép thâm niên tính từ `join_date` nếu >= 5 năm).
+    + Trường *Ngày vào làm* (`join_date`) dùng để tính thâm niên công tác; trường *Ngày làm chính thức* (`official_start_date`) dùng để tích lũy ngày phép.
+  - **Tự động cộng +1 ngày phép qua tháng mới (kể cả sau khi HR điều chỉnh):**
+    + Nếu HR chưa can thiệp: Hệ thống tự động tích lũy 1 ngày/tháng x số tháng đã trôi qua (+ ngày phép thâm niên nếu có).
+    + Nếu HR đã điều chỉnh thủ công trước đó: Hệ thống lấy mốc số ngày HR đã điều chỉnh làm gốc và **tự động cộng thêm +1 ngày phép cho mỗi tháng mới trôi qua** sau thời điểm điều chỉnh. (Ví dụ: Tháng 9 HR lưu 9 ngày ➔ Sang Tháng 10 hệ thống tự động cộng thành 10 ngày; nếu Tháng 8 HR thưởng đặc cách 10 ngày ➔ Sang Tháng 10 tự động cộng thành 12 ngày).
   - **Phân Loại Trạng Thái Làm Việc (Thử Việc / Chính Thức):**
     - Hệ thống quản lý trường `employment_status` ('probation' | 'official') cho từng nhân sự.
     - **Nhân sự Thử việc (`probation`):** Mặc định quỹ phép năm tích lũy tự động là **0 ngày** (không tích lũy phép năm theo tháng). Nếu nhân sự cần nghỉ trong giai đoạn thử việc thì sử dụng hình thức *Nghỉ không lương* (hoặc được HR/Admin chủ động cấp ngày phép thủ công nếu có thỏa thuận riêng).

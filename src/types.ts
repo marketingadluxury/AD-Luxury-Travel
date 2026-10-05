@@ -145,6 +145,7 @@ export interface Profile {
   bank_account_number?: string;
   bank_account_holder?: string;
   join_date?: string;
+  official_start_date?: string | null;
   notes?: string;
   status?: 'active' | 'inactive';
   tier?: string;

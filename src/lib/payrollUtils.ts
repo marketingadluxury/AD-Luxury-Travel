@@ -152,7 +152,7 @@ export function calculateSeniority(
  */
 export function calculateDefaultAccruedLeaveDays(
   year: number,
-  profile?: { join_date?: string; created_at?: string; employment_status?: string } | null,
+  profile?: { join_date?: string; official_start_date?: string | null; created_at?: string; employment_status?: string } | null,
   targetMonth?: number
 ): number {
   // Nếu nhân sự đang trong giai đoạn thử việc (probation) hoặc đã nghỉ việc (resigned): Mặc định 0 ngày
@@ -169,36 +169,52 @@ export function calculateDefaultAccruedLeaveDays(
   if (year > currentYear) {
     return 0; // Năm tương lai chưa có tháng làm việc nào
   } else if (year === currentYear) {
-    effectiveMonth = targetMonth !== undefined ? Math.min(targetMonth, currentMonth) : currentMonth;
+    effectiveMonth = targetMonth !== undefined ? Math.min(12, Math.max(1, targetMonth)) : currentMonth;
   } else {
     // Năm quá khứ: nếu có targetMonth cụ thể thì lấy targetMonth, ngược lại đủ cả năm 12 tháng
-    effectiveMonth = targetMonth !== undefined ? targetMonth : 12;
+    effectiveMonth = targetMonth !== undefined ? Math.min(12, Math.max(1, targetMonth)) : 12;
   }
 
-  // Xác định tháng bắt đầu làm việc của nhân viên
+  // Xác định tháng bắt đầu làm việc chính thức của nhân viên
   let startMonth = 1;
   let seniorityBonus = 0;
-  const joinDateStr = profile?.join_date || profile?.created_at;
-  if (joinDateStr) {
+
+  // Ưu tiên ngày làm chính thức (official_start_date), nếu chưa cấu hình thì fallback về join_date hoặc created_at
+  const officialDateStr = profile?.official_start_date || profile?.join_date || profile?.created_at;
+  const originalJoinStr = profile?.join_date || profile?.created_at || profile?.official_start_date;
+
+  if (officialDateStr) {
     try {
-      const joinDate = new Date(joinDateStr);
+      const officialDate = new Date(officialDateStr);
+      if (!isNaN(officialDate.getTime())) {
+        const officialYear = officialDate.getFullYear();
+        const officialMonth = officialDate.getMonth() + 1;
+
+        if (officialYear > year) {
+          // Chưa chuyển chính thức trong năm tính toán
+          return 0;
+        } else if (officialYear === year) {
+          startMonth = officialMonth;
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi phân tích ngày làm chính thức:', e);
+    }
+  }
+
+  // Tính thâm niên (Điều 114 BLLĐ: cứ đủ 5 năm làm việc -> +1 ngày phép)
+  if (originalJoinStr) {
+    try {
+      const joinDate = new Date(originalJoinStr);
       if (!isNaN(joinDate.getTime())) {
         const joinYear = joinDate.getFullYear();
-        const joinMonth = joinDate.getMonth() + 1;
-
-        if (joinYear > year) {
-          // Nhân viên chưa vào làm trong năm này
-          return 0;
-        } else if (joinYear === year) {
-          startMonth = joinMonth;
-        } else if (year > joinYear) {
-          // Nhân viên đã làm việc qua các năm trước, tính thêm ngày phép thâm niên
+        if (year > joinYear) {
           const yearsOfService = year - joinYear;
           seniorityBonus = Math.floor(yearsOfService / 5);
         }
       }
     } catch (e) {
-      console.warn('Lỗi phân tích ngày vào làm:', e);
+      console.warn('Lỗi phân tích ngày vào làm thâm niên:', e);
     }
   }
 
@@ -212,10 +228,74 @@ export function calculateDefaultAccruedLeaveDays(
 }
 
 /**
- * Lấy số liệu Quỹ phép năm chuẩn xác của nhân viên (ưu tiên bản ghi điều chỉnh thủ công của HR trong `leaveBalances`):
- * - Nếu HR đã lưu điều chỉnh (`total_days` tồn tại), lấy trực tiếp từ `total_days`.
- * - Nếu chưa có can thiệp thủ công, tự động tính số ngày tích lũy theo thời gian (`calculateDefaultAccruedLeaveDays`).
+ * Tính tổng số ngày phép năm hiệu lực của nhân viên cho một mốc tháng cụ thể:
+ * - Nếu không có can thiệp thủ công từ HR: Tích lũy tự động theo tháng (1 ngày/tháng + thâm niên nếu có).
+ * - Nếu HR đã điều chỉnh thủ công trước đó: Lấy mốc số ngày HR đã điều chỉnh và TỰ ĐỘNG CỘNG THÊM +1 ngày cho mỗi tháng mới trôi qua sau tháng điều chỉnh!
+ *   Ví dụ: Tháng 9 HR lưu 9 ngày -> Sang Tháng 10 hệ thống tự động cộng thêm 1 ngày thành 10 ngày (hoặc nếu HR lưu 11 ngày thì sang Tháng 10 thành 12 ngày).
  */
+export function calculateEffectiveTotalLeaveDays(
+  year: number,
+  leaveBalance?: LeaveBalance | { total_days?: number; used_days?: number; updated_at?: string; created_at?: string } | null,
+  profile?: { join_date?: string; official_start_date?: string | null; created_at?: string; employment_status?: string } | null,
+  targetMonth?: number
+): number {
+  // Nếu nhân sự thử việc hoặc đã nghỉ việc: 0 ngày
+  if (profile?.employment_status === 'probation' || profile?.employment_status === 'resigned') {
+    return 0;
+  }
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1 - 12
+
+  // Xác định mốc tháng tính toán
+  let effectiveMonth = 12;
+  if (year > currentYear) {
+    return 0; // Năm tương lai
+  } else if (year === currentYear) {
+    effectiveMonth = targetMonth !== undefined ? Math.min(12, Math.max(1, targetMonth)) : currentMonth;
+  } else {
+    effectiveMonth = targetMonth !== undefined ? Math.min(12, Math.max(1, targetMonth)) : 12;
+  }
+
+  // 1. Trường hợp chưa có can thiệp thủ công từ HR
+  if (!leaveBalance || leaveBalance.total_days === undefined || leaveBalance.total_days === null) {
+    return calculateDefaultAccruedLeaveDays(year, profile, targetMonth);
+  }
+
+  // 2. Trường hợp HR ĐÃ điều chỉnh thủ công
+  const baseManualTotal = Number(leaveBalance.total_days);
+
+  // Xác định tháng mà HR đã lưu điều chỉnh
+  let adjustedMonth = 1;
+  const updatedAtStr = (leaveBalance as any).updated_at || (leaveBalance as any).created_at;
+  if (updatedAtStr) {
+    try {
+      const updatedDate = new Date(updatedAtStr);
+      if (!isNaN(updatedDate.getTime()) && updatedDate.getFullYear() === year) {
+        adjustedMonth = updatedDate.getMonth() + 1;
+      }
+    } catch {
+      adjustedMonth = 1;
+    }
+  } else {
+    // Nếu không có timestamp: coi adjustedMonth là mốc tương ứng với số ngày điều chỉnh (hoặc tháng 1)
+    adjustedMonth = Math.min(12, Math.max(1, Math.floor(baseManualTotal)));
+  }
+
+  // Nếu tháng hiện tại/tháng hạch toán đã bước sang tháng mới sau tháng điều chỉnh -> Tự động cộng +1 ngày / tháng mới
+  if (effectiveMonth > adjustedMonth) {
+    const additionalMonths = effectiveMonth - adjustedMonth;
+    return baseManualTotal + additionalMonths;
+  } else if (effectiveMonth < adjustedMonth && targetMonth !== undefined) {
+    // Khi xem lại bảng chấm công của các tháng trước lần điều chỉnh
+    const fewerMonths = adjustedMonth - effectiveMonth;
+    return Math.max(0, baseManualTotal - fewerMonths);
+  }
+
+  return baseManualTotal;
+}
+
 /**
  * Tính tổng số ngày phép năm đã sử dụng (bao gồm các đơn nghỉ phép năm đã duyệt + các ngày nghỉ hoán đổi/cầu nối toàn công ty)
  */
@@ -230,7 +310,7 @@ export function calculateTotalUsedAnnualDays(
 
   // 1. Đếm số ngày công từ các đơn xin nghỉ phép năm đã duyệt cấp cuối trong năm
   const approvedAnnualLeaves = leaveRequests.filter((req) => {
-    if (req.user_id !== userId || req.status !== 'approved_final' || req.type !== 'annual') {
+    if (req.user_id !== userId || req.status !== 'approved_final' || req.type === 'annual') {
       return false;
     }
     const reqYear = req.start_date ? new Date(req.start_date).getFullYear() : year;
@@ -297,9 +377,7 @@ export function getEffectiveLeaveBalance(
   const balance = leaveBalances.find((b) => b.user_id === userId && b.year === year);
   const isManualOverride = balance?.total_days !== undefined && balance?.total_days !== null;
 
-  const total = isManualOverride
-    ? Number(balance.total_days)
-    : calculateDefaultAccruedLeaveDays(year, profile, targetMonth);
+  const total = calculateEffectiveTotalLeaveDays(year, balance, profile, targetMonth);
 
   const effectiveHolidays = holidays && holidays.length > 0 ? holidays : DEFAULT_VIETNAM_HOLIDAYS;
 
@@ -529,7 +607,7 @@ export function calculateEmployeeTimesheet(
   year: number,
   leaveRequests: LeaveRequest[],
   holidays: Holiday[] = [],
-  leaveBalance?: { total_days?: number; used_days?: number }
+  leaveBalance?: LeaveBalance | { total_days?: number; used_days?: number; updated_at?: string; created_at?: string } | null
 ): EmployeeTimesheetRow {
   const userId = profile.id;
   const standardWorkingDays = calculateStandardWorkingDays(month, year, holidays);
@@ -566,10 +644,7 @@ export function calculateEmployeeTimesheet(
     }
   });
 
-  const defaultAccrued = calculateDefaultAccruedLeaveDays(year, profile, month);
-  const totalDays = leaveBalance?.total_days !== undefined && leaveBalance?.total_days !== null
-    ? Number(leaveBalance.total_days)
-    : defaultAccrued;
+  const totalDays = calculateEffectiveTotalLeaveDays(year, leaveBalance, profile, month);
 
   // Tính tổng số ngày phép năm từ các đơn đã duyệt trong năm cho nhân viên này
   const annualLeavesForYear = leaveRequests.filter((req) => {
