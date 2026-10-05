@@ -122,8 +122,8 @@ export const navigationTree: NavGroup[] = [
     groupName: 'Đối tác & Khách hàng',
     icon: Users,
     items: [
-      { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod'] },
-      { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
+      { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'bod'] },
+      { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'marketing_leader', 'marketing'] },
     ]
   },
 ];
@@ -139,7 +139,7 @@ export interface MainTabItem {
 
 export const mainSidebarNav: MainTabItem[] = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'admin', 'hr'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   {
     name: 'Quản lý tour',
     href: '/tours',
@@ -172,7 +172,7 @@ export const mainSidebarNav: MainTabItem[] = [
     name: 'Đối tác & Khách hàng',
     href: '/customers',
     icon: Users,
-    roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'visa', 'visa_leader', 'tour_guide'],
+    roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'visa', 'visa_leader', 'tour_guide', 'marketing_leader', 'marketing'],
     matchPaths: ['/customers', '/passengers'],
     groupRef: navigationTree[3]
   },
@@ -180,7 +180,7 @@ export const mainSidebarNav: MainTabItem[] = [
 
 const allNavItems: NavItem[] = [
   { name: 'Bảng điều khiển', href: '/dashboard', icon: LayoutDashboard, roleAccess: ['admin', 'bod'] },
-  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'admin', 'hr'] },
+  { name: 'Lịch khởi hành', href: '/', icon: Calendar, roleAccess: ['agent', 'bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Quản lý Tour', href: '/tours', icon: Map, roleAccess: ['operator', 'admin', 'sale_leader', 'bod', 'tour_guide', 'accounting'] },
   { name: 'Ảnh khách đoàn', href: '/tour-media', icon: Camera, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'admin', 'hr'] },
   { name: 'Quản lý Booking', href: '/orders', icon: ShoppingCart, roleAccess: ['operator', 'agent', 'bod', 'sale', 'sale_leader', 'admin', 'visa_leader'] },
@@ -191,8 +191,8 @@ const allNavItems: NavItem[] = [
   { name: 'Nghỉ phép & Chấm công', href: '/leave-requests', icon: Palmtree, roleAccess: ['bod', 'operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'accounting', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'hr'] },
   { name: 'Đề nghị thanh toán', href: '/payment-proposals', icon: FileCheck, roleAccess: ['operator', 'sale', 'sale_leader', 'accounting', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod', 'hr'] },
   { name: 'Quản lý nhân sự', href: '/employees', icon: Users, roleAccess: ['admin', 'bod', 'hr'] },
-  { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'tour_guide', 'admin', 'bod'] },
-  { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr'] },
+  { name: 'Khách hàng (Hành khách)', href: '/passengers', icon: Users, roleAccess: ['operator', 'sale', 'sale_leader', 'visa', 'visa_leader', 'tour_guide', 'marketing_leader', 'marketing', 'admin', 'bod'] },
+  { name: 'Đại lý & CTV', href: '/customers', icon: UserCheck, roleAccess: ['admin', 'bod', 'sale', 'sale_leader', 'operator', 'accounting', 'hr', 'marketing_leader', 'marketing'] },
   { name: 'Kế toán', href: '/accounting', icon: Receipt, roleAccess: ['accounting', 'admin', 'bod'] },
   { name: 'Tra cứu thuế', href: '/tax-handbook', icon: Scale, roleAccess: ['admin', 'bod', 'accounting', 'operator', 'sale', 'sale_leader', 'hr', 'visa', 'visa_leader', 'tour_guide', 'marketing_leader', 'marketing'] },
   { name: 'Marketing', href: '/meta-ads', icon: Megaphone, roleAccess: ['admin', 'bod', 'marketing_leader', 'marketing'] },

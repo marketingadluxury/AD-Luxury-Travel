@@ -6,6 +6,17 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.84 Cấp Quyền Truy Cập Lịch Khởi Hành & Phân Hệ Đối Tác - Khách Hàng Cho Team Marketing
+- **Mô tả yêu cầu:**
+  - Team Marketing (bao gồm `marketing_leader` - Trưởng phòng Marketing và `marketing` - Nhân viên Marketing) cần xem được **Lịch khởi hành tour** và phân hệ **Đối tác & Khách hàng** (Hành khách đoàn, Đại lý & CTV) để nắm thông tin lịch trình, tình trạng chỗ trống, nghiên cứu thị trường, remarketing và phân tích tệp khách hàng.
+- **Giải pháp triển khai:**
+  1. **Cập nhật Điều Hướng Sidebar (`src/components/Layout.tsx`):**
+     - Bổ sung `marketing_leader` và `marketing` vào `roleAccess` của mục **Lịch khởi hành** (`/`) trong `mainSidebarNav` và `allNavItems`.
+     - Bổ sung `marketing_leader` và `marketing` vào `roleAccess` của nhóm **Đối tác & Khách hàng** (`/customers`, `/passengers`) trong `mainSidebarNav`, `allNavItems` và `navigationTree`.
+  2. **Mở Rộng Dữ Liệu Hành Khách Cho Marketing (`PassengersManagement.tsx` & `DepartureCalendar.tsx`):**
+     - Cấp quyền cho `marketing_leader` và `marketing` được xem toàn bộ dữ liệu hành khách đoàn của công ty (`isFullAccess`), phục vụ xuất tệp Custom Audience chạy Meta Ads, phân tích hành vi đặt tour và chăm sóc khách hàng.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.83 Tích Hợp Hệ Thống Thông Báo Đẩy Lên Màn Hình Máy Tính (Native Desktop Push Notifications)
 - **Mô tả yêu cầu:**
   - Người dùng yêu cầu các thông báo của hệ thống (duyệt đề nghị thanh toán, duyệt nghỉ phép, booking mới, khách chuyển khoản) có thể hiển thị dưới dạng thông báo đẩy (push notification) trực tiếp lên màn hình Desktop của máy tính ngay cả khi đang thu nhỏ trình duyệt hoặc làm việc trên ứng dụng khác.

@@ -272,6 +272,9 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
   - **Quyền duyệt Đề nghị thanh toán (`/payment-proposals`):** Tất cả các Leader (`sale_leader`, `marketing_leader`, `visa_leader`, `operator`, `hr`, `bod`, `admin`) có toàn quyền phê duyệt đề nghị thanh toán (Cấp Leader) trước khi chuyển sang Kế toán chi tiền.
   - **Hiển thị tiếng Việt:** Trên toàn bộ giao diện bảng, modal, thẻ đề xuất, vai trò luôn được hiển thị bằng tiếng Việt kèm huy hiệu màu sắc chuẩn (`Trưởng phòng Marketing` màu tím fuchsia, `Trưởng nhóm Kinh doanh` màu cam amber, `Trưởng bộ phận Visa` màu chàm indigo...).
   - **Mẫu in A4 Giấy Đề Nghị Thanh Toán:** Tự động điền đúng tên phòng ban (Marketing, Kinh doanh, Visa, Điều hành Tour, Nhân sự...) và chức vụ của người đề nghị.
+  - **Phân quyền truy cập cho Team Marketing (`marketing_leader`, `marketing`):**
+    + Được xem đầy đủ **Lịch khởi hành tour** (`/`) để nắm bắt số chỗ, lịch bay, giá bán phục vụ chiến dịch truyền thông quảng cáo.
+    + Được truy cập phân hệ **Đối tác & Khách hàng** (`/customers`, `/passengers`) để xem danh sách Đại lý, CTV và tra cứu toàn bộ hồ sơ khách đoàn toàn công ty phục vụ nghiên cứu tệp khách hàng, tạo Custom Audience và remarketing.
 
 - **Hệ Thống Thông Báo Đẩy Lên Màn Hình Desktop (Native Push Notifications):**
   - **Công nghệ:** Sử dụng HTML5 Web Notification API kết hợp Service Worker và Web Audio API (`desktopNotification.ts`).

@@ -142,7 +142,7 @@ export default function PassengersManagement() {
 
   // 1. Filter orders based on user permissions
   const myOrders = useMemo(() => {
-    if (['admin', 'operator', 'visa', 'bod'].includes(currentRole)) {
+    if (['admin', 'operator', 'visa', 'bod', 'marketing_leader', 'marketing'].includes(currentRole)) {
       return allOrders;
     }
     if (currentRole === 'sale_leader') {

@@ -604,7 +604,7 @@ export default function DepartureCalendar() {
   };
 
   const uniqueCustomers = React.useMemo(() => {
-    const isFullAccess = ['admin', 'operator', 'visa', 'bod'].includes(currentRole);
+    const isFullAccess = ['admin', 'operator', 'visa', 'bod', 'marketing_leader', 'marketing'].includes(currentRole);
     const userOrderIds = new Set(
       isFullAccess 
         ? allOrders.map(o => o.id)
