@@ -60,3 +60,27 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// Xử lý sự kiện click vào Desktop Notification từ Service Worker
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Nếu đã có tab mở, focus vào tab đó và điều hướng
+      for (let client of windowClients) {
+        if (client.url && 'focus' in client) {
+          client.focus();
+          client.postMessage({ type: 'NAVIGATE', url: targetUrl });
+          return;
+        }
+      }
+      // Nếu chưa có tab mở, mở cửa sổ mới
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+

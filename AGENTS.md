@@ -266,6 +266,20 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
     + Cho phép cấu hình tên slug của trường Repeater trên WordPress.
     + Thêm/xóa/sửa trường ACF linh hoạt, có sẵn trường `code` (Mã lịch trình / Mã tour) gợi ý mặc định `ma_lich_trinh`.
 
+- **Quy Chuẩn Đồng Bộ & Phân Quyền Cho Tất Cả Các Vai Trò Leader Nội Bộ:**
+  - **Danh sách Leader chính thức:** `sale_leader` (Trưởng nhóm Kinh doanh), `marketing_leader` (Trưởng phòng Marketing), `visa_leader` (Trưởng bộ phận Visa), `operator` (Điều hành Tour), `hr` (Phụ trách Hành chính Nhân sự), `bod` (Ban Giám Đốc), `admin` (Quản trị viên).
+  - **Tuyệt đối không ép vai trò:** Cấm các logic ép vai trò `marketing_leader` thành `sale_leader` hay `marketing` thành `sale`. Mọi vai trò Leader phải luôn giữ đúng định danh độc lập của mình trên toàn hệ thống.
+  - **Quyền duyệt Đề nghị thanh toán (`/payment-proposals`):** Tất cả các Leader (`sale_leader`, `marketing_leader`, `visa_leader`, `operator`, `hr`, `bod`, `admin`) có toàn quyền phê duyệt đề nghị thanh toán (Cấp Leader) trước khi chuyển sang Kế toán chi tiền.
+  - **Hiển thị tiếng Việt:** Trên toàn bộ giao diện bảng, modal, thẻ đề xuất, vai trò luôn được hiển thị bằng tiếng Việt kèm huy hiệu màu sắc chuẩn (`Trưởng phòng Marketing` màu tím fuchsia, `Trưởng nhóm Kinh doanh` màu cam amber, `Trưởng bộ phận Visa` màu chàm indigo...).
+  - **Mẫu in A4 Giấy Đề Nghị Thanh Toán:** Tự động điền đúng tên phòng ban (Marketing, Kinh doanh, Visa, Điều hành Tour, Nhân sự...) và chức vụ của người đề nghị.
+
+- **Hệ Thống Thông Báo Đẩy Lên Màn Hình Desktop (Native Push Notifications):**
+  - **Công nghệ:** Sử dụng HTML5 Web Notification API kết hợp Service Worker và Web Audio API (`desktopNotification.ts`).
+  - **Khả năng hoạt động:** Gửi thông báo native lên màn hình Windows / macOS / Linux ngay cả khi người dùng thu nhỏ trình duyệt hoặc đang làm việc trên ứng dụng khác (Excel, Word, Zalo...).
+  - **Âm thanh:** Âm chuông 2 nốt Crystal Ding-dong (E6 -> B6) sinh bằng Web Audio API thuần, không lỗi CORS hay 404.
+  - **Tương tác trực tiếp:** Khi click vào banner thông báo, trình duyệt tự động kích hoạt tab CRM và mở thẳng tới đơn hàng/đề nghị thanh toán/đơn nghỉ phép tương ứng.
+  - **Cài đặt & Thử nghiệm:** Tích hợp modal cài đặt (`DesktopNotificationSettingsModal.tsx`) trên Dropdown chuông thông báo Header và Menu Profile, cho phép Bật/Tắt đẩy, Bật/Tắt tiếng và Gửi thông báo thử nghiệm.
+
 - **Cấu Trúc Tab Quản Lý Người Dùng & Phân Quyền (`UserManagement.tsx`):**
     - Trang Quản lý người dùng trong Cài đặt hệ thống được phân tách thành **3 tab** chuyên biệt:
       1. **🏢 Quản lý Nhân sự Công ty (`company`):** Quản lý tất cả tài khoản nội bộ công ty (Admin, BOD, Sale Leader, Sale, Điều hành, Visa, Kế toán, HDV, HR, Marketing).

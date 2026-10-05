@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Calendar, 
@@ -41,7 +41,8 @@ import {
   Palmtree,
   BookOpen,
   LogIn,
-  Scale
+  Scale,
+  Monitor
 } from 'lucide-react';
 import { cn, isOrderInLeaderTeam } from '@/lib/utils';
 import { useCRM } from '@/context/CRMContext';
@@ -50,6 +51,12 @@ import { CustomSelect } from './CustomSelect';
 import { Role } from '@/types';
 import { HDVQuickUploadModal } from './HDVQuickUploadModal';
 import { HDVQuickLinkModal } from './HDVQuickLinkModal';
+import { DesktopNotificationSettingsModal } from './DesktopNotificationSettingsModal';
+import { 
+  sendDesktopNotification, 
+  isDesktopNotificationEnabled, 
+  getDesktopNotificationPermission 
+} from '@/utils/desktopNotification';
 
 const roleOptions = [
   { value: 'agent', label: 'Đại lý (Agent)', icon: <Handshake className="w-4 h-4 text-amber-600" /> },
@@ -250,6 +257,38 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       });
     }
   };
+
+  // Desktop Notification State
+  const [isDesktopNotifSettingsOpen, setIsDesktopNotifSettingsOpen] = useState(false);
+  const seenNotifIdsRef = useRef<Set<string>>(new Set());
+  const isInitialNotifLoadRef = useRef(true);
+
+  // Lắng nghe sự kiện click từ Desktop Notification để điều hướng
+  useEffect(() => {
+    const handleDesktopNavigate = (e: any) => {
+      const path = e.detail?.path || e.detail;
+      if (path && typeof path === 'string') {
+        navigate(path, { state: e.detail?.data });
+      }
+    };
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NAVIGATE' && event.data?.url) {
+        navigate(event.data.url);
+      }
+    };
+
+    window.addEventListener('crm-navigate-to', handleDesktopNavigate);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    return () => {
+      window.removeEventListener('crm-navigate-to', handleDesktopNavigate);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
+  }, [navigate]);
 
   // Close mobile menu when navigating
   useEffect(() => {
@@ -601,6 +640,50 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return notifications.filter(n => !n.read);
   }, [notifications]);
 
+  // Tự động đẩy thông báo lên Desktop khi có thông báo mới thuộc vai trò của user
+  useEffect(() => {
+    if (!notifications || notifications.length === 0) return;
+
+    if (isInitialNotifLoadRef.current) {
+      // Đánh dấu các thông báo hiện có trong lần tải đầu tiên để không spam thông báo cũ
+      notifications.forEach(n => seenNotifIdsRef.current.add(n.id));
+      isInitialNotifLoadRef.current = false;
+      return;
+    }
+
+    // Kiểm tra các thông báo mới chưa đọc và chưa từng được gửi lên desktop
+    const newUnreadNotifs = notifications.filter(n => !n.read && !seenNotifIdsRef.current.has(n.id));
+    if (newUnreadNotifs.length > 0 && isDesktopNotificationEnabled()) {
+      newUnreadNotifs.forEach(notif => {
+        seenNotifIdsRef.current.add(notif.id);
+
+        let targetUrl = '/';
+        const titleLower = (notif.title || '').toLowerCase();
+        const msgLower = (notif.message || '').toLowerCase();
+
+        if (titleLower.includes('nghỉ phép') || msgLower.includes('nghỉ phép') || (notif.type as string) === 'leave') {
+          targetUrl = '/leave-requests';
+        } else if (titleLower.includes('đề nghị thanh toán') || msgLower.includes('đề nghị thanh toán') || notif.type === 'proposal' || (notif.type as string) === 'payment_proposal') {
+          targetUrl = '/payment-proposals';
+        } else if (notif.type === 'accounting' || titleLower.includes('phiếu thu') || titleLower.includes('hóa đơn')) {
+          targetUrl = '/accounting';
+        } else if (notif.type === 'visa') {
+          targetUrl = '/visa';
+        } else if (notif.type === 'order' || notif.type === 'extension') {
+          targetUrl = '/orders';
+        }
+
+        sendDesktopNotification({
+          title: notif.title || '🔔 Thông báo từ Tour CRM',
+          body: (notif.message || '').replace(/\b([0-9a-fA-F]{8})-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g, '$1'),
+          url: targetUrl,
+          tag: notif.id,
+          playSound: true
+        });
+      });
+    }
+  }, [notifications]);
+
   const activeGroup = React.useMemo(() => {
     for (const group of navigationTree) {
       if (group.items.some(child => child.href === location.pathname)) {
@@ -920,10 +1003,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-80 sm:w-84 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40">
+                    <div className="absolute right-0 mt-2 w-80 sm:w-88 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40">
                       <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <span className="font-bold text-sm text-gray-900">Thông báo hệ thống</span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsDesktopNotifSettingsOpen(true);
+                            }}
+                            className="p-1 hover:bg-slate-200 text-slate-500 hover:text-blue-700 rounded-lg transition-colors cursor-pointer"
+                            title="Cài đặt thông báo Desktop"
+                          >
+                            <Monitor className="w-3.5 h-3.5" />
+                          </button>
                           {unreadNotifications.length > 0 && (
                             <button
                               type="button"
@@ -931,7 +1025,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                                 e.stopPropagation();
                                 markAllNotificationsAsRead();
                               }}
-                              className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer hover:underline"
+                              className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer hover:underline ml-1"
                             >
                               Đã đọc tất cả
                             </button>
@@ -941,6 +1035,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           </span>
                         </div>
                       </div>
+
+                      {/* Banner gợi ý bật thông báo Desktop nếu chưa cấp quyền */}
+                      {getDesktopNotificationPermission() === 'default' && (
+                        <div 
+                          onClick={() => setIsDesktopNotifSettingsOpen(true)}
+                          className="px-3.5 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 flex items-center justify-between gap-2 cursor-pointer hover:bg-blue-100/60 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Monitor className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="text-[11px] font-bold text-blue-900 leading-tight">
+                              Bật thông báo đẩy Desktop
+                            </span>
+                          </div>
+                          <span className="text-[10px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-md shrink-0">
+                            Kích hoạt
+                          </span>
+                        </div>
+                      )}
+
                       <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
                         {notifications.length === 0 ? (
                           <div className="p-4 text-center text-xs text-gray-500">Chưa có thông báo nào</div>
@@ -981,6 +1094,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           })
                         )}
                       </div>
+
+                      {/* Footer của Dropdown Thông Báo */}
+                      <div className="p-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 px-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNotifications(false);
+                            setIsDesktopNotifSettingsOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                        >
+                          <Monitor className="w-3.5 h-3.5" />
+                          <span>Cài đặt thông báo Desktop</span>
+                        </button>
+                        <span className="text-[10px] text-slate-400">Realtime</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1011,6 +1140,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                          Dashboard cá nhân
                        </Link>
                      )}
+                     <button 
+                       type="button"
+                       onClick={() => setIsDesktopNotifSettingsOpen(true)}
+                       className="w-full flex items-center text-left px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-t border-gray-100 cursor-pointer"
+                     >
+                       <Monitor className="h-4 w-4 mr-2 text-indigo-600" />
+                       <span>Thông báo Desktop</span>
+                     </button>
                      <button 
                        onClick={() => signOut()}
                        className="w-full flex items-center text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
@@ -1461,6 +1598,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         isOpen={isHdvQuickLinkOpen}
         onClose={() => setIsHdvQuickLinkOpen(false)}
         tours={useCRM().tours}
+      />
+
+      {/* Modal Cài Đặt Thông Báo Desktop */}
+      <DesktopNotificationSettingsModal
+        isOpen={isDesktopNotifSettingsOpen}
+        onClose={() => setIsDesktopNotifSettingsOpen(false)}
       />
     </div>
   );

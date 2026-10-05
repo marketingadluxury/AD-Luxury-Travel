@@ -4,7 +4,7 @@ import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
-import { PaymentProposal, ProposalStatus } from '@/types';
+import { PaymentProposal, ProposalStatus, getRoleConfig } from '@/types';
 import { DatePicker } from '@/components/DatePicker';
 import { TimeRangeFilter } from '@/components/TimeRangeFilter';
 import { CustomSelect, SelectOption } from '@/components/CustomSelect';
@@ -80,15 +80,46 @@ export default function PaymentProposals() {
     rejectPaymentProposalAccounting,
     deletePaymentProposal,
     currentRole,
+    displayRole,
+    customRoles,
+    profilesList = [],
     tours = []
   } = useCRM();
 
   const { user, profile } = useAuth();
 
-  // Role checks
+  // Role checks - Hỗ trợ TẤT CẢ các Leader trong công ty
   const isAgent = currentRole === 'agent';
-  const isLeader = ['sale_leader', 'admin', 'bod'].includes(currentRole);
-  const isAccountingOrAdmin = ['accounting', 'admin', 'bod'].includes(currentRole);
+  const LEADER_ROLES = ['sale_leader', 'marketing_leader', 'visa_leader', 'operator', 'hr', 'admin', 'bod'];
+  const effectiveRole = currentRole || profile?.role || 'sale';
+  const isLeader = LEADER_ROLES.includes(currentRole) || LEADER_ROLES.includes(profile?.role || '');
+  const isAccountingOrAdmin = ['accounting', 'admin', 'bod'].includes(currentRole) || ['accounting', 'admin', 'bod'].includes(profile?.role || '');
+
+  // Chuẩn hóa dữ liệu Đề nghị thanh toán (Auto-heal nếu tài khoản Trần Công Hậu / marketing_leader bị lưu nhầm thành sale_leader)
+  const normalizedPaymentProposals = useMemo(() => {
+    return paymentProposals.map(p => {
+      let role = p.created_by_role;
+      const isHau = p.created_by_name?.toLowerCase().includes('hậu') || 
+                    profilesList.find(prof => prof.id === p.created_by_id)?.email === 'marketing.adluxury@gmail.com';
+      if (isHau && (role === 'sale_leader' || !role)) {
+        role = 'marketing_leader';
+      }
+      return {
+        ...p,
+        created_by_role: role
+      };
+    });
+  }, [paymentProposals, profilesList]);
+
+  // Helper render huy hiệu vai trò chuẩn Tiếng Việt
+  const renderRoleBadge = (roleKey?: string) => {
+    const config = getRoleConfig(roleKey, customRoles);
+    return (
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${config.bg} ${config.color} ${config.border}`}>
+        {config.label}
+      </span>
+    );
+  };
 
   const location = useLocation();
 
@@ -289,7 +320,9 @@ export default function PaymentProposals() {
         note: formData.note.trim() || undefined,
         created_by_id: profile?.id || user?.id,
         created_by_name: profile?.full_name || user?.email || 'Nhân viên',
-        created_by_role: currentRole
+        created_by_role: (user?.email === 'marketing.adluxury@gmail.com' || profile?.full_name?.toLowerCase().includes('hậu'))
+          ? (currentRole === 'admin' ? 'admin' : (currentRole === 'marketing' ? 'marketing' : 'marketing_leader'))
+          : (profile?.role || displayRole || currentRole || 'sale')
       });
 
       toast.success('Đã gửi Đề nghị thanh toán thành công! Hồ sơ đang chờ Leader duyệt.');
@@ -355,7 +388,7 @@ export default function PaymentProposals() {
 
   // Filtered proposals calculation
   const filteredProposals = useMemo(() => {
-    return paymentProposals.filter(p => {
+    return normalizedPaymentProposals.filter(p => {
       // Role scope filter
       if (viewScope === 'my' && p.created_by_id && profile?.id && p.created_by_id !== profile.id && p.created_by_name !== profile.full_name) {
         return false;
@@ -387,21 +420,21 @@ export default function PaymentProposals() {
 
       return true;
     });
-  }, [paymentProposals, viewScope, searchTerm, statusFilter, typeFilter, timeRange, startDate, endDate, profile]);
+  }, [normalizedPaymentProposals, viewScope, searchTerm, statusFilter, typeFilter, timeRange, startDate, endDate, profile]);
 
   // Statistics
   const stats = useMemo(() => {
-    const totalCount = paymentProposals.length;
-    const totalAmount = paymentProposals.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalCount = normalizedPaymentProposals.length;
+    const totalAmount = normalizedPaymentProposals.reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    const pendingLeaderCount = paymentProposals.filter(p => p.status === 'pending_leader').length;
-    const pendingLeaderAmount = paymentProposals.filter(p => p.status === 'pending_leader').reduce((sum, p) => sum + (p.amount || 0), 0);
+    const pendingLeaderCount = normalizedPaymentProposals.filter(p => p.status === 'pending_leader').length;
+    const pendingLeaderAmount = normalizedPaymentProposals.filter(p => p.status === 'pending_leader').reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    const pendingAccountingCount = paymentProposals.filter(p => p.status === 'approved_leader').length;
-    const pendingAccountingAmount = paymentProposals.filter(p => p.status === 'approved_leader').reduce((sum, p) => sum + (p.amount || 0), 0);
+    const pendingAccountingCount = normalizedPaymentProposals.filter(p => p.status === 'approved_leader').length;
+    const pendingAccountingAmount = normalizedPaymentProposals.filter(p => p.status === 'approved_leader').reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    const paidCount = paymentProposals.filter(p => p.status === 'approved_accounting').length;
-    const paidAmount = paymentProposals.filter(p => p.status === 'approved_accounting').reduce((sum, p) => sum + (p.amount || 0), 0);
+    const paidCount = normalizedPaymentProposals.filter(p => p.status === 'approved_accounting').length;
+    const paidAmount = normalizedPaymentProposals.filter(p => p.status === 'approved_accounting').reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return {
       totalCount,
@@ -413,7 +446,7 @@ export default function PaymentProposals() {
       paidCount,
       paidAmount
     };
-  }, [paymentProposals]);
+  }, [normalizedPaymentProposals]);
 
   const kanbanColumns = [
     { id: 'pending_leader', title: '1. Chờ Leader duyệt', icon: Clock, bgHeader: 'bg-amber-500 text-white', borderCol: 'border-amber-200 bg-amber-50/20' },
@@ -888,7 +921,7 @@ export default function PaymentProposals() {
                       {/* Proposer */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="font-bold text-gray-800">{p.created_by_name}</div>
-                        <div className="text-[10px] text-gray-400 uppercase font-semibold">{p.created_by_role}</div>
+                        <div className="mt-1">{renderRoleBadge(p.created_by_role)}</div>
                       </td>
 
                       {/* Amount */}
@@ -1375,7 +1408,7 @@ export default function PaymentProposals() {
                   {actionModal.proposal.amount.toLocaleString('vi-VN')} đ
                 </div>
                 <div className="text-gray-600">
-                  Người đề nghị: <strong className="text-gray-800">{actionModal.proposal.created_by_name}</strong> ({actionModal.proposal.created_by_role})
+                  Người đề nghị: <strong className="text-gray-800">{actionModal.proposal.created_by_name}</strong> ({getRoleConfig(actionModal.proposal.created_by_role, customRoles).label})
                 </div>
                 {actionModal.proposal.payment_method === 'Chuyển khoản' && (
                   <div className="mt-2 pt-2 border-t border-gray-200 text-[11px] text-blue-900 font-semibold bg-blue-50/50 p-2 rounded-lg">
@@ -1497,7 +1530,7 @@ export default function PaymentProposals() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-gray-600 pt-2 border-t border-gray-200">
                     <div>Người đề nghị: <strong>{selectedProposal.created_by_name}</strong></div>
-                    <div>Vai trò: <strong className="uppercase">{selectedProposal.created_by_role}</strong></div>
+                    <div className="flex items-center gap-1.5"><span>Vai trò:</span> {renderRoleBadge(selectedProposal.created_by_role)}</div>
                     <div>Hình thức: <strong>{selectedProposal.payment_method}</strong></div>
                     <div>Ngày tạo: <strong>{selectedProposal.created_at ? formatDateTimeVi(selectedProposal.created_at) : ''}</strong></div>
                     {selectedProposal.due_date && (

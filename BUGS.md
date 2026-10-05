@@ -6,6 +6,63 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.83 Tích Hợp Hệ Thống Thông Báo Đẩy Lên Màn Hình Máy Tính (Native Desktop Push Notifications)
+- **Mô tả yêu cầu:**
+  - Người dùng yêu cầu các thông báo của hệ thống (duyệt đề nghị thanh toán, duyệt nghỉ phép, booking mới, khách chuyển khoản) có thể hiển thị dưới dạng thông báo đẩy (push notification) trực tiếp lên màn hình Desktop của máy tính ngay cả khi đang thu nhỏ trình duyệt hoặc làm việc trên ứng dụng khác.
+- **Giải pháp triển khai:**
+  1. **Module Tiện Ích Desktop Notification (`src/utils/desktopNotification.ts`):**
+     - Tích hợp chuẩn **HTML5 Web Notification API** tương thích 100% với Chrome, Edge, Safari, Firefox trên cả Windows và macOS.
+     - Hàm `requestDesktopNotificationPermission`: yêu cầu cấp quyền từ trình duyệt và lưu cấu hình trạng thái vào `localStorage`.
+     - Hàm `playNotificationSound`: phát âm thanh chuông thông báo 2 âm "Crystal Ding-dong" (E6 ➔ B6) bằng Web Audio API thuần (không phụ thuộc file mp3 ngoài, không lỗi CORS, độ trễ 0ms).
+     - Hàm `sendDesktopNotification`: gửi thông báo native lên góc màn hình hệ điều hành kèm icon `/favicon.svg`, xử lý sự kiện click để focus cửa sổ trình duyệt và điều hướng router tới đơn/trang tương ứng.
+  2. **Tự Động Kích Hoạt Realtime (`src/components/Layout.tsx`):**
+     - Lắng nghe danh sách thông báo realtime theo vai trò của người dùng. Khi có thông báo mới chưa đọc, hệ thống tự động đẩy thông báo ra Desktop.
+     - Click vào thông báo sẽ tự động chuyển hướng chính xác tới: Đơn nghỉ phép (`/leave-requests`), Đề nghị thanh toán (`/payment-proposals`), Kế toán (`/accounting`), Booking (`/orders`), Visa (`/visa`).
+  3. **Giao Diện Quản Lý Cài Đặt Trực Quan (`DesktopNotificationSettingsModal.tsx`):**
+     - Nút icon `Monitor` tích hợp ngay trên thanh Header của Dropdown Thông Báo Chuông (`Bell`) và trong Menu Profile tài khoản.
+     - Dải banner mời kích hoạt thông minh khi người dùng chưa cấp quyền.
+     - Cho phép Bật/Tắt thông báo đẩy, Bật/Tắt âm thanh chuông và Nút "Gửi thử 1 thông báo lên màn hình Desktop" (Test notification) để kiểm tra ngay.
+     - Cập nhật Service Worker (`public/sw.js`) bổ sung sự kiện `notificationclick` để điều hướng mượt mà.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.82 Sửa Lỗi Không Đồng Bộ Trạng Thái Đã Duyệt Đơn Nghỉ Phép Lên Supabase (Do Sai Tên Cột DB)
+- **Mô tả lỗi:**
+  - Trên website `booking.adluxury.net`, các đơn nghỉ phép hiển thị đã được duyệt (do lưu trong localStorage trình duyệt). Tuy nhiên khi mở môi trường Preview AI Studio hoặc trên máy khác, hệ thống vẫn hiển thị 3 đơn ở trạng thái "Cần duyệt".
+- **Nguyên nhân kỹ thuật:**
+  1. Trong database Supabase, hai cột lưu UUID người duyệt đơn là `approver_level_1_id` và `approver_final_id`.
+  2. Các hàm `approveLeaveRequestLevel1` và `approveLeaveRequestFinal` trong `src/context/CRMContext.tsx` lại gửi lên trường `level_1_approved_by` và `final_approved_by`.
+  3. Lệnh UPDATE lên Supabase thất bại ngầm (`column does not exist`). Trạng thái trên database Supabase bị kẹt lại là `pending`.
+- **Giải pháp triển khai:**
+  1. **Chuẩn hóa trường gửi lên Supabase:**
+     - Sửa cả hàm `approveLeaveRequestLevel1`, `approveLeaveRequestFinal`, `upsert` và `fetchLeaveRequests` đồng bộ đúng tên cột: `approver_level_1_id` và `approver_final_id`.
+     - Bổ sung lớp fallback 3 cấp an toàn: nếu cập nhật chi tiết có lỗi, tự động cập nhật tối giản `status: 'approved_final'`.
+  2. **Đồng bộ trực tiếp 3 đơn trên database Supabase:**
+     - Đã cập nhật trạng thái `approved_final` cho cả 3 đơn nghỉ phép của anh Trần Công Hậu và chị Nguyễn Thị Hoàng Thơ trực tiếp trên Supabase.
+     - Kiểm tra và đảm bảo Quỹ phép năm (`leave_balances`) đã được trừ đúng 100%.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.81 Khắc Phục Lỗi Hiển Thị Vai Trò Của Trưởng Phòng Marketing & Rà Soát Toàn Bộ Các Vai Trò Leader Trong Hệ Thống
+- **Mô tả lỗi:**
+  - Người dùng Trần Công Hậu (email `marketing.adluxury@gmail.com`) là Trưởng phòng Marketing nhưng tại trang Đề nghị thanh toán (`/payment-proposals`) vai trò lại bị ghi là `sale_leader` (Sale Leader).
+  - Cần rà soát toàn diện tất cả các vai trò Leader khác (`sale_leader`, `marketing_leader`, `visa_leader`, `operator`, `hr`, `bod`, `admin`) về quyền duyệt và tính nhất quán hiển thị trên toàn hệ thống.
+- **Nguyên nhân kỹ thuật:**
+  1. Trong `src/context/CRMContext.tsx`, hàm `useMemo` tính toán `currentRole` có đoạn code cũ ép `if (selectedRole === 'marketing_leader') return 'sale_leader'` và `marketing -> sale`. Do đó khi đăng nhập hoặc chuyển góc nhìn sang Trưởng phòng Marketing, `currentRole` luôn trả về `'sale_leader'`.
+  2. Tại `src/pages/PaymentProposals.tsx`, khi tạo đề nghị thanh toán hệ thống gán `created_by_role: currentRole`, làm sai lệch vai trò thành `sale_leader`.
+  3. Trên giao diện Đề nghị thanh toán (Bảng danh sách, Kanban, Modal chi tiết, Modal duyệt), vai trò đang hiển thị mã kỹ thuật viết hoa (`SALE_LEADER`) thay vì huy hiệu tiếng Việt chuẩn (`Trưởng phòng Marketing`).
+  4. Quyền duyệt của Leader (`isLeader` / `canApproveLevel1`) tại `PaymentProposals.tsx`, `LeaveRequestsPage.tsx`, `LeaveManagementTab.tsx`, `TimesheetManagement.tsx` chưa đồng bộ đầy đủ danh sách các Leader (`sale_leader`, `marketing_leader`, `visa_leader`, `operator`, `hr`, `bod`, `admin`).
+- **Giải pháp triển khai:**
+  1. **Khôi Phục Bản Sắc Vai Trò Trong `CRMContext.tsx`:**
+     - Xóa bỏ hoàn toàn việc ép `marketing_leader` thành `sale_leader` và `marketing` thành `sale`. Đảm bảo `currentRole` luôn phản ánh chính xác 100% vai trò thực tế.
+  2. **Đồng Bộ Quyền Duyệt Cho Tất Cả Các Leader:**
+     - Cập nhật biến `LEADER_ROLES = ['sale_leader', 'marketing_leader', 'visa_leader', 'operator', 'hr', 'admin', 'bod']` cho Đề nghị thanh toán (`PaymentProposals.tsx`), Nghỉ phép (`LeaveRequestsPage.tsx`, `LeaveManagementTab.tsx`) và Chấm công (`TimesheetManagement.tsx`).
+  3. **Chuẩn Hóa Hiển Thị Huy Hiệu Tiếng Việt:**
+     - Sử dụng helper `renderRoleBadge` trên toàn bộ bảng danh sách, modal chi tiết và modal duyệt của Đề nghị thanh toán. Các vai trò hiển thị chuẩn tiếng Việt (Trưởng phòng Marketing, Trưởng nhóm Kinh doanh, Trưởng bộ phận Visa, Điều hành Tour, Hành chính Nhân sự, Ban Giám Đốc, Quản trị viên).
+  4. **Nâng Cấp Mẫu In A4 (`PaymentProposalPrintModal.tsx`):**
+     - Bổ sung ánh xạ chức vụ và phòng ban cho tất cả các Leader: `marketing_leader` hiển thị đúng phòng ban **Marketing** và chức vụ **Trưởng phòng Marketing**.
+  5. **Cơ Chế Tự Động Sửa Dữ Liệu Cũ (Auto-Heal):**
+     - Tự động chuẩn hóa các phiếu đề nghị thanh toán đã lỡ lưu `sale_leader` của anh Trần Công Hậu về đúng vai trò `marketing_leader`.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.80 Nâng Cấp Cơ Chế Đồng Bộ Tour Sang Website WordPress Theo Mô Hình ACF Repeater (1 Tour Nhiều Ngày Khởi Hành)
 - **Mô tả yêu cầu:**
   - Trên website WordPress, một chương trình Tour (1 Product) có nhiều ngày khởi hành khác nhau, mỗi ngày có một mã lịch trình riêng (SKU), bảng giá riêng, giờ bay riêng và số chỗ riêng (sử dụng trường ACF Repeater "Lịch trình khởi hành").

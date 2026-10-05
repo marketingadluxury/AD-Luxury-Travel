@@ -921,8 +921,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
 
   const currentRole = React.useMemo(() => {
-    if (selectedRole === 'marketing') return 'sale';
-    if (selectedRole === 'marketing_leader') return 'sale_leader';
     return selectedRole;
   }, [selectedRole]);
 
@@ -1102,8 +1100,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             const approverFinalUuid = isValidUuid(localItem.approver_final_id) ? localItem.approver_final_id : null;
             supabase.from('leave_requests').update({
               status: localItem.status,
-              ...(approverL1Uuid ? { level_1_approved_by: approverL1Uuid } : {}),
-              ...(approverFinalUuid ? { final_approved_by: approverFinalUuid } : {})
+              ...(approverL1Uuid ? { approver_level_1_id: approverL1Uuid } : {}),
+              ...(approverFinalUuid ? { approver_final_id: approverFinalUuid } : {})
             }).eq('id', item.id).then();
           }
 
@@ -1432,7 +1430,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           level_1_approved_at: new Date().toISOString()
         };
         if (approverUuid) {
-          fullPayload.level_1_approved_by = approverUuid;
+          fullPayload.approver_level_1_id = approverUuid;
         }
 
         const { error: fullErr } = await supabase.from('leave_requests').update(fullPayload).eq('id', id);
@@ -1441,9 +1439,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         } else {
           console.warn('Thử cập nhật tối giản status cấp 1 do bảng DB có thể thiếu cột:', fullErr.message);
           const simplePayload: any = { status: 'approved_level_1' };
-          if (approverUuid) simplePayload.level_1_approved_by = approverUuid;
+          if (approverUuid) simplePayload.approver_level_1_id = approverUuid;
           const { error: simpleErr } = await supabase.from('leave_requests').update(simplePayload).eq('id', id);
           if (!simpleErr) {
+            updateSuccess = true;
+          } else {
+            await supabase.from('leave_requests').update({ status: 'approved_level_1' }).eq('id', id);
             updateSuccess = true;
           }
         }
@@ -1465,7 +1466,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             type: targetReq.type,
             status: 'approved_level_1',
             reason: targetReq.reason,
-            level_1_approved_by: approverUuid,
+            approver_level_1_id: approverUuid,
             level_1_approved_name: approverName,
             level_1_approved_at: new Date().toISOString()
           }, { onConflict: 'id' });
@@ -1563,7 +1564,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           final_approved_at: new Date().toISOString()
         };
         if (approverUuid) {
-          fullPayload.final_approved_by = approverUuid;
+          fullPayload.approver_final_id = approverUuid;
         }
 
         const { error: fullErr } = await supabase.from('leave_requests').update(fullPayload).eq('id', id);
@@ -1572,9 +1573,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         } else {
           console.warn('Thử cập nhật tối giản status cấp cuối do bảng DB có thể thiếu cột:', fullErr.message);
           const simplePayload: any = { status: 'approved_final' };
-          if (approverUuid) simplePayload.final_approved_by = approverUuid;
+          if (approverUuid) simplePayload.approver_final_id = approverUuid;
           const { error: simpleErr } = await supabase.from('leave_requests').update(simplePayload).eq('id', id);
           if (!simpleErr) {
+            updateSuccess = true;
+          } else {
+            await supabase.from('leave_requests').update({ status: 'approved_final' }).eq('id', id);
             updateSuccess = true;
           }
         }
@@ -1596,7 +1600,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
             type: targetReq.type,
             status: 'approved_final',
             reason: targetReq.reason,
-            final_approved_by: approverUuid,
+            approver_final_id: approverUuid,
             final_approved_name: approverName,
             final_approved_at: new Date().toISOString()
           }, { onConflict: 'id' });

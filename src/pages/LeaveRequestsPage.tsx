@@ -65,7 +65,7 @@ export default function LeaveRequestsPage() {
   const currentUserId = profile?.id || user?.id || '';
   const currentYear = new Date().getFullYear();
 
-  const isLeader = ['sale_leader', 'marketing_leader', 'admin', 'bod'].includes(effectiveRole);
+  const isLeader = ['sale_leader', 'marketing_leader', 'visa_leader', 'operator', 'admin', 'bod'].includes(effectiveRole);
   const isHRorBODorAdmin = ['hr', 'bod', 'admin'].includes(effectiveRole);
   const isHROrAdmin = ['hr', 'admin', 'bod'].includes(effectiveRole);
 

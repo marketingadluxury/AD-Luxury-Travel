@@ -34,7 +34,7 @@ export const TimesheetManagement: React.FC = () => {
   const effectiveRole = currentRole || profile?.role || 'sale';
 
   const isHRorBODorAdmin = ['hr', 'bod', 'admin', 'accounting'].includes(effectiveRole);
-  const isLeader = ['sale_leader', 'marketing_leader', 'operator'].includes(effectiveRole);
+  const isLeader = ['sale_leader', 'marketing_leader', 'visa_leader', 'operator'].includes(effectiveRole);
   // Quyền xuất file Excel: Chỉ dành cho HR, Ban Giám Đốc (bod) và Quản trị viên (admin)
   const canExportExcel = ['hr', 'bod', 'admin'].includes(effectiveRole);
 

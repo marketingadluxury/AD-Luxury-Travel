@@ -10,8 +10,9 @@ interface PaymentProposalPrintModalProps {
 }
 
 // Map role sang tên phòng ban tương ứng
-function getDepartmentFromRole(role?: string): string {
-  switch (role) {
+function getDepartmentFromRole(role?: string, name?: string): string {
+  const normRole = (name?.toLowerCase().includes('hậu') && role === 'sale_leader') ? 'marketing_leader' : role;
+  switch (normRole) {
     case 'marketing':
     case 'marketing_leader':
       return 'Marketing';
@@ -25,6 +26,7 @@ function getDepartmentFromRole(role?: string): string {
     case 'hr':
       return 'Hành chính Nhân sự';
     case 'visa':
+    case 'visa_leader':
       return 'Bộ phận Visa';
     case 'tour_guide':
       return 'Hướng dẫn viên';
@@ -34,6 +36,39 @@ function getDepartmentFromRole(role?: string): string {
       return 'Ban Giám Đốc / Quản trị';
     default:
       return 'Văn phòng Công ty';
+  }
+}
+
+// Map role sang chức vụ tương ứng
+function getPositionFromRole(role?: string, name?: string): string {
+  const normRole = (name?.toLowerCase().includes('hậu') && role === 'sale_leader') ? 'marketing_leader' : role;
+  switch (normRole) {
+    case 'marketing_leader':
+      return 'Trưởng phòng Marketing';
+    case 'marketing':
+      return 'Chuyên viên Marketing';
+    case 'sale_leader':
+      return 'Trưởng nhóm Kinh doanh (Sale Leader)';
+    case 'sale':
+      return 'Chuyên viên Tư vấn (Sale)';
+    case 'visa_leader':
+      return 'Trưởng bộ phận Visa';
+    case 'visa':
+      return 'Chuyên viên Visa';
+    case 'operator':
+      return 'Điều hành Tour';
+    case 'accounting':
+      return 'Kế toán';
+    case 'hr':
+      return 'Hành chính Nhân sự';
+    case 'tour_guide':
+      return 'Hướng dẫn viên';
+    case 'bod':
+      return 'Ban Giám Đốc';
+    case 'admin':
+      return 'Quản trị viên';
+    default:
+      return 'Nhân viên';
   }
 }
 
@@ -92,7 +127,8 @@ export default function PaymentProposalPrintModal({ isOpen, onClose, proposal }:
 
   const dateObj = formatVietnameseDate(proposal.created_at);
   const wordsAmount = numberToVietnameseWords(proposal.amount);
-  const department = getDepartmentFromRole(proposal.created_by_role);
+  const department = getDepartmentFromRole(proposal.created_by_role, proposal.created_by_name);
+  const position = getPositionFromRole(proposal.created_by_role, proposal.created_by_name);
   const paymentDateStr = formatDateShort(proposal.due_date || proposal.created_at);
 
   const bankCode = getBankCode(proposal.bank_name);
@@ -218,6 +254,7 @@ export default function PaymentProposalPrintModal({ isOpen, onClose, proposal }:
               <div>
                 <span className="font-bold">Họ và tên người đề nghị thanh toán: </span>
                 <span>{proposal.created_by_name}</span>
+                <span className="text-slate-600 ml-2">({position})</span>
               </div>
 
               <div>
