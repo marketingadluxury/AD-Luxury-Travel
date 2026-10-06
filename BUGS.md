@@ -6,6 +6,22 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.93 Nâng Cấp Chuông Âm Lượng & Kích Hoạt Thông Báo Đẩy Tức Thì Khi Tạo/Duyệt Nghỉ Phép
+- **Mô tả yêu cầu:**
+  - Người dùng phản ánh âm thanh thông báo đẩy còn nhỏ và khi tạo đơn nghỉ phép thì không thấy thông báo đẩy xuất hiện trên máy tính.
+- **Nguyên nhân:**
+  - Hàm phát âm thanh Web Audio API `playNotificationSound` cấu hình gain thấp (`0.18`/`0.22`), dẫn đến âm thanh chuông nhỏ trên loa máy tính.
+  - Khi gọi `createLeaveRequest`, `approveLeaveRequestLevel1`, `approveLeaveRequestFinal`, `rejectLeaveRequest`, hệ thống chỉ thêm notification vào state cục bộ mà chưa kích hoạt gọi trực tiếp `sendDesktopNotification` và realtime event `INSERT`/`UPDATE` của bảng `leave_requests` chưa kích hoạt thông báo đẩy cho các máy client khác.
+- **Giải pháp triển khai:**
+  1. **Tăng cường âm lượng chuông thông báo (`desktopNotification.ts`):**
+     - Nâng mức gain từ `0.18` lên `0.70 - 0.85` (gấp 4 lần), tạo hiệu ứng chuông Crystal Chimes 3 nốt sang trọng (E6 ➔ G#6 ➔ B6), vang rõ và không bị vỡ tiếng.
+  2. **Kích hoạt Thông báo đẩy tức thì (`CRMContext.tsx`):**
+     - Tích hợp gọi trực tiếp `sendDesktopNotification` khi tạo đơn nghỉ phép (`createLeaveRequest`), khi Leader duyệt cấp 1 (`approveLeaveRequestLevel1`), khi duyệt hoàn tất (`approveLeaveRequestFinal`) và khi từ chối (`rejectLeaveRequest`).
+     - Tích hợp lắng nghe realtime Supabase `leave_management_realtime` cho các sự kiện `INSERT` và `UPDATE` bảng `leave_requests` để phát thông báo đẩy Desktop ngay cả khi đơn được tạo từ thiết bị khác.
+     - Đồng bộ quy trình tương tự cho phân hệ Đề nghị thanh toán (`payment_proposals`).
+  3. **Kiểm thử tự động:** Vượt qua 100% các bài test (`npm test`, `npm run test:simulation`, `lint_applet`, `compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.92 Tích Hợp Nút Phê Duyệt Trực Tiếp Trên Kanban & Modal Đề Nghị Thanh Toán
 - **Mô tả yêu cầu:**
   - Ở chế độ xem Kanban (`viewMode === 'kanban'`) và trong Modal xem chi tiết đề nghị thanh toán (`showDetailModal`), người dùng có quyền Leader và Kế toán không thấy các nút hành động để phê duyệt hoặc từ chối đề nghị.

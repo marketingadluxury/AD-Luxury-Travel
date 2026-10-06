@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth, UserProfile } from './AuthContext';
 import { triggerMetaCapiEvent, fetchMetaConversionLogs, fetchMetaCapiConfig } from '../lib/metaCapiService';
 import { DEFAULT_VIETNAM_HOLIDAYS, getLeaveRequestWorkdaysCount, calculateDefaultAccruedLeaveDays, calculateTotalUsedAnnualDays } from '../lib/payrollUtils';
+import { sendDesktopNotification } from '../utils/desktopNotification';
 
 const idMap: { [key: string]: string } = {
   '1': 'a809b4db-9ee7-4c07-b352-09419106093d',
@@ -1168,8 +1169,34 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     if (isSupabaseConfigured()) {
       const channel = supabase
         .channel('leave_management_realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leave_requests' }, (payload: any) => {
           fetchLeaveRequests();
+          const newRow = payload.new;
+          if (newRow) {
+            sendDesktopNotification({
+              title: '📋 Đơn xin nghỉ phép mới cần duyệt',
+              body: `${newRow.user_name || 'Nhân viên'} vừa gửi đơn xin nghỉ (${newRow.start_date} -> ${newRow.end_date}).`,
+              url: '/leave-requests',
+              tag: `leave-${newRow.id}`,
+              playSound: true
+            });
+          }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leave_requests' }, (payload: any) => {
+          fetchLeaveRequests();
+          const updatedRow = payload.new;
+          if (updatedRow) {
+            const statusText = updatedRow.status === 'approved' || updatedRow.status === 'approved_final' ? 'được duyệt hoàn tất' :
+                               updatedRow.status === 'approved_level_1' ? 'được Leader duyệt cấp 1' :
+                               updatedRow.status === 'rejected' ? 'bị từ chối' : 'cập nhật';
+            sendDesktopNotification({
+              title: '🔔 Cập nhật trạng thái đơn nghỉ phép',
+              body: `Đơn nghỉ phép của ${updatedRow.user_name || 'nhân viên'} đã ${statusText}.`,
+              url: '/leave-requests',
+              tag: `leave-upd-${updatedRow.id}-${updatedRow.status}`,
+              playSound: true
+            });
+          }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_balances' }, () => {
           fetchLeaveBalances();
@@ -1385,12 +1412,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     addSystemNotification({
       id: generateSafeUUID(),
-      type: 'system',
+      type: 'leave',
       title: 'Đơn xin nghỉ phép mới cần duyệt',
       message: `${requestData.user_name || 'Nhân viên'} vừa gửi đơn xin nghỉ (${requestData.start_date} -> ${requestData.end_date}${sessionText}).`,
       targetId: newId,
       createdAt: new Date().toISOString(),
       read: false
+    });
+
+    sendDesktopNotification({
+      title: '📋 Đơn xin nghỉ phép mới đã gửi',
+      body: `${requestData.user_name || 'Nhân viên'} vừa gửi đơn xin nghỉ (${requestData.start_date} -> ${requestData.end_date}${sessionText}). Cần Trưởng bộ phận duyệt.`,
+      url: '/leave-requests',
+      tag: `leave-${newId}`,
+      playSound: true
     });
 
     toast.success('Đã gửi đơn xin nghỉ phép thành công!');
@@ -1475,6 +1510,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         console.warn('Lỗi approve cấp 1 leave_requests:', err?.message || err);
       }
     }
+
+    addSystemNotification({
+      id: generateSafeUUID(),
+      type: 'leave',
+      title: 'Đơn nghỉ phép đã được Leader duyệt (Cấp 1)',
+      message: `${approverName} vừa duyệt đơn nghỉ phép của ${targetReq?.user_name || 'nhân viên'}. Đã chuyển tới HR để duyệt hoàn tất.`,
+      targetId: id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+
+    sendDesktopNotification({
+      title: '✅ Đơn nghỉ phép đã được Leader duyệt (Cấp 1)',
+      body: `${approverName} vừa duyệt đơn nghỉ phép của ${targetReq?.user_name || 'nhân viên'}. Chuyển tới HR duyệt hoàn tất.`,
+      url: '/leave-requests',
+      tag: `leave-l1-${id}`,
+      playSound: true
+    });
 
     toast.success('Trưởng bộ phận đã duyệt đơn (Cấp 1)');
   };
@@ -1610,6 +1663,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       }
     }
 
+    addSystemNotification({
+      id: generateSafeUUID(),
+      type: 'leave',
+      title: 'Đơn nghỉ phép đã được duyệt hoàn tất',
+      message: `${approverName} đã duyệt hoàn tất đơn nghỉ phép của ${targetReq?.user_name || 'nhân viên'}.`,
+      targetId: id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+
+    sendDesktopNotification({
+      title: '🎉 Đơn xin nghỉ phép đã được duyệt hoàn tất',
+      body: `${approverName} đã duyệt hoàn tất đơn nghỉ phép của ${targetReq?.user_name || 'nhân viên'}.`,
+      url: '/leave-requests',
+      tag: `leave-final-${id}`,
+      playSound: true
+    });
+
     toast.success('Đã duyệt đơn nghỉ phép thành công (Cấp cuối)!');
   };
 
@@ -1650,6 +1721,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         console.warn('Lỗi reject leave_requests:', err?.message || err);
       }
     }
+
+    addSystemNotification({
+      id: generateSafeUUID(),
+      type: 'leave',
+      title: 'Đơn nghỉ phép bị từ chối',
+      message: `${approverName} đã từ chối đơn nghỉ phép của ${targetReq?.user_name || 'nhân viên'}. Lý do: ${reason}`,
+      targetId: id,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+
+    sendDesktopNotification({
+      title: '❌ Đơn xin nghỉ phép bị từ chối',
+      body: `${approverName} đã từ chối đơn nghỉ phép của ${targetReq?.user_name || 'nhân viên'}. Lý do: ${reason}`,
+      url: '/leave-requests',
+      tag: `leave-reject-${id}`,
+      playSound: true
+    });
 
     toast.error('Đã từ chối đơn xin nghỉ phép');
   };
@@ -6103,12 +6192,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     addSystemNotification({
       id: 'N-' + Date.now(),
-      type: 'accounting',
+      type: 'proposal',
       title: 'Đề nghị thanh toán mới',
       message: `${newProposal.created_by_name} (${newProposal.created_by_role}) vừa gửi đề nghị thanh toán ${newProposal.code}: ${newProposal.title} (${newProposal.amount.toLocaleString('vi-VN')} đ). Cần Leader duyệt.`,
       targetId: newProposal.id,
       createdAt: new Date().toISOString(),
       read: false
+    });
+
+    sendDesktopNotification({
+      title: '💳 Đề nghị thanh toán mới',
+      body: `${newProposal.created_by_name} vừa gửi đề nghị ${newProposal.code} (${newProposal.amount.toLocaleString('vi-VN')} đ). Cần Leader duyệt.`,
+      url: '/payment-proposals',
+      tag: `proposal-${newProposal.id}`,
+      playSound: true
     });
 
     return newProposal;
@@ -6145,12 +6242,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     addSystemNotification({
       id: 'N-' + Date.now(),
-      type: 'accounting',
+      type: 'proposal',
       title: 'Đề nghị thanh toán đã qua vòng duyệt Leader',
       message: `Leader ${leaderName} đã duyệt đề nghị ${target.code} của ${target.created_by_name}. Đã chuyển thông tin tới Kế toán để chi tiền.`,
       targetId: target.id,
       createdAt: new Date().toISOString(),
       read: false
+    });
+
+    sendDesktopNotification({
+      title: '✅ Leader đã duyệt Đề nghị thanh toán',
+      body: `Leader ${leaderName} đã duyệt đề nghị ${target.code}. Đã chuyển tới Kế toán để chi tiền.`,
+      url: '/payment-proposals',
+      tag: `proposal-l1-${target.id}`,
+      playSound: true
     });
   };
 
@@ -6185,12 +6290,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     addSystemNotification({
       id: 'N-' + Date.now(),
-      type: 'accounting',
+      type: 'proposal',
       title: 'Đề nghị thanh toán bị từ chối bởi Leader',
       message: `Leader ${leaderName} đã từ chối đề nghị ${target.code}.${leaderNote ? ` Lý do: ${leaderNote}` : ''}`,
       targetId: target.id,
       createdAt: new Date().toISOString(),
       read: false
+    });
+
+    sendDesktopNotification({
+      title: '❌ Đề nghị thanh toán bị từ chối',
+      body: `Leader ${leaderName} đã từ chối đề nghị ${target.code}.${leaderNote ? ` Lý do: ${leaderNote}` : ''}`,
+      url: '/payment-proposals',
+      tag: `proposal-rej-${target.id}`,
+      playSound: true
     });
   };
 
@@ -6252,12 +6365,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     addSystemNotification({
       id: 'N-' + Date.now(),
-      type: 'accounting',
+      type: 'proposal',
       title: 'Đề nghị thanh toán đã được Chi tiền',
       message: `Kế toán ${accountingName} đã duyệt & thực hiện chi tiền cho đề nghị ${target.code} (${target.amount.toLocaleString('vi-VN')} đ).`,
       targetId: target.id,
       createdAt: new Date().toISOString(),
       read: false
+    });
+
+    sendDesktopNotification({
+      title: '💵 Đề nghị thanh toán đã được Chi tiền',
+      body: `Kế toán ${accountingName} đã duyệt & thực hiện chi tiền cho đề nghị ${target.code} (${target.amount.toLocaleString('vi-VN')} đ).`,
+      url: '/payment-proposals',
+      tag: `proposal-acc-${target.id}`,
+      playSound: true
     });
   };
 
@@ -6292,12 +6413,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
     addSystemNotification({
       id: 'N-' + Date.now(),
-      type: 'accounting',
+      type: 'proposal',
       title: 'Đề nghị thanh toán bị Kế toán từ chối',
-      message: `Kế toán ${accountingName} đã từ chối chi đề nghị ${target.code}.${accountingNote ? ` Lý do: ${accountingNote}` : ''}`,
+      message: `Kế toán ${accountingName} đã từ chối đề nghị ${target.code}.${accountingNote ? ` Lý do: ${accountingNote}` : ''}`,
       targetId: target.id,
       createdAt: new Date().toISOString(),
       read: false
+    });
+
+    sendDesktopNotification({
+      title: '❌ Đề nghị thanh toán bị Kế toán từ chối',
+      body: `Kế toán ${accountingName} đã từ chối đề nghị ${target.code}.${accountingNote ? ` Lý do: ${accountingNote}` : ''}`,
+      url: '/payment-proposals',
+      tag: `proposal-acc-rej-${target.id}`,
+      playSound: true
     });
   };
 

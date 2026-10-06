@@ -74,8 +74,8 @@ export async function requestDesktopNotificationPermission(): Promise<boolean> {
 }
 
 /**
- * Phát âm thanh chuông thông báo AD Luxury (Web Audio API - E6 -> B6 Crystal Chimes)
- * Không phụ thuộc file mp3 ngoài, độ trễ 0ms, không lỗi CORS
+ * Phát âm thanh chuông thông báo AD Luxury (Web Audio API - E6 -> G#6 -> B6 Crystal Chimes)
+ * Tăng cường âm lượng to rõ, trong trẻo, không phụ thuộc file ngoài, độ trễ 0ms
  */
 export function playNotificationSound(): void {
   if (isDesktopNotificationSoundMuted()) return;
@@ -91,31 +91,44 @@ export function playNotificationSound(): void {
 
     const now = ctx.currentTime;
 
-    // Âm 1: E6 (1318.5 Hz)
+    // Nốt 1: E6 (1318.5 Hz) - Âm mở đầu
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(1318.5, now);
     gain1.gain.setValueAtTime(0, now);
-    gain1.gain.linearRampToValueAtTime(0.18, now + 0.02);
-    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    gain1.gain.linearRampToValueAtTime(0.70, now + 0.02);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
     osc1.connect(gain1);
     gain1.connect(ctx.destination);
     osc1.start(now);
-    osc1.stop(now + 0.35);
+    osc1.stop(now + 0.45);
 
-    // Âm 2: B6 (1975.5 Hz) sau 120ms
+    // Nốt 2: G#6 (1661.2 Hz) sau 90ms - Âm chuyển tiếp
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1975.5, now + 0.12);
-    gain2.gain.setValueAtTime(0, now + 0.12);
-    gain2.gain.linearRampToValueAtTime(0.22, now + 0.14);
-    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+    osc2.frequency.setValueAtTime(1661.2, now + 0.09);
+    gain2.gain.setValueAtTime(0, now + 0.09);
+    gain2.gain.linearRampToValueAtTime(0.75, now + 0.11);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);
-    osc2.start(now + 0.12);
-    osc2.stop(now + 0.6);
+    osc2.start(now + 0.09);
+    osc2.stop(now + 0.55);
+
+    // Nốt 3: B6 (1975.5 Hz) sau 180ms - Âm điểm nhấn cao vút, ngân vang
+    const osc3 = ctx.createOscillator();
+    const gain3 = ctx.createGain();
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(1975.5, now + 0.18);
+    gain3.gain.setValueAtTime(0, now + 0.18);
+    gain3.gain.linearRampToValueAtTime(0.85, now + 0.20);
+    gain3.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+    osc3.connect(gain3);
+    gain3.connect(ctx.destination);
+    osc3.start(now + 0.18);
+    osc3.stop(now + 0.85);
   } catch (e) {
     console.warn('Không thể phát âm thanh chuông:', e);
   }
