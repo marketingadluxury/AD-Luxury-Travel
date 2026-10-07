@@ -6,6 +6,36 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.95 Nâng Cấp Modal Lựa Chọn Sản Phẩm Website Trước Khi Đồng Bộ Tour (Multi-Departure)
+- **Mô tả yêu cầu:**
+  - Website `adluxury.net` quản lý một sản phẩm Tour mẹ gồm nhiều ngày khởi hành.
+  - Trước đây khi đồng bộ tự động sẽ tạo mỗi ngày khởi hành thành 1 sản phẩm mới riêng biệt trên website.
+  - Cần nâng cấp giao diện Modal trước khi bấm đồng bộ: Cho phép người dùng tìm kiếm và chọn sản phẩm Tour mẹ có sẵn trên website (hoặc chọn tạo mới nếu chưa có); nếu sản phẩm đã có mã lịch thì cập nhật, nếu chưa có thì tự động thêm dòng lịch khởi hành mới vào sản phẩm đó.
+- **Giải pháp triển khai:**
+  1. **Nâng cấp Backend API WooCommerce (`woocommerceRoutes.ts`, `woocommerceService.ts`):**
+     - Bổ sung endpoint `GET /api/woocommerce/products` hỗ trợ tìm kiếm sản phẩm realtime theo tên/từ khóa và phân trang.
+     - Cập nhật logic `POST /api/woocommerce/sync-tour/:id` nhận tham số `target_product_id` và `force_new`: Ghép chính xác ngày khởi hành vào bảng ACF repeater của sản phẩm mẹ được chọn; nếu mã lịch đã tồn tại thì cập nhật giá/chỗ trống, nếu chưa có thì thêm mới.
+  2. **Xây dựng Modal Thông Minh (`SyncTourToWooCommerceModal.tsx`):**
+     - Tích hợp 2 chế độ trực quan: **Ghép vào sản phẩm có sẵn trên Website** (kèm tìm kiếm realtime, chọn sản phẩm, hiển thị số lịch hiện có, link xem trước) và **Tạo thành sản phẩm mới hoàn toàn**.
+     - Tự động nhận diện và chọn trước sản phẩm nếu tour đã có `wp_product_id` hoặc tên trùng khớp.
+     - Hiển thị thông báo trạng thái trực quan: Bổ sung lịch mới (`+ Thêm mới`) hoặc Cập nhật lịch hiện có (`Cập nhật`).
+  3. **Kiểm thử tự động:** Vượt qua 100% các bài test (`npm test`, `npm run test:simulation`, `lint_applet`, `compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.94 Nâng Cấp Tab Duyệt C1 & Đơn Nhóm Duy Trì Theo Dõi Đơn Nghỉ Phép
+- **Mô tả yêu cầu:**
+  - Sau khi Trưởng bộ phận (Leader) duyệt Cấp 1 cho nhân viên của mình, đơn chuyển sang trạng thái chờ duyệt Cấp cuối (`approved_level_1`) và biến mất khỏi tab duyệt, khiến Leader không thể theo dõi tiếp tiến trình đơn.
+- **Nguyên nhân:**
+  - Tab `team_approval` lọc cứng điều kiện `if (r.status !== 'pending') return false;`, dẫn đến khi đơn được duyệt C1 thì bị ẩn ngay lập tức khỏi tab này.
+  - Leader không có quyền truy cập tab `final_approval` (dành riêng cho HR/BOD/Admin), dẫn đến mất dấu đơn của nhân viên sau khi duyệt.
+- **Giải pháp triển khai:**
+  1. **Nâng cấp Tab "Duyệt C1 & Đơn nhóm" (`LeaveRequestsPage.tsx`):**
+     - Đổi tên tab thành `Duyệt C1 & Đơn nhóm`, cho phép hiển thị toàn bộ vòng đời đơn nghỉ phép của các thành viên trong nhóm phụ trách (Chờ duyệt C1, Đã duyệt C1 chờ HR, Đã duyệt hoàn tất, Đã từ chối).
+     - Duy trì huy hiệu số đỏ đếm số đơn **Chờ duyệt C1** (`pendingLevel1Requests.length`) để nhắc nhở hành động cần duyệt.
+     - Sau khi duyệt C1, đơn vẫn hiển thị trong danh sách với trạng thái trực quan `Trưởng nhóm đã duyệt • Chờ HR/BOD duyệt (C2)` và tích hợp bộ lọc Trạng thái linh hoạt.
+  2. **Kiểm thử tự động:** Vượt qua 100% các bài test (`npm test`, `npm run test:simulation`, `lint_applet`, `compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.93 Nâng Cấp Chuông Âm Lượng & Kích Hoạt Thông Báo Đẩy Tức Thì Khi Tạo/Duyệt Nghỉ Phép
 - **Mô tả yêu cầu:**
   - Người dùng phản ánh âm thanh thông báo đẩy còn nhỏ và khi tạo đơn nghỉ phép thì không thấy thông báo đẩy xuất hiện trên máy tính.

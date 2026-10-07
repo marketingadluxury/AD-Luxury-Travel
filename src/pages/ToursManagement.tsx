@@ -58,6 +58,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { SyncTourToWooCommerceModal } from '@/components/SyncTourToWooCommerceModal';
 import { CustomSelect } from '@/components/CustomSelect';
 import DashboardOperator from '@/components/DashboardOperator';
 import TourCostsManagement from '@/components/TourCostsManagement';
@@ -519,38 +520,11 @@ export default function ToursManagement() {
   // WooCommerce Sync states
   const [isSyncingTourId, setIsSyncingTourId] = useState<string | null>(null);
   const [isBulkSyncing, setIsBulkSyncing] = useState<boolean>(false);
+  const [selectedTourForWpSync, setSelectedTourForWpSync] = useState<Tour | null>(null);
 
-  const handleSyncSingleTourToWooCommerce = async (tour: Tour) => {
-    try {
-      setIsSyncingTourId(tour.id);
-      const res = await fetch(`/api/woocommerce/sync-tour/${tour.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast.success(json.message || 'Đồng bộ sang Website thành công!');
-        updateTour({
-          ...tour,
-          wp_product_id: json.product_id,
-          wp_sync_status: 'synced',
-          wp_last_synced_at: new Date().toISOString(),
-          wp_sync_message: json.message
-        });
-      } else {
-        toast.error(json.message || 'Đồng bộ thất bại');
-        updateTour({
-          ...tour,
-          wp_sync_status: 'failed',
-          wp_last_synced_at: new Date().toISOString(),
-          wp_sync_message: json.message
-        });
-      }
-    } catch (err: any) {
-      toast.error('Lỗi khi gọi đồng bộ: ' + err.message);
-    } finally {
-      setIsSyncingTourId(null);
-    }
+  const handleSyncSingleTourToWooCommerce = (tour: Tour) => {
+    // Mở modal lựa chọn sản phẩm website thông minh trước khi đồng bộ
+    setSelectedTourForWpSync(tour);
   };
 
   const handleBulkSyncToWooCommerce = async () => {
@@ -4580,6 +4554,24 @@ export default function ToursManagement() {
           </div>
         </div>
       )}
+
+      {/* Modal Lựa chọn Sản phẩm Website & Đồng bộ Tour Thông minh */}
+      <SyncTourToWooCommerceModal
+        isOpen={!!selectedTourForWpSync}
+        onClose={() => setSelectedTourForWpSync(null)}
+        tour={selectedTourForWpSync}
+        onSyncSuccess={(res) => {
+          if (selectedTourForWpSync && res?.product_id) {
+            updateTour({
+              ...selectedTourForWpSync,
+              wp_product_id: res.product_id,
+              wp_sync_status: 'synced',
+              wp_last_synced_at: new Date().toISOString(),
+              wp_sync_message: res.message
+            });
+          }
+        }}
+      />
     </div>
   );
 }

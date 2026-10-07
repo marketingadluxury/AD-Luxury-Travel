@@ -3,11 +3,32 @@ import {
   getWooCommerceConfig,
   saveWooCommerceConfig,
   testWooCommerceConnection,
+  getWooCommerceProducts,
   syncTourToWooCommerce,
   syncAllToursToWooCommerce
 } from '../services/woocommerceService.js';
 
 const router = Router();
+
+/**
+ * GET /api/woocommerce/products
+ * Lấy danh sách sản phẩm Tour hiện có trên website WordPress WooCommerce
+ */
+router.get(['/api/woocommerce/products', '/woocommerce/products'], async (req, res) => {
+  try {
+    const search = req.query.search as string | undefined;
+    const perPage = req.query.per_page ? parseInt(req.query.per_page as string, 10) : 20;
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+
+    const result = await getWooCommerceProducts(search, perPage, page);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Lỗi khi lấy danh sách sản phẩm WooCommerce'
+    });
+  }
+});
 
 /**
  * GET /api/woocommerce/config
@@ -101,16 +122,17 @@ router.post('/api/woocommerce/test-connection', async (req, res) => {
 
 /**
  * POST /api/woocommerce/sync-tour/:id
- * Đồng bộ 1 tour cụ thể sang WooCommerce
+ * Đồng bộ 1 tour cụ thể sang WooCommerce (hỗ trợ chọn sản phẩm cha hoặc tạo mới)
  */
-router.post('/api/woocommerce/sync-tour/:id', async (req, res) => {
+router.post(['/api/woocommerce/sync-tour/:id', '/woocommerce/sync-tour/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
       return res.status(400).json({ success: false, message: 'Thiếu ID Tour' });
     }
 
-    const result = await syncTourToWooCommerce(id);
+    const { target_product_id, force_new } = req.body || {};
+    const result = await syncTourToWooCommerce(id, { target_product_id, force_new });
     res.json(result);
   } catch (error: any) {
     res.status(500).json({

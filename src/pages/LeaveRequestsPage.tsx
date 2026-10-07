@@ -158,8 +158,8 @@ export default function LeaveRequestsPage() {
     if (activeTab === 'my_leaves') {
       list = myRequests;
     } else if (activeTab === 'team_approval') {
+      // Hiển thị toàn bộ đơn của các thành viên thuộc nhóm do Leader phụ trách (để theo dõi tiến trình kể cả sau khi đã duyệt C1)
       list = leaveRequests.filter((r) => {
-        if (r.status !== 'pending') return false;
         if (r.user_id === currentUserId) return false;
         const creator = profilesList.find((p) => p.id === r.user_id);
         return isUserAuthorizedToApproveLeaveL1(
@@ -171,7 +171,8 @@ export default function LeaveRequestsPage() {
         );
       });
     } else if (activeTab === 'final_approval') {
-      list = leaveRequests.filter((r) => r.status === 'approved_level_1' || r.status === 'approved_final' || r.status === 'rejected' || (['admin', 'bod', 'hr'].includes(effectiveRole) && r.status === 'pending'));
+      // Dành cho HR / BOD / Admin xem toàn bộ đơn của nhân sự để duyệt hoặc kiểm tra lịch sử
+      list = leaveRequests.filter((r) => r.user_id !== currentUserId);
     } else {
       list = leaveRequests;
     }
@@ -429,7 +430,7 @@ export default function LeaveRequestsPage() {
               }`}
             >
               <UserCheck className="w-3.5 h-3.5 shrink-0" />
-              <span>Duyệt Cấp 1</span>
+              <span>Duyệt C1 & Đơn nhóm</span>
               {pendingLevel1Requests.length > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
                   {pendingLevel1Requests.length}
