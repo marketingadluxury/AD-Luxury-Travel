@@ -381,11 +381,11 @@ export default function LeaveRequestPrintModal({
 
                   <div>
                     <div className="h-16 sm:h-20 flex items-end justify-center font-serif text-xs pb-1 text-black">
-                      {leaveRequest.approver_level_1_name || (leaveRequest.status !== 'pending' ? 'HÙNG TRUNG' : '')}
+                      {leaveRequest.approver_final_name || (leaveRequest.status === 'approved_final' ? 'BOD' : '')}
                     </div>
                     <div className="border-b border-black w-full mb-1.5"></div>
-                    <div className="italic text-black leading-snug">Signature of Head of Division</div>
-                    <div className="italic text-black leading-snug">Chữ ký của Trưởng phòng</div>
+                    <div className="italic text-black leading-snug">Signature of BOD</div>
+                    <div className="italic text-black leading-snug">Chữ ký của BOD</div>
                   </div>
 
                   <div>

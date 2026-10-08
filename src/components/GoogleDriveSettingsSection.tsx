@@ -25,7 +25,7 @@ interface ConnectedAccount {
 }
 
 export const GoogleDriveSettingsSection: React.FC = () => {
-  const { session } = useAuth();
+  const { session, profile, user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,6 +38,10 @@ export const GoogleDriveSettingsSection: React.FC = () => {
   // Modal Connect Account
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'token' | 'oauth'>('token');
+
+  // Modal Confirm Delete Account
+  const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form Token state
   const [formEmail, setFormEmail] = useState('tranconghau1509@gmail.com');
@@ -60,6 +64,8 @@ export const GoogleDriveSettingsSection: React.FC = () => {
       const token = session?.access_token;
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile?.role) headers['x-user-role'] = profile.role;
+      if (user?.email) headers['x-user-email'] = user.email;
 
       const res = await fetch('/api/drive/config', { headers });
       const data = await res.json();
@@ -113,6 +119,8 @@ export const GoogleDriveSettingsSection: React.FC = () => {
         'Content-Type': 'application/json'
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile?.role) headers['x-user-role'] = profile.role;
+      if (user?.email) headers['x-user-email'] = user.email;
 
       const res = await fetch('/api/drive/add-account', {
         method: 'POST',
@@ -189,6 +197,8 @@ export const GoogleDriveSettingsSection: React.FC = () => {
         'Content-Type': 'application/json'
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile?.role) headers['x-user-role'] = profile.role;
+      if (user?.email) headers['x-user-email'] = user.email;
 
       const res = await fetch('/api/drive/select-account', {
         method: 'POST',
@@ -214,35 +224,45 @@ export const GoogleDriveSettingsSection: React.FC = () => {
     }
   };
 
-  // 4. Xóa tài khoản khỏi danh sách
-  const handleRemoveAccount = async (email: string, e: React.MouseEvent) => {
+  // 4. Mở modal xác nhận xóa tài khoản
+  const handleOpenDeleteModal = (email: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Bạn có chắc muốn xóa tài khoản ${email} khỏi danh sách liên kết không?`)) {
-      return;
-    }
+    setAccountToDelete(email);
+  };
+
+  // 5. Thực hiện xóa tài khoản sau khi người dùng bấm xác nhận trong Modal
+  const handleConfirmDelete = async () => {
+    if (!accountToDelete) return;
 
     try {
+      setIsDeleting(true);
       const token = session?.access_token;
       const headers: HeadersInit = {
         'Content-Type': 'application/json'
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile?.role) headers['x-user-role'] = profile.role;
+      if (user?.email) headers['x-user-email'] = user.email;
 
       const res = await fetch('/api/drive/remove-account', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: accountToDelete })
       });
 
       const data = await res.json();
-      if (data.success) {
-        toast.success(`Đã xóa tài khoản ${email}.`);
+      if (res.ok && data.success) {
+        toast.success(`Đã ngắt kết nối và xóa tài khoản ${accountToDelete} thành công.`);
+        setAccountToDelete(null);
         await fetchConfig(true);
       } else {
-        toast.error(data.error || 'Lỗi khi xóa.');
+        toast.error(data.error || 'Lỗi khi xóa tài khoản.');
       }
     } catch (err: any) {
+      console.error('Lỗi khi xóa tài khoản Google Drive:', err);
       toast.error('Lỗi kết nối máy chủ.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -348,9 +368,9 @@ export const GoogleDriveSettingsSection: React.FC = () => {
                     {accounts.length > 1 && (
                       <button
                         type="button"
-                        onClick={(e) => handleRemoveAccount(acc.email, e)}
+                        onClick={(e) => handleOpenDeleteModal(acc.email, e)}
                         title="Xóa kết nối tài khoản này"
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -616,6 +636,65 @@ export const GoogleDriveSettingsSection: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal xác nhận ngắt kết nối tài khoản Google Drive */}
+      {accountToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center mx-auto mb-4 text-rose-600">
+                <Trash2 className="w-6 h-6" />
+              </div>
+
+              <h3 className="text-base font-bold text-slate-900 text-center mb-2">
+                Xác nhận ngắt kết nối tài khoản
+              </h3>
+
+              <p className="text-xs text-slate-600 text-center leading-relaxed mb-4">
+                Bạn có chắc chắn muốn ngắt kết nối và xóa tài khoản{' '}
+                <strong className="text-slate-900 font-bold font-mono">{accountToDelete}</strong>{' '}
+                khỏi danh sách Google Drive của hệ thống không?
+              </p>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-[11px] text-amber-800 flex items-start gap-2 mb-6">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  Các tệp đã tải lên trước đó vẫn được lưu an toàn trên Google Drive. Tuy nhiên hệ thống sẽ không thể tiếp tục tải tệp lên tài khoản này.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setAccountToDelete(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleConfirmDelete}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-700 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang xóa...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Xác nhận xóa</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

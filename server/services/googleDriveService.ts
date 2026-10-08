@@ -766,3 +766,193 @@ export async function uploadWith3TierFallback(
     throw new Error(`Lỗi tải file lên Google Drive: ${driveErrorMsg}`);
   }
 }
+
+/**
+ * Tìm hoặc tạo file Google Spreadsheet 'Góp Ý & Báo Lỗi - Tour CRM' trong thư mục Góp Ý & Báo Lỗi
+ */
+export async function getOrCreateFeedbackSpreadsheet(folderId: string, token: string): Promise<string> {
+  const sheetName = 'Góp Ý & Báo Lỗi - Tour CRM';
+  const query = encodeURIComponent(`mimeType='application/vnd.google-apps.spreadsheet' and name='${sheetName}' and '${folderId}' in parents and trashed=false`);
+  const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (searchRes.ok) {
+    const data = await searchRes.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+  }
+
+  // Tìm trong toàn bộ Drive nếu chưa nằm trong thư mục con
+  const globalQuery = encodeURIComponent(`mimeType='application/vnd.google-apps.spreadsheet' and name='${sheetName}' and trashed=false`);
+  const globalSearchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${globalQuery}&fields=files(id,name,parents)&supportsAllDrives=true&includeItemsFromAllDrives=true`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (globalSearchRes.ok) {
+    const data = await globalSearchRes.json();
+    if (data.files && data.files.length > 0) {
+      const existingSheet = data.files[0];
+      // Di chuyển vào folderId nếu chưa có
+      try {
+        const prevParents = (existingSheet.parents || []).join(',');
+        await fetch(`https://www.googleapis.com/drive/v3/files/${existingSheet.id}?addParents=${folderId}&removeParents=${prevParents}&supportsAllDrives=true`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (moveErr) {
+        console.warn('[Feedback Sheet] Không thể di chuyển sheet vào folder:', moveErr);
+      }
+      return existingSheet.id;
+    }
+  }
+
+  // Tạo mới file Google Sheet nếu hoàn toàn chưa có
+  const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      properties: { title: sheetName },
+      sheets: [
+        {
+          properties: {
+            title: 'Góp ý & Báo lỗi',
+            gridProperties: { rowCount: 1000, columnCount: 10, frozenRowCount: 1 }
+          }
+        }
+      ]
+    })
+  });
+
+  if (!createRes.ok) {
+    const errText = await createRes.text();
+    throw new Error(`Không thể khởi tạo Google Sheet: ${errText}`);
+  }
+
+  const created = await createRes.json();
+  const spreadsheetId = created.spreadsheetId;
+
+  // Di chuyển file vào thư mục Góp Ý & Báo Lỗi
+  try {
+    await fetch(`https://www.googleapis.com/drive/v3/files/${spreadsheetId}?addParents=${folderId}&supportsAllDrives=true`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  } catch (err) {
+    console.warn('[Feedback Sheet] Warning moving new sheet to folder:', err);
+  }
+
+  // Thiết lập dòng tiêu đề (Header row)
+  const headerValues = [
+    [
+      'Thời gian',
+      'Loại yêu cầu',
+      'Tiêu đề',
+      'Mô tả chi tiết',
+      'Người gửi',
+      'Email',
+      'Trang gặp sự cố',
+      'Ảnh chụp màn hình',
+      'Trạng thái'
+    ]
+  ];
+
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:I1?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ values: headerValues })
+  });
+
+  return spreadsheetId;
+}
+
+/**
+ * Ghi 1 dòng phản hồi / báo lỗi mới vào Google Sheet realtime
+ */
+export async function appendFeedbackToGoogleSheet(
+  feedbackData: {
+    type: string;
+    title: string;
+    description: string;
+    user_name?: string;
+    user_email?: string;
+    page_url?: string;
+    screenshot_url?: string;
+    status?: string;
+    created_at?: string;
+  },
+  token: string,
+  folderId: string
+): Promise<{ spreadsheetId: string; updatedRows: number }> {
+  const spreadsheetId = await getOrCreateFeedbackSpreadsheet(folderId, token);
+
+  const now = feedbackData.created_at ? new Date(feedbackData.created_at) : new Date();
+  const vnTimeStr = now.toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+
+  const typeLabelMap: Record<string, string> = {
+    bug: 'Báo lỗi hệ thống',
+    feature: 'Đề xuất tính năng',
+    ui: 'Giao diện & Trải nghiệm',
+    other: 'Khác'
+  };
+
+  const statusLabelMap: Record<string, string> = {
+    new: 'Mới tiếp nhận',
+    pending: 'Đang xử lý',
+    resolved: 'Đã giải quyết',
+    closed: 'Đã đóng'
+  };
+
+  const row = [
+    vnTimeStr,
+    typeLabelMap[feedbackData.type] || feedbackData.type || 'Khác',
+    feedbackData.title || '',
+    feedbackData.description || '',
+    feedbackData.user_name || 'Người dùng ẩn danh',
+    feedbackData.user_email || '',
+    feedbackData.page_url || '',
+    feedbackData.screenshot_url || '',
+    statusLabelMap[feedbackData.status || 'new'] || 'Mới tiếp nhận'
+  ];
+
+  const appendRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A:I:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        values: [row]
+      })
+    }
+  );
+
+  if (!appendRes.ok) {
+    const errText = await appendRes.text();
+    throw new Error(`Lỗi khi ghi dòng vào Google Sheet: ${errText}`);
+  }
+
+  const result = await appendRes.json();
+  return {
+    spreadsheetId,
+    updatedRows: result.updates?.updatedRows || 1
+  };
+}

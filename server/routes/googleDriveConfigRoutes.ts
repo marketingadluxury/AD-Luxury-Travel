@@ -9,12 +9,16 @@ const router = express.Router();
 // Middleware kiểm tra quyền Admin hoặc BOD
 const requireAdminOrBOD = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
+    const ADMIN_EMAILS = ['marketing@adluxury.net', 'marketing.adluxury@gmail.com'];
+    const headerRole = req.headers['x-user-role'] as string;
+    const headerEmail = (req.headers['x-user-email'] as string || '').toLowerCase();
+
+    if (['admin', 'bod'].includes(headerRole) || (headerEmail && ADMIN_EMAILS.includes(headerEmail))) {
+      return next();
+    }
+
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      const headerRole = req.headers['x-user-role'] as string;
-      if (['admin', 'bod'].includes(headerRole)) {
-        return next();
-      }
       return res.status(401).json({ error: 'Chưa được xác thực hoặc không có quyền truy cập.' });
     }
 
@@ -24,6 +28,10 @@ const requireAdminOrBOD = async (req: express.Request, res: express.Response, ne
 
     if (authError || !user) {
       return res.status(401).json({ error: 'Phiên đăng nhập không hợp lệ.' });
+    }
+
+    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+      return next();
     }
 
     const { data: profile } = await supabase
