@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CustomSelect } from './CustomSelect';
+import { BulkSyncWooCommerceModal } from './BulkSyncWooCommerceModal';
+import { useCRM } from '../context/CRMContext';
 
 interface WooCommerceConfigState {
   site_url: string;
@@ -88,6 +90,8 @@ const DEFAULT_MAPPINGS: Record<string, string> = {
 };
 
 export default function WooCommerceSettingsSection() {
+  const { tours } = useCRM();
+  const [showBulkSyncModal, setShowBulkSyncModal] = useState(false);
   const [config, setConfig] = useState<WooCommerceConfigState>({
     site_url: '',
     consumer_key: '',
@@ -206,28 +210,8 @@ export default function WooCommerceSettingsSection() {
     }
   };
 
-  const handleSyncAllTours = async () => {
-    if (!window.confirm('Bạn có chắc chắn muốn đồng bộ toàn bộ Tour hiện có sang Website WordPress không? Quá trình này có thể mất từ 10 - 30 giây.')) {
-      return;
-    }
-
-    try {
-      setIsSyncingAll(true);
-      const res = await fetch('/api/woocommerce/sync-all-tours', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast.success(`Đã đồng bộ thành công ${json.synced}/${json.total} tour sang Website!`);
-      } else {
-        toast.error(json.message || 'Đồng bộ thất bại');
-      }
-    } catch (err: any) {
-      toast.error('Lỗi đồng bộ: ' + err.message);
-    } finally {
-      setIsSyncingAll(false);
-    }
+  const handleSyncAllTours = () => {
+    setShowBulkSyncModal(true);
   };
 
   // Thao tác Xóa 1 trường ACF mapping
@@ -918,6 +902,13 @@ export default function WooCommerceSettingsSection() {
           </div>
         </div>
       )}
+
+      {/* Modal Chọn danh sách & Đồng bộ hàng loạt Tour sang WooCommerce */}
+      <BulkSyncWooCommerceModal
+        isOpen={showBulkSyncModal}
+        onClose={() => setShowBulkSyncModal(false)}
+        tours={tours}
+      />
     </div>
   );
 }

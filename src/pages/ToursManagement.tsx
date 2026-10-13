@@ -59,6 +59,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { SyncTourToWooCommerceModal } from '@/components/SyncTourToWooCommerceModal';
+import { BulkSyncWooCommerceModal } from '@/components/BulkSyncWooCommerceModal';
 import { CustomSelect } from '@/components/CustomSelect';
 import DashboardOperator from '@/components/DashboardOperator';
 import TourCostsManagement from '@/components/TourCostsManagement';
@@ -520,6 +521,7 @@ export default function ToursManagement() {
   // WooCommerce Sync states
   const [isSyncingTourId, setIsSyncingTourId] = useState<string | null>(null);
   const [isBulkSyncing, setIsBulkSyncing] = useState<boolean>(false);
+  const [isBulkSyncModalOpen, setIsBulkSyncModalOpen] = useState<boolean>(false);
   const [selectedTourForWpSync, setSelectedTourForWpSync] = useState<Tour | null>(null);
 
   const handleSyncSingleTourToWooCommerce = (tour: Tour) => {
@@ -527,27 +529,9 @@ export default function ToursManagement() {
     setSelectedTourForWpSync(tour);
   };
 
-  const handleBulkSyncToWooCommerce = async () => {
-    if (!window.confirm('Bạn có muốn đồng bộ toàn bộ danh sách Tour hiện có sang Website WordPress (WooCommerce) không? Quá trình này sẽ mất từ 10 - 30 giây.')) {
-      return;
-    }
-    try {
-      setIsBulkSyncing(true);
-      const res = await fetch('/api/woocommerce/sync-all-tours', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast.success(`Đã đồng bộ ${json.synced}/${json.total} tour sang Website thành công!`);
-      } else {
-        toast.error(json.message || 'Đồng bộ thất bại');
-      }
-    } catch (err: any) {
-      toast.error('Lỗi khi đồng bộ hàng loạt: ' + err.message);
-    } finally {
-      setIsBulkSyncing(false);
-    }
+  const handleBulkSyncToWooCommerce = () => {
+    // Mở modal danh sách tour để người dùng kiểm tra và lựa chọn trước khi đồng bộ
+    setIsBulkSyncModalOpen(true);
   };
 
   const toggleGroup = (groupName: string) => {
@@ -4570,6 +4554,16 @@ export default function ToursManagement() {
               wp_sync_message: res.message
             });
           }
+        }}
+      />
+
+      {/* Modal Đồng bộ Hàng Loạt Tour sang WooCommerce */}
+      <BulkSyncWooCommerceModal
+        isOpen={isBulkSyncModalOpen}
+        onClose={() => setIsBulkSyncModalOpen(false)}
+        tours={tours}
+        onSyncComplete={() => {
+          // Callback sau khi hoàn tất đồng bộ
         }}
       />
     </div>

@@ -6,6 +6,27 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.99 Tích Hợp Modal Chọn Tour & Tự Động Ghép Nối Sản Phẩm Website Trước Khi Đồng Bộ Hàng Loạt Lên WooCommerce
+- **Mô tả yêu cầu:**
+  - Khi bấm nút "Đồng bộ Website" (hoặc "Đồng bộ tất cả tour" trong Cài đặt WooCommerce), hệ thống trước đây dùng hộp thoại xác nhận trình duyệt mặc định rồi gửi lệnh chạy ngầm, không hiển thị danh sách tour/sản phẩm để người dùng kiểm tra và lựa chọn trước.
+- **Giải pháp triển khai:**
+  1. **Xây dựng component `BulkSyncWooCommerceModal.tsx` chuyên dụng:**
+     - Cho phép duyệt toàn bộ danh sách Tour CRM với thanh tìm kiếm nhanh theo tên/mã tour, thống kê số lượng đã chọn, bộ lọc trạng thái ("Tất cả", "Đã ghép sản phẩm", "Tạo mới trên Web").
+     - Hỗ trợ checkbox chọn/bỏ chọn từng tour hoặc chọn tất cả linh hoạt.
+     - Cơ chế Tự động khớp sản phẩm Website thông minh (Auto-matching):
+       + Nếu tour đã có `wp_product_id`: Tự động nhận diện sản phẩm đã liên kết trước đó.
+       + Nếu chưa có liên kết: Tự động so sánh tên Tour với danh sách sản phẩm trên WordPress WooCommerce theo thuật toán chuẩn hóa tiếng Việt, tự động gợi ý ghép nối nếu trùng hoặc tương đồng cao.
+       + Nếu không khớp: Mặc định chọn chế độ "Tạo sản phẩm mới trên Website".
+     - Cho phép người dùng bấm "Đổi liên kết" để tìm kiếm và gán thủ công vào bất kỳ sản phẩm nào trên WooCommerce hoặc chuyển sang tạo mới.
+     - Tùy chọn nâng cao: Bật/tắt cập nhật bảng giá và cập nhật lịch khởi hành vào ACF Repeater.
+     - Giao diện Tiến trình Đồng bộ Thực tế (Realtime Progress): Hiển thị thanh tiến trình % hoàn thành, số lượng thành công/lỗi, log trạng thái chi tiết từng tour và nút mở trực tiếp link sản phẩm trên Website.
+  2. **Tích hợp vào các màn hình Quản lý:**
+     - Thay thế luồng `window.confirm` trên `src/pages/ToursManagement.tsx` (nút "Đồng bộ Website") và `src/components/WooCommerceSettingsSection.tsx` (nút "Đồng bộ toàn bộ Tour sang Website") để mở Modal `BulkSyncWooCommerceModal`.
+  3. **Kiểm thử & Tiêu chuẩn giao diện:**
+     - Tuân thủ 100% quy chuẩn giao diện: Zero Native Inputs, z-index phân tầng an toàn, không double icon, tiền tệ phân tách hàng nghìn, định dạng ngày chuẩn Việt Nam.
+     - Đã vượt qua `npm run lint` và `compile_applet` thành công 100%.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.98 Tích Hợp Tự Động Ghi Dòng Mới Vào Google Sheet Khi Người Dùng Gửi Góp Ý & Báo Lỗi
 - **Mô tả yêu cầu:**
   - Người dùng gửi góp ý / báo lỗi trên hệ thống nhận thông báo thành công, nhưng khi kiểm tra file Google Sheet thì không thấy xuất hiện dòng mới.

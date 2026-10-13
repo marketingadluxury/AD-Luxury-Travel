@@ -143,6 +143,9 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - `auto_sync_on_booking` (boolean - tự động cập nhật số chỗ trống khi có booking)
 - `field_mappings` (jsonb - bảng ánh xạ trường ACF)
 - `created_at`, `updated_at` (timestamp)
+- **Quy trình đồng bộ hàng loạt (`BulkSyncWooCommerceModal.tsx`):**
+  + Khi người dùng bấm nút "Đồng bộ Website" tại Quản lý Tour (`ToursManagement.tsx`) hoặc "Đồng bộ tất cả tour sang Website" tại Cài đặt WooCommerce (`WooCommerceSettingsSection.tsx`), hệ thống luôn mở Modal chuyên dụng để người dùng kiểm tra danh sách tour và trạng thái ghép nối sản phẩm Website trước khi bấm tiến hành đồng bộ.
+  + Hỗ trợ tự động khớp theo tên sản phẩm WooCommerce (Auto-match), cho phép tích chọn tour, đổi sản phẩm liên kết linh hoạt hoặc chọn tạo mới trên Web, kèm thanh tiến trình realtime chi tiết.
 
 ---
 
