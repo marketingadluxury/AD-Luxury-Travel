@@ -418,7 +418,7 @@ export interface Passenger {
   nationality?: string; // Quốc tịch
   passport_issue_date?: string; // Ngày cấp hộ chiếu
   passport_expiry_date?: string; // Ngày hết hạn hộ chiếu
-  visa_status: 'pending' | 'processing' | 'approved' | 'rejected' | 'not_required' | 'disqualified';
+  visa_status: 'pending' | 'processing' | 'approved' | 'rejected' | 'not_required' | 'disqualified' | 'cancelled';
   needs_visa_service?: boolean; // Tùy chọn làm visa thông qua tour
   visa_submitted_at?: string;
   visa_disqualified_reason?: string;

@@ -343,11 +343,15 @@ function buildWooCommercePayload(
   primaryTour: any,
   groupTours: any[],
   config: WooCommerceConfig,
-  existingProduct?: any
+  existingProduct?: any,
+  options?: { update_prices?: boolean; update_departures?: boolean }
 ) {
   const mappings = config.field_mappings || DEFAULT_FIELD_MAPPINGS;
   const repeaterSlug = (config.repeater_slug || 'lich_trinh_khoi_hanh').trim();
   const codeSlug = (mappings.code || 'ma_lich_trinh').trim();
+
+  const shouldUpdatePrices = options?.update_prices !== false;
+  const shouldUpdateDepartures = options?.update_departures !== false;
 
   // Tìm mức giá người lớn thấp nhất của các đợt đang mở bán để hiển thị giá "Chỉ từ ..."
   const prices = groupTours
@@ -387,46 +391,46 @@ function buildWooCommercePayload(
   }
 
   // 2. Xây dựng bảng ACF Repeater Lịch Trình Khởi Hành
-  // Lấy các dòng hiện có trên sản phẩm WordPress (nếu có) để merge
-  let currentRows: Record<string, any>[] = [];
-  if (existingProduct && Array.isArray(existingProduct.meta_data)) {
+  if (shouldUpdateDepartures) {
+    let currentRows: Record<string, any>[] = [];
+    if (existingProduct && Array.isArray(existingProduct.meta_data)) {
+      const existingMeta = existingProduct.meta_data.find((m: any) => m.key === repeaterSlug);
+      if (existingMeta && Array.isArray(existingMeta.value)) {
+        currentRows = [...existingMeta.value];
+      }
+    }
+
+    const rowsMap = new Map<string, Record<string, any>>();
+    currentRows.forEach(r => {
+      const codeVal = r[codeSlug] || r.ma_lich_trinh || r.code;
+      if (codeVal) rowsMap.set(String(codeVal).trim().toUpperCase(), r);
+    });
+
+    groupTours.forEach(t => {
+      const row = buildRepeaterRowFromTour(t, mappings);
+      const codeVal = String(t.code).trim().toUpperCase();
+      rowsMap.set(codeVal, row);
+    });
+
+    const finalRepeaterRows = Array.from(rowsMap.values());
+
+    metaData.push({ key: repeaterSlug, value: finalRepeaterRows });
+    metaData.push({ key: repeaterSlug, value: finalRepeaterRows.length });
+    finalRepeaterRows.forEach((r, idx) => {
+      for (const [subKey, subVal] of Object.entries(r)) {
+        metaData.push({
+          key: `${repeaterSlug}_${idx}_${subKey}`,
+          value: subVal
+        });
+      }
+    });
+  } else if (existingProduct && Array.isArray(existingProduct.meta_data)) {
+    // Giữ nguyên repeater cũ từ existingProduct
     const existingMeta = existingProduct.meta_data.find((m: any) => m.key === repeaterSlug);
-    if (existingMeta && Array.isArray(existingMeta.value)) {
-      currentRows = [...existingMeta.value];
+    if (existingMeta) {
+      metaData.push({ key: repeaterSlug, value: existingMeta.value });
     }
   }
-
-  // Cập nhật hoặc thêm mới các đợt từ CRM vào bảng Repeater
-  const rowsMap = new Map<string, Record<string, any>>();
-  // Đưa các dòng cũ vào map
-  currentRows.forEach(r => {
-    const codeVal = r[codeSlug] || r.ma_lich_trinh || r.code;
-    if (codeVal) rowsMap.set(String(codeVal).trim().toUpperCase(), r);
-  });
-
-  // Hợp nhất các đợt từ CRM
-  groupTours.forEach(t => {
-    const row = buildRepeaterRowFromTour(t, mappings);
-    const codeVal = String(t.code).trim().toUpperCase();
-    rowsMap.set(codeVal, row);
-  });
-
-  const finalRepeaterRows = Array.from(rowsMap.values());
-
-  // Thêm dữ liệu Repeater vào meta_data dạng mảng chuẩn ACF REST API
-  metaData.push({ key: repeaterSlug, value: finalRepeaterRows });
-
-  // Đồng thời thêm cả chuẩn Indexed Meta của ACF Pro (lich_trinh_khoi_hanh = N, lich_trinh_khoi_hanh_0_ma_lich_trinh = ...)
-  // để tương thích 100% với get_field(), have_rows() trong PHP của WordPress
-  metaData.push({ key: repeaterSlug, value: finalRepeaterRows.length });
-  finalRepeaterRows.forEach((r, idx) => {
-    for (const [subKey, subVal] of Object.entries(r)) {
-      metaData.push({
-        key: `${repeaterSlug}_${idx}_${subKey}`,
-        value: subVal
-      });
-    }
-  });
 
   // Cờ nhận diện Tour CRM
   metaData.push({ key: '_synced_by_tour_crm', value: 'yes' });
@@ -445,7 +449,9 @@ ${primaryTour.itinerary_pdf_url ? `<p><a href="${primaryTour.itinerary_pdf_url}"
     name: primaryTour.name,
     type: 'simple',
     sku: primaryTour.code,
-    regular_price: minPrice > 0 ? minPrice.toString() : '0',
+    regular_price: (!shouldUpdatePrices && existingProduct?.regular_price) 
+      ? existingProduct.regular_price 
+      : (minPrice > 0 ? minPrice.toString() : '0'),
     manage_stock: true,
     stock_quantity: totalAvailableSeats >= 0 ? totalAvailableSeats : 0,
     stock_status: totalAvailableSeats > 0 ? 'instock' : 'outofstock',
@@ -528,7 +534,12 @@ export async function getWooCommerceProducts(search?: string, perPage = 20, page
  */
 export async function syncTourToWooCommerce(
   tourId: string, 
-  options?: { target_product_id?: number | 'new'; force_new?: boolean }
+  options?: { 
+    target_product_id?: number | 'new'; 
+    force_new?: boolean;
+    update_prices?: boolean;
+    update_departures?: boolean;
+  }
 ) {
   const config = await getWooCommerceConfig();
   if (!config.is_active || !config.site_url) {
@@ -621,7 +632,7 @@ export async function syncTourToWooCommerce(
     }
   }
 
-  const payload = buildWooCommercePayload(tour, groupTours, config, existingProduct);
+  const payload = buildWooCommercePayload(tour, groupTours, config, existingProduct, options);
 
   let finalProductId = targetWpProductId;
   let productUrl = '';

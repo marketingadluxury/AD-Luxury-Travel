@@ -470,6 +470,7 @@ export default function ToursManagement() {
     addCategory,
     deleteCategory,
     updateCategory,
+    refreshTours,
     currentRole,
     tourMedia,
     createOrder,
@@ -530,7 +531,7 @@ export default function ToursManagement() {
   };
 
   const handleBulkSyncToWooCommerce = () => {
-    // Mở modal danh sách tour để người dùng kiểm tra và lựa chọn trước khi đồng bộ
+    // Mở modal đồng bộ hàng loạt chuyên dụng cho phép duyệt, tích chọn và ghép nối sản phẩm
     setIsBulkSyncModalOpen(true);
   };
 
@@ -4557,13 +4558,14 @@ export default function ToursManagement() {
         }}
       />
 
-      {/* Modal Đồng bộ Hàng Loạt Tour sang WooCommerce */}
+      {/* Modal Đồng Bộ Hàng Loạt Chuyên Dụng Lên WooCommerce */}
       <BulkSyncWooCommerceModal
         isOpen={isBulkSyncModalOpen}
         onClose={() => setIsBulkSyncModalOpen(false)}
         tours={tours}
         onSyncComplete={() => {
-          // Callback sau khi hoàn tất đồng bộ
+          // Tải lại danh sách tour từ Supabase để cập nhật trạng thái mới nhất
+          refreshTours();
         }}
       />
     </div>

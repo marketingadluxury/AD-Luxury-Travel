@@ -143,9 +143,6 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - `auto_sync_on_booking` (boolean - tự động cập nhật số chỗ trống khi có booking)
 - `field_mappings` (jsonb - bảng ánh xạ trường ACF)
 - `created_at`, `updated_at` (timestamp)
-- **Quy trình đồng bộ hàng loạt (`BulkSyncWooCommerceModal.tsx`):**
-  + Khi người dùng bấm nút "Đồng bộ Website" tại Quản lý Tour (`ToursManagement.tsx`) hoặc "Đồng bộ tất cả tour sang Website" tại Cài đặt WooCommerce (`WooCommerceSettingsSection.tsx`), hệ thống luôn mở Modal chuyên dụng để người dùng kiểm tra danh sách tour và trạng thái ghép nối sản phẩm Website trước khi bấm tiến hành đồng bộ.
-  + Hỗ trợ tự động khớp theo tên sản phẩm WooCommerce (Auto-match), cho phép tích chọn tour, đổi sản phẩm liên kết linh hoạt hoặc chọn tạo mới trên Web, kèm thanh tiến trình realtime chi tiết.
 
 ---
 
@@ -175,6 +172,15 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 ---
 
 ## 7. Quy Tắc Phân Quyền & Tính Năng Đặc Biệt (Cập Nhật Mới)
+- **Modal Đồng Bộ Hàng Loạt Chuyên Dụng Lên WooCommerce (`BulkSyncWooCommerceModal.tsx`):**
+  - **Duyệt & Tích chọn Tour:** Thay thế toàn bộ hộp thoại `window.confirm` ngầm trước đây. Khi bấm nút "Đồng bộ Website" (tại `/tours`) hoặc "Bắt đầu đồng bộ toàn bộ Tour sang Website" (tại `/settings`), hệ thống mở Modal chuyên dụng cho phép duyệt toàn bộ danh sách tour, tìm kiếm nhanh (tên, mã tour, điểm đến), lọc theo trạng thái ghép nối, và chọn/bỏ chọn tour linh hoạt.
+  - **Tự động ghép nối thông minh (Auto-matching):**
+    + Nhận diện các tour đã có `wp_product_id` (Badge xanh *Đã liên kết #ID*).
+    + Tự động so khớp theo tên tour với danh mục sản phẩm trên WooCommerce WordPress (Badge tím *Khớp tên #ID*).
+    + Tự động chọn chế độ tạo mới nếu chưa có sản phẩm tương tự (Badge xám/xanh *Tạo mới*).
+  - **Đổi sản phẩm liên kết linh hoạt:** Cho phép mở popover chọn nhanh sản phẩm WooCommerce bất kỳ để ghép nối thủ công hoặc chuyển sang tạo sản phẩm mới.
+  - **Tùy chọn nâng cao:** Bật/tắt cập nhật bảng giá (Regular Price) và cập nhật ACF Repeater lịch khởi hành.
+  - **Tiến trình chạy thực tế (Live Progress):** Hiển thị thanh tiến trình % trực quan, trạng thái xử lý từng tour theo thời gian thực (pending -> running -> success/failed), log kết quả chi tiết và link mở trực tiếp sản phẩm trên website.
 - **Chế Độ Xem Lịch Khởi Hành Công Khai (Public View-Only) Cho Tất Cả Người Dùng:**
   - **Truy cập công khai:** Mọi người dùng khi vào trang chủ website (`/`) đều có thể xem ngay trang **Lịch khởi hành tour** mà không cần đăng nhập trước.
   - **Giới hạn Chỉ xem (View-only):** Khách vãng lai xem được đầy đủ: Danh sách tour, lịch trình, hành trình, thời gian đi/về, chuyến bay, khách sạn, số chỗ trống khả dụng, biểu giá các đối tượng (người lớn, trẻ em, trẻ nhỏ, phụ thu phòng đơn, phí visa), tìm kiếm, bộ lọc nâng cao, tải/mở file PDF lịch trình chi tiết và modal Thông tin lưu ý.
@@ -213,7 +219,13 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 - **Phân Quyền Sale Leader khi Tạo, Thao Tác & Xem Lãi Lỗ Tour:** Vai trò **Sale Leader (`sale_leader`)** chỉ có thể tạo, chỉnh sửa, sao chép và xem bảng hạch toán chi phí/lãi lỗ đối với các loại **Tour gửi khách đối tác (`partner`)** và **Tour đoàn riêng (`private`)**. Sale Leader hoàn toàn **không có quyền** tạo mới, sửa, sao chép, xóa hoặc **xem báo cáo lãi lỗ/chi phí** của các **Tour tự vận hành (`internal`)**. Các nút thao tác và danh sách hạch toán cho loại tour tự vận hành sẽ tự động bị vô hiệu hóa hoặc ẩn khỏi vai trò Sale Leader.
 - **Tạo Danh Mục Sản Phẩm Mới Khi Tạo Tour:** Ngay tại form khai báo/cập nhật Tour du lịch mới, hệ thống cho phép tạo nhanh danh mục sản phẩm mới ngay lập tức mà không cần chuyển sang tab danh mục riêng biệt. Khi tạo thành công, danh mục này sẽ tự động được chọn làm danh mục hiện tại cho Tour đó.
 - **Tự Động Đồng Bộ Bộ Lọc Danh Mục:** Bộ lọc danh mục sản phẩm tại trang *Lịch khởi hành* (Departure Calendar) tự động cập nhật danh sách và thêm danh mục mới ngay khi có bất kỳ danh mục nào được khởi tạo thêm (từ tab Danh mục hoặc trực tiếp từ biểu mẫu Tạo Tour).
-- **Phân Loại Dịch Vụ Visa:** Dịch vụ visa lẻ (`tour_type === 'visa'`) **không tính là Tour du lịch**. Tất cả các bộ lọc, số lượng đếm Tour, và danh sách chọn album ảnh đoàn đều tự động loại trừ các sản phẩm dịch vụ visa.
+- **Phân Loại Dịch Vụ Visa & Quản Lý Booking Visa Chuyên Biệt (`/visa-orders`):**
+  - Dịch vụ visa lẻ (`tour_type === 'visa'`) **không tính là Tour du lịch**. Tất cả các bộ lọc, số lượng đếm Tour, và danh sách chọn album ảnh đoàn đều tự động loại trừ các sản phẩm dịch vụ visa.
+  - **Quản lý Booking Visa (`/visa-orders`):** Độc lập với Quản lý đơn hàng tour (`/orders`), hỗ trợ phân loại 3 tab trạng thái: **Tất cả booking**, **Đang hoạt động / Đã chốt**, **Đã hủy** với số lượng cập nhật theo thời gian thực.
+  - **Cơ chế Hủy Đơn Booking Visa Chuẩn Nghiệp Vụ:**
+    + Khi hủy booking visa: Người dùng xác nhận qua modal kèm tùy chọn nhập lý do hủy chi tiết, hệ thống cập nhật đồng bộ trạng thái `status: 'cancelled'` và `booking_status: 'cancelled'` cho đơn hàng, đồng thời chuyển trạng thái toàn bộ hành khách thuộc booking sang `visa_status: 'cancelled'` trên cả Client state và Database Supabase (`bookings`, `passengers`).
+    + Trên giao diện: Đơn đã hủy hiển thị rõ ràng huy hiệu màu đỏ **"Đã hủy"**, tên khách gạch ngang mờ nhẹ, hiển thị khung thông báo trạng thái đơn kèm lý do hủy, ẩn các nút thao tác nghiệp vụ (Nộp biên lai, Sửa đơn, Hủy đơn) và thay thế bằng nhãn "Đơn hàng đã ở trạng thái Đã hủy".
+    + Trang Xử lý Visa (`/visa-processing`): Tự động ẩn hồ sơ của các booking visa đã hủy khỏi bảng Kanban quy trình để tránh chuyên viên visa xử lý nhầm; hỗ trợ tab lọc "Đã hủy" ở chế độ xem Danh sách để dễ dàng đối soát lịch sử.
 - **Giao Diện & Tính Năng Dành Cho Hướng Dẫn Viên (HDV / `tour_guide`) & Ảnh Khách Đoàn:**
   - **Trang & Tab Riêng "Ảnh khách đoàn" (`/tour-media`):** Được hiển thị trên thanh Sidebar cho người dùng công ty (Admin, Operator, Sale, Visa, Kế toán, BOD, HDV) và **ẩn đối với Cộng Tác Viên (`CTV`)**. Trang này chứa danh sách đoàn tour kèm nút duy nhất **"📂 Mở Thư Mục Google Drive"** để truy cập thẳng thư mục `AD Luxury Travel > Tour > {MÃ_TOUR} > Ảnh đoàn`.
   - **Phân Quyền Thao Tác Upload & Link HDV:** Chỉ có vai trò **Điều hành (`operator`)**, **HDV (`tour_guide`)** và **Quản trị viên (`admin`)** mới có quyền thao tác các nút **"📸 Upload Ảnh Đoàn"** và **"🔗 Link HDV Freelance"**. Các vai trò khác (Sale, Kế toán, Visa, BOD) chỉ xem và mở thư mục Drive.

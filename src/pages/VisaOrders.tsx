@@ -6,7 +6,7 @@ import { useCRM } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { isOrderInLeaderTeam } from '@/lib/utils';
 import { Order, Passenger } from '@/types';
-import { ShoppingCart, Users, Plus, ChevronDown, ChevronUp, Trash2, Info, Edit, Search, Phone, Tag, CreditCard, Copy } from 'lucide-react';
+import { ShoppingCart, Users, Plus, ChevronDown, ChevronUp, Trash2, Info, Edit, Search, Phone, Tag, CreditCard, Copy, Check, Clock, X, XCircle, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import EditPassengerModal from '../components/EditPassengerModal';
@@ -88,6 +88,7 @@ export default function VisaOrders() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'cancelled'>('all');
 
   // Handle navigation from notifications
   useEffect(() => {
@@ -101,6 +102,7 @@ export default function VisaOrders() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
   const [confirmModalData, setConfirmModalData] = useState<{
     isOpen: boolean;
     title: string;
@@ -228,11 +230,29 @@ export default function VisaOrders() {
     toast.success('Đặt dịch vụ visa thành công!');
   };
 
-  const filteredOrders = orders.filter(o => {
-    const tour = tours.find(t => t.id === o.tour_id);
-    const searchStr = (o.booker_name + o.booker_phone + tour?.code + tour?.name).toLowerCase();
-    return searchStr.includes(searchTerm.toLowerCase());
-  });
+  const tabCounts = React.useMemo(() => {
+    return {
+      all: orders.length,
+      active: orders.filter(o => o.status !== 'cancelled').length,
+      cancelled: orders.filter(o => o.status === 'cancelled').length
+    };
+  }, [orders]);
+
+  const filteredOrders = React.useMemo(() => {
+    return orders.filter(o => {
+      if (statusFilter === 'active' && o.status === 'cancelled') return false;
+      if (statusFilter === 'cancelled' && o.status !== 'cancelled') return false;
+
+      if (searchTerm.trim() !== '') {
+        const tour = tours.find(t => t.id === o.tour_id);
+        const searchStr = `${o.booker_name || ''} ${o.booker_phone || ''} ${tour?.code || ''} ${tour?.name || ''} ${o.id || ''}`.toLowerCase();
+        if (!searchStr.includes(searchTerm.toLowerCase().trim())) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [orders, statusFilter, searchTerm, tours]);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -481,14 +501,67 @@ export default function VisaOrders() {
         </form>
       )}
 
+      {/* Tabs phân loại trạng thái */}
+      <div className="flex border-b border-gray-200 bg-white rounded-t-xl overflow-x-auto shadow-sm">
+        <button
+          onClick={() => setStatusFilter('all')}
+          className={`flex-1 min-w-[130px] flex items-center justify-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+            statusFilter === 'all'
+              ? 'border-purple-600 text-purple-700 bg-purple-50/20'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/40'
+          }`}
+        >
+          <span>Tất cả booking</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+            statusFilter === 'all' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-600'
+          }`}>
+            {tabCounts.all}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter('active')}
+          className={`flex-1 min-w-[150px] flex items-center justify-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+            statusFilter === 'active'
+              ? 'border-emerald-600 text-emerald-700 bg-emerald-50/20'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/40'
+          }`}
+        >
+          <Check className={`w-3.5 h-3.5 ${statusFilter === 'active' ? 'text-emerald-600' : 'text-gray-400'}`} />
+          <span>Đang hoạt động / Đã chốt</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+            statusFilter === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+          }`}>
+            {tabCounts.active}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter('cancelled')}
+          className={`flex-1 min-w-[130px] flex items-center justify-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+            statusFilter === 'cancelled'
+              ? 'border-rose-600 text-rose-700 bg-rose-50/20'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/40'
+          }`}
+        >
+          <X className={`w-3.5 h-3.5 ${statusFilter === 'cancelled' ? 'text-rose-600' : 'text-gray-400'}`} />
+          <span>Đã hủy</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+            statusFilter === 'cancelled' ? 'bg-rose-100 text-rose-800' : 'bg-gray-100 text-gray-600'
+          }`}>
+            {tabCounts.cancelled}
+          </span>
+        </button>
+      </div>
+
       {/* Search and Filters */}
       <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
+        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+          <Search className="h-4 w-4 text-gray-400" />
         </div>
         <input
           type="text"
-          className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+          className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm shadow-sm"
           placeholder="Tìm booking visa theo mã, tên khách, số điện thoại..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -500,39 +573,70 @@ export default function VisaOrders() {
         {filteredOrders.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-16 text-center shadow-sm">
             <ShoppingCart className="w-14 h-14 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm font-medium">Không tìm thấy booking visa nào.</p>
+            <p className="text-gray-500 text-sm font-medium">Không tìm thấy booking visa nào phù hợp với bộ lọc.</p>
           </div>
         ) : (
           filteredOrders.map((order) => {
             const tour = tours.find(t => t.id === order.tour_id);
             const isExpanded = expandedOrderId === order.id;
             const orderPassengers = passengers.filter(p => p.order_id === order.id);
+            const isCancelled = order.status === 'cancelled';
 
             return (
-              <div key={order.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              <div 
+                key={order.id} 
+                className={`rounded-xl border shadow-sm overflow-hidden transition-all ${
+                  isCancelled 
+                    ? 'bg-rose-50/15 border-rose-200/80 opacity-90' 
+                    : 'bg-white border-gray-200 hover:shadow-md'
+                }`}
+              >
                 <div 
                   className="p-5 cursor-pointer flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
                   onClick={() => toggleOrderExpand(order.id)}
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-bold text-gray-900 uppercase">{order.booker_name}</h3>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className={`text-base sm:text-lg font-bold uppercase ${isCancelled ? 'text-gray-700 line-through opacity-80' : 'text-gray-900'}`}>
+                        {order.booker_name}
+                      </h3>
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 uppercase tracking-wider">
                         {tour?.visa_country || tour?.destination || 'Chưa xác định'} - {tour?.visa_service_type || 'Dịch vụ'}
                       </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 uppercase tracking-wider">
-                        Đã chốt
-                      </span>
+                      {isCancelled ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider flex items-center gap-1">
+                          <X className="w-3 h-3" /> Đã hủy
+                        </span>
+                      ) : order.status === 'paid' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Đã thanh toán
+                        </span>
+                      ) : order.status === 'hold' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wider flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Giữ chỗ
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Đã chốt
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 font-medium">
-                      <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />{order.booker_phone}</span>
-                      <span className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" />{tour?.code}</span>
-                      <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" />{order.adult_count} hồ sơ</span>
+                    <div className="flex items-center gap-4 mt-1.5 text-xs text-gray-500 font-medium flex-wrap">
+                      <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-gray-400" />{order.booker_phone}</span>
+                      <span className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5 text-gray-400" />{tour?.code}</span>
+                      <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-gray-400" />{order.adult_count} hồ sơ</span>
+                      {isCancelled && order.cancel_reason && (
+                        <span className="text-[11px] text-rose-600 font-semibold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                          Lý do hủy: {order.cancel_reason}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <div className="text-lg font-bold text-purple-700">{new Intl.NumberFormat('vi-VN').format(order.total_price)} đ</div>
+                    <div className={`text-lg font-bold ${isCancelled ? 'text-gray-500 line-through' : 'text-purple-700'}`}>
+                      {new Intl.NumberFormat('vi-VN').format(order.total_price)} đ
+                    </div>
                     <div className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
                       Đặt lúc: {format(new Date(order.created_at || ''), 'HH:mm dd/MM/yyyy')}
                     </div>
@@ -544,7 +648,19 @@ export default function VisaOrders() {
                 </div>
 
                 {isExpanded && (
-                  <div className="px-5 pb-6 pt-2 border-t border-gray-50 bg-gray-50/50 animate-in slide-in-from-top-2 duration-200">
+                  <div className="px-5 pb-6 pt-2 border-t border-gray-100 bg-gray-50/50 animate-in slide-in-from-top-2 duration-200">
+                    {isCancelled && (
+                      <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-medium flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                          <span>Booking này đã bị hủy bỏ.{order.cancel_reason ? ` Lý do: ${order.cancel_reason}` : ''}</span>
+                        </div>
+                        <span className="text-[10px] uppercase font-bold text-rose-600 bg-rose-100/80 px-2 py-0.5 rounded">
+                          Đã hủy
+                        </span>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-4">
                         <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -555,30 +671,34 @@ export default function VisaOrders() {
                           {orderPassengers.map((p) => (
                             <div key={p.id} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
                               <div>
-                                <div className="text-sm font-bold text-gray-800 uppercase">{p.full_name}</div>
+                                <div className={`text-sm font-bold uppercase ${isCancelled ? 'text-gray-500' : 'text-gray-800'}`}>{p.full_name}</div>
                                 <div className="text-[10px] text-gray-400 font-mono mt-0.5">#{p.id.substring(0,8)}</div>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                  isCancelled || p.visa_status === 'cancelled' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
                                   p.visa_status === 'approved' ? 'bg-green-100 text-green-700' :
                                   p.visa_status === 'rejected' ? 'bg-red-100 text-red-700' :
                                   p.visa_status === 'processing' ? 'bg-blue-100 text-blue-700' :
                                   'bg-gray-100 text-gray-700'
                                 }`}>
-                                  {p.visa_status === 'approved' ? 'Đã duyệt' :
+                                  {isCancelled || p.visa_status === 'cancelled' ? 'Đã hủy' :
+                                   p.visa_status === 'approved' ? 'Đã duyệt' :
                                    p.visa_status === 'rejected' ? 'Từ chối' :
                                    p.visa_status === 'processing' ? 'Đang xử lý' : 'Chờ xử lý'}
                                 </span>
-                                <button 
-                                  onClick={() => {
-                                    setEditingPassenger(p);
-                                    setIsEditPassengerOpen(true);
-                                  }}
-                                  className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 transition-colors"
-                                  title="Cập nhật hồ sơ"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
+                                {!isCancelled && (
+                                  <button 
+                                    onClick={() => {
+                                      setEditingPassenger(p);
+                                      setIsEditPassengerOpen(true);
+                                    }}
+                                    className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 transition-colors"
+                                    title="Cập nhật hồ sơ"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -615,48 +735,70 @@ export default function VisaOrders() {
                             <span className="text-gray-500">Dịch vụ:</span>
                             <span className="font-bold text-purple-700 uppercase">{tour?.name}</span>
                           </div>
-                          <div className="flex justify-between items-center py-1">
+                          <div className="flex justify-between items-center py-1 border-b border-gray-50">
                             <span className="text-gray-500">Ghi chú:</span>
                             <span className="font-medium text-gray-800">{order.special_requests || 'Không có'}</span>
                           </div>
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-500">Trạng thái:</span>
+                            <span className={`font-bold ${isCancelled ? 'text-rose-600' : 'text-emerald-700'}`}>
+                              {isCancelled ? 'Đã hủy đơn hàng' : order.status === 'paid' ? 'Đã hoàn tất thanh toán' : 'Đã chốt (Active)'}
+                            </span>
+                          </div>
                           
                           <div className="pt-4 flex gap-3 flex-wrap">
-                            {order.status !== 'cancelled' && (
-                              <button 
-                                onClick={() => {
-                                  setPaymentOrder(order);
-                                  setIsPaymentModalOpen(true);
-                                }}
-                                className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-blue-200 shadow-sm text-xs font-bold rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 transition-all min-w-[120px]"
-                              >
-                                <CreditCard className="w-3.5 h-3.5 mr-2" />
-                                Nộp biên lai
-                              </button>
+                            {!isCancelled ? (
+                              <>
+                                <button 
+                                  onClick={() => {
+                                    setPaymentOrder(order);
+                                    setIsPaymentModalOpen(true);
+                                  }}
+                                  className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-blue-200 shadow-sm text-xs font-bold rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 transition-all min-w-[120px]"
+                                >
+                                  <CreditCard className="w-3.5 h-3.5 mr-2" />
+                                  Nộp biên lai
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setEditingOrder(order);
+                                    setIsEditOrderOpen(true);
+                                  }}
+                                  className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-xs font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-all min-w-[100px]"
+                                >
+                                  <Edit className="w-3.5 h-3.5 mr-2" />
+                                  Sửa đơn
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setConfirmModalData({
+                                      isOpen: true,
+                                      title: 'Hủy booking visa',
+                                      message: `Bạn có chắc chắn muốn hủy đơn booking visa #${order.id.substring(0,8).toUpperCase()} của khách hàng "${order.booker_name}"? Hành động này sẽ chuyển trạng thái đơn sang Đã hủy và cập nhật hồ sơ visa liên quan.`,
+                                      showInput: true,
+                                      inputLabel: 'Lý do hủy booking visa (tùy chọn)',
+                                      inputPlaceholder: 'Nhập lý do khách hủy hoặc nguyên nhân...',
+                                      onConfirm: async (reasonInput?: string) => {
+                                        try {
+                                          await cancelOrder(order.id, reasonInput);
+                                          toast.success('Đã hủy booking visa thành công!');
+                                        } catch (err: any) {
+                                          toast.error(err?.message || 'Có lỗi xảy ra khi hủy booking visa!');
+                                        }
+                                      }
+                                    });
+                                  }}
+                                  className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-rose-300 shadow-sm text-xs font-bold rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 hover:text-rose-800 transition-all min-w-[100px]"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 mr-2" />
+                                  Hủy đơn
+                                </button>
+                              </>
+                            ) : (
+                              <div className="w-full text-center py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded-lg">
+                                Đơn hàng đã ở trạng thái Đã hủy
+                              </div>
                             )}
-                            <button 
-                              onClick={() => {
-                                setEditingOrder(order);
-                                setIsEditOrderOpen(true);
-                              }}
-                              className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-xs font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-all min-w-[100px]"
-                            >
-                              <Edit className="w-3.5 h-3.5 mr-2" />
-                              Sửa đơn
-                            </button>
-                            <button 
-                              onClick={() => {
-                                setConfirmModalData({
-                                  isOpen: true,
-                                  title: 'Hủy booking visa',
-                                  message: `Bạn có chắc chắn muốn hủy booking ${order.id.substring(0,8)}? Hành động này không thể hoàn tác.`,
-                                  onConfirm: () => cancelOrder(order.id)
-                                });
-                              }}
-                              className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-xs font-bold rounded-lg text-white bg-red-600 hover:bg-red-700 transition-all"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 mr-2" />
-                              Hủy đơn
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -700,6 +842,9 @@ export default function VisaOrders() {
         title={confirmModalData.title}
         message={confirmModalData.message}
         onConfirm={confirmModalData.onConfirm}
+        showInput={confirmModalData.showInput}
+        inputPlaceholder={confirmModalData.inputPlaceholder}
+        inputLabel={confirmModalData.inputLabel}
       />
 
       <PaymentModal

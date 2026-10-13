@@ -156,8 +156,23 @@ export default function VisaProcessing() {
       const hasDocs = p.passport_url || p.labor_contract_url;
       if (!hasDocs) return false;
       
-      // 1. Status Filter (chỉ áp dụng ở Dạng Danh Sách)
-      if (viewMode !== 'kanban' && filterStatus !== 'all' && p.visa_status !== filterStatus) return false;
+      const order = orders.find(o => o.id === p.order_id);
+      const isOrderCancelled = order?.status === 'cancelled' || p.visa_status === 'cancelled';
+
+      // 1. Không hiển thị hồ sơ của đơn đã hủy trên Kanban để tránh nhân viên xử lý nhầm
+      if (viewMode === 'kanban' && isOrderCancelled) return false;
+
+      // 2. Status Filter (chỉ áp dụng ở Dạng Danh Sách)
+      if (viewMode !== 'kanban') {
+        if (filterStatus === 'cancelled') {
+          if (!isOrderCancelled) return false;
+        } else if (filterStatus === 'all') {
+          // Mặc định tab 'Tất cả' hiển thị các hồ sơ đang xử lý (không tính đơn đã hủy)
+          if (isOrderCancelled) return false;
+        } else {
+          if (isOrderCancelled || p.visa_status !== filterStatus) return false;
+        }
+      }
 
       // 2. Search Term Filter
       if (searchTerm.trim() !== '') {
@@ -241,6 +256,8 @@ export default function VisaProcessing() {
             Hồ sơ chưa đạt
           </button>
         );
+      case 'cancelled':
+        return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800 border border-rose-200">Đơn đã hủy</span>;
       default:
         return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Không yêu cầu</span>;
     }
@@ -302,12 +319,13 @@ export default function VisaProcessing() {
             <div className="flex items-center space-x-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Trạng thái Visa:</span>
               <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-                {['all', 'pending', 'processing', 'approved', 'rejected', 'disqualified'].map(status => {
+                {['all', 'pending', 'processing', 'approved', 'rejected', 'disqualified', 'cancelled'].map(status => {
                   const label = status === 'all' ? 'Tất cả' :
                                 status === 'pending' ? 'Chờ duyệt' :
                                 status === 'processing' ? 'Đang làm' :
                                 status === 'approved' ? 'Đã có Visa' : 
-                                status === 'disqualified' ? 'Chưa đạt' : 'Từ chối';
+                                status === 'disqualified' ? 'Chưa đạt' : 
+                                status === 'cancelled' ? 'Đã hủy' : 'Từ chối';
                   return (
                     <button
                       key={status}

@@ -131,8 +131,8 @@ router.post(['/api/woocommerce/sync-tour/:id', '/woocommerce/sync-tour/:id'], as
       return res.status(400).json({ success: false, message: 'Thiếu ID Tour' });
     }
 
-    const { target_product_id, force_new } = req.body || {};
-    const result = await syncTourToWooCommerce(id, { target_product_id, force_new });
+    const { target_product_id, force_new, update_prices, update_departures } = req.body || {};
+    const result = await syncTourToWooCommerce(id, { target_product_id, force_new, update_prices, update_departures });
     res.json(result);
   } catch (error: any) {
     res.status(500).json({

@@ -87,6 +87,7 @@ interface CRMContextType {
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
   updateCategory: (oldCategory: string, newCategory: string) => void;
+  refreshTours: () => Promise<void>;
   addTour: (tour: Omit<Tour, 'id' | 'sold_seats' | 'hold_seats' | 'available_seats' | 'seat_status'>) => Promise<Tour | undefined>;
   updateTour: (tour: Tour) => void;
   deleteTour: (tourId: string) => void;
@@ -138,7 +139,7 @@ interface CRMContextType {
     conversion_event_id?: string;
   }) => Promise<Order | undefined>;
   confirmOrder: (orderId: string, passengersData: Omit<Passenger, 'id' | 'order_id' | 'visa_status'>[]) => void;
-  cancelOrder: (orderId: string, reason?: string) => void;
+  cancelOrder: (orderId: string, reason?: string) => Promise<void>;
   requestExtension: (orderId: string, hours: number) => void;
   handleExtensionRequest: (orderId: string, approve: boolean) => void;
   updateVisaStatus: (passengerId: string, status: Passenger['visa_status'], reason?: string) => void;
@@ -3242,6 +3243,80 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const refreshTours = async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { data: toursData, error: toursErr } = await supabase.from('tours').select('*').order('created_at', { ascending: false });
+      if (toursErr) throw toursErr;
+      if (toursData && toursData.length > 0) {
+        const fetchedTours: Tour[] = toursData.map(t => ({
+          id: t.id,
+          code: t.code,
+          name: t.name,
+          duration: t.duration,
+          price: Number(t.price),
+          total_seats: Number(t.total_seats),
+          sold_seats: Math.max(0, Number(t.sold_seats || 0)),
+          hold_seats: Math.max(0, Number(t.hold_seats || 0)),
+          available_seats: Number(t.total_seats) - Math.max(0, Number(t.sold_seats || 0)) - Math.max(0, Number(t.hold_seats || 0)),
+          seat_status: t.seat_status || 'Còn chỗ',
+          departure_time: t.departure_time || t.departure_date,
+          return_time: t.return_time,
+          airline: t.airline,
+          hotel: t.hotel,
+          commission: Number(t.commission || 0),
+          flight_out: t.flight_out,
+          flight_out_transit: t.flight_out_transit,
+          flight_in: t.flight_in,
+          flight_in_transit: t.flight_in_transit,
+          transit_info: t.transit_info,
+          guide_name: t.guide_name,
+          guide_phone: t.guide_phone,
+          ticket_status: t.ticket_status,
+          visa_deadline: t.visa_deadline,
+          ticket_deadline: t.ticket_deadline,
+          description: t.description,
+          tour_status: t.tour_status,
+          category: t.category,
+          hold_duration_hours: Number(t.hold_duration_hours || 48),
+          overbook_limit: Number(t.overbook_limit || 0),
+          price_adult: Number(t.price_adult !== undefined ? t.price_adult : (t.price || 0)),
+          price_child: Number(t.price_child || 0),
+          price_infant: Number(t.price_infant || 0),
+          single_room_surcharge: Number(t.single_room_surcharge || 0),
+          discount: Number(t.discount || 0),
+          itinerary_pdf_url: t.itinerary_pdf_url,
+          notice_sections: t.notice_sections,
+          tour_type: t.tour_type || 'internal',
+          partner_name: t.partner_name || t.partner_company_name,
+          partner_contact: t.partner_contact,
+          partner_company_name: t.partner_company_name || t.partner_name,
+          partner_retail_price: Number(t.partner_retail_price || 0),
+          partner_net_cost: Number(t.partner_net_cost || 0),
+          ad_commission_amount: Number(t.ad_commission_amount || 0),
+          organization_name: t.organization_name,
+          group_leader_contact: t.group_leader_contact,
+          custom_requirements: t.custom_requirements,
+          visa_country: t.visa_country,
+          visa_service_type: t.visa_service_type,
+          visa_speed: t.visa_speed,
+          destination: t.destination || t.category || 'Chưa xác định',
+          price_visa_tour: Number(t.price_visa_tour || 0),
+          start_date: t.start_date || (t.departure_time ? t.departure_time.substring(0, 10) : ''),
+          end_date: t.end_date || (t.return_time ? t.return_time.substring(0, 10) : ''),
+          status: t.status,
+          wp_product_id: t.wp_product_id,
+          wp_sync_status: t.wp_sync_status,
+          wp_last_synced_at: t.wp_last_synced_at,
+          wp_sync_message: t.wp_sync_message
+        }));
+        setTours(fetchedTours);
+      }
+    } catch (e) {
+      console.error('Lỗi khi tải lại tours từ Supabase:', e);
+    }
+  };
+
   const cleanValueForSupabase = (val: any, isNumeric: boolean = false) => {
     if (val === undefined || val === null) {
       return isNumeric ? 0 : null;
@@ -4472,12 +4547,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled', cancel_reason: reason } : o));
+    setPassengers(prev => prev.map(p => p.order_id === orderId ? { ...p, visa_status: 'cancelled' } : p));
     logActivity({ action: 'Hủy Booking', module: 'Đơn hàng', details: `Mã booking: ${orderId.substring(0, 8)} - Lý do: ${reason || 'Không ghi'}` });
 
     const shortCode = orderId.includes('-') ? orderId.split('-')[0] : orderId.substring(0, 8);
     const bookerName = order?.booker_name || order?.customer_name || 'Khách hàng';
     const targetTour = tours.find(t => t.id === order?.tour_id);
-    const tourLabel = targetTour ? ` (Tour ${targetTour.code || targetTour.name})` : '';
+    const tourLabel = targetTour ? ` (${targetTour.tour_type === 'visa' ? 'Visa' : 'Tour'} ${targetTour.code || targetTour.name})` : '';
 
     const newNotif: Notification = {
       id: generateSafeUUID(),
@@ -4495,19 +4571,31 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       try {
         let updateData: any = { 
           status: 'cancelled',
+          booking_status: 'cancelled',
           cancel_reason: reason || null
         };
         
         let { error } = await supabase.from('bookings').update(updateData).eq('id', toUuid(orderId));
         
-        if (error && error.message?.includes('cancel_reason')) {
-          console.warn("Column 'cancel_reason' not found, retrying without it...");
+        if (error && (error.message?.includes('cancel_reason') || error.message?.includes('booking_status'))) {
+          console.warn("Column 'cancel_reason' or 'booking_status' not found in bookings, retrying with core columns...", error.message);
           delete updateData.cancel_reason;
+          delete updateData.booking_status;
+          updateData.status = 'cancelled';
           const retryRes = await supabase.from('bookings').update(updateData).eq('id', toUuid(orderId));
           error = retryRes.error;
         }
 
-        if (error) throw error;
+        if (error) {
+          console.error("Lỗi khi cập nhật bảng bookings trên Supabase:", error);
+        }
+
+        // Cập nhật trạng thái hành khách của đơn hàng này sang 'cancelled'
+        try {
+          await supabase.from('passengers').update({ visa_status: 'cancelled' }).eq('order_id', toUuid(orderId));
+        } catch (passErr) {
+          console.warn("Lỗi khi cập nhật visa_status cho hành khách trên Supabase:", passErr);
+        }
         
         const matchingTour = updatedTours.find(t => t.id === order.tour_id);
         if (matchingTour) {
@@ -6808,6 +6896,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       addCategory,
       deleteCategory,
       updateCategory,
+      refreshTours,
       addTour,
       updateTour,
       deleteTour,

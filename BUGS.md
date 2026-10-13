@@ -6,25 +6,52 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
-### 1.99 Tích Hợp Modal Chọn Tour & Tự Động Ghép Nối Sản Phẩm Website Trước Khi Đồng Bộ Hàng Loạt Lên WooCommerce
+### 1.100 Khắc Phục Lỗi Hủy Đơn Booking Visa Không Cập Nhật Trạng Thái Trên Hệ Thống
 - **Mô tả yêu cầu:**
-  - Khi bấm nút "Đồng bộ Website" (hoặc "Đồng bộ tất cả tour" trong Cài đặt WooCommerce), hệ thống trước đây dùng hộp thoại xác nhận trình duyệt mặc định rồi gửi lệnh chạy ngầm, không hiển thị danh sách tour/sản phẩm để người dùng kiểm tra và lựa chọn trước.
+  - Người dùng thực hiện hủy đơn booking visa lẻ, modal thông báo hủy thành công nhưng giao diện và hệ thống vẫn giữ nguyên, thẻ đơn hàng vẫn hiển thị "Đã chốt" và nút "Hủy đơn" màu đỏ vẫn tồn tại.
+- **Nguyên nhân kỹ thuật:**
+  1. Trong trang Quản lý Booking Visa (`VisaOrders.tsx`), huy hiệu trạng thái (Badge) của đơn hàng trước đó bị gán cố định chuỗi `"Đã chốt"` màu xanh lá mà không dựa trên thuộc tính `order.status`.
+  2. Nút bấm "Hủy đơn", "Sửa đơn", "Nộp biên lai" không được ẩn khi đơn hàng chuyển sang trạng thái `order.status === 'cancelled'`.
+  3. Trang `VisaOrders.tsx` thiếu thanh Tabs phân loại trạng thái ("Tất cả", "Đang hoạt động / Đã chốt", "Đã hủy"), khiến các đơn đã hủy vẫn nằm lẫn lộn cùng các đơn đang hoạt động.
+  4. Trong `CRMContext.tsx`, hàm `cancelOrder` trước đây chưa cập nhật trạng thái `visa_status: 'cancelled'` cho các hành khách (`passengers`) trong đơn hàng, đồng thời chưa đồng bộ cột `booking_status: 'cancelled'` trên Supabase.
+  5. Trong trang Xử lý Visa (`VisaProcessing.tsx`), danh sách hồ sơ khách hàng chưa loại trừ các đơn booking đã bị hủy, dẫn đến chuyên viên visa vẫn thấy hồ sơ của đơn đã hủy nằm trong cột quy trình xử lý.
 - **Giải pháp triển khai:**
-  1. **Xây dựng component `BulkSyncWooCommerceModal.tsx` chuyên dụng:**
-     - Cho phép duyệt toàn bộ danh sách Tour CRM với thanh tìm kiếm nhanh theo tên/mã tour, thống kê số lượng đã chọn, bộ lọc trạng thái ("Tất cả", "Đã ghép sản phẩm", "Tạo mới trên Web").
-     - Hỗ trợ checkbox chọn/bỏ chọn từng tour hoặc chọn tất cả linh hoạt.
-     - Cơ chế Tự động khớp sản phẩm Website thông minh (Auto-matching):
-       + Nếu tour đã có `wp_product_id`: Tự động nhận diện sản phẩm đã liên kết trước đó.
-       + Nếu chưa có liên kết: Tự động so sánh tên Tour với danh sách sản phẩm trên WordPress WooCommerce theo thuật toán chuẩn hóa tiếng Việt, tự động gợi ý ghép nối nếu trùng hoặc tương đồng cao.
-       + Nếu không khớp: Mặc định chọn chế độ "Tạo sản phẩm mới trên Website".
-     - Cho phép người dùng bấm "Đổi liên kết" để tìm kiếm và gán thủ công vào bất kỳ sản phẩm nào trên WooCommerce hoặc chuyển sang tạo mới.
-     - Tùy chọn nâng cao: Bật/tắt cập nhật bảng giá và cập nhật lịch khởi hành vào ACF Repeater.
-     - Giao diện Tiến trình Đồng bộ Thực tế (Realtime Progress): Hiển thị thanh tiến trình % hoàn thành, số lượng thành công/lỗi, log trạng thái chi tiết từng tour và nút mở trực tiếp link sản phẩm trên Website.
-  2. **Tích hợp vào các màn hình Quản lý:**
-     - Thay thế luồng `window.confirm` trên `src/pages/ToursManagement.tsx` (nút "Đồng bộ Website") và `src/components/WooCommerceSettingsSection.tsx` (nút "Đồng bộ toàn bộ Tour sang Website") để mở Modal `BulkSyncWooCommerceModal`.
-  3. **Kiểm thử & Tiêu chuẩn giao diện:**
-     - Tuân thủ 100% quy chuẩn giao diện: Zero Native Inputs, z-index phân tầng an toàn, không double icon, tiền tệ phân tách hàng nghìn, định dạng ngày chuẩn Việt Nam.
-     - Đã vượt qua `npm run lint` và `compile_applet` thành công 100%.
+  1. **Nâng cấp toàn diện Quản lý Booking Visa (`VisaOrders.tsx`):**
+     - Bổ sung thanh Tabs trạng thái trực quan: **Tất cả booking**, **Đang hoạt động / Đã chốt**, **Đã hủy** kèm số lượng thống kê theo thời gian thực.
+     - Hiển thị huy hiệu trạng thái chính xác theo `order.status`: Badge đỏ `"Đã hủy"` (`bg-rose-50 text-rose-700 border-rose-200`) khi `status === 'cancelled'`, kèm lý do hủy (nếu có).
+     - Khi đơn hàng ở trạng thái đã hủy: Thẻ đơn đổi màu viền, tên khách hàng gạch ngang mờ nhẹ, hiển thị khung thông báo "Booking này đã bị hủy bỏ", ẩn toàn bộ các nút thao tác (Nộp biên lai, Sửa đơn, Hủy đơn) và hiển thị nhãn "Đơn hàng đã ở trạng thái Đã hủy".
+     - Khi bấm Hủy đơn: Hỗ trợ modal nhập lý do hủy chi tiết, gọi `await cancelOrder` và hiển thị toast thông báo thành công.
+  2. **Đồng bộ hóa trong `CRMContext.tsx` & `types.ts`:**
+     - Bổ sung giá trị `'cancelled'` vào union type `Passenger['visa_status']`.
+     - Chuyển `cancelOrder` thành `Promise<void>` để hỗ trợ xử lý bất đồng bộ.
+     - Đồng bộ cập nhật cả `orders` (`status: 'cancelled'`) và `passengers` (`visa_status: 'cancelled'`) trên cả local state và bảng database `bookings`, `passengers` của Supabase.
+  3. **Tối ưu hóa trang Xử lý Visa (`VisaProcessing.tsx`):**
+     - Tự động ẩn hồ sơ của các booking đã hủy khỏi bảng Kanban quy trình xử lý visa.
+     - Thêm tab lọc "Đã hủy" và badge "Đơn đã hủy" ở chế độ xem Danh sách để chuyên viên visa dễ dàng tra cứu khi cần.
+  4. **Kiểm thử tự động:** Vượt qua 100% kiểm tra linter (`npm run lint`), biên dịch (`compile_applet`), toàn bộ 50 unit tests Vitest (`npm test`) và kịch bản mô phỏng 4 vai trò nhân sự (`npm run test:simulation`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.99 Nâng Cấp Hệ Thống Đồng Bộ Hàng Loạt Tour Lên WooCommerce Với Modal Chuyên Dụng (BulkSyncWooCommerceModal)
+- **Mô tả yêu cầu:**
+  - Khắc phục tình trạng khi người dùng bấm nút "Đồng bộ Website" (hoặc "Đồng bộ tất cả tour"), hệ thống tự động chạy ngầm qua `window.confirm` mà không hiển thị danh sách sản phẩm để người dùng kiểm tra, tích chọn và liên kết sản phẩm trước khi đồng bộ.
+- **Giải pháp triển khai:**
+  1. **Xây dựng Modal Đồng Bộ Hàng Loạt Chuyên Dụng (`BulkSyncWooCommerceModal.tsx`):**
+     - **Duyệt & Tích chọn Tour:** Cho phép duyệt toàn bộ danh sách tour, ô tìm kiếm nhanh (theo tên, mã lịch, điểm đến), bộ lọc trạng thái (Tất cả, Đã liên kết, Khớp tên, Tạo mới), hỗ trợ chọn/bỏ chọn từng tour hoặc chọn tất cả 1-click.
+     - **Tự động ghép nối sản phẩm thông minh (Auto-matching):**
+       + Nhận diện các tour đã có liên kết từ trước (`tour.wp_product_id` -> Badge xanh lá *Đã liên kết #ID*).
+       + Tự động so khớp tên Tour với danh sách sản phẩm trên WordPress WooCommerce (Badge tím *Khớp tên #ID*).
+       + Với tour chưa có sản phẩm tương tự, hệ thống mặc định chọn chế độ *Tạo sản phẩm mới trên Website* (Badge xám/xanh).
+     - **Linh hoạt đổi sản phẩm liên kết:** Nút "Đổi" cho phép tìm kiếm và chọn ghép vào bất kỳ sản phẩm nào có sẵn trên WooCommerce hoặc chuyển sang tạo sản phẩm mới.
+     - **Tùy chọn đồng bộ nâng cao:** Hỗ trợ 2 công tắc tùy chỉnh: "Cập nhật bảng giá (Regular Price)" và "Cập nhật ACF Lịch trình khởi hành".
+     - **Tiến trình chạy thực tế (Live Progress):** Hiển thị thanh tiến trình % trực quan, trạng thái xử lý từng tour theo thời gian thực (Chờ -> Đang gửi -> Thành công/Lỗi), bảng log chi tiết và nút "Xem Web" mở trực tiếp permalink sản phẩm trên WordPress.
+  2. **Tối ưu Backend API (`woocommerceService.ts` & `woocommerceRoutes.ts`):**
+     - Cập nhật hàm `buildWooCommercePayload` và `syncTourToWooCommerce` hỗ trợ tùy chọn `update_prices` và `update_departures`.
+     - Tuyệt đối giữ nguyên giá cũ của sản phẩm khi người dùng tắt cập nhật bảng giá; giữ nguyên cấu trúc repeater khi tắt cập nhật lịch trình.
+  3. **Tích hợp trên toàn hệ thống:**
+     - Thay thế nút "Đồng bộ Website" tại trang Quản lý Tour (`ToursManagement.tsx`).
+     - Thay thế nút "Bắt đầu đồng bộ toàn bộ Tour sang Website" tại mục Cài đặt WooCommerce (`WooCommerceSettingsSection.tsx`).
+     - Tự động gọi `refreshTours()` sau khi đồng bộ để làm mới badge và thông tin tour ngay trên giao diện.
+  4. **Kiểm thử tự động:** Vượt qua 100% kiểm tra linter (`npm run lint`), biên dịch (`npm run build`) và 50 unit tests Vitest (`npm test`).
 - **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
 
 ### 1.98 Tích Hợp Tự Động Ghi Dòng Mới Vào Google Sheet Khi Người Dùng Gửi Góp Ý & Báo Lỗi

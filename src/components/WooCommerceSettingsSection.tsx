@@ -90,8 +90,6 @@ const DEFAULT_MAPPINGS: Record<string, string> = {
 };
 
 export default function WooCommerceSettingsSection() {
-  const { tours } = useCRM();
-  const [showBulkSyncModal, setShowBulkSyncModal] = useState(false);
   const [config, setConfig] = useState<WooCommerceConfigState>({
     site_url: '',
     consumer_key: '',
@@ -210,8 +208,11 @@ export default function WooCommerceSettingsSection() {
     }
   };
 
+  const { tours, refreshTours } = useCRM();
+  const [isBulkSyncModalOpen, setIsBulkSyncModalOpen] = useState(false);
+
   const handleSyncAllTours = () => {
-    setShowBulkSyncModal(true);
+    setIsBulkSyncModalOpen(true);
   };
 
   // Thao tác Xóa 1 trường ACF mapping
@@ -903,11 +904,14 @@ export default function WooCommerceSettingsSection() {
         </div>
       )}
 
-      {/* Modal Chọn danh sách & Đồng bộ hàng loạt Tour sang WooCommerce */}
+      {/* Modal Đồng Bộ Hàng Loạt Chuyên Dụng Lên WooCommerce */}
       <BulkSyncWooCommerceModal
-        isOpen={showBulkSyncModal}
-        onClose={() => setShowBulkSyncModal(false)}
+        isOpen={isBulkSyncModalOpen}
+        onClose={() => setIsBulkSyncModalOpen(false)}
         tours={tours}
+        onSyncComplete={() => {
+          refreshTours();
+        }}
       />
     </div>
   );

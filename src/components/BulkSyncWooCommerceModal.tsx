@@ -1,29 +1,26 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  Globe,
-  Search,
-  RefreshCw,
-  CheckCircle2,
-  XCircle,
+import { 
+  Globe, 
+  Search, 
+  RefreshCw, 
+  CheckCircle2, 
+  XCircle, 
+  ExternalLink, 
+  X, 
+  Check, 
+  Calendar, 
+  DollarSign, 
   AlertCircle,
-  ExternalLink,
-  X,
-  Check,
-  Calendar,
-  Layers,
-  ArrowRight,
-  Filter,
-  ArrowUpDown,
+  Sparkles,
+  Link2,
+  ArrowRightLeft,
   Plus,
   Play,
   RotateCcw,
-  SlidersHorizontal,
-  ChevronDown,
-  ChevronUp,
-  Link2,
-  FileSpreadsheet,
-  CheckSquare,
-  Square
+  Sliders,
+  Filter,
+  Layers,
+  StopCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
@@ -44,17 +41,24 @@ export interface WordPressProduct {
   departures: string[];
 }
 
-export interface BulkTourSyncRow {
-  tour: Tour;
-  selected: boolean;
-  matchType: 'linked' | 'auto_matched' | 'new';
+export interface TourSyncSetting {
+  mode: 'existing' | 'new';
   targetProductId: number | null;
-  targetProductName: string;
-  targetProductUrl: string;
-  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
-  syncMessage?: string;
-  syncedProductId?: number;
-  syncedProductUrl?: string;
+  matchedType: 'linked' | 'auto_matched' | 'manual' | 'new';
+  matchedProductName?: string;
+  productUrl?: string;
+}
+
+export interface SyncProgressItem {
+  tourId: string;
+  tourCode: string;
+  tourName: string;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  action?: 'created' | 'updated';
+  productId?: number;
+  productName?: string;
+  productUrl?: string;
+  message?: string;
 }
 
 interface BulkSyncWooCommerceModalProps {
@@ -64,726 +68,819 @@ interface BulkSyncWooCommerceModalProps {
   onSyncComplete?: () => void;
 }
 
-// Hàm chuẩn hóa chuỗi tiếng Việt để so sánh tìm kiếm
-function normalizeString(str: string): string {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Tính độ tương đồng đơn giản giữa 2 tên tour
-function calculateSimilarity(str1: string, str2: string): number {
-  const norm1 = normalizeString(str1);
-  const norm2 = normalizeString(str2);
-  if (!norm1 || !norm2) return 0;
-  if (norm1 === norm2) return 1;
-  if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.85;
-
-  const words1 = new Set(norm1.split(' ').filter(w => w.length > 1));
-  const words2 = new Set(norm2.split(' ').filter(w => w.length > 1));
-  if (words1.size === 0 || words2.size === 0) return 0;
-
-  let common = 0;
-  words1.forEach(w => {
-    if (words2.has(w)) common++;
-  });
-
-  return (2 * common) / (words1.size + words2.size);
-}
-
 export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> = ({
   isOpen,
   onClose,
   tours,
   onSyncComplete
 }) => {
-  const [products, setProducts] = useState<WordPressProduct[]>([]);
+  // Trạng thái màn hình: 'selection' (chọn & ghép nối) | 'progress' (đang chạy & xem kết quả)
+  const [currentView, setCurrentView] = useState<'selection' | 'progress'>('selection');
+
+  // Danh sách sản phẩm WooCommerce từ server
+  const [wpProducts, setWpProducts] = useState<WordPressProduct[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
-  const [isConfigChecked, setIsConfigChecked] = useState(false);
-  const [siteUrl, setSiteUrl] = useState('');
 
-  // Danh sách dòng tour đang xử lý trong modal
-  const [syncRows, setSyncRows] = useState<BulkTourSyncRow[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'matched' | 'new'>('all');
+  // Bộ lọc & Tìm kiếm Tour
+  const [searchTourQuery, setSearchTourQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'linked' | 'auto_matched' | 'new'>('all');
 
-  // Popup đổi sản phẩm liên kết cho từng tour
-  const [editingTourId, setEditingTourId] = useState<string | null>(null);
-  const [productSearchInModal, setProductSearchInModal] = useState('');
+  // Danh sách tour được tích chọn (tourId Set)
+  const [selectedTourIds, setSelectedTourIds] = useState<Set<string>>(new Set());
 
-  // Tiến trình đồng bộ
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const isPausedRef = useRef(false);
-  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, successCount: 0, errorCount: 0 });
-  const [currentSyncingName, setCurrentSyncingName] = useState('');
-  const [viewStep, setViewStep] = useState<'selection' | 'progress'>('selection');
+  // Cấu hình ghép nối cho từng tour (tourId -> TourSyncSetting)
+  const [syncSettings, setSyncSettings] = useState<Record<string, TourSyncSetting>>({});
 
-  // Tùy chọn nâng cao
-  const [showOptions, setShowOptions] = useState(false);
+  // Tùy chọn đồng bộ nâng cao
   const [updatePrices, setUpdatePrices] = useState(true);
   const [updateDepartures, setUpdateDepartures] = useState(true);
 
-  // 1. Tải cấu hình và sản phẩm từ website WooCommerce khi mở Modal
-  useEffect(() => {
-    if (!isOpen) {
-      setViewStep('selection');
-      setIsSyncing(false);
-      setEditingTourId(null);
-      return;
+  // State mở popover đổi sản phẩm cho 1 tour cụ thể
+  const [editingTourId, setEditingTourId] = useState<string | null>(null);
+  const [productSearchKeyword, setProductSearchKeyword] = useState('');
+
+  // Tiến trình đồng bộ
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgressList, setSyncProgressList] = useState<SyncProgressItem[]>([]);
+  const [currentSyncIndex, setCurrentSyncIndex] = useState(0);
+  const abortSyncRef = useRef(false);
+
+  // Chuẩn hóa chuỗi tìm kiếm tiếng Việt
+  const normalizeText = (text: string) => {
+    return (text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .trim();
+  };
+
+  // Nạp danh sách sản phẩm WooCommerce khi mở Modal
+  const loadWooCommerceProducts = async () => {
+    try {
+      setIsLoadingProducts(true);
+      const res = await fetch('/api/woocommerce/products?per_page=100');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.products)) {
+        setWpProducts(data.products);
+        autoMatchProducts(tours, data.products);
+      } else {
+        toast.error('Không thể tải danh sách sản phẩm từ Website WordPress.');
+      }
+    } catch (err) {
+      console.error('Lỗi nạp sản phẩm WooCommerce:', err);
+      toast.error('Lỗi kết nối máy chủ WooCommerce.');
+    } finally {
+      setIsLoadingProducts(false);
     }
+  };
 
-    const initData = async () => {
-      try {
-        setIsLoadingProducts(true);
-        // Kiểm tra cấu hình kết nối
-        const configRes = await fetch('/api/woocommerce/config');
-        const configJson = await configRes.json();
-        if (configJson.success && configJson.data) {
-          setSiteUrl(configJson.data.site_url || '');
-          setIsConfigChecked(true);
-        }
+  // Thuật toán tự động ghép nối sản phẩm
+  const autoMatchProducts = (currentTours: Tour[], productsList: WordPressProduct[]) => {
+    const newSettings: Record<string, TourSyncSetting> = {};
+    const defaultSelected = new Set<string>();
 
-        // Tải danh sách sản phẩm WP (tối đa 100 sản phẩm để khớp)
-        const productsRes = await fetch('/api/woocommerce/products?per_page=100');
-        const productsJson = await productsRes.json();
-        const wpProducts: WordPressProduct[] = (productsJson.success && Array.isArray(productsJson.products))
-          ? productsJson.products
-          : [];
-        setProducts(wpProducts);
-
-        // Khởi tạo bảng ghép nối cho các tour
-        initializeSyncRows(tours, wpProducts);
-      } catch (err: any) {
-        console.error('Lỗi khi tải dữ liệu WooCommerce:', err);
-        toast.error('Không thể kết nối đến website WordPress. Vui lòng kiểm tra lại cấu hình.');
-      } finally {
-        setIsLoadingProducts(false);
+    currentTours.forEach(tour => {
+      // Mặc định chọn các tour đang hoạt động hoặc sắp diễn ra
+      if (tour.status !== 'cancelled') {
+        defaultSelected.add(tour.id);
       }
-    };
 
-    initData();
-  }, [isOpen, tours]);
-
-  // Khởi tạo danh sách các tour và tự động khớp sản phẩm
-  const initializeSyncRows = (sourceTours: Tour[], wpProducts: WordPressProduct[]) => {
-    // Chỉ lấy các tour hợp lệ (bỏ qua tour visa nếu có)
-    const validTours = sourceTours.filter(t => t.tour_type !== 'visa');
-
-    const rows: BulkTourSyncRow[] = validTours.map(t => {
-      let matchType: 'linked' | 'auto_matched' | 'new' = 'new';
-      let targetProductId: number | null = null;
-      let targetProductName = 'Tạo sản phẩm mới trên Website';
-      let targetProductUrl = '';
-
-      // Trường hợp 1: Tour đã có wp_product_id sẵn trong CRM
-      if (t.wp_product_id) {
-        const found = wpProducts.find(p => p.id === Number(t.wp_product_id));
-        if (found) {
-          matchType = 'linked';
-          targetProductId = found.id;
-          targetProductName = found.name;
-          targetProductUrl = found.permalink;
+      // 1. Kiểm tra nếu tour đã có wp_product_id từ trước
+      if (tour.wp_product_id) {
+        const linkedProduct = productsList.find(p => p.id === Number(tour.wp_product_id));
+        if (linkedProduct) {
+          newSettings[tour.id] = {
+            mode: 'existing',
+            targetProductId: linkedProduct.id,
+            matchedType: 'linked',
+            matchedProductName: linkedProduct.name,
+            productUrl: linkedProduct.permalink
+          };
+          return;
         }
       }
 
-      // Trường hợp 2: Chưa có ID, tự động quét theo tên tour
-      if (matchType === 'new' && wpProducts.length > 0) {
-        let bestProduct: WordPressProduct | null = null;
-        let bestScore = 0;
+      // 2. Tự động so khớp theo Tên Tour
+      const normTourName = normalizeText(tour.name);
+      if (normTourName) {
+        // So khớp chính xác 100%
+        let matched = productsList.find(p => normalizeText(p.name) === normTourName);
 
-        for (const p of wpProducts) {
-          const score = calculateSimilarity(t.name, p.name);
-          if (score > bestScore) {
-            bestScore = score;
-            bestProduct = p;
-          }
+        // Nếu không khớp 100%, kiểm tra chứa nhau
+        if (!matched) {
+          matched = productsList.find(p => {
+            const normProdName = normalizeText(p.name);
+            return normProdName.includes(normTourName) || normTourName.includes(normProdName);
+          });
         }
 
-        // Nếu độ tương đồng >= 0.65 -> Tự động gợi ý khớp
-        if (bestProduct && bestScore >= 0.65) {
-          matchType = 'auto_matched';
-          targetProductId = bestProduct.id;
-          targetProductName = bestProduct.name;
-          targetProductUrl = bestProduct.permalink;
+        if (matched) {
+          newSettings[tour.id] = {
+            mode: 'existing',
+            targetProductId: matched.id,
+            matchedType: 'auto_matched',
+            matchedProductName: matched.name,
+            productUrl: matched.permalink
+          };
+          return;
         }
       }
 
-      return {
-        tour: t,
-        selected: true, // Mặc định tích chọn tất cả
-        matchType,
-        targetProductId,
-        targetProductName,
-        targetProductUrl,
-        syncStatus: 'idle'
+      // 3. Không tìm thấy sản phẩm khớp -> Mặc định chọn tạo mới
+      newSettings[tour.id] = {
+        mode: 'new',
+        targetProductId: null,
+        matchedType: 'new'
       };
     });
 
-    setSyncRows(rows);
+    setSyncSettings(newSettings);
+    setSelectedTourIds(defaultSelected);
   };
 
-  // Lọc danh sách hiển thị
-  const filteredRows = useMemo(() => {
-    return syncRows.filter(row => {
-      // Lọc theo từ khóa
-      if (searchQuery.trim()) {
-        const q = normalizeString(searchQuery);
-        const nameMatch = normalizeString(row.tour.name).includes(q);
-        const codeMatch = normalizeString(row.tour.code || '').includes(q);
-        const targetMatch = normalizeString(row.targetProductName).includes(q);
-        if (!nameMatch && !codeMatch && !targetMatch) return false;
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentView('selection');
+      setIsSyncing(false);
+      setEditingTourId(null);
+      setProductSearchKeyword('');
+      loadWooCommerceProducts();
+    }
+  }, [isOpen, tours]);
+
+  // Lọc danh sách tour hiển thị theo tìm kiếm & trạng thái
+  const filteredTours = useMemo(() => {
+    return tours.filter(tour => {
+      // Tìm kiếm theo tên hoặc mã tour
+      if (searchTourQuery.trim()) {
+        const query = normalizeText(searchTourQuery);
+        const nameMatch = normalizeText(tour.name).includes(query);
+        const codeMatch = normalizeText(tour.code).includes(query);
+        const destMatch = normalizeText(tour.destination || '').includes(query);
+        if (!nameMatch && !codeMatch && !destMatch) return false;
       }
 
-      // Lọc theo chế độ ghép nối
-      if (filterMode === 'matched' && row.matchType === 'new') return false;
-      if (filterMode === 'new' && row.matchType !== 'new') return false;
+      // Lọc theo trạng thái ghép nối
+      const setting = syncSettings[tour.id];
+      if (statusFilter === 'linked') {
+        return setting?.matchedType === 'linked';
+      }
+      if (statusFilter === 'auto_matched') {
+        return setting?.matchedType === 'auto_matched';
+      }
+      if (statusFilter === 'new') {
+        return setting?.matchedType === 'new';
+      }
 
       return true;
     });
-  }, [syncRows, searchQuery, filterMode]);
+  }, [tours, searchTourQuery, statusFilter, syncSettings]);
 
   // Thống kê số lượng
   const stats = useMemo(() => {
-    const total = syncRows.length;
-    const selected = syncRows.filter(r => r.selected);
-    const selectedCount = selected.length;
-    const matchedCount = selected.filter(r => r.matchType === 'linked' || r.matchType === 'auto_matched').length;
-    const newCount = selected.filter(r => r.matchType === 'new').length;
-    return { total, selectedCount, matchedCount, newCount };
-  }, [syncRows]);
+    const selectedCount = selectedTourIds.size;
+    let linkedCount = 0;
+    let autoMatchedCount = 0;
+    let newCount = 0;
 
-  // Chọn / bỏ chọn tất cả
-  const handleToggleSelectAll = (checked: boolean) => {
-    setSyncRows(prev => prev.map(row => {
-      // Nếu đang có bộ lọc hiển thị, chỉ đổi các dòng thỏa mãn
-      const isVisible = filteredRows.some(fr => fr.tour.id === row.tour.id);
-      return isVisible ? { ...row, selected: checked } : row;
-    }));
+    selectedTourIds.forEach(id => {
+      const s = syncSettings[id];
+      if (!s || s.matchedType === 'new') {
+        newCount++;
+      } else if (s.matchedType === 'linked') {
+        linkedCount++;
+      } else {
+        autoMatchedCount++;
+      }
+    });
+
+    return { selectedCount, linkedCount, autoMatchedCount, newCount };
+  }, [selectedTourIds, syncSettings]);
+
+  // Chọn / Bỏ chọn 1 tour
+  const toggleSelectTour = (tourId: string) => {
+    setSelectedTourIds(prev => {
+      const next = new Set(prev);
+      if (next.has(tourId)) {
+        next.delete(tourId);
+      } else {
+        next.add(tourId);
+      }
+      return next;
+    });
   };
 
-  // Toggle chọn 1 dòng
-  const handleToggleRow = (tourId: string) => {
-    setSyncRows(prev => prev.map(r => r.tour.id === tourId ? { ...r, selected: !r.selected } : r));
+  // Chọn tất cả các tour đang hiển thị
+  const handleSelectAllFiltered = () => {
+    setSelectedTourIds(prev => {
+      const next = new Set(prev);
+      filteredTours.forEach(t => next.add(t.id));
+      return next;
+    });
   };
 
-  // Thay đổi sản phẩm ghép nối cho 1 tour
-  const handleSelectTargetProduct = (tourId: string, product: WordPressProduct | null) => {
-    setSyncRows(prev => prev.map(r => {
-      if (r.tour.id !== tourId) return r;
-      if (!product) {
+  // Bỏ chọn tất cả các tour đang hiển thị
+  const handleDeselectAllFiltered = () => {
+    setSelectedTourIds(prev => {
+      const next = new Set(prev);
+      filteredTours.forEach(t => next.delete(t.id));
+      return next;
+    });
+  };
+
+  // Cập nhật ghép nối sản phẩm cho 1 tour
+  const handleSelectProductForTour = (tourId: string, product: WordPressProduct | 'new') => {
+    setSyncSettings(prev => {
+      if (product === 'new') {
         return {
-          ...r,
-          matchType: 'new',
-          targetProductId: null,
-          targetProductName: 'Tạo sản phẩm mới trên Website',
-          targetProductUrl: ''
+          ...prev,
+          [tourId]: {
+            mode: 'new',
+            targetProductId: null,
+            matchedType: 'new'
+          }
         };
       }
       return {
-        ...r,
-        matchType: 'linked',
-        targetProductId: product.id,
-        targetProductName: product.name,
-        targetProductUrl: product.permalink
+        ...prev,
+        [tourId]: {
+          mode: 'existing',
+          targetProductId: product.id,
+          matchedType: 'manual',
+          matchedProductName: product.name,
+          productUrl: product.permalink
+        }
       };
-    }));
+    });
     setEditingTourId(null);
-    setProductSearchInModal('');
-    toast.success('Đã cập nhật sản phẩm liên kết!');
   };
 
-  // Lọc danh sách sản phẩm WP khi tìm kiếm đổi sản phẩm
-  const filteredWpProducts = useMemo(() => {
-    if (!productSearchInModal.trim()) return products.slice(0, 15);
-    const q = normalizeString(productSearchInModal);
-    return products.filter(p => normalizeString(p.name).includes(q) || String(p.id).includes(q)).slice(0, 20);
-  }, [products, productSearchInModal]);
+  // Danh sách sản phẩm WordPress được lọc trong popover đổi liên kết
+  const filteredWpProductsForSelector = useMemo(() => {
+    if (!productSearchKeyword.trim()) return wpProducts.slice(0, 30);
+    const kw = normalizeText(productSearchKeyword);
+    return wpProducts.filter(p => 
+      normalizeText(p.name).includes(kw) || 
+      String(p.id).includes(kw) ||
+      normalizeText(p.sku || '').includes(kw)
+    ).slice(0, 30);
+  }, [wpProducts, productSearchKeyword]);
 
-  // 2. Bắt đầu quá trình đồng bộ hàng loạt
+  // Thực hiện đồng bộ hàng loạt
   const handleStartBulkSync = async () => {
-    const targetRows = syncRows.filter(r => r.selected);
-    if (targetRows.length === 0) {
-      toast.error('Vui lòng tích chọn ít nhất 1 Tour để đồng bộ.');
+    const toursToSync = tours.filter(t => selectedTourIds.has(t.id));
+    if (toursToSync.length === 0) {
+      toast.error('Vui lòng chọn ít nhất 1 tour để đồng bộ.');
       return;
     }
 
-    setViewStep('progress');
-    setIsSyncing(true);
-    setIsPaused(false);
-    isPausedRef.current = false;
-    setSyncProgress({
-      current: 0,
-      total: targetRows.length,
-      successCount: 0,
-      errorCount: 0
+    // Chuẩn bị danh sách tiến trình
+    const initialProgress: SyncProgressItem[] = toursToSync.map(t => {
+      const s = syncSettings[t.id];
+      return {
+        tourId: t.id,
+        tourCode: t.code,
+        tourName: t.name,
+        status: 'pending',
+        productId: s?.targetProductId || undefined,
+        productName: s?.matchedProductName,
+        productUrl: s?.productUrl
+      };
     });
 
-    // Reset trạng thái các dòng được chọn
-    setSyncRows(prev => prev.map(r => r.selected ? { ...r, syncStatus: 'idle', syncMessage: undefined } : r));
+    setSyncProgressList(initialProgress);
+    setCurrentView('progress');
+    setIsSyncing(true);
+    setCurrentSyncIndex(0);
+    abortSyncRef.current = false;
 
-    let success = 0;
-    let error = 0;
+    let successCount = 0;
+    let failedCount = 0;
 
-    for (let i = 0; i < targetRows.length; i++) {
-      if (isPausedRef.current) {
-        toast('Quá trình đồng bộ đã được tạm dừng.');
+    for (let i = 0; i < toursToSync.length; i++) {
+      if (abortSyncRef.current) {
+        toast('Đã dừng tiến trình đồng bộ theo yêu cầu.', { icon: '⚠️' });
         break;
       }
 
-      const row = targetRows[i];
-      setCurrentSyncingName(row.tour.name);
+      const currentTour = toursToSync[i];
+      const setting = syncSettings[currentTour.id] || { mode: 'new', targetProductId: null, matchedType: 'new' };
 
-      // Cập nhật trạng thái đang sync cho dòng này
-      setSyncRows(prev => prev.map(r => r.tour.id === row.tour.id ? { ...r, syncStatus: 'syncing' } : r));
+      setCurrentSyncIndex(i);
+
+      // Cập nhật trạng thái đang chạy
+      setSyncProgressList(prev => prev.map((item, idx) => 
+        idx === i ? { ...item, status: 'running' } : item
+      ));
 
       try {
-        const bodyPayload: any = {
-          force_new: row.matchType === 'new',
+        const payload: any = {
+          target_product_id: setting.mode === 'existing' && setting.targetProductId ? setting.targetProductId : 'new',
+          force_new: setting.mode === 'new',
           update_prices: updatePrices,
           update_departures: updateDepartures
         };
-        if (row.matchType !== 'new' && row.targetProductId) {
-          bodyPayload.target_product_id = row.targetProductId;
-        }
 
-        const res = await fetch(`/api/woocommerce/sync-tour/${row.tour.id}`, {
+        const res = await fetch(`/api/woocommerce/sync-tour/${currentTour.id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bodyPayload)
+          body: JSON.stringify(payload)
         });
 
-        const resJson = await res.json();
+        const data = await res.json();
 
-        if (resJson.success) {
-          success++;
-          setSyncRows(prev => prev.map(r => r.tour.id === row.tour.id ? {
-            ...r,
-            syncStatus: 'success',
-            syncedProductId: resJson.product_id,
-            syncedProductUrl: resJson.product_url,
-            syncMessage: resJson.message || 'Đồng bộ thành công'
-          } : r));
+        if (res.ok && data.success) {
+          successCount++;
+          setSyncProgressList(prev => prev.map((item, idx) => 
+            idx === i ? {
+              ...item,
+              status: 'success',
+              action: data.action,
+              productId: data.product_id,
+              productName: data.product_name,
+              productUrl: data.product_url,
+              message: data.message || 'Đồng bộ thành công'
+            } : item
+          ));
         } else {
-          error++;
-          setSyncRows(prev => prev.map(r => r.tour.id === row.tour.id ? {
-            ...r,
-            syncStatus: 'error',
-            syncMessage: resJson.message || 'Đồng bộ thất bại'
-          } : r));
+          failedCount++;
+          setSyncProgressList(prev => prev.map((item, idx) => 
+            idx === i ? {
+              ...item,
+              status: 'failed',
+              message: data.message || 'Lỗi không xác định khi đồng bộ'
+            } : item
+          ));
         }
       } catch (err: any) {
-        error++;
-        setSyncRows(prev => prev.map(r => r.tour.id === row.tour.id ? {
-          ...r,
-          syncStatus: 'error',
-          syncMessage: err.message || 'Lỗi mạng hoặc server không phản hồi'
-        } : r));
+        failedCount++;
+        setSyncProgressList(prev => prev.map((item, idx) => 
+          idx === i ? {
+            ...item,
+            status: 'failed',
+            message: err.message || 'Lỗi kết nối khi gửi dữ liệu'
+          } : item
+        ));
       }
 
-      setSyncProgress({
-        current: i + 1,
-        total: targetRows.length,
-        successCount: success,
-        errorCount: error
-      });
-
-      // Khoảng nghỉ nhỏ để tránh quá tải WordPress REST API
-      await new Promise(r => setTimeout(r, 400));
+      // Giãn cách nhẹ 200ms giữa các request để giảm tải máy chủ WordPress
+      await new Promise(r => setTimeout(r, 200));
     }
 
     setIsSyncing(false);
-    setCurrentSyncingName('');
 
-    if (success > 0) {
-      toast.success(`Đã đồng bộ thành công ${success}/${targetRows.length} tour lên Website!`);
-      if (onSyncComplete) {
-        onSyncComplete();
+    if (!abortSyncRef.current) {
+      if (failedCount === 0) {
+        toast.success(`Đồng bộ thành công toàn bộ ${successCount} tour lên Website!`);
+      } else {
+        toast(`Đã xử lý xong: ${successCount} thành công, ${failedCount} thất bại.`, { icon: 'ℹ️' });
       }
-    } else {
-      toast.error('Đồng bộ không thành công, vui lòng kiểm tra lại log chi tiết.');
+    }
+
+    if (onSyncComplete) {
+      onSyncComplete();
     }
   };
 
-  const handlePauseOrResume = () => {
-    if (isPaused) {
-      isPausedRef.current = false;
-      setIsPaused(false);
-      // Tiếp tục vòng lặp
-      handleStartBulkSync();
-    } else {
-      isPausedRef.current = true;
-      setIsPaused(true);
-    }
+  // Dừng đồng bộ
+  const handleAbortSync = () => {
+    abortSyncRef.current = true;
+    setIsSyncing(false);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div 
         className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl flex flex-col max-h-[92vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Modal */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/70 via-white to-emerald-50/50">
+        {/* MODAL HEADER */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
               <Globe className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <span>Đồng bộ hàng loạt Tour lên Website WooCommerce</span>
-                {siteUrl && (
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 hidden sm:inline-block">
-                    {siteUrl.replace(/^https?:\/\//, '')}
-                  </span>
-                )}
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Xem lại danh sách, kiểm tra sản phẩm ghép nối trên website trước khi tiến hành đồng bộ
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 text-lg">Đồng Bộ Tour Lên Website WooCommerce</h3>
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                  {currentView === 'selection' ? 'Chọn & Ghép Nối' : 'Tiến Trình Chạy'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                {currentView === 'selection' 
+                  ? 'Kiểm tra danh sách tour, cơ chế ghép nối sản phẩm và bảng giá trước khi đồng bộ' 
+                  : 'Theo dõi tiến độ cập nhật thực tế từng sản phẩm lên website theo thời gian thực'}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            disabled={isSyncing}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
-            title="Đóng modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {currentView === 'selection' && (
+              <button
+                type="button"
+                onClick={loadWooCommerceProducts}
+                disabled={isLoadingProducts}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-colors shadow-sm disabled:opacity-50"
+                title="Tải lại danh sách sản phẩm từ Website"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingProducts ? 'animate-spin text-indigo-600' : ''}`} />
+                <span>Tải lại dữ liệu Web</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSyncing}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors disabled:opacity-30"
+              title="Đóng modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Nội dung chính Modal */}
+        {/* MODAL BODY */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {isLoadingProducts ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center space-y-3">
-              <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin" />
-              <p className="text-sm font-semibold text-slate-700">Đang nạp danh sách Tour & sản phẩm từ Website WordPress...</p>
-              <p className="text-xs text-slate-400">Hệ thống đang chuẩn bị cơ chế tự động khớp sản phẩm thông minh</p>
-            </div>
-          ) : viewStep === 'selection' ? (
+          {currentView === 'selection' ? (
             <>
-              {/* Thanh tóm tắt & Bộ lọc */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-700">Đã chọn:</span>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
-                    {stats.selectedCount} / {stats.total} tour
-                  </span>
-                  <span className="text-xs text-slate-400">|</span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {stats.matchedCount} tour khớp sản phẩm Web
-                  </span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                    {stats.newCount} tour sẽ tạo mới
-                  </span>
+              {/* THANH THỐNG KÊ & TÙY CHỌN NÂNG CAO */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+                {/* 4 Thẻ thống kê */}
+                <div className="md:col-span-7 flex flex-wrap items-center gap-2">
+                  <div className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs shadow-sm flex items-center gap-2">
+                    <span className="text-slate-500">Đã chọn:</span>
+                    <span className="font-bold text-slate-800 text-sm">{stats.selectedCount}</span>
+                    <span className="text-slate-400">/ {tours.length}</span>
+                  </div>
+
+                  <div className="px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Đã liên kết:</span>
+                    <span className="font-bold">{stats.linkedCount}</span>
+                  </div>
+
+                  <div className="px-2.5 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-xs font-medium text-purple-800 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Khớp theo tên:</span>
+                    <span className="font-bold">{stats.autoMatchedCount}</span>
+                  </div>
+
+                  <div className="px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-xs font-medium text-blue-800 flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Tạo mới:</span>
+                    <span className="font-bold">{stats.newCount}</span>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowOptions(!showOptions)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Tùy chọn cập nhật</span>
-                    {showOptions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
+                {/* 2 Tùy chọn checkbox đồng bộ */}
+                <div className="md:col-span-5 flex flex-wrap items-center justify-end gap-3 text-xs text-slate-700">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:border-slate-300">
+                    <input 
+                      type="checkbox" 
+                      checked={updatePrices} 
+                      onChange={(e) => setUpdatePrices(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Cập nhật bảng giá</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:border-slate-300">
+                    <input 
+                      type="checkbox" 
+                      checked={updateDepartures} 
+                      onChange={(e) => setUpdateDepartures(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Cập nhật ACF Lịch trình</span>
+                  </label>
                 </div>
               </div>
 
-              {/* Hộp tùy chọn cập nhật mở rộng */}
-              <AnimatePresence>
-                {showOptions && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 text-xs text-slate-700 space-y-2 overflow-hidden"
-                  >
-                    <div className="font-semibold text-indigo-900 flex items-center gap-1.5">
-                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Cấu hình dữ liệu đồng bộ sang WordPress:</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200">
-                        <input
-                          type="checkbox"
-                          checked={updatePrices}
-                          onChange={e => setUpdatePrices(e.target.checked)}
-                          className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                        />
-                        <span>Cập nhật bảng giá (Người lớn, Trẻ em, Phòng đơn)</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200">
-                        <input
-                          type="checkbox"
-                          checked={updateDepartures}
-                          onChange={e => setUpdateDepartures(e.target.checked)}
-                          className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                        />
-                        <span>Cập nhật lịch khởi hành & chỗ trống vào ACF Repeater</span>
-                      </label>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Thanh tìm kiếm & chuyển bộ lọc */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {/* BỘ LỌC VÀ TÌM KIẾM TOUR */}
+              <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Tìm theo tên tour, mã tour CRM hoặc tên sản phẩm Web..."
-                    className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm"
+                    value={searchTourQuery}
+                    onChange={(e) => setSearchTourQuery(e.target.value)}
+                    placeholder="Tìm theo tên tour, mã lịch trình, điểm đến..."
+                    className="w-full pl-9 pr-8 h-10 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                   />
-                  {searchQuery && (
+                  {searchTourQuery && (
                     <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      type="button"
+                      onClick={() => setSearchTourQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                {/* Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
                   <button
                     type="button"
-                    onClick={() => setFilterMode('all')}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                      filterMode === 'all'
-                        ? 'bg-slate-800 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    onClick={() => setStatusFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl border transition-all ${
+                      statusFilter === 'all'
+                        ? 'bg-slate-800 text-white border-slate-800 shadow-sm font-medium'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    Tất cả ({syncRows.length})
+                    Tất cả ({tours.length})
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFilterMode('matched')}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                      filterMode === 'matched'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                    onClick={() => setStatusFilter('linked')}
+                    className={`px-3 py-1.5 rounded-xl border transition-all ${
+                      statusFilter === 'linked'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm font-medium'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    Đã ghép ({stats.matchedCount})
+                    Đã liên kết
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFilterMode('new')}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                      filterMode === 'new'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                    onClick={() => setStatusFilter('auto_matched')}
+                    className={`px-3 py-1.5 rounded-xl border transition-all ${
+                      statusFilter === 'auto_matched'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm font-medium'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    Tạo mới ({stats.newCount})
+                    Khớp tên
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('new')}
+                    className={`px-3 py-1.5 rounded-xl border transition-all ${
+                      statusFilter === 'new'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm font-medium'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Tạo mới
+                  </button>
+
+                  <div className="h-5 w-px bg-slate-200 mx-1 hidden sm:block" />
+
+                  {/* Nút chọn nhanh */}
+                  <button
+                    type="button"
+                    onClick={handleSelectAllFiltered}
+                    className="px-2.5 py-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg font-medium transition-colors"
+                  >
+                    Chọn trang này
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeselectAllFiltered}
+                    className="px-2.5 py-1.5 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Bỏ chọn
                   </button>
                 </div>
               </div>
 
-              {/* Bảng danh sách tour */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
-                <div className="max-h-[380px] overflow-y-auto">
-                  <table className="w-full text-left text-xs sm:text-sm border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 sticky top-0 z-10 shadow-sm">
+              {/* BẢNG DANH SÁCH TOUR VÀ GHÉP NỐI */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="overflow-x-auto max-h-[50vh]">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 text-slate-700 font-semibold">
                       <tr>
-                        <th className="py-3 px-3 w-10 text-center">
-                          <input
+                        <th className="p-3 w-10 text-center">
+                          <input 
                             type="checkbox"
-                            checked={filteredRows.length > 0 && filteredRows.every(r => r.selected)}
-                            onChange={e => handleToggleSelectAll(e.target.checked)}
+                            checked={filteredTours.length > 0 && filteredTours.every(t => selectedTourIds.has(t.id))}
+                            onChange={(e) => {
+                              if (e.target.checked) handleSelectAllFiltered();
+                              else handleDeselectAllFiltered();
+                            }}
                             className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                            title="Chọn / Bỏ chọn tất cả"
                           />
                         </th>
-                        <th className="py-3 px-3 font-semibold text-slate-700 w-64">Tour trong CRM</th>
-                        <th className="py-3 px-3 font-semibold text-slate-700">Sản phẩm Website WooCommerce ghép nối</th>
-                        <th className="py-3 px-3 font-semibold text-slate-700 w-32 text-right">Thao tác</th>
+                        <th className="p-3 min-w-[200px]">Tour CRM (Tên & Mã Lịch)</th>
+                        <th className="p-3 w-32">Giá Tour</th>
+                        <th className="p-3 w-36">Khởi Hành</th>
+                        <th className="p-3 min-w-[260px]">Sản Phẩm Website Khớp Nối</th>
+                        <th className="p-3 w-28 text-center">Hành Động</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredRows.length === 0 ? (
+                      {filteredTours.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-12 text-center text-slate-400">
-                            <Layers className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                          <td colSpan={6} className="text-center py-12 text-slate-400">
                             Không tìm thấy tour nào phù hợp với bộ lọc.
                           </td>
                         </tr>
                       ) : (
-                        filteredRows.map(row => {
-                          const isEditing = editingTourId === row.tour.id;
+                        filteredTours.map(tour => {
+                          const isSelected = selectedTourIds.has(tour.id);
+                          const setting = syncSettings[tour.id] || { mode: 'new', targetProductId: null, matchedType: 'new' };
+                          const isEditing = editingTourId === tour.id;
 
                           return (
-                            <tr
-                              key={row.tour.id}
-                              className={`transition-colors hover:bg-slate-50/80 ${
-                                row.selected ? 'bg-indigo-50/20' : 'opacity-70 bg-white'
-                              }`}
+                            <tr 
+                              key={tour.id} 
+                              className={`transition-colors hover:bg-slate-50/80 ${isSelected ? 'bg-indigo-50/30' : ''}`}
                             >
-                              {/* Checkbox */}
-                              <td className="py-3 px-3 text-center align-top pt-3.5">
-                                <input
+                              {/* Checkbox chọn */}
+                              <td className="p-3 text-center">
+                                <input 
                                   type="checkbox"
-                                  checked={row.selected}
-                                  onChange={() => handleToggleRow(row.tour.id)}
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectTour(tour.id)}
                                   className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                                 />
                               </td>
 
                               {/* Thông tin Tour CRM */}
-                              <td className="py-3 px-3 align-top">
-                                <div className="space-y-1">
-                                  <div className="font-semibold text-slate-800 line-clamp-2">
-                                    {row.tour.name}
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                                    <span className="font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 font-medium">
-                                      {row.tour.code}
-                                    </span>
-                                    {row.tour.price_adult ? (
-                                      <span className="font-semibold text-emerald-600">
-                                        {Number(row.tour.price_adult).toLocaleString('vi-VN')} đ
-                                      </span>
-                                    ) : null}
-                                    {row.tour.departure_time && (
-                                      <span className="text-slate-400">
-                                        • {new Date(row.tour.departure_time).toLocaleDateString('vi-VN')}
-                                      </span>
-                                    )}
-                                  </div>
+                              <td className="p-3">
+                                <div className="font-semibold text-slate-800 line-clamp-1" title={tour.name}>
+                                  {tour.name}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                                  <span className="font-mono font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {tour.code}
+                                  </span>
+                                  {tour.duration && <span>• {tour.duration}</span>}
+                                  {tour.destination && <span>• {tour.destination}</span>}
                                 </div>
                               </td>
 
-                              {/* Sản phẩm Website ghép nối */}
-                              <td className="py-3 px-3 align-top">
-                                {isEditing ? (
-                                  <div className="bg-white p-3 rounded-xl border border-indigo-200 shadow-md space-y-2">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-semibold text-xs text-indigo-900">Chọn sản phẩm trên WordPress:</span>
-                                      <button
-                                        type="button"
+                              {/* Giá tour */}
+                              <td className="p-3 font-medium text-slate-700">
+                                {Number(tour.price_adult || tour.price || 0) > 0 ? (
+                                  <span className="text-amber-700 font-semibold">
+                                    {Number(tour.price_adult || tour.price || 0).toLocaleString('vi-VN')} đ
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">Chưa có giá</span>
+                                )}
+                              </td>
+
+                              {/* Ngày khởi hành & Chỗ trống */}
+                              <td className="p-3 text-slate-600">
+                                <div className="flex items-center gap-1 font-medium">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{tour.start_date || 'N/A'}</span>
+                                </div>
+                                <div className="text-[11px] text-slate-500 mt-0.5">
+                                  Còn {tour.available_seats ?? tour.total_seats ?? 0} chỗ
+                                </div>
+                              </td>
+
+                              {/* Trạng thái ghép nối sản phẩm Website */}
+                              <td className="p-3 relative">
+                                <div className="flex items-center gap-2">
+                                  {setting.matchedType === 'linked' && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                      <Link2 className="w-3 h-3 text-emerald-600" />
+                                      <span>Đã liên kết #{setting.targetProductId}</span>
+                                    </span>
+                                  )}
+
+                                  {setting.matchedType === 'auto_matched' && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                      <Sparkles className="w-3 h-3 text-purple-600" />
+                                      <span>Khớp tên #{setting.targetProductId}</span>
+                                    </span>
+                                  )}
+
+                                  {setting.matchedType === 'manual' && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                                      <Check className="w-3 h-3 text-blue-600" />
+                                      <span>Đã chọn #{setting.targetProductId}</span>
+                                    </span>
+                                  )}
+
+                                  {setting.matchedType === 'new' && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                      <Plus className="w-3 h-3 text-slate-500" />
+                                      <span>Tạo mới trên Website</span>
+                                    </span>
+                                  )}
+
+                                  {setting.matchedProductName && (
+                                    <span className="text-slate-600 text-xs truncate max-w-[180px]" title={setting.matchedProductName}>
+                                      {setting.matchedProductName}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* POPOVER ĐỔI SẢN PHẨM LIÊN KẾT */}
+                                {isEditing && (
+                                  <div 
+                                    className="absolute left-0 top-full mt-1 z-[90] w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-2.5 space-y-2 animate-in fade-in zoom-in-95 duration-150"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                                      <span className="font-semibold text-slate-800 text-xs">Chọn Sản Phẩm Website</span>
+                                      <button 
+                                        type="button" 
                                         onClick={() => setEditingTourId(null)}
-                                        className="text-slate-400 hover:text-slate-600 p-1"
+                                        className="text-slate-400 hover:text-slate-600 p-0.5"
                                       >
                                         <X className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
+
+                                    {/* Ô tìm kiếm sản phẩm WP */}
                                     <div className="relative">
-                                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                      <input
+                                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                      <input 
                                         type="text"
-                                        value={productSearchInModal}
-                                        onChange={e => setProductSearchInModal(e.target.value)}
-                                        placeholder="Tìm tên sản phẩm trên website..."
-                                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                        autoFocus
+                                        value={productSearchKeyword}
+                                        onChange={(e) => setProductSearchKeyword(e.target.value)}
+                                        placeholder="Tìm tên sản phẩm, ID, SKU..."
+                                        className="w-full pl-7 pr-2.5 h-8 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                       />
                                     </div>
-                                    <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 text-xs border border-slate-100 rounded-lg">
+
+                                    {/* Danh sách lựa chọn */}
+                                    <div className="max-h-48 overflow-y-auto space-y-1">
+                                      {/* Tùy chọn 1: Tạo mới */}
                                       <button
                                         type="button"
-                                        onClick={() => handleSelectTargetProduct(row.tour.id, null)}
-                                        className="w-full p-2 text-left hover:bg-blue-50 flex items-center justify-between text-blue-700 font-medium transition-colors"
+                                        onClick={() => handleSelectProductForTour(tour.id, 'new')}
+                                        className={`w-full text-left p-2 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                                          setting.mode === 'new' 
+                                            ? 'bg-indigo-50 text-indigo-700 font-semibold' 
+                                            : 'hover:bg-slate-50 text-slate-700'
+                                        }`}
                                       >
                                         <div className="flex items-center gap-1.5">
-                                          <Plus className="w-3.5 h-3.5 text-blue-600" />
-                                          <span>Tạo sản phẩm mới hoàn toàn trên Website</span>
+                                          <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                                          <span>✨ Tạo sản phẩm mới trên Website</span>
                                         </div>
-                                        {row.matchType === 'new' && <Check className="w-3.5 h-3.5" />}
+                                        {setting.mode === 'new' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
                                       </button>
-                                      {filteredWpProducts.map(wp => (
-                                        <button
-                                          key={wp.id}
-                                          type="button"
-                                          onClick={() => handleSelectTargetProduct(row.tour.id, wp)}
-                                          className={`w-full p-2 text-left hover:bg-slate-50 flex items-center justify-between transition-colors ${
-                                            row.targetProductId === wp.id ? 'bg-indigo-50/70 font-semibold text-indigo-900' : 'text-slate-700'
-                                          }`}
-                                        >
-                                          <div>
-                                            <div className="line-clamp-1">{wp.name}</div>
-                                            <div className="text-[11px] text-slate-400">ID: #{wp.id} • SKU: {wp.sku || 'N/A'}</div>
-                                          </div>
-                                          {row.targetProductId === wp.id && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      {row.matchType === 'linked' ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                          Đã liên kết
-                                        </span>
-                                      ) : row.matchType === 'auto_matched' ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                          <SparklesIcon className="w-3 h-3 text-amber-600" />
-                                          Tự động khớp tên
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                                          <Plus className="w-3 h-3 text-blue-600" />
-                                          Tạo sản phẩm mới
-                                        </span>
-                                      )}
 
-                                      {row.targetProductId && (
-                                        <span className="text-[11px] font-mono text-slate-400">
-                                          #{row.targetProductId}
-                                        </span>
+                                      <div className="h-px bg-slate-100 my-1" />
+
+                                      {/* Danh sách các sản phẩm từ WordPress */}
+                                      {filteredWpProductsForSelector.map(p => {
+                                        const isCurrent = setting.targetProductId === p.id;
+                                        return (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => handleSelectProductForTour(tour.id, p)}
+                                            className={`w-full text-left p-2 rounded-lg text-xs flex items-start justify-between gap-2 transition-colors ${
+                                              isCurrent 
+                                                ? 'bg-emerald-50 text-emerald-800 font-semibold' 
+                                                : 'hover:bg-slate-50 text-slate-700'
+                                            }`}
+                                          >
+                                            <div className="min-w-0">
+                                              <div className="line-clamp-1 font-medium">{p.name}</div>
+                                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                                ID: #{p.id} • {p.departures_count || 0} đợt lịch • {Number(p.regular_price || p.price || 0).toLocaleString('vi-VN')} đ
+                                              </div>
+                                            </div>
+                                            {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />}
+                                          </button>
+                                        );
+                                      })}
+
+                                      {filteredWpProductsForSelector.length === 0 && (
+                                        <div className="text-center py-3 text-slate-400 text-xs">
+                                          Không tìm thấy sản phẩm WordPress nào.
+                                        </div>
                                       )}
                                     </div>
-
-                                    <div className="text-slate-800 font-medium line-clamp-1">
-                                      {row.targetProductName}
-                                    </div>
-
-                                    {row.targetProductUrl && (
-                                      <a
-                                        href={row.targetProductUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline"
-                                      >
-                                        <span>Xem trên Web</span>
-                                        <ExternalLink className="w-3 h-3" />
-                                      </a>
-                                    )}
                                   </div>
                                 )}
                               </td>
 
-                              {/* Nút thao tác đổi liên kết */}
-                              <td className="py-3 px-3 align-top text-right">
+                              {/* Cột Hành động: Nút đổi liên kết */}
+                              <td className="p-3 text-center">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setEditingTourId(isEditing ? null : row.tour.id);
-                                    setProductSearchInModal(row.tour.name || '');
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isEditing) {
+                                      setEditingTourId(null);
+                                    } else {
+                                      setEditingTourId(tour.id);
+                                      setProductSearchKeyword(tour.name || '');
+                                    }
                                   }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-lg transition-colors shadow-sm"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-xs"
                                   title="Đổi sản phẩm Website ghép nối"
                                 >
-                                  <Link2 className="w-3.5 h-3.5 text-slate-500" />
-                                  <span>{isEditing ? 'Đóng' : 'Đổi liên kết'}</span>
+                                  <ArrowRightLeft className="w-3 h-3" />
+                                  <span>Đổi</span>
                                 </button>
                               </td>
                             </tr>
@@ -796,196 +893,221 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
               </div>
             </>
           ) : (
-            /* Màn hình tiến trình đồng bộ (Live Progress) */
-            <div className="space-y-5 py-2">
-              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                      {isSyncing ? (
-                        <>
-                          <RefreshCw className="w-5 h-5 text-indigo-600 animate-spin" />
-                          <span>Đang tiến hành đồng bộ sang Website WooCommerce...</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                          <span>Đã hoàn tất tiến trình đồng bộ!</span>
-                        </>
-                      )}
-                    </h4>
-                    {currentSyncingName && (
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-1">
-                        Đang xử lý: <strong className="text-slate-700">{currentSyncingName}</strong>
-                      </p>
+            /* MÀN HÌNH TIẾN TRÌNH ĐỒNG BỘ (LIVE PROGRESS) */
+            <div className="space-y-4">
+              {/* THANH TIẾN ĐỘ TỔNG QUAN */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    {isSyncing ? (
+                      <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     )}
+                    <span className="font-semibold text-slate-800 text-sm">
+                      {isSyncing ? `Đang đồng bộ (${currentSyncIndex + 1}/${syncProgressList.length})...` : 'Tiến trình đồng bộ hoàn tất'}
+                    </span>
                   </div>
 
-                  <div className="text-right">
-                    <span className="text-2xl font-black text-indigo-600">
-                      {syncProgress.total > 0
-                        ? Math.round((syncProgress.current / syncProgress.total) * 100)
+                  <div className="flex items-center gap-2 font-mono text-slate-600 font-semibold">
+                    <span>
+                      {syncProgressList.length > 0 
+                        ? Math.round(((syncProgressList.filter(i => i.status === 'success' || i.status === 'failed').length) / syncProgressList.length) * 100) 
                         : 0}%
                     </span>
-                    <p className="text-xs text-slate-500 font-medium">
-                      {syncProgress.current} / {syncProgress.total} tour
-                    </p>
                   </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden shadow-inner">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-indigo-500 via-indigo-600 to-emerald-500 transition-all duration-300"
+                {/* Thanh Progress Bar */}
+                <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-300 rounded-full ${isSyncing ? 'bg-indigo-600' : 'bg-emerald-600'}`}
                     style={{
-                      width: `${syncProgress.total > 0 ? (syncProgress.current / syncProgress.total) * 100 : 0}%`
+                      width: `${syncProgressList.length > 0 
+                        ? Math.round(((syncProgressList.filter(i => i.status === 'success' || i.status === 'failed').length) / syncProgressList.length) * 100) 
+                        : 0}%`
                     }}
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
+                {/* Thống kê kết quả */}
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
                   <div className="flex items-center gap-3">
-                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                    <span className="text-emerald-700 font-medium flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      Thành công: {syncProgress.successCount}
+                      Thành công: {syncProgressList.filter(i => i.status === 'success').length}
                     </span>
-                    {syncProgress.errorCount > 0 && (
-                      <span className="text-rose-700 font-semibold flex items-center gap-1">
-                        <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                        Lỗi: {syncProgress.errorCount}
-                      </span>
-                    )}
+                    <span className="text-rose-700 font-medium flex items-center gap-1">
+                      <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                      Lỗi: {syncProgressList.filter(i => i.status === 'failed').length}
+                    </span>
+                    <span className="text-slate-500">
+                      Chờ xử lý: {syncProgressList.filter(i => i.status === 'pending').length}
+                    </span>
                   </div>
 
                   {isSyncing && (
                     <button
                       type="button"
-                      onClick={handlePauseOrResume}
-                      className="text-xs text-slate-600 hover:text-slate-900 underline font-medium"
+                      onClick={handleAbortSync}
+                      className="flex items-center gap-1 text-rose-600 hover:text-rose-700 font-medium transition-colors"
                     >
-                      {isPaused ? 'Tiếp tục chạy' : 'Tạm dừng'}
+                      <StopCircle className="w-3.5 h-3.5" />
+                      <span>Dừng lại</span>
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Danh sách log chi tiết từng tour */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 font-semibold text-xs text-slate-700">
-                  Chi tiết kết quả từng Tour:
-                </div>
-                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1">
-                  {syncRows.filter(r => r.selected).map(row => (
-                    <div
-                      key={row.tour.id}
-                      className="p-2.5 rounded-lg text-xs flex items-center justify-between hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 pr-3">
-                        {row.syncStatus === 'syncing' ? (
-                          <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
-                        ) : row.syncStatus === 'success' ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        ) : row.syncStatus === 'error' ? (
-                          <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                        ) : (
-                          <div className="w-4 h-4 rounded-full border-2 border-slate-200 shrink-0" />
-                        )}
-
-                        <div className="min-w-0">
-                          <div className="font-semibold text-slate-800 truncate">
-                            {row.tour.name}
-                          </div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-2 truncate">
-                            <span>Mã: {row.tour.code}</span>
-                            {row.syncMessage && (
-                              <span className={row.syncStatus === 'error' ? 'text-rose-600' : 'text-emerald-600'}>
-                                • {row.syncMessage}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {row.syncedProductUrl && (
-                        <a
-                          href={row.syncedProductUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline shrink-0 bg-indigo-50 px-2 py-1 rounded"
-                        >
-                          <span>Xem Web</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
+              {/* BẢNG LOG CHI TIẾT TỪNG TOUR */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm max-h-[50vh] overflow-y-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 text-slate-700 font-semibold">
+                    <tr>
+                      <th className="p-3 w-12 text-center">STT</th>
+                      <th className="p-3 min-w-[220px]">Tour CRM</th>
+                      <th className="p-3 w-32 text-center">Trạng Thái</th>
+                      <th className="p-3 min-w-[280px]">Kết Quả Đồng Bộ</th>
+                      <th className="p-3 w-32 text-center">Liên Kết Web</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {syncProgressList.map((item, index) => (
+                      <tr key={item.tourId} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3 text-center font-mono text-slate-400">
+                          {index + 1}
+                        </td>
+                        <td className="p-3">
+                          <div className="font-semibold text-slate-800 line-clamp-1">{item.tourName}</div>
+                          <div className="font-mono text-[11px] text-slate-500 mt-0.5">{item.tourCode}</div>
+                        </td>
+                        <td className="p-3 text-center">
+                          {item.status === 'pending' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600">
+                              Chờ lượt...
+                            </span>
+                          )}
+                          {item.status === 'running' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-100 text-indigo-700 animate-pulse">
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              Đang gửi...
+                            </span>
+                          )}
+                          {item.status === 'success' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Thành công
+                            </span>
+                          )}
+                          {item.status === 'failed' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-100 text-rose-800">
+                              <XCircle className="w-3 h-3 text-rose-600" />
+                              Thất bại
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          {item.message ? (
+                            <div className="text-xs">{item.message}</div>
+                          ) : (
+                            <span className="text-slate-400 italic">Đang chờ xử lý...</span>
+                          )}
+                          {item.productId && (
+                            <div className="text-[11px] text-indigo-600 font-mono mt-0.5">
+                              Sản phẩm #{item.productId}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          {item.productUrl ? (
+                            <a
+                              href={item.productUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg font-medium transition-colors"
+                            >
+                              <span>Xem Web</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer hành động Modal */}
-        <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-          <div>
-            {viewStep === 'progress' && !isSyncing && (
-              <button
-                type="button"
-                onClick={() => setViewStep('selection')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Quay lại danh sách chọn</span>
-              </button>
-            )}
-          </div>
+        {/* MODAL FOOTER */}
+        <div className="px-5 py-3.5 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
+          {currentView === 'selection' ? (
+            <>
+              <div className="text-xs text-slate-500">
+                <span>Đã chọn </span>
+                <strong className="text-slate-800 font-semibold">{stats.selectedCount}</strong>
+                <span> tour để đồng bộ</span>
+              </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSyncing}
-              className="px-4 py-2 text-xs sm:text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors disabled:opacity-50"
-            >
-              {viewStep === 'progress' && !isSyncing ? 'Đóng' : 'Hủy bỏ'}
-            </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-xs"
+                >
+                  Hủy bỏ
+                </button>
 
-            {viewStep === 'selection' && (
-              <button
-                type="button"
-                onClick={handleStartBulkSync}
-                disabled={isLoadingProducts || stats.selectedCount === 0 || isSyncing}
-                className="inline-flex items-center gap-2 px-5 py-2 text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Globe className="w-4 h-4" />
-                <span>Tiến hành đồng bộ ({stats.selectedCount} tour)</span>
-              </button>
-            )}
-          </div>
+                <button
+                  type="button"
+                  onClick={handleStartBulkSync}
+                  disabled={stats.selectedCount === 0 || isLoadingProducts}
+                  className="flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-all shadow-sm hover:shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Tiến hành đồng bộ ({stats.selectedCount})</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-xs text-slate-500">
+                {isSyncing ? (
+                  <span>Đang thực hiện đồng bộ... Vui lòng không đóng trang.</span>
+                ) : (
+                  <span>Quá trình đồng bộ hàng loạt đã hoàn thành.</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!isSyncing && (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('selection')}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Quay lại cấu hình</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSyncing}
+                  className="px-5 py-2 text-xs font-semibold text-white bg-slate-800 rounded-xl hover:bg-slate-900 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  Hoàn tất & Đóng
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };
-
-// Component icon nhỏ
-function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-      <path d="M5 3v4" />
-      <path d="M19 17v4" />
-      <path d="M3 5h4" />
-      <path d="M17 19h4" />
-    </svg>
-  );
-}
 export default BulkSyncWooCommerceModal;
