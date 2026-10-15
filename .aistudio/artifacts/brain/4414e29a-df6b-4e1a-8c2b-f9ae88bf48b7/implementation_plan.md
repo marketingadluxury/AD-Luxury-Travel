@@ -1,61 +1,80 @@
-# Kế Hoạch Triển Khai: Modal Chọn & Ghép Nối Sản Phẩm Trước Khi Đồng Bộ Hàng Loạt Lên Website WooCommerce
+# Kế Hoạch Triển Khai: Đồng Bộ Mã Lịch Trình CRM Sang Sản Phẩm SKU Tour Trên Website WooCommerce
 
-## 1. Mục Tiêu & Yêu Cầu
-- Khắc phục tình trạng khi bấm nút "Đồng bộ Website" (hoặc "Đồng bộ tất cả tour"), hệ thống tự động chạy ngầm mà không hiển thị danh sách sản phẩm để người dùng kiểm tra và lựa chọn trước.
-- Xây dựng **Modal Đồng bộ Hàng loạt (`BulkSyncWooCommerceModal.tsx`)** với trải nghiệm chuyên nghiệp:
-  1. Cho phép người dùng duyệt toàn bộ danh sách tour, có ô tìm kiếm, bộ lọc trạng thái và nút "Chọn tất cả / Bỏ chọn".
-  2. Tự động tìm kiếm và gợi ý ghép nối sản phẩm trên website WooCommerce dựa trên tên tour hoặc mã tour.
-  3. Cung cấp tính năng xem & đổi sản phẩm website liên kết (chọn sản phẩm có sẵn trên Web hoặc chọn "Tạo sản phẩm mới").
-  4. Hiển thị tiến trình đồng bộ trực quan (% hoàn thành, số lượng thành công/thất bại, thông báo trạng thái từng tour).
-  5. Tuân thủ 100% chuẩn giao diện: Không dùng native select/date, z-index phân tầng rõ ràng, không double icon, màu sắc đồng bộ hệ thống.
-
----
-
-## 2. Các Bước Triển Khai Chi Tiết
-
-### Bước 1: Xây Dựng Component `BulkSyncWooCommerceModal.tsx`
-- **Giao diện Modal:**
-  - Header: Tiêu đề "Đồng bộ hàng loạt Tour lên Website WooCommerce", hiển thị số lượng tour đã chọn.
-  - Bộ lọc & Tìm kiếm: Thanh tìm kiếm theo tên/mã tour, checkbox "Chọn tất cả" / "Chỉ chọn tour đã kích hoạt".
-  - Bảng danh sách Tour:
-    - Cột 1: Checkbox chọn tour.
-    - Cột 2: Thông tin Tour CRM (Mã tour, Tên tour, Giá, Lịch khởi hành).
-    - Cột 3: Trạng thái ghép nối sản phẩm Website:
-      + Đã có liên kết (hiển thị Tên & ID sản phẩm trên WP kèm nhãn xanh).
-      + Tự động khớp theo tên (hiển thị sản phẩm gợi ý và nút xác nhận/đổi).
-      + Chưa có sản phẩm trên WP (mặc định chọn "Tạo sản phẩm mới trên Website").
-    - Cột 4: Nút "Đổi sản phẩm Website" (mở popup/dropdown tìm kiếm nhanh sản phẩm trên WooCommerce để ghép lại theo ý muốn).
-  - Tùy chọn đồng bộ:
-    - Bật/tắt cập nhật giá tour.
-    - Bật/tắt cập nhật lịch khởi hành & chỗ trống.
-    - Bật/tắt cập nhật nội dung lịch trình / chính sách tour.
-  - Màn hình tiến trình đồng bộ (Syncing Progress):
-    - Thanh Progress Bar hiển thị % tiến độ (`Đang đồng bộ 5/20 tour...`).
-    - Danh sách kết quả chi tiết từng tour (Thành công / Lỗi / Bỏ qua) kèm nút Xem trên Web nếu thành công.
-
-### Bước 2: Tối Ưu API Backend Xử Lý Đồng Bộ Danh Sách Tour
-- Kiểm tra và cập nhật `server/routes/woocommerceRoutes.ts` và `server/services/woocommerceService.ts`:
-  - Hỗ trợ endpoint `/api/woocommerce/sync-selected-tours` nhận danh sách mảng các tour cần đồng bộ kèm thông tin sản phẩm ghép nối (`tourId`, `targetWpPostId`, `syncOptions`).
-  - Đảm bảo cơ chế tự động khớp: Tìm kiếm sản phẩm tương tự trên WooCommerce bằng tên tour trước khi đồng bộ.
-  - Trả về kết quả chi tiết từng bản ghi để frontend cập nhật thanh tiến trình realtime.
-
-### Bước 3: Tích Hợp Vào Giao Diện Quản Lý
-- **Tại `src/pages/ToursManagement.tsx`:**
-  - Thay thế hàm `handleBulkSyncToWooCommerce` (trước đây dùng `window.confirm`) thành mở Modal `BulkSyncWooCommerceModal`.
-  - Cập nhật nút "Đồng bộ Website" trên thanh công cụ để kích hoạt Modal này.
-- **Tại `src/components/WooCommerceSettingsSection.tsx`:**
-  - Thay thế nút "Đồng bộ tất cả tour" để mở chung Modal `BulkSyncWooCommerceModal`, giúp đồng bộ trải nghiệm trên toàn hệ thống.
-
-### Bước 4: Kiểm Thử & Tối Ưu (Quality Assurance)
-- Kiểm tra tính tương thích dữ liệu: Tour đã có `woocommerce_product_id` trong CRM và tour hoàn toàn mới.
-- Kiểm tra cơ chế tìm kiếm, tự động khớp tên tiếng Việt có dấu/không dấu.
-- Kiểm tra giao diện trên mobile và desktop, đảm bảo không bị tràn viền, dropdown không bị cắt chữ.
-- Chạy linter (`npm run lint`), build (`npm run build`) và unit test.
-
-### Bước 5: Cập Nhật Tài Liệu & Ghi Nhận BUGS.md / AGENTS.md
-- Ghi nhận đầy đủ tính năng Modal đồng bộ hàng loạt vào `BUGS.md` và `AGENTS.md`.
+## 1. Bối Cảnh & Mục Tiêu Nghiệp Vụ
+- **Website WooCommerce:** Mỗi sản phẩm tour đại diện cho một chương trình tour tổng thể, sở hữu một mã **SKU** (hoặc ID sản phẩm) duy nhất (ví dụ: `AD-US-01` - *Tour Bờ Tây Hoa Kỳ 8N7Đ*). Trong sản phẩm đó chứa một danh sách (ACF Repeater) gồm nhiều ngày/đợt khởi hành khác nhau.
+- **Hệ thống Tour CRM:** Mỗi bản ghi trong danh sách tour là một **đợt khởi hành cụ thể** gắn với một **Mã lịch trình** độc lập (ví dụ: `AD-US-01-201026`, `AD-US-01-151126`).
+- **Mục tiêu giải pháp:**
+  1. **Khớp nối bằng tiền tố:** Tự động nhận diện SKU sản phẩm trên web bằng tiền tố của mã lịch trình CRM (hoặc qua cấu hình SKU sản phẩm mẹ).
+  2. **Đồng bộ vào ACF Repeater:** Khi đồng bộ một mã lịch trình từ CRM lên Web, hệ thống tìm sản phẩm theo SKU. Nếu đợt khởi hành với mã lịch trình hoặc ngày khởi hành đó đã tồn tại trong ACF thì cập nhật thông tin (ngày đi, ngày về, giá người lớn/trẻ em, số chỗ trống); nếu chưa có thì tự động thêm dòng mới vào bảng ACF.
+  3. **Tự động cộng dồn chỗ trống (Inventory/Stock):** Cập nhật tổng số chỗ trống của sản phẩm WooCommerce bằng tổng các đợt khởi hành còn khả dụng.
+  4. **Xử lý khi chưa có SKU trên Web:** Hiển thị rõ ràng trên Modal đồng bộ (`BulkSyncWooCommerceModal` / `SyncTourToWooCommerceModal`) với badge trạng thái cảnh báo, cho phép người dùng bấm chọn ghép nối nhanh với một sản phẩm trên Web hoặc bấm tạo sản phẩm SKU mới trên Web.
 
 ---
 
-## 3. Thời Gian & Quy Trình Tiếp Theo
-- Sau khi anh/chị xem và bấm nút **Proceed** (hoặc xác nhận), hệ thống sẽ tiến hành triển khai mã nguồn ngay lập tức theo đúng kế hoạch trên.
+## 2. Thiết Kế Kỹ Thuật Chi Tiết
+
+### 2.1. Quy Tắc Khớp Tiền Tố Mã Lịch Trình Với SKU (Prefix Matching Rule)
+- Thuật toán xác định SKU từ Mã lịch trình CRM:
+  - Nếu mã lịch trình có định dạng phân tách (ví dụ `AD-US01-20261015` hoặc `AD_US01_1026`), hệ thống trích xuất phần tiền tố trước dấu gạch nối cuối cùng (`AD-US01`).
+  - Hệ thống so khớp với danh sách SKU sản phẩm WooCommerce đã tải về từ API `/wp-json/wc/v3/products`.
+  - Ngoài ra, ưu tiên so khớp chính xác:
+    1. Trực tiếp theo `wp_product_id` (nếu tour đã từng được liên kết trước đó).
+    2. SKU sản phẩm WooCommerce trùng khớp với tiền tố của `tour_code`.
+    3. Mã lịch trình `tour_code` nằm trong danh sách ACF đợt khởi hành của sản phẩm.
+    4. Gợi ý so khớp theo tên chương trình tour tương tự.
+
+### 2.2. Cơ Chế Cập Nhật ACF Repeater & Tổng Chỗ Trống (`woocommerceService.ts`)
+- **Đọc cấu hình trường ACF:**
+  - Lấy trường cấu hình Repeater lịch khởi hành từ `woocommerce_configs.field_mappings` (mặc định: `lich_khoi_hanh` hoặc `departures_schedule`).
+  - Các sub-field trong mỗi đợt:
+    + `ma_lich_trinh` / `tour_code`: Mã lịch trình CRM.
+    + `ngay_khoi_hanh` / `start_date`: Ngày bắt đầu (`dd/mm/yyyy` hoặc `YYYY-MM-DD`).
+    + `ngay_ket_thuc` / `end_date`: Ngày kết thúc.
+    + `gia_nguoi_lon` / `price_adult`: Giá người lớn.
+    + `gia_tre_em` / `price_child`: Giá trẻ em.
+    + `so_cho_trong` / `available_slots`: Số chỗ còn nhận.
+    + `tinh_trang`: Tình trạng ('con_cho', 'het_cho', 'sap_khoi_hanh').
+- **Logic xử lý mảng Repeater (Upsert logic):**
+  - Đọc danh sách đợt khởi hành hiện có trên sản phẩm WordPress.
+  - So khớp dòng hiện có theo `ma_lich_trinh` hoặc `ngay_khoi_hanh`.
+  - Nếu đã có dòng khớp: Cập nhật đè thông tin mới nhất từ CRM vào dòng đó.
+  - Nếu chưa có: `append` (thêm mới) dòng đợt khởi hành vào mảng ACF.
+- **Tính tổng chỗ trống (Inventory Sync):**
+  - Tính tổng `slots_available` từ các đợt khởi hành còn hạn trong bảng ACF.
+  - Cập nhật trường `stock_quantity` của sản phẩm WooCommerce (nếu bật quản lý kho `manage_stock: true`).
+
+### 2.3. Cải Tiến Giao Diện Modal Đồng Bộ (`BulkSyncWooCommerceModal.tsx` & `SyncTourToWooCommerceModal.tsx`)
+- **Phân loại 3 nhóm trạng thái ghép nối trực quan:**
+  1. **Đã khớp SKU (Badge xanh dương đậm):** Hiển thị `[Khớp SKU: AD-US01] -> Sản phẩm #ID - Tour Bờ Tây Hoa Kỳ`, hiển thị hành động: *"Cập nhật đợt vào ACF"*.
+  2. **Đã liên kết cố định (Badge xanh lá):** Đã lưu `wp_product_id` trước đó.
+  3. **Chưa có SKU tương ứng (Badge vàng cam):** Hiển thị cảnh báo `Chưa có sản phẩm SKU phù hợp trên Website`. Cung cấp 2 lựa chọn 1-click ngay trên dòng:
+     - Nút *"Ghép nối với sản phẩm web"* (mở popover tìm kiếm nhanh mọi sản phẩm trên WooCommerce theo tên/SKU/ID).
+     - Nút *"Tạo sản phẩm SKU mới"* (hệ thống sẽ tự động tạo sản phẩm WooCommerce mới với SKU là tiền tố mã lịch trình và đẩy đợt khởi hành đầu tiên vào).
+- **Bộ lọc nhanh trên Modal:**
+  - Lọc theo: "Tất cả", "Đã khớp SKU", "Cần ghép nối", "Đã liên kết".
+  - Giúp điều hành viên/sale xử lý nhanh các tour chưa có SKU chỉ trong vài thao tác.
+
+### 2.4. Cấu Hình Tùy Chọn Trong `WooCommerceSettingsSection.tsx`
+- Bổ sung tùy chọn trong phần Cài đặt WooCommerce:
+  - **Quy tắc trích xuất SKU:** Mặc định lấy tiền tố trước ký tự gạch nối cuối cùng (ví dụ: `PREFIX-XXXX`).
+  - **Tên trường ACF Repeater & Sub-fields:** Cho phép tùy biến tên trường linh hoạt tương thích với mọi theme/ACF của WordPress (Hỗ trợ cấu hình mặc định sẵn cho các theme lữ hành phổ biến).
+
+---
+
+## 3. Các Bước Triển Khai Cụ Thể
+
+1. **Bước 1: Cập nhật hàm xử lý tại Backend (`server/services/woocommerceService.ts`)**
+   - Bổ sung logic tách tiền tố SKU từ `tour_code`.
+   - Tìm sản phẩm theo SKU qua WooCommerce REST API (`/wp-json/wc/v3/products?sku=...`).
+   - Xây dựng hàm `upsertDepartureToAcfRepeater()` xử lý cập nhật/thêm dòng đợt khởi hành và tính lại tổng số chỗ trống.
+2. **Bước 2: Cập nhật Modal đồng bộ hàng loạt (`src/components/BulkSyncWooCommerceModal.tsx`)**
+   - Bổ sung thuật toán auto-match bằng SKU prefix bên cạnh tên tour.
+   - Thêm giao diện chọn ghép nối sản phẩm theo SKU hoặc tạo sản phẩm mới có SKU theo tiền tố.
+   - Hiển thị nhãn rõ ràng: "Sẽ cập nhật vào đợt khởi hành ACF của Tour SKU: [Mã SKU]".
+3. **Bước 3: Cập nhật Modal đồng bộ đơn lẻ (`src/components/SyncTourToWooCommerceModal.tsx`)**
+   - Đồng bộ logic tách SKU và xem trước đợt khởi hành được đẩy lên sản phẩm mẹ.
+4. **Bước 4: Cập nhật cấu hình tại `src/components/WooCommerceSettingsSection.tsx`**
+   - Thêm hướng dẫn và cài đặt tùy chỉnh quy tắc tiền tố SKU nếu cần.
+5. **Bước 5: Kiểm tra toàn diện & Build**
+   - Chạy kiểm thử tự động, linter và build hệ thống để đảm bảo chất lượng.
+   - Cập nhật nhật ký công việc vào `AGENTS.md` và `BUGS.md`.

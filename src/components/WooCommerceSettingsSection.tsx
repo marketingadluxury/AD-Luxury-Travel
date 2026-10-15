@@ -771,7 +771,7 @@ export default function WooCommerceSettingsSection() {
                 <span>Đồng Bộ Toàn Bộ Danh Sách Tour (Bulk Sync)</span>
               </h4>
               <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                Đẩy toàn bộ các tour đang có trên Tour CRM lên website WordPress. Nếu sản phẩm đã tồn tại (trùng mã Tour/SKU), hệ thống sẽ cập nhật lại giá và ngày giờ mới nhất; nếu chưa có, hệ thống sẽ tự động tạo sản phẩm mới.
+                Đẩy các tour từ Tour CRM lên website WordPress. Hệ thống tự động nhận diện sản phẩm theo quy tắc <strong>tiền tố Mã lịch trình tương ứng với SKU tour</strong> trên website, cập nhật/thêm đợt vào bảng ACF Repeater và tính lại tổng số chỗ trống; nếu chưa có SKU tương ứng, bạn có thể chọn ghép nối hoặc tạo sản phẩm mới trên modal.
               </p>
             </div>
 

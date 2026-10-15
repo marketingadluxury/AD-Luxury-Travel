@@ -337,6 +337,34 @@ function buildRepeaterRowFromTour(tour: any, mappings: Record<string, string>): 
 }
 
 /**
+/**
+ * Trích xuất tiền tố SKU sản phẩm từ Mã lịch trình CRM
+ * Ví dụ: "AD-US01-201026" -> "AD-US01", "TOUR-VN-01_1026" -> "TOUR-VN-01"
+ */
+export function extractSkuFromTourCode(tourCode: string): string {
+  if (!tourCode || typeof tourCode !== 'string') return '';
+  const trimmed = tourCode.trim();
+  const lastDash = trimmed.lastIndexOf('-');
+  const lastUnderscore = trimmed.lastIndexOf('_');
+  const splitIdx = Math.max(lastDash, lastUnderscore);
+
+  if (splitIdx > 0 && splitIdx < trimmed.length - 1) {
+    const prefix = trimmed.substring(0, splitIdx).trim();
+    const suffix = trimmed.substring(splitIdx + 1).trim();
+
+    // Suffix là ngày khởi hành (ví dụ: 201026, 151126, 20261015, 1026 - 4 đến 8 chữ số)
+    const isDateSuffix = /^\d{4,8}$/.test(suffix);
+    // Suffix là mã đợt khởi hành (ví dụ: D1, D01, K1, K01, DOT1, LICH1)
+    const isBatchSuffix = /^(D|K|DOT|LICH)\d+$/i.test(suffix);
+
+    if (prefix.length >= 2 && (isDateSuffix || isBatchSuffix)) {
+      return prefix;
+    }
+  }
+  return trimmed;
+}
+
+/**
  * Xây dựng payload sản phẩm WooCommerce từ Tour (hỗ trợ cả Simple Product & ACF Repeater)
  */
 function buildWooCommercePayload(
@@ -353,21 +381,83 @@ function buildWooCommercePayload(
   const shouldUpdatePrices = options?.update_prices !== false;
   const shouldUpdateDepartures = options?.update_departures !== false;
 
-  // Tìm mức giá người lớn thấp nhất của các đợt đang mở bán để hiển thị giá "Chỉ từ ..."
-  const prices = groupTours
+  // Tìm mức giá người lớn thấp nhất ban đầu của các tour CRM
+  const initialPrices = groupTours
     .map(t => Number(t.price_adult || t.price || 0))
     .filter(p => p > 0);
-  const minPrice = prices.length > 0 ? Math.min(...prices) : Number(primaryTour.price_adult || primaryTour.price || 0);
+  let minPrice = initialPrices.length > 0 ? Math.min(...initialPrices) : Number(primaryTour.price_adult || primaryTour.price || 0);
 
-  // Tổng số chỗ khả dụng của toàn bộ các đợt khởi hành
-  const totalAvailableSeats = groupTours.reduce((sum, t) => {
+  // Tổng số chỗ khả dụng ban đầu
+  let totalAvailableSeats = groupTours.reduce((sum, t) => {
     return sum + Number(t.available_seats ?? t.total_seats ?? 0);
   }, 0);
 
-  // Mảng ACF metadata
+  // 1. Xây dựng bảng ACF Repeater Lịch Trình Khởi Hành
   const metaData: { key: string; value: any }[] = [];
+  let finalRepeaterRows: Record<string, any>[] = [];
 
-  // 1. Thêm các trường metadata tổng quan của chương trình Tour
+  if (shouldUpdateDepartures) {
+    let currentRows: Record<string, any>[] = [];
+    if (existingProduct && Array.isArray(existingProduct.meta_data)) {
+      const existingMeta = existingProduct.meta_data.find((m: any) => m.key === repeaterSlug);
+      if (existingMeta && Array.isArray(existingMeta.value)) {
+        currentRows = [...existingMeta.value];
+      }
+    }
+
+    const rowsMap = new Map<string, Record<string, any>>();
+    // Giữ lại các đợt khởi hành hiện có trên WooCommerce
+    currentRows.forEach(r => {
+      const codeVal = r[codeSlug] || r.ma_lich_trinh || r.code;
+      if (codeVal) rowsMap.set(String(codeVal).trim().toUpperCase(), r);
+    });
+
+    // Cập nhật hoặc thêm mới các đợt khởi hành từ CRM
+    groupTours.forEach(t => {
+      const row = buildRepeaterRowFromTour(t, mappings);
+      const codeVal = String(t.code).trim().toUpperCase();
+      rowsMap.set(codeVal, row);
+    });
+
+    finalRepeaterRows = Array.from(rowsMap.values());
+
+    // Cập nhật lại tổng chỗ trống khả dụng và giá sàn từ TOÀN BỘ các đợt trong ACF
+    if (finalRepeaterRows.length > 0) {
+      const combinedSeats = finalRepeaterRows.reduce((sum, r) => {
+        const s = Number(r[mappings.available_seats || 'so_cho_trong'] ?? r.so_cho_trong ?? r.available_seats ?? 0);
+        return sum + (isNaN(s) ? 0 : s);
+      }, 0);
+      if (combinedSeats > 0 || totalAvailableSeats === 0) {
+        totalAvailableSeats = combinedSeats;
+      }
+
+      const combinedPrices = finalRepeaterRows
+        .map(r => Number(r[mappings.price_adult || 'gia_nguoi_lon'] ?? r.gia_nguoi_lon ?? r.price_adult ?? 0))
+        .filter(p => p > 0);
+      if (combinedPrices.length > 0) {
+        minPrice = Math.min(...combinedPrices);
+      }
+    }
+
+    metaData.push({ key: repeaterSlug, value: finalRepeaterRows });
+    metaData.push({ key: repeaterSlug, value: finalRepeaterRows.length });
+    finalRepeaterRows.forEach((r, idx) => {
+      for (const [subKey, subVal] of Object.entries(r)) {
+        metaData.push({
+          key: `${repeaterSlug}_${idx}_${subKey}`,
+          value: subVal
+        });
+      }
+    });
+  } else if (existingProduct && Array.isArray(existingProduct.meta_data)) {
+    // Giữ nguyên repeater cũ từ existingProduct
+    const existingMeta = existingProduct.meta_data.find((m: any) => m.key === repeaterSlug);
+    if (existingMeta) {
+      metaData.push({ key: repeaterSlug, value: existingMeta.value });
+    }
+  }
+
+  // 2. Thêm các trường metadata tổng quan của chương trình Tour
   if (mappings && typeof mappings === 'object') {
     for (const [crmField, acfSlug] of Object.entries(mappings)) {
       if (!acfSlug || typeof acfSlug !== 'string' || !acfSlug.trim()) continue;
@@ -390,48 +480,6 @@ function buildWooCommercePayload(
     }
   }
 
-  // 2. Xây dựng bảng ACF Repeater Lịch Trình Khởi Hành
-  if (shouldUpdateDepartures) {
-    let currentRows: Record<string, any>[] = [];
-    if (existingProduct && Array.isArray(existingProduct.meta_data)) {
-      const existingMeta = existingProduct.meta_data.find((m: any) => m.key === repeaterSlug);
-      if (existingMeta && Array.isArray(existingMeta.value)) {
-        currentRows = [...existingMeta.value];
-      }
-    }
-
-    const rowsMap = new Map<string, Record<string, any>>();
-    currentRows.forEach(r => {
-      const codeVal = r[codeSlug] || r.ma_lich_trinh || r.code;
-      if (codeVal) rowsMap.set(String(codeVal).trim().toUpperCase(), r);
-    });
-
-    groupTours.forEach(t => {
-      const row = buildRepeaterRowFromTour(t, mappings);
-      const codeVal = String(t.code).trim().toUpperCase();
-      rowsMap.set(codeVal, row);
-    });
-
-    const finalRepeaterRows = Array.from(rowsMap.values());
-
-    metaData.push({ key: repeaterSlug, value: finalRepeaterRows });
-    metaData.push({ key: repeaterSlug, value: finalRepeaterRows.length });
-    finalRepeaterRows.forEach((r, idx) => {
-      for (const [subKey, subVal] of Object.entries(r)) {
-        metaData.push({
-          key: `${repeaterSlug}_${idx}_${subKey}`,
-          value: subVal
-        });
-      }
-    });
-  } else if (existingProduct && Array.isArray(existingProduct.meta_data)) {
-    // Giữ nguyên repeater cũ từ existingProduct
-    const existingMeta = existingProduct.meta_data.find((m: any) => m.key === repeaterSlug);
-    if (existingMeta) {
-      metaData.push({ key: repeaterSlug, value: existingMeta.value });
-    }
-  }
-
   // Cờ nhận diện Tour CRM
   metaData.push({ key: '_synced_by_tour_crm', value: 'yes' });
   metaData.push({ key: '_tour_crm_primary_id', value: primaryTour.id });
@@ -441,14 +489,17 @@ function buildWooCommercePayload(
 <p><strong>Chương trình Tour:</strong> ${primaryTour.name}</p>
 <p><strong>Thời lượng:</strong> ${primaryTour.duration || 'N/A'} - <strong>Điểm đến:</strong> ${primaryTour.destination || 'N/A'}</p>
 <p><strong>Hãng bay:</strong> ${primaryTour.airline || 'N/A'} - <strong>Khách sạn:</strong> ${primaryTour.hotel || 'N/A'}</p>
-<p><strong>Số đợt khởi hành đang mở bán:</strong> ${groupTours.length} đợt</p>
+<p><strong>Số đợt khởi hành đang mở bán:</strong> ${finalRepeaterRows.length || groupTours.length} đợt</p>
 ${primaryTour.itinerary_pdf_url ? `<p><a href="${primaryTour.itinerary_pdf_url}" target="_blank" rel="noopener noreferrer">📄 Tải lịch trình chi tiết (PDF)</a></p>` : ''}
   `.trim();
+
+  // Xác định SKU Tour: ưu tiên tiền tố trích xuất để sản phẩm mẹ có SKU chuẩn
+  const targetSku = extractSkuFromTourCode(primaryTour.code) || primaryTour.code;
 
   return {
     name: primaryTour.name,
     type: 'simple',
-    sku: primaryTour.code,
+    sku: targetSku,
     regular_price: (!shouldUpdatePrices && existingProduct?.regular_price) 
       ? existingProduct.regular_price 
       : (minPrice > 0 ? minPrice.toString() : '0'),
@@ -585,7 +636,30 @@ export async function syncTourToWooCommerce(
     }
   }
 
-  // Nếu không có target_product_id và không force_new, thử tìm theo tên tour
+  // Nếu không có target_product_id và không force_new:
+  // Bước 1: Thử tìm theo SKU tương ứng với tiền tố mã lịch trình (ví dụ: tour.code = "AD-US01-201026" -> SKU "AD-US01")
+  const extractedSku = extractSkuFromTourCode(tour.code);
+  if (!targetWpProductId && !options?.force_new && options?.target_product_id !== 'new' && extractedSku) {
+    try {
+      const skuRes = await callWooCommerceApi(config, '/products', 'GET', undefined, {
+        sku: extractedSku,
+        per_page: 5
+      });
+      if (Array.isArray(skuRes.data) && skuRes.data.length > 0) {
+        const exactSkuMatch = skuRes.data.find(
+          (p: any) => (p.sku || '').trim().toUpperCase() === extractedSku.toUpperCase()
+        ) || skuRes.data[0];
+        if (exactSkuMatch?.id) {
+          targetWpProductId = exactSkuMatch.id;
+          existingProduct = exactSkuMatch;
+        }
+      }
+    } catch (e) {
+      console.warn(`[WooCommerce] Tìm sản phẩm theo SKU "${extractedSku}" thất bại:`, e);
+    }
+  }
+
+  // Bước 2: Nếu vẫn chưa có target_product_id, thử tìm theo tên chương trình tour
   if (!targetWpProductId && !options?.force_new && options?.target_product_id !== 'new' && tour.name) {
     try {
       const searchRes = await callWooCommerceApi(config, '/products', 'GET', undefined, {
@@ -676,8 +750,8 @@ export async function syncTourToWooCommerce(
       action: isUpdate ? 'updated' : 'created',
       departure_action: departureAction,
       message: isUpdate 
-        ? `Đã ${departureAction === 'updated' ? 'cập nhật' : 'thêm mới'} ngày khởi hành [${tour.code}] vào sản phẩm "${existingProduct?.name || tour.name}" (#${finalProductId}) trên website.`
-        : `Đã tạo mới sản phẩm "${tour.name}" (#${finalProductId}) trên website.`
+        ? `Đã ${departureAction === 'updated' ? 'cập nhật' : 'thêm mới'} đợt [${tour.code}] vào sản phẩm "${existingProduct?.name || tour.name}" (${existingProduct?.sku ? `SKU: ${existingProduct.sku} • ` : ''}#${finalProductId}) trên website và cập nhật tổng chỗ trống.`
+        : `Đã tạo mới sản phẩm "${tour.name}" (SKU: ${extractSkuFromTourCode(tour.code) || tour.code} • #${finalProductId}) trên website.`
     };
   } catch (err: any) {
     const errorMsg = err.data?.message || err.message || 'Lỗi không xác định';

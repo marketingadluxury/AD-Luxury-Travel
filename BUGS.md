@@ -6,6 +6,36 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.101 Nâng Cấp Hệ Thống Đồng Bộ Mã Lịch Trình CRM Với Sản Phẩm SKU Tour Trên WooCommerce
+- **Mô tả yêu cầu:**
+  - Trên website WordPress WooCommerce, mỗi chương trình tour lớn sở hữu một mã SKU (ID sản phẩm) duy nhất và có nhiều ngày/đợt khởi hành khác nhau nằm trong bảng ACF Repeater (`lich_trinh_khoi_hanh`).
+  - Trên Tour CRM, mỗi tour là một đợt khởi hành gắn với một Mã lịch trình riêng biệt.
+  - Cần nâng cấp hệ thống đồng bộ: Tự động so khớp tiền tố mã lịch trình tương ứng với SKU tour trên website; cập nhật hoặc thêm đợt vào bảng ACF và tính toán lại tổng chỗ trống của sản phẩm; trường hợp chưa có SKU phù hợp thì hiển thị trực quan trên modal để chọn ghép nối hoặc tạo sản phẩm mới.
+- **Giải pháp triển khai:**
+  1. **Xây dựng module bóc tách tiền tố SKU & Thuật toán so khớp (`src/utils/skuHelper.ts`):**
+     - Hàm `extractSkuFromTourCode`: Bóc tách thông minh tiền tố SKU (ví dụ: `AD-US01-201026` ➔ SKU `AD-US01`, `TOUR-VN-01-D1` ➔ SKU `TOUR-VN-01`), nhận diện chính xác đuôi ngày tháng (`isDateSuffix: /^\d{4,8}$/`) và đuôi mã đợt (`isBatchSuffix: /^(D|K|DOT|LICH)\d+$/i`), bảo vệ nguyên vẹn các mã tour không có đuôi ngày (`AD-US01`, `VN-PQ01`).
+     - Hàm `findMatchedProductForTour`: Thuật toán 4 tầng ưu tiên nhận diện sản phẩm:
+       + Tầng 1: Đã liên kết trước đó (`tour.wp_product_id`).
+       + Tầng 2: Khớp SKU sản phẩm với tiền tố mã lịch trình CRM (hoặc mã lịch trình bắt đầu bằng SKU của sản phẩm WooCommerce).
+       + Tầng 3: Mã lịch trình đã có trong danh sách đợt khởi hành ACF departures của sản phẩm.
+       + Tầng 4: Khớp tên chương trình tour (so sánh chuẩn hóa tiếng Việt).
+       + Mặc định: Chọn chế độ tạo mới với SKU là tiền tố mã lịch trình.
+  2. **Tối ưu Backend API WooCommerce (`server/services/woocommerceService.ts`):**
+     - Đồng bộ hàm `extractSkuFromTourCode` vào backend service.
+     - Hàm `buildWooCommercePayload`: Khi cập nhật đợt khởi hành vào ACF Repeater, tự động tính toán lại tổng số chỗ trống khả dụng (`stock_quantity`) và giá sàn ("Chỉ từ...") từ TOÀN BỘ các đợt khởi hành hợp nhất trong bảng ACF.
+     - Hàm `syncTourToWooCommerce`: Tự động tìm kiếm sản phẩm theo SKU tiền tố trước khi tìm kiếm theo tên tour; gán SKU chuẩn của sản phẩm mẹ khi tạo mới thay vì dùng cả mã đợt khởi hành.
+  3. **Nâng cấp giao diện Modal Đồng Bộ (`BulkSyncWooCommerceModal.tsx` & `SyncTourToWooCommerceModal.tsx`):**
+     - Thêm thẻ thống kê riêng biệt **"Khớp SKU"** (Badge màu xanh chàm với icon Tag) và nút lọc riêng `Khớp SKU` trong bộ lọc Status Pills.
+     - Cột thông tin Tour CRM: Hiển thị mã lịch trình kèm tiền tố SKU suy luận (`SKU: [prefix]`).
+     - Cột sản phẩm Website ghép nối:
+       + Badge xanh chàm `Khớp SKU [Mã SKU] (#ID)` kèm chú thích hành động: `↳ Cập nhật đợt vào ACF & cộng dồn chỗ`.
+       + Badge màu hổ phách `Chưa có SKU Web (Sẽ tạo SKU: [Prefix])` kèm gợi ý rõ ràng và 2 nút bấm thao tác nhanh.
+       + Trong popover chọn đổi sản phẩm: Hiển thị SKU rõ ràng trên từng dòng sản phẩm WooCommerce.
+  4. **Kiểm thử tự động:**
+     - Viết mới bộ Unit test `src/utils/__tests__/skuHelper.test.ts` kiểm thử 100% các trường hợp bóc tách SKU và so khớp sản phẩm.
+     - Vượt qua toàn bộ 57 unit tests (`npm test`), 21 kịch bản simulation (`npm run test:simulation`), `npm run lint` và `compile_applet`.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.100 Khắc Phục Lỗi Hủy Đơn Booking Visa Không Cập Nhật Trạng Thái Trên Hệ Thống
 - **Mô tả yêu cầu:**
   - Người dùng thực hiện hủy đơn booking visa lẻ, modal thông báo hủy thành công nhưng giao diện và hệ thống vẫn giữ nguyên, thẻ đơn hàng vẫn hiển thị "Đã chốt" và nút "Hủy đơn" màu đỏ vẫn tồn tại.

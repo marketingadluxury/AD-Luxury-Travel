@@ -172,13 +172,17 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 ---
 
 ## 7. Quy Tắc Phân Quyền & Tính Năng Đặc Biệt (Cập Nhật Mới)
-- **Modal Đồng Bộ Hàng Loạt Chuyên Dụng Lên WooCommerce (`BulkSyncWooCommerceModal.tsx`):**
-  - **Duyệt & Tích chọn Tour:** Thay thế toàn bộ hộp thoại `window.confirm` ngầm trước đây. Khi bấm nút "Đồng bộ Website" (tại `/tours`) hoặc "Bắt đầu đồng bộ toàn bộ Tour sang Website" (tại `/settings`), hệ thống mở Modal chuyên dụng cho phép duyệt toàn bộ danh sách tour, tìm kiếm nhanh (tên, mã tour, điểm đến), lọc theo trạng thái ghép nối, và chọn/bỏ chọn tour linh hoạt.
-  - **Tự động ghép nối thông minh (Auto-matching):**
-    + Nhận diện các tour đã có `wp_product_id` (Badge xanh *Đã liên kết #ID*).
-    + Tự động so khớp theo tên tour với danh mục sản phẩm trên WooCommerce WordPress (Badge tím *Khớp tên #ID*).
-    + Tự động chọn chế độ tạo mới nếu chưa có sản phẩm tương tự (Badge xám/xanh *Tạo mới*).
-  - **Đổi sản phẩm liên kết linh hoạt:** Cho phép mở popover chọn nhanh sản phẩm WooCommerce bất kỳ để ghép nối thủ công hoặc chuyển sang tạo sản phẩm mới.
+- **Đồng Bộ Mã Lịch Trình CRM Sang Sản Phẩm SKU Tour Trên WooCommerce (`BulkSyncWooCommerceModal.tsx` & `SyncTourToWooCommerceModal.tsx`):**
+  - **Quy tắc Tiền Tố Mã Lịch Trình tương ứng SKU Tour:**
+    + Website WordPress WooCommerce: Mỗi chương trình tour là 1 sản phẩm sở hữu mã SKU duy nhất và có nhiều ngày/đợt khởi hành trong bảng ACF Repeater (`lich_trinh_khoi_hanh`).
+    + CRM: Mỗi tour là một đợt khởi hành với mã lịch trình độc lập (ví dụ `AD-US01-201026`, `TOUR-VN-01-D1`).
+    + Thuật toán `extractSkuFromTourCode`: Tự động nhận diện và bóc tách chính xác tiền tố SKU (nhận diện đuôi ngày tháng `isDateSuffix: /^\d{4,8}$/` và đuôi đợt `isBatchSuffix: /^(D|K|DOT|LICH)\d+$/i`, không làm thay đổi các mã tour gốc như `AD-US01`, `VN-PQ01`).
+    + Thuật toán `findMatchedProductForTour`: Tự động nhận diện 4 tầng ưu tiên: (1) Đã liên kết trước đó (`wp_product_id`), (2) Khớp tiền tố SKU của sản phẩm WooCommerce (Badge xanh chàm *Khớp SKU [Mã SKU] #ID*), (3) Đã có mã trong danh sách ACF departures của sản phẩm, (4) Khớp theo tên chương trình tour (Badge tím *Khớp tên #ID*). Nếu chưa có sản phẩm khớp: Mặc định chọn tạo mới (Badge màu cam/xám *Chưa có SKU Web*).
+  - **Cập nhật ACF Repeater & Tính Toán Tổng Chỗ Trống:**
+    + Khi đồng bộ một đợt từ CRM sang WooCommerce: Nếu đợt đã có trong bảng ACF thì cập nhật thông tin mới nhất; nếu chưa có thì thêm dòng mới vào ACF.
+    + Sau khi hợp nhất các đợt trong ACF, hệ thống tự động tính lại tổng số chỗ khả dụng (`stock_quantity`) và mức giá sàn ("Chỉ từ...") từ TOÀN BỘ các đợt đang mở bán trong ACF.
+  - **Duyệt & Tích chọn Tour:** Cho phép duyệt toàn bộ danh sách tour, tìm kiếm nhanh (tên, mã tour, điểm đến), lọc theo trạng thái ghép nối (Tất cả, Khớp SKU, Đã liên kết, Khớp tên, Tạo mới), và chọn/bỏ chọn tour linh hoạt.
+  - **Đổi sản phẩm liên kết linh hoạt:** Cho phép mở popover chọn nhanh sản phẩm WooCommerce bất kỳ (hiển thị rõ SKU của từng sản phẩm) để ghép nối thủ công hoặc chuyển sang tạo sản phẩm mới.
   - **Tùy chọn nâng cao:** Bật/tắt cập nhật bảng giá (Regular Price) và cập nhật ACF Repeater lịch khởi hành.
   - **Tiến trình chạy thực tế (Live Progress):** Hiển thị thanh tiến trình % trực quan, trạng thái xử lý từng tour theo thời gian thực (pending -> running -> success/failed), log kết quả chi tiết và link mở trực tiếp sản phẩm trên website.
 - **Chế Độ Xem Lịch Khởi Hành Công Khai (Public View-Only) Cho Tất Cả Người Dùng:**

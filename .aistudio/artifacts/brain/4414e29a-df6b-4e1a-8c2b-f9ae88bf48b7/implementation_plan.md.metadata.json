@@ -1,6 +1,6 @@
 {
-  "summary": "Kế hoạch triển khai Modal chọn danh sách Tour và ghép nối sản phẩm Website trước khi Đồng bộ hàng loạt lên WooCommerce.\nBao gồm:\n- Thiết kế Modal `BulkSyncWooCommerceModal.tsx` chuyên dụng cho phép duyệt danh sách tour, tích chọn hàng loạt, tự động dò khớp sản phẩm theo tên và đổi sản phẩm liên kết linh hoạt.\n- Tích hợp tiến trình đồng bộ (Progress bar, kết quả từng tour) trực quan, chi tiết.\n- Cập nhật nút bấm tại ToursManagement.tsx và WooCommerceSettingsSection.tsx để mở Modal thay vì gọi API ngầm.\n- Bổ sung/tối ưu API endpoint xử lý đồng bộ danh sách tour có kèm ID sản phẩm tương ứng.",
-  "updatedAt": "2026-10-13T09:13:12.038705071Z",
+  "summary": "Kế hoạch chi tiết đồng bộ dữ liệu giữa Mã lịch trình trên CRM và SKU Sản phẩm Tour trên Website WooCommerce. Đề xuất quy tắc bóc tách tiền tố SKU, cơ chế thêm/cập nhật đợt khởi hành vào ACF Repeater, tính tổng chỗ trống tự động và giao diện chọn ghép nối/tạo mới trên Modal đồng bộ.",
+  "updatedAt": "2026-10-15T03:10:59.559709059Z",
   "requestFeedback": true,
   "userFacing": true
 }
