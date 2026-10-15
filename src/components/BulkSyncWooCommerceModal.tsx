@@ -26,7 +26,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 import { Tour } from '../types';
-import { findMatchedProductForTour, extractSkuFromTourCode, normalizeText } from '../utils/skuHelper';
+import { extractSkuPrefix, normalizeSku } from '../utils/skuUtils';
 
 export interface WordPressProduct {
   id: number;
@@ -46,10 +46,11 @@ export interface WordPressProduct {
 export interface TourSyncSetting {
   mode: 'existing' | 'new';
   targetProductId: number | null;
-  matchedType: 'linked' | 'sku_matched' | 'name_matched' | 'auto_matched' | 'manual' | 'new';
-  matchedSku?: string;
+  matchedType: 'linked' | 'sku_matched' | 'departure_matched' | 'auto_matched' | 'manual' | 'new';
   matchedProductName?: string;
+  matchedProductSku?: string;
   productUrl?: string;
+  skuPrefix?: string;
 }
 
 export interface SyncProgressItem {
@@ -86,7 +87,7 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
 
   // Bộ lọc & Tìm kiếm Tour
   const [searchTourQuery, setSearchTourQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'sku_matched' | 'linked' | 'name_matched' | 'new'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'sku_matched' | 'linked' | 'auto_matched' | 'new'>('all');
 
   // Danh sách tour được tích chọn (tourId Set)
   const [selectedTourIds, setSelectedTourIds] = useState<Set<string>>(new Set());
@@ -108,6 +109,16 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
   const [currentSyncIndex, setCurrentSyncIndex] = useState(0);
   const abortSyncRef = useRef(false);
 
+  // Chuẩn hóa chuỗi tìm kiếm tiếng Việt
+  const normalizeText = (text: string) => {
+    return (text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .trim();
+  };
+
   // Nạp danh sách sản phẩm WooCommerce khi mở Modal
   const loadWooCommerceProducts = async () => {
     try {
@@ -118,17 +129,18 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
         setWpProducts(data.products);
         autoMatchProducts(tours, data.products);
       } else {
-        toast.error('Không thể tải danh sách sản phẩm từ Website WordPress.');
+        const errorMsg = data.message || 'Không thể tải danh sách sản phẩm từ Website WordPress. Vui lòng kiểm tra lại cấu hình kết nối.';
+        toast.error(errorMsg);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Lỗi nạp sản phẩm WooCommerce:', err);
-      toast.error('Lỗi kết nối máy chủ WooCommerce.');
+      toast.error(err?.message || 'Lỗi kết nối máy chủ WooCommerce.');
     } finally {
       setIsLoadingProducts(false);
     }
   };
 
-  // Thuật toán tự động ghép nối sản phẩm theo quy tắc tiền tố SKU & tên tour
+  // Thuật toán tự động ghép nối sản phẩm theo Quy Tắc 4 Tầng Thông Minh
   const autoMatchProducts = (currentTours: Tour[], productsList: WordPressProduct[]) => {
     const newSettings: Record<string, TourSyncSetting> = {};
     const defaultSelected = new Set<string>();
@@ -139,15 +151,107 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
         defaultSelected.add(tour.id);
       }
 
-      // Tự động tìm sản phẩm khớp: ưu tiên liên kết cũ -> khớp tiền tố SKU -> khớp tên -> tạo mới
-      const matchRes = findMatchedProductForTour(tour, productsList);
+      // Áp dụng thuật toán 4 tầng so khớp từ skuUtils
+      const tourCode = (tour.code || '').trim();
+      const skuPrefix = extractSkuPrefix(tourCode);
+      const normalizedTourCode = normalizeSku(tourCode);
+      const normalizedSkuPrefix = normalizeSku(skuPrefix);
+      const normalizedTourName = normalizeText(tour.name);
+
+      // TẦNG 1: Tour đã có liên kết từ trước (wp_product_id)
+      if (tour.wp_product_id) {
+        const linkedProduct = productsList.find(p => p.id === Number(tour.wp_product_id));
+        if (linkedProduct) {
+          newSettings[tour.id] = {
+            mode: 'existing',
+            targetProductId: linkedProduct.id,
+            matchedType: 'linked',
+            matchedProductName: linkedProduct.name,
+            matchedProductSku: linkedProduct.sku,
+            productUrl: linkedProduct.permalink,
+            skuPrefix: skuPrefix || tourCode
+          };
+          return;
+        }
+      }
+
+      // TẦNG 2 (MỚI): Khớp theo tiền tố SKU của sản phẩm WooCommerce
+      if (normalizedSkuPrefix) {
+        const matchedBySku = productsList.find(p => {
+          if (!p.sku) return false;
+          const pSkuNorm = normalizeSku(p.sku);
+          return (
+            pSkuNorm === normalizedSkuPrefix ||
+            pSkuNorm === normalizedTourCode ||
+            normalizedSkuPrefix === normalizeSku(extractSkuPrefix(p.sku))
+          );
+        });
+
+        if (matchedBySku) {
+          newSettings[tour.id] = {
+            mode: 'existing',
+            targetProductId: matchedBySku.id,
+            matchedType: 'sku_matched',
+            matchedProductName: matchedBySku.name,
+            matchedProductSku: matchedBySku.sku,
+            productUrl: matchedBySku.permalink,
+            skuPrefix: skuPrefix || tourCode
+          };
+          return;
+        }
+      }
+
+      // TẦNG 3: Mã lịch trình đã có trong danh sách đợt khởi hành ACF departures
+      if (tourCode) {
+        const matchedByDeparture = productsList.find(p => {
+          if (!Array.isArray(p.departures) || p.departures.length === 0) return false;
+          return p.departures.some(d => normalizeSku(d) === normalizedTourCode);
+        });
+
+        if (matchedByDeparture) {
+          newSettings[tour.id] = {
+            mode: 'existing',
+            targetProductId: matchedByDeparture.id,
+            matchedType: 'departure_matched',
+            matchedProductName: matchedByDeparture.name,
+            matchedProductSku: matchedByDeparture.sku,
+            productUrl: matchedByDeparture.permalink,
+            skuPrefix: skuPrefix || tourCode
+          };
+          return;
+        }
+      }
+
+      // TẦNG 4: So khớp theo tên chương trình tour tương đồng
+      if (normalizedTourName) {
+        let matchedByName = productsList.find(p => normalizeText(p.name) === normalizedTourName);
+        if (!matchedByName) {
+          matchedByName = productsList.find(p => {
+            const pNorm = normalizeText(p.name);
+            return pNorm.includes(normalizedTourName) || normalizedTourName.includes(pNorm);
+          });
+        }
+
+        if (matchedByName) {
+          newSettings[tour.id] = {
+            mode: 'existing',
+            targetProductId: matchedByName.id,
+            matchedType: 'auto_matched',
+            matchedProductName: matchedByName.name,
+            matchedProductSku: matchedByName.sku,
+            productUrl: matchedByName.permalink,
+            skuPrefix: skuPrefix || tourCode
+          };
+          return;
+        }
+      }
+
+      // MẶC ĐỊNH: Chưa có SKU Web - Gợi ý tạo mới sản phẩm với SKU là tiền tố đã bóc tách
       newSettings[tour.id] = {
-        mode: matchRes.targetProductId ? 'existing' : 'new',
-        targetProductId: matchRes.targetProductId,
-        matchedType: matchRes.matchedType,
-        matchedSku: matchRes.matchedSku,
-        matchedProductName: matchRes.matchedProductName,
-        productUrl: matchRes.productUrl
+        mode: 'new',
+        targetProductId: null,
+        matchedType: 'new',
+        skuPrefix: skuPrefix || tourCode
       };
     });
 
@@ -168,7 +272,7 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
   // Lọc danh sách tour hiển thị theo tìm kiếm & trạng thái
   const filteredTours = useMemo(() => {
     return tours.filter(tour => {
-      // Tìm kiếm theo tên hoặc mã tour
+      // Tìm kiếm theo tên hoặc mã tour hoặc điểm đến
       if (searchTourQuery.trim()) {
         const query = normalizeText(searchTourQuery);
         const nameMatch = normalizeText(tour.name).includes(query);
@@ -185,8 +289,8 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
       if (statusFilter === 'linked') {
         return setting?.matchedType === 'linked';
       }
-      if (statusFilter === 'name_matched') {
-        return setting?.matchedType === 'name_matched' || setting?.matchedType === 'auto_matched';
+      if (statusFilter === 'auto_matched') {
+        return setting?.matchedType === 'auto_matched' || setting?.matchedType === 'departure_matched';
       }
       if (statusFilter === 'new') {
         return setting?.matchedType === 'new';
@@ -196,28 +300,28 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
     });
   }, [tours, searchTourQuery, statusFilter, syncSettings]);
 
-  // Thống kê số lượng
+  // Thống kê số lượng theo từng tầng so khớp
   const stats = useMemo(() => {
     const selectedCount = selectedTourIds.size;
-    let linkedCount = 0;
     let skuMatchedCount = 0;
-    let nameMatchedCount = 0;
+    let linkedCount = 0;
+    let autoMatchedCount = 0;
     let newCount = 0;
 
     selectedTourIds.forEach(id => {
       const s = syncSettings[id];
       if (!s || s.matchedType === 'new') {
         newCount++;
-      } else if (s.matchedType === 'linked') {
-        linkedCount++;
       } else if (s.matchedType === 'sku_matched') {
         skuMatchedCount++;
+      } else if (s.matchedType === 'linked') {
+        linkedCount++;
       } else {
-        nameMatchedCount++;
+        autoMatchedCount++;
       }
     });
 
-    return { selectedCount, linkedCount, skuMatchedCount, nameMatchedCount, newCount };
+    return { selectedCount, skuMatchedCount, linkedCount, autoMatchedCount, newCount };
   }, [selectedTourIds, syncSettings]);
 
   // Chọn / Bỏ chọn 1 tour
@@ -253,6 +357,10 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
 
   // Cập nhật ghép nối sản phẩm cho 1 tour
   const handleSelectProductForTour = (tourId: string, product: WordPressProduct | 'new') => {
+    const tour = tours.find(t => t.id === tourId);
+    const tourCode = tour?.code || '';
+    const skuPrefix = extractSkuPrefix(tourCode);
+
     setSyncSettings(prev => {
       if (product === 'new') {
         return {
@@ -260,7 +368,8 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
           [tourId]: {
             mode: 'new',
             targetProductId: null,
-            matchedType: 'new'
+            matchedType: 'new',
+            skuPrefix: skuPrefix || tourCode
           }
         };
       }
@@ -271,7 +380,9 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
           targetProductId: product.id,
           matchedType: 'manual',
           matchedProductName: product.name,
-          productUrl: product.permalink
+          matchedProductSku: product.sku,
+          productUrl: product.permalink,
+          skuPrefix: skuPrefix || tourCode
         }
       };
     });
@@ -495,7 +606,7 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                   <div className="px-2.5 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-xs font-medium text-purple-800 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                     <span>Khớp tên:</span>
-                    <span className="font-bold">{stats.nameMatchedCount}</span>
+                    <span className="font-bold">{stats.autoMatchedCount}</span>
                   </div>
 
                   <div className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs font-medium text-amber-800 flex items-center gap-1.5">
@@ -575,7 +686,7 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    Khớp SKU
+                    Khớp SKU ({stats.skuMatchedCount})
                   </button>
                   <button
                     type="button"
@@ -586,18 +697,18 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    Đã liên kết
+                    Đã liên kết ({stats.linkedCount})
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStatusFilter('name_matched')}
+                    onClick={() => setStatusFilter('auto_matched')}
                     className={`px-3 py-1.5 rounded-xl border transition-all ${
-                      statusFilter === 'name_matched'
+                      statusFilter === 'auto_matched'
                         ? 'bg-purple-600 text-white border-purple-600 shadow-sm font-medium'
                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    Khớp tên
+                    Khớp tên ({stats.autoMatchedCount})
                   </button>
                   <button
                     type="button"
@@ -608,7 +719,7 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    Tạo mới
+                    Chưa có SKU ({stats.newCount})
                   </button>
 
                   <div className="h-5 w-px bg-slate-200 mx-1 hidden sm:block" />
@@ -651,7 +762,7 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                         <th className="p-3 min-w-[200px]">Tour CRM (Tên & Mã Lịch)</th>
                         <th className="p-3 w-32">Giá Tour</th>
                         <th className="p-3 w-36">Khởi Hành</th>
-                        <th className="p-3 min-w-[260px]">Sản Phẩm Website Khớp Nối</th>
+                        <th className="p-3 min-w-[280px]">Sản Phẩm Website Khớp Nối</th>
                         <th className="p-3 w-28 text-center">Hành Động</th>
                       </tr>
                     </thead>
@@ -688,16 +799,10 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                                 <div className="font-semibold text-slate-800 line-clamp-1" title={tour.name}>
                                   {tour.name}
                                 </div>
-                                <div className="flex items-center flex-wrap gap-1.5 mt-1 text-[11px] text-slate-500">
-                                  <span className="font-mono font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                                  <span className="font-mono font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
                                     {tour.code}
                                   </span>
-                                  {extractSkuFromTourCode(tour.code) && extractSkuFromTourCode(tour.code) !== tour.code && (
-                                    <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1">
-                                      <Tag className="w-2.5 h-2.5 text-indigo-500" />
-                                      <span>SKU: {extractSkuFromTourCode(tour.code)}</span>
-                                    </span>
-                                  )}
                                   {tour.duration && <span>• {tour.duration}</span>}
                                   {tour.destination && <span>• {tour.destination}</span>}
                                 </div>
@@ -727,71 +832,79 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
 
                               {/* Trạng thái ghép nối sản phẩm Website */}
                               <td className="p-3 relative">
-                                <div className="flex flex-col gap-1">
+                                <div className="space-y-1">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     {setting.matchedType === 'sku_matched' && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-xs">
-                                        <Tag className="w-3 h-3 text-indigo-600" />
-                                        <span>Khớp SKU {setting.matchedSku ? `[${setting.matchedSku}]` : ''} #{setting.targetProductId}</span>
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-100 text-indigo-900 border border-indigo-200 shadow-xs">
+                                        <Tag className="w-3 h-3 text-indigo-700" />
+                                        <span>Khớp SKU [{setting.matchedProductSku || setting.skuPrefix}] #{setting.targetProductId}</span>
                                       </span>
                                     )}
 
                                     {setting.matchedType === 'linked' && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-xs">
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                         <Link2 className="w-3 h-3 text-emerald-600" />
                                         <span>Đã liên kết #{setting.targetProductId}</span>
                                       </span>
                                     )}
 
-                                    {(setting.matchedType === 'auto_matched' || setting.matchedType === 'name_matched') && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200 shadow-xs">
-                                        <Sparkles className="w-3 h-3 text-purple-600" />
+                                    {setting.matchedType === 'departure_matched' && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                        <Check className="w-3 h-3 text-purple-600" />
+                                        <span>Đã có trong ACF #{setting.targetProductId}</span>
+                                      </span>
+                                    )}
+
+                                    {setting.matchedType === 'auto_matched' && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-sky-100 text-sky-800 border border-sky-200">
+                                        <Sparkles className="w-3 h-3 text-sky-600" />
                                         <span>Khớp tên #{setting.targetProductId}</span>
                                       </span>
                                     )}
 
                                     {setting.matchedType === 'manual' && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200 shadow-xs">
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                                         <Check className="w-3 h-3 text-blue-600" />
                                         <span>Đã chọn #{setting.targetProductId}</span>
                                       </span>
                                     )}
 
                                     {setting.matchedType === 'new' && (
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 shadow-xs">
-                                          <AlertCircle className="w-3 h-3 text-amber-600" />
-                                          <span>Chưa có SKU Web</span>
-                                        </span>
-                                        <span className="text-[11px] text-slate-500 font-mono">
-                                          (Sẽ tạo SKU: {extractSkuFromTourCode(tour.code) || tour.code})
-                                        </span>
-                                      </div>
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
+                                        <AlertCircle className="w-3 h-3 text-amber-600" />
+                                        <span>Chưa có SKU Web (Sẽ tạo SKU: {setting.skuPrefix || extractSkuPrefix(tour.code)})</span>
+                                      </span>
                                     )}
 
                                     {setting.matchedProductName && (
-                                      <span className="text-slate-700 font-medium text-xs truncate max-w-[220px]" title={setting.matchedProductName}>
+                                      <span className="text-slate-600 text-xs truncate max-w-[200px]" title={setting.matchedProductName}>
                                         {setting.matchedProductName}
                                       </span>
                                     )}
                                   </div>
 
-                                  {/* Chú thích hành động cụ thể */}
-                                  {setting.mode === 'existing' && setting.targetProductId && (
-                                    <div className="text-[10px] text-indigo-600 font-medium flex items-center gap-1">
-                                      <span>↳ Cập nhật đợt [{tour.code}] vào ACF & cộng dồn chỗ</span>
-                                    </div>
-                                  )}
+                                  {/* Nhãn hành động trực quan */}
+                                  <div className="text-[11px]">
+                                    {setting.mode === 'existing' ? (
+                                      <span className="text-indigo-700 font-medium">
+                                        ↳ Cập nhật đợt vào ACF & cộng dồn chỗ
+                                      </span>
+                                    ) : (
+                                      <span className="text-amber-700 font-medium">
+                                        ↳ Tạo sản phẩm tour mới với SKU [{setting.skuPrefix || extractSkuPrefix(tour.code)}]
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 {/* POPOVER ĐỔI SẢN PHẨM LIÊN KẾT */}
                                 {isEditing && (
                                   <div 
-                                    className="absolute left-0 top-full mt-1 z-[90] w-84 bg-white rounded-xl shadow-xl border border-slate-200 p-2.5 space-y-2 animate-in fade-in zoom-in-95 duration-150"
+                                    className="absolute left-0 top-full mt-1 z-[90] w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-2.5 space-y-2 animate-in fade-in zoom-in-95 duration-150"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                                      <span className="font-semibold text-slate-800 text-xs">Chọn Sản Phẩm Tour Trên Website</span>
+                                      <span className="font-semibold text-slate-800 text-xs">Chọn Sản Phẩm Website</span>
                                       <button 
                                         type="button" 
                                         onClick={() => setEditingTourId(null)}
@@ -827,7 +940,7 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                                       >
                                         <div className="flex items-center gap-1.5">
                                           <Plus className="w-3.5 h-3.5 text-indigo-600" />
-                                          <span>✨ Tạo sản phẩm mới với SKU: <strong className="font-mono">{extractSkuFromTourCode(tour.code) || tour.code}</strong></span>
+                                          <span>✨ Tạo sản phẩm mới trên Website</span>
                                         </div>
                                         {setting.mode === 'new' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
                                       </button>
@@ -851,16 +964,10 @@ export const BulkSyncWooCommerceModal: React.FC<BulkSyncWooCommerceModalProps> =
                                             <div className="min-w-0">
                                               <div className="line-clamp-1 font-medium">{p.name}</div>
                                               <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                                {p.sku && (
-                                                  <span className="font-mono text-indigo-600 bg-indigo-50 px-1 rounded">
-                                                    SKU: {p.sku}
-                                                  </span>
-                                                )}
                                                 <span>ID: #{p.id}</span>
-                                                <span>•</span>
-                                                <span>{p.departures_count || 0} đợt lịch</span>
-                                                <span>•</span>
-                                                <span>{Number(p.regular_price || p.price || 0).toLocaleString('vi-VN')} đ</span>
+                                                {p.sku && <span className="font-mono text-indigo-600 bg-indigo-50 px-1 rounded">SKU: {p.sku}</span>}
+                                                <span>• {p.departures_count || 0} đợt lịch</span>
+                                                <span>• {Number(p.regular_price || p.price || 0).toLocaleString('vi-VN')} đ</span>
                                               </div>
                                             </div>
                                             {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />}

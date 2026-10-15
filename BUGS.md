@@ -6,34 +6,42 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
-### 1.101 Nâng Cấp Hệ Thống Đồng Bộ Mã Lịch Trình CRM Với Sản Phẩm SKU Tour Trên WooCommerce
-- **Mô tả yêu cầu:**
-  - Trên website WordPress WooCommerce, mỗi chương trình tour lớn sở hữu một mã SKU (ID sản phẩm) duy nhất và có nhiều ngày/đợt khởi hành khác nhau nằm trong bảng ACF Repeater (`lich_trinh_khoi_hanh`).
-  - Trên Tour CRM, mỗi tour là một đợt khởi hành gắn với một Mã lịch trình riêng biệt.
-  - Cần nâng cấp hệ thống đồng bộ: Tự động so khớp tiền tố mã lịch trình tương ứng với SKU tour trên website; cập nhật hoặc thêm đợt vào bảng ACF và tính toán lại tổng chỗ trống của sản phẩm; trường hợp chưa có SKU phù hợp thì hiển thị trực quan trên modal để chọn ghép nối hoặc tạo sản phẩm mới.
+### 1.101 Cơ Chế Bóc Tách Tiền Tố SKU, So Khớp 4 Tầng Thông Minh & Khắc Phục Lỗi Tải Sản Phẩm WooCommerce
+- **Mô tả yêu cầu & Vấn đề thực tế:**
+  1. Website du lịch WooCommerce thiết kế mỗi tour là một sản phẩm mẹ với 1 mã SKU duy nhất và có nhiều ngày khởi hành trong bảng ACF Repeater. Trên CRM, mỗi tour là một đợt khởi hành gắn với một mã lịch trình riêng (ví dụ: `AD-US01-201026`). Cần xây dựng cơ chế tự động bóc tách tiền tố SKU và cập nhật đợt khởi hành vào bảng ACF kèm tính tổng chỗ trống.
+  2. Lỗi thực tế: Kết nối thành công webhook tới website `adluxury.net` nhưng khi bắt đầu đồng bộ thì modal hiển thị thông báo "Không thể tải danh sách sản phẩm từ Website WordPress".
+- **Nguyên nhân kỹ thuật của lỗi tải sản phẩm:**
+  - Trong hàm `getWooCommerceProducts` (`woocommerceService.ts`), hệ thống gửi tham số query `status: 'publish,draft,private'`.
+  - Theo chuẩn WooCommerce REST API v3 schema, tham số `status` là enum đơn giá trị (`'any'`, `'publish'`, `'draft'`, `'pending'`, `'private'`), không chấp nhận chuỗi ngăn cách bằng dấu phẩy. Việc gửi `'publish,draft,private'` khiến WooCommerce trả về HTTP 400 Bad Request (`rest_invalid_param: "status" is not one of any, draft, pending, private, publish.`).
+  - Khi test connection (`/products?per_page=1`), tham số status không được truyền nên thành công, nhưng khi mở modal thì bị chặn lỗi 400.
+  - Ngoài ra, việc URL thiếu protocol (`adluxury.net`) hoặc cấu hình chuyển hướng HTTP/HTTPS khiến Authorization header có thể bị tước trong quá trình fetch redirect.
 - **Giải pháp triển khai:**
-  1. **Xây dựng module bóc tách tiền tố SKU & Thuật toán so khớp (`src/utils/skuHelper.ts`):**
-     - Hàm `extractSkuFromTourCode`: Bóc tách thông minh tiền tố SKU (ví dụ: `AD-US01-201026` ➔ SKU `AD-US01`, `TOUR-VN-01-D1` ➔ SKU `TOUR-VN-01`), nhận diện chính xác đuôi ngày tháng (`isDateSuffix: /^\d{4,8}$/`) và đuôi mã đợt (`isBatchSuffix: /^(D|K|DOT|LICH)\d+$/i`), bảo vệ nguyên vẹn các mã tour không có đuôi ngày (`AD-US01`, `VN-PQ01`).
-     - Hàm `findMatchedProductForTour`: Thuật toán 4 tầng ưu tiên nhận diện sản phẩm:
-       + Tầng 1: Đã liên kết trước đó (`tour.wp_product_id`).
-       + Tầng 2: Khớp SKU sản phẩm với tiền tố mã lịch trình CRM (hoặc mã lịch trình bắt đầu bằng SKU của sản phẩm WooCommerce).
-       + Tầng 3: Mã lịch trình đã có trong danh sách đợt khởi hành ACF departures của sản phẩm.
-       + Tầng 4: Khớp tên chương trình tour (so sánh chuẩn hóa tiếng Việt).
-       + Mặc định: Chọn chế độ tạo mới với SKU là tiền tố mã lịch trình.
-  2. **Tối ưu Backend API WooCommerce (`server/services/woocommerceService.ts`):**
-     - Đồng bộ hàm `extractSkuFromTourCode` vào backend service.
-     - Hàm `buildWooCommercePayload`: Khi cập nhật đợt khởi hành vào ACF Repeater, tự động tính toán lại tổng số chỗ trống khả dụng (`stock_quantity`) và giá sàn ("Chỉ từ...") từ TOÀN BỘ các đợt khởi hành hợp nhất trong bảng ACF.
-     - Hàm `syncTourToWooCommerce`: Tự động tìm kiếm sản phẩm theo SKU tiền tố trước khi tìm kiếm theo tên tour; gán SKU chuẩn của sản phẩm mẹ khi tạo mới thay vì dùng cả mã đợt khởi hành.
-  3. **Nâng cấp giao diện Modal Đồng Bộ (`BulkSyncWooCommerceModal.tsx` & `SyncTourToWooCommerceModal.tsx`):**
-     - Thêm thẻ thống kê riêng biệt **"Khớp SKU"** (Badge màu xanh chàm với icon Tag) và nút lọc riêng `Khớp SKU` trong bộ lọc Status Pills.
-     - Cột thông tin Tour CRM: Hiển thị mã lịch trình kèm tiền tố SKU suy luận (`SKU: [prefix]`).
-     - Cột sản phẩm Website ghép nối:
-       + Badge xanh chàm `Khớp SKU [Mã SKU] (#ID)` kèm chú thích hành động: `↳ Cập nhật đợt vào ACF & cộng dồn chỗ`.
-       + Badge màu hổ phách `Chưa có SKU Web (Sẽ tạo SKU: [Prefix])` kèm gợi ý rõ ràng và 2 nút bấm thao tác nhanh.
-       + Trong popover chọn đổi sản phẩm: Hiển thị SKU rõ ràng trên từng dòng sản phẩm WooCommerce.
-  4. **Kiểm thử tự động:**
-     - Viết mới bộ Unit test `src/utils/__tests__/skuHelper.test.ts` kiểm thử 100% các trường hợp bóc tách SKU và so khớp sản phẩm.
-     - Vượt qua toàn bộ 57 unit tests (`npm test`), 21 kịch bản simulation (`npm run test:simulation`), `npm run lint` và `compile_applet`.
+  1. **Khắc phục triệt để lỗi tải danh sách sản phẩm WooCommerce:**
+     - Thiết lập cơ chế 3 tầng fallback trong `getWooCommerceProducts`: Lần 1 thử với `status: 'any'` (chuẩn WooCommerce); nếu server hạn chế quyền/lỗi 400 thì Lần 2 thử `status: 'publish'`; nếu vẫn lỗi thì Lần 3 bỏ hoàn toàn tham số `status` để WooCommerce tự dùng mặc định.
+     - Tự động chuẩn hóa URL (bổ sung `https://` nếu thiếu protocol, loại bỏ dấu gạch chéo cuối).
+     - Thiết lập `redirect: 'follow'` và hỗ trợ cả xác thực qua Basic Auth Header lẫn URL query params `consumer_key` & `consumer_secret`.
+     - Xuất thông báo lỗi chi tiết từ server WordPress về frontend thay vì thông báo chung chung.
+  2. **Thuật toán bóc tách tiền tố SKU (`src/utils/skuUtils.ts` & `woocommerceService.ts`):**
+     - Xây dựng hàm `extractSkuPrefix`: Tự động nhận diện phần đuôi ngày tháng (`YYMMDD`, `YYYYMMDD`, `DDMM`) hoặc ký hiệu đợt (`D1`, `DOT1`, `T10`, `DOT-1`) để trích xuất chính xác SKU tour mẹ (ví dụ: `AD-US01-201026` ➔ SKU `AD-US01`, `TOUR-VN-01-D1` ➔ SKU `TOUR-VN-01`, `US01_15102026` ➔ SKU `US01`), đồng thời bảo toàn mã tour gốc nếu không có đuôi ngày (`AD-US01` giữ nguyên `AD-US01`).
+     - Hàm `normalizeSku` chuẩn hóa chữ hoa và loại bỏ khoảng trắng.
+  3. **Quy tắc 4 tầng so khớp thông minh (`matchTourToWooCommerceProduct`):**
+     - **Tầng 1:** Tour đã có liên kết từ trước (`tour.wp_product_id`).
+     - **Tầng 2 (Mới):** Khớp theo tiền tố SKU của sản phẩm WooCommerce (Badge xanh chàm *Khớp SKU [Mã SKU] #ID*).
+     - **Tầng 3:** Mã lịch trình đã có trong danh sách đợt khởi hành ACF departures của sản phẩm trên website.
+     - **Tầng 4:** So khớp theo tên chương trình tour tương đồng.
+     - **Mặc định:** Gợi ý chế độ tạo mới với mã SKU là tiền tố đã bóc tách (Badge hổ phách *Chưa có SKU Web (Sẽ tạo SKU: [Prefix])*).
+  4. **Cập nhật đợt khởi hành vào ACF Repeater & Tính tổng chỗ trống:**
+     - Nếu đợt khởi hành đã có: Cập nhật lại giá vé, ngày đi, ngày về, chỗ trống và tình trạng mới nhất.
+     - Nếu đợt khởi hành chưa có: Tự động thêm mới dòng đợt khởi hành vào mảng ACF Repeater.
+     - Tự động cộng dồn số chỗ trống khả dụng (`stock_quantity`) của toàn bộ các đợt khởi hành trong bảng ACF.
+     - Tự động cập nhật giá sàn hiển thị ("Giá chỉ từ...") theo mức giá thấp nhất của các đợt đang mở bán (`regular_price`).
+  5. **Nâng cấp giao diện Modal đồng bộ (`BulkSyncWooCommerceModal.tsx` & `SyncTourToWooCommerceModal.tsx`):**
+     - Thêm thẻ thống kê và nút lọc nhanh riêng biệt **Khớp SKU** (màu xanh chàm) trên thanh công cụ.
+     - Hiển thị trực quan trên từng dòng: mã SKU đã khớp, nhãn hành động `↳ Cập nhật đợt vào ACF & cộng dồn chỗ`, kèm tùy chọn bấm "Đổi" để ghép nối nhanh với bất kỳ sản phẩm nào trên website.
+     - Popover chọn sản phẩm hiển thị đầy đủ ID, SKU, số đợt lịch và giá sàn.
+  6. **Kiểm thử tự động:**
+     - Xây dựng unit test suite `src/utils/__tests__/skuUtils.test.ts` (9 tests) kiểm thử toàn diện bóc tách SKU và 4 tầng so khớp.
+     - Vượt qua 100% kiểm thử: 59 Unit tests Vitest (`npm test`), 21 kịch bản Simulation (`npm run test:simulation`), kiểm tra TypeScript linter (`npm run lint`) và biên dịch (`compile_applet`).
 - **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
 
 ### 1.100 Khắc Phục Lỗi Hủy Đơn Booking Visa Không Cập Nhật Trạng Thái Trên Hệ Thống

@@ -15,13 +15,12 @@ import {
   Layers,
   Sparkles,
   ArrowRight,
-  Tag,
-  Link2
+  Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 import { Tour } from '../types';
-import { findMatchedProductForTour, extractSkuFromTourCode } from '../utils/skuHelper';
+import { extractSkuPrefix, normalizeSku, matchTourToWooCommerceProduct } from '../utils/skuUtils';
 
 interface WordPressProduct {
   id: number;
@@ -58,6 +57,7 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
   // Lựa chọn: 'existing' (ghép vào sản phẩm có sẵn) | 'new' (tạo sản phẩm mới)
   const [syncMode, setSyncMode] = useState<'existing' | 'new'>('existing');
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [matchBadge, setMatchBadge] = useState<{ text: string; type: string } | null>(null);
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{
@@ -78,25 +78,40 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
       if (keyword.trim()) {
         url.searchParams.set('search', keyword.trim());
       }
-      url.searchParams.set('per_page', '30');
+      url.searchParams.set('per_page', '50');
 
       const res = await fetch(url.toString());
       const data = await res.json();
       if (data.success && Array.isArray(data.products)) {
         setProducts(data.products);
 
-        // Tự động nhận diện sản phẩm phù hợp theo quy tắc: wp_product_id -> tiền tố SKU -> tên tour
+        // Áp dụng thuật toán 4 tầng so khớp tự động
         if (tour) {
-          const match = findMatchedProductForTour(tour, data.products);
-          if (match.targetProductId) {
-            setSelectedProductId(match.targetProductId);
+          const matchResult = matchTourToWooCommerceProduct(tour, data.products);
+          if (matchResult.mode === 'existing' && matchResult.targetProductId) {
+            setSelectedProductId(matchResult.targetProductId);
             setSyncMode('existing');
+            if (matchResult.matchedType === 'sku_matched') {
+              setMatchBadge({ text: `Khớp SKU [${matchResult.matchedProductSku || matchResult.suggestedNewSku}]`, type: 'sku' });
+            } else if (matchResult.matchedType === 'linked') {
+              setMatchBadge({ text: `Đã liên kết #${matchResult.targetProductId}`, type: 'linked' });
+            } else if (matchResult.matchedType === 'departure_matched') {
+              setMatchBadge({ text: `Đã có trong ACF #${matchResult.targetProductId}`, type: 'acf' });
+            } else {
+              setMatchBadge({ text: `Khớp tên #${matchResult.targetProductId}`, type: 'name' });
+            }
+          } else {
+            setSyncMode('new');
+            setSelectedProductId(null);
+            setMatchBadge({ text: `Chưa có SKU (Sẽ tạo SKU: ${matchResult.suggestedNewSku})`, type: 'new' });
           }
         }
+      } else {
+        toast.error(data.message || 'Không thể nạp danh sách sản phẩm từ website.');
       }
     } catch (err: any) {
       console.error('Lỗi khi tải danh sách sản phẩm WooCommerce:', err);
-      toast.error('Không thể nạp danh sách sản phẩm từ website.');
+      toast.error(err?.message || 'Không thể nạp danh sách sản phẩm từ website.');
     } finally {
       setIsLoadingProducts(false);
     }
@@ -199,18 +214,10 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
         {/* THÔNG TIN TOUR CRM ĐANG CHỌN */}
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 my-4 space-y-2">
           <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
-                  Mã lịch: {tour.code}
-                </span>
-                {extractSkuFromTourCode(tour.code) && extractSkuFromTourCode(tour.code) !== tour.code && (
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
-                    <Tag className="w-2.5 h-2.5 text-indigo-600" />
-                    <span>Tiền tố SKU: {extractSkuFromTourCode(tour.code)}</span>
-                  </span>
-                )}
-              </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                {tour.code}
+              </span>
               <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{tour.name}</h4>
             </div>
             <span className="text-xs font-black text-rose-600 shrink-0">
@@ -323,9 +330,14 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
                     className="w-4 h-4 text-blue-600 focus:ring-blue-500 mt-0.5 cursor-pointer"
                   />
                   <div className="space-y-0.5">
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                       <Plus className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Tạo Sản phẩm mới trên Web</span>
+                      {tour?.code && (
+                        <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-bold">
+                          SKU: {extractSkuPrefix(tour.code)}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                       Đăng một Sản phẩm Tour hoàn toàn mới lên website và đưa đợt này vào làm ngày khởi hành đầu tiên.
@@ -411,43 +423,33 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
                               className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
                             />
                             <div className="space-y-0.5 min-w-0">
-                              <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5 flex-wrap">
+                              <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
                                 <span className="truncate">{p.name}</span>
-                                {p.sku && (
-                                  <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded font-semibold shrink-0">
-                                    SKU: {p.sku}
-                                  </span>
-                                )}
-                                <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                                <span className="text-[10px] font-mono text-slate-500 shrink-0">
                                   (ID: #{p.id})
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 flex-wrap">
+                                {p.sku && <span className="font-mono text-indigo-700 bg-indigo-50 px-1 rounded font-bold">SKU: {p.sku}</span>}
                                 <span>Giá web: <strong>{p.price ? Number(p.price).toLocaleString('vi-VN') + ' đ' : 'Chưa có giá'}</strong></span>
                                 <span>•</span>
                                 <span className="text-blue-700 font-bold">
-                                  {p.departures_count} đợt lịch ACF
+                                  {p.departures_count} ngày khởi hành đang có
                                 </span>
                               </div>
                             </div>
                           </div>
 
                           <div className="shrink-0 flex items-center gap-2">
-                            {p.sku && tour.code.toUpperCase().startsWith(p.sku.toUpperCase()) && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200">
-                                <Tag className="w-2.5 h-2.5 text-indigo-600" />
-                                <span>Khớp SKU</span>
-                              </span>
-                            )}
                             {hasCurrentCode ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200">
                                 <RefreshCw className="w-2.5 h-2.5 text-amber-600" />
-                                <span>Đã có mã (Cập nhật)</span>
+                                <span>Đã có mã lịch (Sẽ cập nhật)</span>
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
                                 <Plus className="w-2.5 h-2.5 text-emerald-600" />
-                                <span>Thêm đợt mới</span>
+                                <span>Chưa có (Sẽ thêm mới dòng)</span>
                               </span>
                             )}
                           </div>
@@ -463,16 +465,16 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
                     <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                     <div className="space-y-0.5 leading-relaxed">
                       <div>
-                        Đã chọn Sản phẩm: <strong>{selectedProduct.name}</strong> {selectedProduct.sku ? `(SKU: ${selectedProduct.sku} • #${selectedProduct.id})` : `(#${selectedProduct.id})`}
+                        Đã chọn Sản phẩm: <strong>{selectedProduct.name}</strong> (ID: #{selectedProduct.id})
                       </div>
                       <div className="text-[11px] text-blue-800">
                         {departureStatusOnSelectedProduct === 'update' ? (
                           <span>
-                            ➔ Đợt <strong>{tour.code}</strong> đã có sẵn trong bảng ACF. Hệ thống sẽ <strong>CẬP NHẬT</strong> lại giá vé, ngày đi, ngày về và <strong>TÍNH LẠI TỔNG CHỖ TRỐNG</strong> của toàn bộ sản phẩm.
+                            ➔ Mã lịch <strong>{tour.code}</strong> đã có sẵn trong bảng lịch trình. Hệ thống sẽ <strong>CẬP NHẬT</strong> lại giá vé, chỗ trống và ngày đi mới nhất.
                           </span>
                         ) : (
                           <span>
-                            ➔ Đợt <strong>{tour.code}</strong> chưa có trong bảng ACF. Hệ thống sẽ <strong>TỰ ĐỘNG THÊM MỚI 1 ĐỢT</strong> vào sản phẩm này và <strong>CỘNG DỒN TỔNG CHỖ TRỐNG</strong>.
+                            ➔ Mã lịch <strong>{tour.code}</strong> chưa có trong bảng lịch trình. Hệ thống sẽ <strong>TỰ ĐỘNG THÊM MỚI 1 HÀNG</strong> ngày khởi hành vào sản phẩm này.
                           </span>
                         )}
                       </div>
@@ -490,7 +492,7 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
                   <span>Tạo Sản phẩm mới trên Website</span>
                 </div>
                 <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
-                  Hệ thống sẽ tạo 1 Sản phẩm Tour mới trên website WordPress có SKU là <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-amber-300">{extractSkuFromTourCode(tour.code) || tour.code}</strong>, tên là <strong>"{tour.name}"</strong> và đưa đợt khởi hành <strong>[{tour.code}]</strong> vào làm hàng lịch trình đầu tiên trong bảng ACF.
+                  Hệ thống sẽ tạo 1 Sản phẩm Tour mới trên website WordPress có tên là <strong>"{tour.name}"</strong> và đưa ngày khởi hành <strong>[{tour.code}]</strong> vào làm hàng lịch trình đầu tiên.
                 </p>
               </div>
             )}

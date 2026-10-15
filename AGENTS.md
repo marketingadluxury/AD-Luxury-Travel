@@ -172,17 +172,22 @@ Dưới đây là cấu trúc các bảng chính cần thiết đã được đ�
 ---
 
 ## 7. Quy Tắc Phân Quyền & Tính Năng Đặc Biệt (Cập Nhật Mới)
-- **Đồng Bộ Mã Lịch Trình CRM Sang Sản Phẩm SKU Tour Trên WooCommerce (`BulkSyncWooCommerceModal.tsx` & `SyncTourToWooCommerceModal.tsx`):**
-  - **Quy tắc Tiền Tố Mã Lịch Trình tương ứng SKU Tour:**
-    + Website WordPress WooCommerce: Mỗi chương trình tour là 1 sản phẩm sở hữu mã SKU duy nhất và có nhiều ngày/đợt khởi hành trong bảng ACF Repeater (`lich_trinh_khoi_hanh`).
-    + CRM: Mỗi tour là một đợt khởi hành với mã lịch trình độc lập (ví dụ `AD-US01-201026`, `TOUR-VN-01-D1`).
-    + Thuật toán `extractSkuFromTourCode`: Tự động nhận diện và bóc tách chính xác tiền tố SKU (nhận diện đuôi ngày tháng `isDateSuffix: /^\d{4,8}$/` và đuôi đợt `isBatchSuffix: /^(D|K|DOT|LICH)\d+$/i`, không làm thay đổi các mã tour gốc như `AD-US01`, `VN-PQ01`).
-    + Thuật toán `findMatchedProductForTour`: Tự động nhận diện 4 tầng ưu tiên: (1) Đã liên kết trước đó (`wp_product_id`), (2) Khớp tiền tố SKU của sản phẩm WooCommerce (Badge xanh chàm *Khớp SKU [Mã SKU] #ID*), (3) Đã có mã trong danh sách ACF departures của sản phẩm, (4) Khớp theo tên chương trình tour (Badge tím *Khớp tên #ID*). Nếu chưa có sản phẩm khớp: Mặc định chọn tạo mới (Badge màu cam/xám *Chưa có SKU Web*).
-  - **Cập nhật ACF Repeater & Tính Toán Tổng Chỗ Trống:**
-    + Khi đồng bộ một đợt từ CRM sang WooCommerce: Nếu đợt đã có trong bảng ACF thì cập nhật thông tin mới nhất; nếu chưa có thì thêm dòng mới vào ACF.
-    + Sau khi hợp nhất các đợt trong ACF, hệ thống tự động tính lại tổng số chỗ khả dụng (`stock_quantity`) và mức giá sàn ("Chỉ từ...") từ TOÀN BỘ các đợt đang mở bán trong ACF.
-  - **Duyệt & Tích chọn Tour:** Cho phép duyệt toàn bộ danh sách tour, tìm kiếm nhanh (tên, mã tour, điểm đến), lọc theo trạng thái ghép nối (Tất cả, Khớp SKU, Đã liên kết, Khớp tên, Tạo mới), và chọn/bỏ chọn tour linh hoạt.
-  - **Đổi sản phẩm liên kết linh hoạt:** Cho phép mở popover chọn nhanh sản phẩm WooCommerce bất kỳ (hiển thị rõ SKU của từng sản phẩm) để ghép nối thủ công hoặc chuyển sang tạo sản phẩm mới.
+- **Modal Đồng Bộ Hàng Loạt Chuyên Dụng Lên WooCommerce (`BulkSyncWooCommerceModal.tsx` & `SyncTourToWooCommerceModal.tsx`):**
+  - **Duyệt & Tích chọn Tour:** Thay thế toàn bộ hộp thoại `window.confirm` ngầm trước đây. Khi bấm nút "Đồng bộ Website" (tại `/tours`) hoặc "Bắt đầu đồng bộ toàn bộ Tour sang Website" (tại `/settings`), hệ thống mở Modal chuyên dụng cho phép duyệt toàn bộ danh sách tour, tìm kiếm nhanh (tên, mã tour, điểm đến), lọc theo trạng thái ghép nối, và chọn/bỏ chọn tour linh hoạt.
+  - **Cơ Chế Bóc Tách Tiền Tố SKU & So Khớp 4 Tầng Thông Minh (`skuUtils.ts`):**
+    + *Thuật toán bóc tách tiền tố SKU:* Tự động nhận diện phần đuôi ngày tháng (`YYMMDD`, `YYYYMMDD`, `DDMM`) hoặc ký hiệu đợt (`D1`, `DOT1`, `T10`, `DOT-1`) để tách lấy SKU tour mẹ (`AD-US01-201026` -> SKU `AD-US01`, `TOUR-VN-01-D1` -> SKU `TOUR-VN-01`), bảo toàn nguyên vẹn mã gốc nếu không có đuôi ngày (`AD-US01` giữ nguyên `AD-US01`).
+    + *Tầng 1:* Tour đã có liên kết từ trước (`tour.wp_product_id` -> Badge xanh lá *Đã liên kết #ID*).
+    + *Tầng 2 (Mới):* Khớp theo tiền tố SKU của sản phẩm WooCommerce (Badge xanh chàm *Khớp SKU [Mã SKU] #ID*).
+    + *Tầng 3:* Mã lịch trình đã có trong danh sách đợt khởi hành ACF `departures` của sản phẩm trên website (Badge tím *Đã có trong ACF #ID*).
+    + *Tầng 4:* So khớp theo tên chương trình tour tương đồng (Badge lam *Khớp tên #ID*).
+    + *Mặc định:* Gợi ý chế độ tạo mới với mã SKU là tiền tố đã bóc tách (Badge hổ phách *Chưa có SKU Web (Sẽ tạo SKU: [Prefix])*).
+  - **Cập Nhật Đợt Khởi Hành Vào ACF Repeater & Tính Tổng Chỗ Trống:**
+    + Khi đồng bộ sang sản phẩm WooCommerce: Nếu đợt đã có trong bảng ACF thì cập nhật giá vé, ngày đi/về, chuyến bay và chỗ trống; nếu chưa có thì tự động thêm dòng mới vào bảng ACF Repeater.
+    + Tự động cộng dồn số chỗ trống khả dụng (`stock_quantity`) của toàn bộ các đợt khởi hành trong bảng ACF và cập nhật giá sàn hiển thị ("Giá chỉ từ...") theo mức giá thấp nhất của các đợt đang mở bán (`regular_price`).
+  - **Khắc Phục Triệt Để Lỗi Tải Danh Sách Sản Phẩm Web (`adluxury.net`):**
+    + Loại bỏ hoàn toàn chuỗi `status: 'publish,draft,private'` gây lỗi 400 Bad Request trên WooCommerce REST API v3.
+    + Tích hợp cơ chế 3 tầng fallback (`status: 'any'` -> `status: 'publish'` -> không truyền status), hỗ trợ tự động bổ sung protocol `https://`, xử lý `redirect: 'follow'` và gửi song song cả Basic Auth Header lẫn Query Params.
+  - **Đổi sản phẩm liên kết linh hoạt:** Cho phép mở popover chọn nhanh sản phẩm WooCommerce bất kỳ (hiển thị ID, SKU, số đợt lịch, giá sàn) để ghép nối thủ công hoặc chuyển sang tạo sản phẩm mới.
   - **Tùy chọn nâng cao:** Bật/tắt cập nhật bảng giá (Regular Price) và cập nhật ACF Repeater lịch khởi hành.
   - **Tiến trình chạy thực tế (Live Progress):** Hiển thị thanh tiến trình % trực quan, trạng thái xử lý từng tour theo thời gian thực (pending -> running -> success/failed), log kết quả chi tiết và link mở trực tiếp sản phẩm trên website.
 - **Chế Độ Xem Lịch Khởi Hành Công Khai (Public View-Only) Cho Tất Cả Người Dùng:**
