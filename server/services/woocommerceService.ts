@@ -335,7 +335,56 @@ export function normalizeSku(sku: string): string {
 }
 
 /**
+ * Trích xuất mã hiệu chuyến bay và giờ cất cánh/hạ cánh
+ * Ví dụ: "JQ62 22:35 - 10:15" -> { flightCode: 'JQ62', depTime: '22:35', arrTime: '10:15' }
+ */
+export function parseFlightInfo(flightStr?: string, dateTimeIso?: string) {
+  let flightCode = '';
+  let depTime = '';
+  let arrTime = '';
+
+  if (flightStr) {
+    const trimmed = flightStr.trim();
+    const codeMatch = trimmed.match(/\b([A-Za-z]{2,3}\s?[0-9]{2,4})\b/);
+    if (codeMatch) {
+      flightCode = codeMatch[1].replace(/\s+/g, '').toUpperCase();
+    } else {
+      const firstToken = trimmed.split(/[\s-]+/)[0];
+      if (firstToken && firstToken.length >= 2 && firstToken.length <= 8) {
+        flightCode = firstToken.toUpperCase();
+      }
+    }
+
+    const timeMatches = trimmed.match(/\b([0-1]?[0-9]|2[0-3]):[0-5][0-9]\b/g);
+    if (timeMatches && timeMatches.length >= 1) {
+      depTime = timeMatches[0];
+      if (timeMatches.length >= 2) {
+        arrTime = timeMatches[1];
+      }
+    }
+  }
+
+  if (!depTime && dateTimeIso) {
+    try {
+      const d = new Date(dateTimeIso);
+      if (!isNaN(d.getTime())) {
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        if (hh !== '00' || mm !== '00') {
+          depTime = `${hh}:${mm}`;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return { flightCode, depTime, arrTime };
+}
+
+/**
  * Xây dựng 1 hàng (row) cho bảng ACF Repeater từ thông tin Tour
+ * Chuẩn hóa 100% theo đúng cấu trúc bảng ACF thực tế trên Website (image_0ea0250c.png)
  */
 function buildRepeaterRowFromTour(tour: any, mappings: Record<string, string>): Record<string, any> {
   const row: Record<string, any> = {};
@@ -346,12 +395,57 @@ function buildRepeaterRowFromTour(tour: any, mappings: Record<string, string>): 
   const totalSeats = Number(tour.total_seats || 0);
   const availSeats = Number(tour.available_seats ?? tour.total_seats ?? 0);
 
-  // Map theo các trường cấu hình
-  for (const [crmField, acfSlug] of Object.entries(mappings)) {
+  const depDateVn = tour.departure_time ? formatDateVN(tour.departure_time) : (tour.start_date ? formatDateVN(tour.start_date) : '');
+  const retDateVn = tour.return_time ? formatDateVN(tour.return_time) : (tour.end_date ? formatDateVN(tour.end_date) : '');
+
+  const outFlight = parseFlightInfo(tour.flight_out, tour.departure_time);
+  const inFlight = parseFlightInfo(tour.flight_in, tour.return_time);
+
+  // Ánh xạ trạng thái tour sang checkbox ACF
+  const statusLabels: string[] = [];
+  if (tour.tour_status === 'noshop') statusLabels.push('No Shop');
+  else if (tour.tour_status === 'last_minute') statusLabels.push('Giờ chót');
+  else if (tour.tour_status === 'holiday') statusLabels.push('Lễ tết');
+  else if (tour.tour_status === 'on_sale') statusLabels.push('Giảm giá');
+
+  // Đầy đủ các trường chuẩn hóa theo ACF thực tế (Lịch trình khởi hành)
+  row.ma_lich_trinh = tour.code;
+  row.ngay_khoi_hanh = depDateVn;
+
+  // 1. Chuyến bay đi
+  row.ngay_di = depDateVn;
+  row.ma_chuyen_bay_di = outFlight.flightCode || tour.airline || '';
+  row.gio_cat_canh_di = outFlight.depTime || '';
+  row.gio_ha_canh_di = outFlight.arrTime || '';
+  row.chuyen_bay_di = tour.flight_out || outFlight.flightCode || '';
+
+  // 2. Chuyến bay về
+  row.ngay_ve = retDateVn;
+  row.ma_chuyen_bay_ve = inFlight.flightCode || tour.airline || '';
+  row.gio_cat_canh_ve = inFlight.depTime || '';
+  row.gio_ha_canh_ve = inFlight.arrTime || '';
+  row.chuyen_bay_ve = tour.flight_in || inFlight.flightCode || '';
+
+  // 3. Bảng giá
+  row.gia_nguoi_lon = adultPrice;
+  row.gia_tre_em = childPrice;
+  row.gia_em_be = infantPrice;
+  row.phu_thu_phong_don = singleRoom;
+
+  // 4. Lưu ý đặc biệt & Tình trạng chỗ
+  row.luu_y_dac_biet = tour.description || (tour.visa_deadline ? `Nhận hồ sơ đến: ${formatDateVN(tour.visa_deadline)}` : '');
+  row.tong_so_cho_mo_ban = totalSeats;
+  row.so_cho_con_lai = availSeats;
+  row.han_muc_overbook = Number(tour.overbook_limit || 0);
+  row.tinh_trang_tour = statusLabels;
+
+  // Áp dụng thêm các mapping tùy chỉnh người dùng cài đặt
+  for (const [crmField, acfSlug] of Object.entries(mappings || {})) {
     if (!acfSlug || typeof acfSlug !== 'string' || !acfSlug.trim()) continue;
     const cleanSlug = acfSlug.trim();
-    let val: any = tour[crmField];
+    if (row[cleanSlug] !== undefined) continue;
 
+    let val: any = tour[crmField];
     if (crmField === 'code') val = tour.code;
     else if (crmField === 'price_adult') val = adultPrice;
     else if (crmField === 'price_child') val = childPrice;
@@ -359,8 +453,8 @@ function buildRepeaterRowFromTour(tour: any, mappings: Record<string, string>): 
     else if (crmField === 'single_room_surcharge') val = singleRoom;
     else if (crmField === 'total_seats') val = totalSeats;
     else if (crmField === 'available_seats') val = availSeats;
-    else if (crmField === 'start_date') val = tour.start_date ? formatDateVN(tour.start_date) : '';
-    else if (crmField === 'end_date') val = tour.end_date ? formatDateVN(tour.end_date) : '';
+    else if (crmField === 'start_date') val = depDateVn;
+    else if (crmField === 'end_date') val = retDateVn;
     else if (crmField === 'flight_out') val = tour.flight_out || '';
     else if (crmField === 'flight_in') val = tour.flight_in || '';
     else if (crmField === 'tour_status') val = tour.tour_status || 'available';
@@ -370,10 +464,6 @@ function buildRepeaterRowFromTour(tour: any, mappings: Record<string, string>): 
       row[cleanSlug] = val;
     }
   }
-
-  // Đảm bảo luôn có mã lịch trình
-  const codeSlug = mappings.code || 'ma_lich_trinh';
-  row[codeSlug] = tour.code;
 
   return row;
 }
@@ -490,7 +580,7 @@ ${primaryTour.itinerary_pdf_url ? `<p><a href="${primaryTour.itinerary_pdf_url}"
   return {
     name: primaryTour.name,
     type: 'simple',
-    sku: existingProduct?.sku || extractSkuPrefix(primaryTour.code) || primaryTour.code,
+    sku: existingProduct?.sku || primaryTour.wp_product_sku || extractSkuPrefix(primaryTour.code) || primaryTour.code,
     regular_price: (!shouldUpdatePrices && existingProduct?.regular_price) 
       ? existingProduct.regular_price 
       : (minPrice > 0 ? minPrice.toString() : '0'),
@@ -613,6 +703,7 @@ export async function syncTourToWooCommerce(
     force_new?: boolean;
     update_prices?: boolean;
     update_departures?: boolean;
+    group_tour_ids?: string[];
   }
 ) {
   const config = await getWooCommerceConfig();
@@ -631,8 +722,9 @@ export async function syncTourToWooCommerce(
     throw new Error(`Không tìm thấy tour ID: ${tourId}`);
   }
 
+  const explicitSku = (tour.wp_product_sku || '').trim();
   const tourCode = (tour.code || '').trim();
-  const skuPrefix = extractSkuPrefix(tourCode);
+  const skuPrefix = explicitSku || extractSkuPrefix(tourCode);
 
   // Xác định Target Product ID trên WooCommerce theo Quy tắc 4 Tầng
   let targetWpProductId: number | undefined = undefined;
@@ -665,37 +757,40 @@ export async function syncTourToWooCommerce(
     }
   }
 
-  // TẦNG 2: Khớp theo tiền tố SKU của sản phẩm WooCommerce
-  if (!targetWpProductId && !options?.force_new && options?.target_product_id !== 'new' && skuPrefix) {
-    try {
-      // 1. Tìm chính xác theo SKU = skuPrefix
-      const skuRes = await callWooCommerceApi(config, '/products', 'GET', undefined, {
-        sku: skuPrefix,
-        per_page: 5
-      });
-      if (Array.isArray(skuRes.data) && skuRes.data.length > 0) {
-        const found = skuRes.data.find((p: any) => normalizeSku(p.sku) === normalizeSku(skuPrefix)) || skuRes.data[0];
-        if (found?.id) {
-          targetWpProductId = found.id;
-          existingProduct = found;
-          matchMethod = 'sku_prefix';
-        }
-      }
-
-      // 2. Nếu chưa thấy, thử tìm SKU = tourCode
-      if (!targetWpProductId && tourCode !== skuPrefix) {
-        const codeRes = await callWooCommerceApi(config, '/products', 'GET', undefined, {
-          sku: tourCode,
-          per_page: 3
+  // TẦNG 2 (MỚI): Khớp theo Mã SKU Sản phẩm Web (wp_product_sku) hoặc tiền tố SKU
+  if (!targetWpProductId && !options?.force_new && options?.target_product_id !== 'new') {
+    const searchSku = explicitSku || skuPrefix;
+    if (searchSku) {
+      try {
+        // 1. Tìm chính xác theo searchSku
+        const skuRes = await callWooCommerceApi(config, '/products', 'GET', undefined, {
+          sku: searchSku,
+          per_page: 5
         });
-        if (Array.isArray(codeRes.data) && codeRes.data.length > 0) {
-          targetWpProductId = codeRes.data[0].id;
-          existingProduct = codeRes.data[0];
-          matchMethod = 'sku_prefix';
+        if (Array.isArray(skuRes.data) && skuRes.data.length > 0) {
+          const found = skuRes.data.find((p: any) => normalizeSku(p.sku) === normalizeSku(searchSku)) || skuRes.data[0];
+          if (found?.id) {
+            targetWpProductId = found.id;
+            existingProduct = found;
+            matchMethod = 'sku_prefix';
+          }
         }
+
+        // 2. Nếu chưa thấy và có tourCode khác searchSku, thử tìm SKU = tourCode
+        if (!targetWpProductId && tourCode !== searchSku) {
+          const codeRes = await callWooCommerceApi(config, '/products', 'GET', undefined, {
+            sku: tourCode,
+            per_page: 3
+          });
+          if (Array.isArray(codeRes.data) && codeRes.data.length > 0) {
+            targetWpProductId = codeRes.data[0].id;
+            existingProduct = codeRes.data[0];
+            matchMethod = 'sku_prefix';
+          }
+        }
+      } catch (e) {
+        console.warn('[WooCommerce] Tìm sản phẩm theo SKU thất bại:', e);
       }
-    } catch (e) {
-      console.warn('[WooCommerce] Tìm sản phẩm theo SKU thất bại:', e);
     }
   }
 
@@ -753,21 +848,42 @@ export async function syncTourToWooCommerce(
     }
   }
 
-  // Tìm tất cả các tour trên CRM thuộc cùng sản phẩm này (cùng Tên, cùng wp_product_id, hoặc cùng Tiền tố SKU)
-  const orConditions: string[] = [`name.eq."${tour.name}"`];
-  if (targetWpProductId) {
-    orConditions.push(`wp_product_id.eq.${targetWpProductId}`);
-  }
-  if (skuPrefix && skuPrefix.length >= 3) {
-    orConditions.push(`code.like.${skuPrefix}%`);
+  // Tìm tất cả các tour trên CRM thuộc cùng sản phẩm này (hoặc lấy chính xác theo group_tour_ids)
+  let groupTours: any[] = [tour];
+  if (options?.group_tour_ids && Array.isArray(options.group_tour_ids) && options.group_tour_ids.length > 0) {
+    const { data: requestedTours } = await supabase
+      .from('tours')
+      .select('*')
+      .in('id', options.group_tour_ids);
+    if (requestedTours && requestedTours.length > 0) {
+      groupTours = requestedTours;
+    }
+  } else {
+    const orConditions: string[] = [`name.eq."${tour.name}"`];
+    if (targetWpProductId) {
+      orConditions.push(`wp_product_id.eq.${targetWpProductId}`);
+    }
+    if (explicitSku) {
+      orConditions.push(`wp_product_sku.eq."${explicitSku}"`);
+    }
+    if (skuPrefix && skuPrefix.length >= 3) {
+      orConditions.push(`code.like.${skuPrefix}%`);
+    }
+
+    const { data: siblingTours } = await supabase
+      .from('tours')
+      .select('*')
+      .or(orConditions.join(','));
+
+    groupTours = (siblingTours && siblingTours.length > 0) ? siblingTours : [tour];
   }
 
-  const { data: siblingTours } = await supabase
-    .from('tours')
-    .select('*')
-    .or(orConditions.join(','));
-
-  const groupTours = (siblingTours && siblingTours.length > 0) ? siblingTours : [tour];
+  // Sắp xếp các đợt trong groupTours theo ngày khởi hành
+  groupTours.sort((a, b) => {
+    const timeA = new Date(a.departure_time || a.start_date || 0).getTime();
+    const timeB = new Date(b.departure_time || b.start_date || 0).getTime();
+    return timeA - timeB;
+  });
 
   // Kiểm tra xem mã lịch trình của tour này đã có trong sản phẩm chưa
   const repeaterSlug = (config.repeater_slug || 'lich_trinh_khoi_hanh').trim();
@@ -792,6 +908,7 @@ export async function syncTourToWooCommerce(
   let finalProductId = targetWpProductId;
   let productUrl = '';
   let isUpdate = false;
+  const allTourIds = groupTours.map((t: any) => t.id);
 
   try {
     if (targetWpProductId) {
@@ -807,21 +924,22 @@ export async function syncTourToWooCommerce(
       productUrl = createRes.data.permalink || '';
     }
 
-    // Cập nhật lại wp_product_id cho tour hiện tại trong Supabase
+    // Cập nhật lại wp_product_id và trạng thái đồng bộ cho TOÀN BỘ các đợt trong nhóm
     const now = new Date().toISOString();
     const actionDesc = isUpdate 
-      ? (departureAction === 'updated' ? `Cập nhật mã lịch ${tour.code} vào SP #${finalProductId}` : `Thêm mới mã lịch ${tour.code} vào SP #${finalProductId}`)
-      : `Tạo mới sản phẩm #${finalProductId}`;
+      ? (departureAction === 'updated' ? `Cập nhật ${groupTours.length} đợt vào SP #${finalProductId}` : `Thêm mới ${groupTours.length} đợt vào SP #${finalProductId}`)
+      : `Tạo mới SP #${finalProductId} với ${groupTours.length} đợt khởi hành`;
 
     await supabase
       .from('tours')
       .update({
         wp_product_id: finalProductId,
+        wp_product_sku: explicitSku || existingProduct?.sku || skuPrefix || tour.code,
         wp_sync_status: 'synced',
         wp_last_synced_at: now,
         wp_sync_message: `Đồng bộ thành công (${actionDesc})`
       })
-      .eq('id', tour.id);
+      .in('id', allTourIds);
 
     return {
       success: true,
@@ -830,14 +948,15 @@ export async function syncTourToWooCommerce(
       product_url: productUrl,
       action: isUpdate ? 'updated' : 'created',
       departure_action: departureAction,
+      synced_tours_count: groupTours.length,
       message: isUpdate 
-        ? `Đã ${departureAction === 'updated' ? 'cập nhật' : 'thêm mới'} ngày khởi hành [${tour.code}] vào sản phẩm "${existingProduct?.name || tour.name}" (#${finalProductId}) trên website.`
-        : `Đã tạo mới sản phẩm "${tour.name}" (#${finalProductId}) trên website.`
+        ? `Đã cập nhật thành công ${groupTours.length} đợt khởi hành vào sản phẩm "${existingProduct?.name || tour.name}" (#${finalProductId}) trên website.`
+        : `Đã tạo mới sản phẩm "${tour.name}" (#${finalProductId}) với ${groupTours.length} đợt khởi hành trên website.`
     };
   } catch (err: any) {
     const errorMsg = err.data?.message || err.message || 'Lỗi không xác định';
 
-    // Ghi nhận lỗi vào tour
+    // Ghi nhận lỗi vào tất cả các tour trong nhóm
     await supabase
       .from('tours')
       .update({
@@ -845,7 +964,7 @@ export async function syncTourToWooCommerce(
         wp_last_synced_at: new Date().toISOString(),
         wp_sync_message: `Lỗi: ${errorMsg}`
       })
-      .eq('id', tourId);
+      .in('id', allTourIds);
 
     throw new Error(`Đồng bộ thất bại: ${errorMsg}`);
   }

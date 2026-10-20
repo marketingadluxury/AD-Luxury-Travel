@@ -78,11 +78,13 @@ export function matchTourToWooCommerceProduct<T extends {
   permalink?: string;
   departures?: string[];
 }>(
-  tour: { id: string; name: string; code: string; wp_product_id?: number | string | null },
+  tour: { id: string; name: string; code: string; wp_product_id?: number | string | null; wp_product_sku?: string | null },
   products: T[]
 ): ProductMatchResult<T> {
+  const explicitSku = (tour.wp_product_sku || '').trim();
   const tourCode = (tour.code || '').trim();
-  const skuPrefix = extractSkuPrefix(tourCode);
+  const skuPrefix = explicitSku || extractSkuPrefix(tourCode);
+  const normalizedExplicitSku = normalizeSku(explicitSku);
   const normalizedTourCode = normalizeSku(tourCode);
   const normalizedSkuPrefix = normalizeSku(skuPrefix);
   const normalizedTourName = (tour.name || '').trim().toLowerCase();
@@ -99,17 +101,19 @@ export function matchTourToWooCommerceProduct<T extends {
         matchedProductSku: existingLinked.sku,
         productUrl: existingLinked.permalink,
         matchedProduct: existingLinked,
-        suggestedNewSku: skuPrefix || tourCode
+        suggestedNewSku: explicitSku || skuPrefix || tourCode
       };
     }
   }
 
-  // TẦNG 2 (MỚI): Khớp theo tiền tố SKU của sản phẩm WooCommerce
-  // Tìm sản phẩm có product.sku trùng với tiền tố SKU của tour CRM hoặc trùng với tourCode
-  if (normalizedSkuPrefix) {
+  // TẦNG 2 (MỚI): Khớp theo Mã SKU Sản phẩm Web (wp_product_sku) hoặc tiền tố SKU
+  if (normalizedExplicitSku || normalizedSkuPrefix) {
     const matchedBySku = products.find(p => {
       if (!p.sku) return false;
       const normalizedProductSku = normalizeSku(p.sku);
+      if (normalizedExplicitSku && normalizedProductSku === normalizedExplicitSku) {
+        return true;
+      }
       return (
         normalizedProductSku === normalizedSkuPrefix ||
         normalizedProductSku === normalizedTourCode ||
@@ -126,7 +130,7 @@ export function matchTourToWooCommerceProduct<T extends {
         matchedProductSku: matchedBySku.sku,
         productUrl: matchedBySku.permalink,
         matchedProduct: matchedBySku,
-        suggestedNewSku: skuPrefix || tourCode
+        suggestedNewSku: explicitSku || skuPrefix || tourCode
       };
     }
   }
@@ -147,7 +151,7 @@ export function matchTourToWooCommerceProduct<T extends {
         matchedProductSku: matchedByDeparture.sku,
         productUrl: matchedByDeparture.permalink,
         matchedProduct: matchedByDeparture,
-        suggestedNewSku: skuPrefix || tourCode
+        suggestedNewSku: explicitSku || skuPrefix || tourCode
       };
     }
   }
@@ -168,7 +172,7 @@ export function matchTourToWooCommerceProduct<T extends {
         matchedProductSku: matchedByName.sku,
         productUrl: matchedByName.permalink,
         matchedProduct: matchedByName,
-        suggestedNewSku: skuPrefix || tourCode
+        suggestedNewSku: explicitSku || skuPrefix || tourCode
       };
     }
   }
@@ -178,6 +182,116 @@ export function matchTourToWooCommerceProduct<T extends {
     mode: 'new',
     targetProductId: null,
     matchedType: 'new',
-    suggestedNewSku: skuPrefix || tourCode
+    suggestedNewSku: explicitSku || skuPrefix || tourCode
   };
+}
+
+export interface ParentTourGroup<T = any> {
+  groupId: string;
+  sku: string;
+  name: string;
+  destination: string;
+  duration: string;
+  airline: string;
+  hotel: string;
+  itineraryPdfUrl?: string;
+  departures: T[];
+  totalSeats: number;
+  availableSeats: number;
+  minPrice: number;
+  primaryTour: T;
+  wpProductId?: number | null;
+}
+
+/**
+ * Gom nhóm danh sách các ngày khởi hành thành các Sản Phẩm Mẹ (Parent Tour Group)
+ * Gom nhóm theo:
+ *  1. wp_product_sku (nếu đã gán cùng SKU Website, ví dụ OBAU-SYDMEL-JQ)
+ *  2. wp_product_id (nếu đã liên kết cùng sản phẩm WooCommerce)
+ *  3. Tiền tố SKU bóc tách (nếu khác mã tour) hoặc Tên chương trình tour
+ */
+export function groupToursByParentProduct<T extends {
+  id: string;
+  name: string;
+  code: string;
+  departure_time?: string;
+  start_date?: string;
+  price?: number;
+  price_adult?: number;
+  total_seats?: number;
+  available_seats?: number;
+  destination?: string;
+  duration?: string;
+  airline?: string;
+  hotel?: string;
+  itinerary_pdf_url?: string;
+  wp_product_id?: number | string | null;
+  wp_product_sku?: string | null;
+}>(tours: T[]): ParentTourGroup<T>[] {
+  const groupsMap = new Map<string, T[]>();
+
+  tours.forEach(tour => {
+    let groupKey = '';
+
+    if (tour.wp_product_sku && tour.wp_product_sku.trim()) {
+      groupKey = `SKU:${normalizeSku(tour.wp_product_sku)}`;
+    } else if (tour.wp_product_id) {
+      groupKey = `WP_ID:${tour.wp_product_id}`;
+    } else {
+      const prefix = extractSkuPrefix(tour.code);
+      if (prefix && prefix !== tour.code) {
+        groupKey = `PREFIX:${normalizeSku(prefix)}`;
+      } else {
+        const cleanName = (tour.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        groupKey = `NAME:${cleanName}`;
+      }
+    }
+
+    const existing = groupsMap.get(groupKey) || [];
+    existing.push(tour);
+    groupsMap.set(groupKey, existing);
+  });
+
+  const parentGroups: ParentTourGroup<T>[] = [];
+
+  groupsMap.forEach((departures, groupKey) => {
+    // Sắp xếp các đợt theo ngày khởi hành tăng dần
+    const sorted = [...departures].sort((a, b) => {
+      const timeA = new Date(a.departure_time || a.start_date || 0).getTime();
+      const timeB = new Date(b.departure_time || b.start_date || 0).getTime();
+      return timeA - timeB;
+    });
+
+    const primaryTour = sorted[0];
+    const explicitSku = sorted.find(t => t.wp_product_sku?.trim())?.wp_product_sku?.trim();
+    const explicitWpId = sorted.find(t => t.wp_product_id)?.wp_product_id;
+
+    const parentSku = explicitSku || extractSkuPrefix(primaryTour.code) || primaryTour.code;
+    const totalSeats = sorted.reduce((sum, t) => sum + Number(t.total_seats || 0), 0);
+    const availableSeats = sorted.reduce((sum, t) => sum + Number(t.available_seats ?? t.total_seats ?? 0), 0);
+
+    const prices = sorted
+      .map(t => Number(t.price_adult || t.price || 0))
+      .filter(p => p > 0);
+    const minPrice = prices.length > 0 ? Math.min(...prices) : Number(primaryTour.price_adult || primaryTour.price || 0);
+
+    parentGroups.push({
+      groupId: groupKey,
+      sku: parentSku,
+      name: primaryTour.name,
+      destination: primaryTour.destination || '',
+      duration: primaryTour.duration || '',
+      airline: primaryTour.airline || '',
+      hotel: primaryTour.hotel || '',
+      itineraryPdfUrl: primaryTour.itinerary_pdf_url,
+      departures: sorted,
+      totalSeats,
+      availableSeats,
+      minPrice,
+      primaryTour,
+      wpProductId: explicitWpId ? Number(explicitWpId) : null
+    });
+  });
+
+  return parentGroups;
 }

@@ -2017,7 +2017,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
               price_visa_tour: Number(t.price_visa_tour || 0),
               start_date: t.start_date || (t.departure_time ? t.departure_time.substring(0, 10) : ''),
               end_date: t.end_date || (t.return_time ? t.return_time.substring(0, 10) : ''),
-              status: t.status
+              status: t.status,
+              wp_product_id: t.wp_product_id,
+              wp_product_sku: t.wp_product_sku,
+              wp_sync_status: t.wp_sync_status,
+              wp_last_synced_at: t.wp_last_synced_at,
+              wp_sync_message: t.wp_sync_message
             }));
             setTours(fetchedTours);
             console.log('Đã nạp thành công Tours từ Supabase');
@@ -3306,6 +3311,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           end_date: t.end_date || (t.return_time ? t.return_time.substring(0, 10) : ''),
           status: t.status,
           wp_product_id: t.wp_product_id,
+          wp_product_sku: t.wp_product_sku,
           wp_sync_status: t.wp_sync_status,
           wp_last_synced_at: t.wp_last_synced_at,
           wp_sync_message: t.wp_sync_message
@@ -3448,7 +3454,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           visa_country: cleanValueForSupabase(tourData.visa_country),
           visa_service_type: cleanValueForSupabase(tourData.visa_service_type),
           visa_speed: cleanValueForSupabase(tourData.visa_speed),
-          price_visa_tour: cleanValueForSupabase(tourData.price_visa_tour, true)
+          price_visa_tour: cleanValueForSupabase(tourData.price_visa_tour, true),
+          wp_product_sku: cleanValueForSupabase(tourData.wp_product_sku)
         };
 
         let currentPayload = { ...initialPayload };
@@ -3806,6 +3813,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           departure_time: cleanValueForSupabase(updatedTour.departure_time),
           return_time: cleanValueForSupabase(updatedTour.return_time),
           airline: cleanValueForSupabase(updatedTour.airline),
+          wp_product_sku: cleanValueForSupabase(updatedTour.wp_product_sku),
         };
 
         let currentPayload = { ...updatePayload };

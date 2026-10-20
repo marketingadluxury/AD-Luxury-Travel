@@ -1184,6 +1184,7 @@ END $$;
 
 -- Bổ sung các cột trạng thái đồng bộ WordPress vào bảng tours
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_product_id BIGINT;
+ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_product_sku TEXT;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_sync_status TEXT DEFAULT 'not_synced';
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_last_synced_at TIMESTAMPTZ;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_sync_message TEXT;

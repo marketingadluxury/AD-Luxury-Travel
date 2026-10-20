@@ -695,6 +695,7 @@ export default function ToursManagement() {
   // Bulk creation states
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkBaseTour, setBulkBaseTour] = useState<Tour | null>(null);
+  const [bulkSeriesSku, setBulkSeriesSku] = useState<string>('');
   const [bulkCustomDate, setBulkCustomDate] = useState<string>('');
   const [bulkDatesList, setBulkDatesList] = useState<Array<{ date: Date; selected: boolean }>>([]);
 
@@ -708,6 +709,7 @@ export default function ToursManagement() {
       return;
     }
     setBulkBaseTour(tour);
+    setBulkSeriesSku(tour.wp_product_sku || extractSkuPrefix(tour.code) || '');
     setBulkCustomDate('');
     setBulkDatesList([]);
     setShowBulkModal(true);
@@ -818,6 +820,8 @@ export default function ToursManagement() {
         organization_name: bulkBaseTour.organization_name || undefined,
         group_leader_contact: bulkBaseTour.group_leader_contact || undefined,
         custom_requirements: bulkBaseTour.custom_requirements || undefined,
+        wp_product_sku: bulkSeriesSku.trim().toUpperCase() || bulkBaseTour.wp_product_sku || undefined,
+        wp_product_id: bulkBaseTour.wp_product_id || undefined,
       };
 
       addTour(newTourData);
@@ -840,6 +844,7 @@ export default function ToursManagement() {
 
   // Tour Form State (for both create & edit)
   const [code, setCode] = useState('');
+  const [wpProductSku, setWpProductSku] = useState('');
   const [isCodeDuplicate, setIsCodeDuplicate] = useState(false);
 
   useEffect(() => {
@@ -1100,6 +1105,7 @@ export default function ToursManagement() {
     setContractUploadError(null);
     setItineraryUploadError(null);
     setCode(tour.code);
+    setWpProductSku(tour.wp_product_sku || '');
     setName(tour.name);
     setDestination(tour.destination || '');
     setDuration(tour.duration);
@@ -1444,6 +1450,7 @@ export default function ToursManagement() {
   // Reset/Clear Form State
   const resetForm = () => {
     setCode('');
+    setWpProductSku('');
     setName('');
     setDestination('');
     setDuration('5 ngày 4 đêm');
@@ -1606,6 +1613,7 @@ export default function ToursManagement() {
         organization_name: privateCustomerName,
         group_leader_contact: privateCustomerPhone,
         custom_requirements: privateCustomerEmail ? `Email: ${privateCustomerEmail}` : undefined,
+        wp_product_sku: wpProductSku.trim().toUpperCase() || undefined,
       };
     } else {
       tourData = {
@@ -1658,6 +1666,7 @@ export default function ToursManagement() {
         visa_country: visaCountry || (tourType === 'visa' ? destination : undefined),
         visa_service_type: visaServiceType || undefined,
         visa_speed: visaSpeed || undefined,
+        wp_product_sku: wpProductSku.trim().toUpperCase() || undefined,
       };
     }
 
@@ -2173,6 +2182,39 @@ export default function ToursManagement() {
                         className="w-full"
                         buttonClassName="w-full h-9 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                       />
+                    </div>
+
+                    <div className="md:col-span-4 bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Globe className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <label className="text-xs font-bold text-indigo-950 uppercase tracking-wider">
+                            Mã SKU Sản Phẩm Website (WooCommerce)
+                          </label>
+                          {code && !wpProductSku && (
+                            <button
+                              type="button"
+                              onClick={() => setWpProductSku(extractSkuPrefix(code))}
+                              className="text-[11px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                              title="Tự động bóc tách tiền tố SKU từ Mã Tour"
+                            >
+                              Gợi ý: {extractSkuPrefix(code)} (Bấm để gán)
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-indigo-700 leading-relaxed">
+                          Mã SKU chung của chương trình tour trên website (VD: <strong className="font-mono">OBAU-SYDMEL-JQ</strong>). Tất cả các ngày khởi hành có cùng SKU này sẽ tự động gom về cùng 1 sản phẩm WooCommerce cha và cập nhật vào bảng lịch trình ACF.
+                        </p>
+                      </div>
+                      <div className="w-full sm:w-64 shrink-0">
+                        <input
+                          type="text"
+                          placeholder={code ? extractSkuPrefix(code) : 'Ví dụ: OBAU-SYDMEL-JQ'}
+                          className="w-full h-9 px-3 py-1.5 border border-indigo-300 rounded-lg text-xs font-mono font-bold text-indigo-900 bg-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 uppercase"
+                          value={wpProductSku}
+                          onChange={e => setWpProductSku(e.target.value.toUpperCase())}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -3511,6 +3553,11 @@ export default function ToursManagement() {
                                             Tự vận hành
                                           </span>
                                         )}
+                                        {t.wp_product_sku && (
+                                          <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded flex items-center gap-1" title={`Mã SKU Tour Website: ${t.wp_product_sku}`}>
+                                            <Tag className="w-2.5 h-2.5 text-indigo-600" /> {t.wp_product_sku}
+                                          </span>
+                                        )}
                                         {t.wp_product_id && (
                                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1" title={`Đã đồng bộ WooCommerce Product ID #${t.wp_product_id}`}>
                                             <Globe className="w-3 h-3 text-emerald-600" /> WC #{t.wp_product_id}
@@ -4038,6 +4085,19 @@ export default function ToursManagement() {
                   <div className="pt-2 border-t border-slate-100 flex justify-between text-xs">
                     <span className="text-slate-500 font-semibold">Mã gốc:</span>
                     <strong className="text-slate-800 font-mono">{bulkBaseTour.code}</strong>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                    <label className="text-[11px] font-bold text-indigo-900 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-indigo-600" /> Mã SKU Web dùng chung cho chuỗi:
+                    </label>
+                    <input
+                      type="text"
+                      value={bulkSeriesSku}
+                      onChange={e => setBulkSeriesSku(e.target.value.toUpperCase())}
+                      placeholder={bulkBaseTour.wp_product_sku || extractSkuPrefix(bulkBaseTour.code) || 'Ví dụ: OBAU-SYDMEL-JQ'}
+                      className="w-full h-8 px-2.5 border border-indigo-200 rounded-lg text-xs font-mono font-bold text-indigo-900 bg-indigo-50/40 uppercase focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <p className="text-[10px] text-slate-500">Tất cả {bulkDatesList.length || 'các'} đợt khởi hành tạo ra sẽ mang cùng SKU này để tự động gom về 1 tour trên Web.</p>
                   </div>
                 </div>
 

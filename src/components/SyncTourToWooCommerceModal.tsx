@@ -215,9 +215,16 @@ export const SyncTourToWooCommerceModal: React.FC<SyncTourToWooCommerceModalProp
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 my-4 space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-0.5">
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
-                {tour.code}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                  {tour.code}
+                </span>
+                {tour.wp_product_sku && (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                    <Tag className="w-2.5 h-2.5" /> SKU Web: {tour.wp_product_sku}
+                  </span>
+                )}
+              </div>
               <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{tour.name}</h4>
             </div>
             <span className="text-xs font-black text-rose-600 shrink-0">
