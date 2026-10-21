@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractSkuFromTourCode, findMatchedProductForTour } from '../skuHelper';
+import { extractSkuFromTourCode, findMatchedProductForTour } from '../skuUtils';
 
 describe('extractSkuFromTourCode', () => {
   it('trích xuất tiền tố SKU chuẩn xác khi mã lịch trình có ngày/đợt ở đuôi', () => {

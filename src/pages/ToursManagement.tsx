@@ -63,69 +63,9 @@ import { BulkSyncWooCommerceModal } from '@/components/BulkSyncWooCommerceModal'
 import { CustomSelect } from '@/components/CustomSelect';
 import DashboardOperator from '@/components/DashboardOperator';
 import TourCostsManagement from '@/components/TourCostsManagement';
-
-// Formatted numeric input component with thousands separators on input
-const NumericFormatInput: React.FC<{
-  label: string;
-  value: number | '';
-  onChange: (val: number | '') => void;
-  required?: boolean;
-  placeholder?: string;
-  className?: string;
-  labelClassName?: string;
-  inputClassName?: string;
-}> = ({
-  label,
-  value,
-  onChange,
-  required = false,
-  placeholder = '',
-  className = '',
-  labelClassName = 'block text-sm font-medium text-gray-700 mb-1',
-  inputClassName = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white'
-}) => {
-  const [displayValue, setDisplayValue] = useState(() => {
-    if (value === '' || value === undefined || value === null) return '';
-    return new Intl.NumberFormat('vi-VN').format(value);
-  });
-
-  useEffect(() => {
-    if (value === '' || value === undefined || value === null) {
-      setDisplayValue('');
-    } else {
-      const parsedDisplay = displayValue.replace(/\./g, '');
-      if (Number(parsedDisplay) !== value) {
-        setDisplayValue(new Intl.NumberFormat('vi-VN').format(value));
-      }
-    }
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\D/g, ''); // digits only
-    if (rawValue === '') {
-      setDisplayValue('');
-      onChange('');
-    } else {
-      const numValue = Number(rawValue);
-      setDisplayValue(new Intl.NumberFormat('vi-VN').format(numValue));
-      onChange(numValue);
-    }
-  };
-
-  return (
-    <div className={className}>
-      <label className={labelClassName}>{label}</label>
-      <input
-        type="text"
-        required={required}
-        placeholder={placeholder}
-        className={inputClassName}
-        value={displayValue}
-        onChange={handleChange}
-      />
-    </div>
-  );
-};
+import { extractSkuPrefix } from '@/utils/skuUtils';
+import { NumericFormatInput } from '@/components/NumericFormatInput';
+import { BulkSeriesModal } from '@/components/tours/BulkSeriesModal';
 
 // Helper to format tour code based on base code and departure date (DDMMYY)
 const getFormattedCode = (currentCode: string, departureDateIso: string) => {
@@ -695,9 +635,6 @@ export default function ToursManagement() {
   // Bulk creation states
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkBaseTour, setBulkBaseTour] = useState<Tour | null>(null);
-  const [bulkSeriesSku, setBulkSeriesSku] = useState<string>('');
-  const [bulkCustomDate, setBulkCustomDate] = useState<string>('');
-  const [bulkDatesList, setBulkDatesList] = useState<Array<{ date: Date; selected: boolean }>>([]);
 
   const handleOpenBulkModal = (tour: Tour) => {
     if (!canManageTours) {
@@ -709,127 +646,9 @@ export default function ToursManagement() {
       return;
     }
     setBulkBaseTour(tour);
-    setBulkSeriesSku(tour.wp_product_sku || extractSkuPrefix(tour.code) || '');
-    setBulkCustomDate('');
-    setBulkDatesList([]);
     setShowBulkModal(true);
   };
 
-  const handleAddBulkDate = () => {
-    if (!bulkCustomDate || !bulkBaseTour) {
-      toast.error('Vui lòng chọn ngày khởi hành trước!');
-      return;
-    }
-    const baseDep = new Date(bulkBaseTour.departure_time);
-    const dateToAdd = new Date(bulkCustomDate);
-    // Set hours and minutes to match base tour's departure time so they have the exact same time
-    dateToAdd.setHours(baseDep.getHours(), baseDep.getMinutes(), 0, 0);
-
-    const isDuplicate = bulkDatesList.some(item => item.date.getTime() === dateToAdd.getTime());
-    if (isDuplicate) {
-      toast.error('Ngày khởi hành này đã tồn tại trong danh sách!');
-      return;
-    }
-    setBulkDatesList(prev => [...prev, { date: dateToAdd, selected: true }].sort((a, b) => a.date.getTime() - b.date.getTime()));
-    setBulkCustomDate('');
-  };
-
-  const handleCreateBulkSeries = () => {
-    if (!bulkBaseTour) return;
-    const selectedDates = bulkDatesList.filter(d => d.selected);
-    if (selectedDates.length === 0) {
-      toast.error('Vui lòng chọn hoặc thêm ít nhất một ngày khởi hành hợp lệ!');
-      return;
-    }
-
-    // Calculate duration difference in MS from base tour
-    const baseDep = new Date(bulkBaseTour.departure_time);
-    const baseRet = new Date(bulkBaseTour.return_time);
-    const durationMs = baseRet.getTime() - baseDep.getTime();
-
-    selectedDates.forEach(({ date }) => {
-      // Use getFormattedCode to generate correct DDMMYY structure
-      const generatedCode = getFormattedCode(bulkBaseTour.code, date.toISOString());
-
-      // Calculate return date
-      const generatedReturnTime = new Date(date.getTime() + durationMs);
-
-      // Visa deadline (if base tour had one, shift it by same difference)
-      let generatedVisaDeadline: string | undefined = undefined;
-      if (bulkBaseTour.visa_deadline) {
-        const baseVisa = new Date(bulkBaseTour.visa_deadline);
-        const visaDiffMs = baseDep.getTime() - baseVisa.getTime();
-        generatedVisaDeadline = new Date(date.getTime() - visaDiffMs).toISOString();
-      }
-
-      // Ticket deadline (if base tour had one, shift it by same difference)
-      let generatedTicketDeadline: string | undefined = undefined;
-      if (bulkBaseTour.ticket_deadline) {
-        const baseTicket = new Date(bulkBaseTour.ticket_deadline);
-        const ticketDiffMs = baseDep.getTime() - baseTicket.getTime();
-        generatedTicketDeadline = new Date(date.getTime() - ticketDiffMs).toISOString();
-      }
-
-      // Clone notice sections
-      let noticeSecs = DEFAULT_NOTICE_SECTIONS;
-      if (bulkBaseTour.notice_sections) {
-        try {
-          noticeSecs = JSON.parse(bulkBaseTour.notice_sections);
-        } catch (e) {
-          // fallback
-        }
-      }
-
-      const newTourData = {
-        code: generatedCode,
-        name: bulkBaseTour.name,
-        destination: bulkBaseTour.destination || 'Chưa xác định',
-        start_date: date.toISOString().substring(0, 10),
-        end_date: generatedReturnTime.toISOString().substring(0, 10),
-        duration: bulkBaseTour.duration,
-        departure_time: date.toISOString(),
-        return_time: generatedReturnTime.toISOString(),
-        airline: bulkBaseTour.airline || 'Vietnam Airlines',
-        hotel: bulkBaseTour.hotel || 'Khách sạn 4*',
-        price: bulkBaseTour.price,
-        commission: bulkBaseTour.commission,
-        total_seats: bulkBaseTour.total_seats,
-        flight_out: bulkBaseTour.flight_out || undefined,
-        flight_out_transit: bulkBaseTour.flight_out_transit || undefined,
-        flight_in: bulkBaseTour.flight_in || undefined,
-        flight_in_transit: bulkBaseTour.flight_in_transit || undefined,
-        transit_info: bulkBaseTour.transit_info || undefined,
-        guide_name: bulkBaseTour.guide_name || undefined,
-        guide_phone: bulkBaseTour.guide_phone || undefined,
-        ticket_status: bulkBaseTour.ticket_status || 'CHỜ XUẤT VÉ',
-        visa_deadline: generatedVisaDeadline,
-        ticket_deadline: generatedTicketDeadline,
-        description: bulkBaseTour.description || undefined,
-        tour_status: 'available' as TourStatus,
-        category: bulkBaseTour.category || categories[0],
-        hold_duration_hours: bulkBaseTour.hold_duration_hours || 48,
-        price_adult: bulkBaseTour.price_adult ?? bulkBaseTour.price,
-        price_child: bulkBaseTour.price_child ?? Math.round(bulkBaseTour.price * 0.8),
-        price_infant: bulkBaseTour.price_infant ?? Math.round(bulkBaseTour.price * 0.3),
-        single_room_surcharge: bulkBaseTour.single_room_surcharge ?? 7500000,
-        itinerary_pdf_url: bulkBaseTour.itinerary_pdf_url || undefined,
-        notice_sections: JSON.stringify(noticeSecs),
-        tour_type: bulkBaseTour.tour_type || 'partner',
-        partner_name: bulkBaseTour.partner_name || undefined,
-        partner_contact: bulkBaseTour.partner_contact || undefined,
-        organization_name: bulkBaseTour.organization_name || undefined,
-        group_leader_contact: bulkBaseTour.group_leader_contact || undefined,
-        custom_requirements: bulkBaseTour.custom_requirements || undefined,
-        wp_product_sku: bulkSeriesSku.trim().toUpperCase() || bulkBaseTour.wp_product_sku || undefined,
-        wp_product_id: bulkBaseTour.wp_product_id || undefined,
-      };
-
-      addTour(newTourData);
-    });
-
-    toast.success(`Đã khởi tạo thành công chuỗi gồm ${selectedDates.length} ngày khởi hành cho Tour series này!`);
-    setShowBulkModal(false);
-  };
 
   // Form toggles
   const [showAddForm, setShowAddForm] = useState(false);
@@ -4041,190 +3860,15 @@ export default function ToursManagement() {
       )}
 
       {/* MODAL BỘ TẠO TOUR KHỞI HÀNH HÀNG LOẠT (SERIES) */}
-      {showBulkModal && bulkBaseTour && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-purple-100 text-purple-700 rounded-lg">
-                  <Grid className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-base">Bộ tạo đoàn khởi hành hàng loạt</h3>
-                  <p className="text-xs text-slate-500 font-semibold">Tự động hóa nhân bản tour sang nhiều ngày khởi hành tùy chọn trong tích tắc.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBulkModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-full transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <BulkSeriesModal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        baseTour={bulkBaseTour}
+        onAddTour={addTour}
+        categories={categories}
+        defaultNoticeSections={DEFAULT_NOTICE_SECTIONS}
+      />
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-50/40">
-              {/* Left Column: Rules configuration (5 cols) */}
-              <div className="md:col-span-5 space-y-4">
-                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="text-xs font-black text-purple-700 uppercase tracking-wider">Hành trình gốc</h4>
-                  <div>
-                    <div className="text-xs font-bold text-slate-800 line-clamp-2 uppercase" title={bulkBaseTour.name}>
-                      {bulkBaseTour.name}
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-semibold mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                      <span>{bulkBaseTour.duration}</span>
-                      <span>•</span>
-                      <span>Hotel: {bulkBaseTour.hotel}</span>
-                      <span>•</span>
-                      <span>{bulkBaseTour.airline}</span>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-slate-100 flex justify-between text-xs">
-                    <span className="text-slate-500 font-semibold">Mã gốc:</span>
-                    <strong className="text-slate-800 font-mono">{bulkBaseTour.code}</strong>
-                  </div>
-                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                    <label className="text-[11px] font-bold text-indigo-900 flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5 text-indigo-600" /> Mã SKU Web dùng chung cho chuỗi:
-                    </label>
-                    <input
-                      type="text"
-                      value={bulkSeriesSku}
-                      onChange={e => setBulkSeriesSku(e.target.value.toUpperCase())}
-                      placeholder={bulkBaseTour.wp_product_sku || extractSkuPrefix(bulkBaseTour.code) || 'Ví dụ: OBAU-SYDMEL-JQ'}
-                      className="w-full h-8 px-2.5 border border-indigo-200 rounded-lg text-xs font-mono font-bold text-indigo-900 bg-indigo-50/40 uppercase focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <p className="text-[10px] text-slate-500">Tất cả {bulkDatesList.length || 'các'} đợt khởi hành tạo ra sẽ mang cùng SKU này để tự động gom về 1 tour trên Web.</p>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm space-y-4">
-                  <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">Thêm ngày khởi hành mới</h4>
-                  
-                  {/* Select Custom Date using custom VietnameseDateTimePicker */}
-                  <VietnameseDateTimePicker
-                    label="Chọn Ngày khởi hành muốn tạo"
-                    required
-                    showTime={false}
-                    value={bulkCustomDate}
-                    onChange={setBulkCustomDate}
-                    placeholder="Chọn ngày khởi hành..."
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleAddBulkDate}
-                    className="w-full h-9 inline-flex items-center justify-center px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black transition-all shadow-sm"
-                  >
-                    <Plus className="w-4 h-4 mr-1.5" />
-                    Thêm ngày này vào danh sách
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Column: Generated Dates Preview (7 cols) */}
-              <div className="md:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full min-h-[350px]">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider font-sans">Danh sách đoàn sắp khởi tạo</span>
-                  <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded">
-                    Tổng số: {bulkDatesList.length} ngày
-                  </span>
-                </div>
-
-                <div className="overflow-y-auto divide-y divide-slate-100 flex-1 max-h-[320px]">
-                  {bulkDatesList.length === 0 ? (
-                    <div className="text-center py-16 text-slate-400 text-xs px-6">
-                      <p className="font-semibold">Chưa có ngày khởi hành nào được chọn.</p>
-                      <p className="text-[11px] mt-1 text-slate-400">Vui lòng chọn ngày khởi hành ở cột bên trái và bấm thêm.</p>
-                    </div>
-                  ) : (
-                    bulkDatesList.map((item, idx) => {
-                      // Calculate return date preview
-                      const baseDep = new Date(bulkBaseTour.departure_time);
-                      const baseRet = new Date(bulkBaseTour.return_time);
-                      const durationMs = baseRet.getTime() - baseDep.getTime();
-                      const retDate = new Date(item.date.getTime() + durationMs);
-
-                      // Format for preview code using the helper
-                      const tourCodePreview = getFormattedCode(bulkBaseTour.code, item.date.toISOString());
-
-                      // Day name translation to Vietnamese
-                      const dayNamesMap = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-                      const vietnameseDayName = dayNamesMap[item.date.getDay()];
-
-                      return (
-                        <div key={idx} className={`p-3.5 flex items-center justify-between hover:bg-slate-50/60 transition-colors ${!item.selected ? 'opacity-50' : ''}`}>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">
-                                {tourCodePreview}
-                              </span>
-                              <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider">
-                                {vietnameseDayName}
-                              </span>
-                            </div>
-                            <div className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5">
-                              <span>Đi: <strong className="text-slate-800">{format(item.date, 'dd/MM/yyyy HH:mm')}</strong></span>
-                              <span>→</span>
-                              <span>Về: <strong className="text-slate-800">{format(retDate, 'dd/MM/yyyy HH:mm')}</strong></span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={item.selected}
-                              onChange={(e) => {
-                                const updated = [...bulkDatesList];
-                                updated[idx].selected = e.target.checked;
-                                setBulkDatesList(updated);
-                              }}
-                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer animate-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setBulkDatesList(prev => prev.filter((_, i) => i !== idx));
-                              }}
-                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors"
-                              title="Xóa ngày này"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-150 flex justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowBulkModal(false)}
-                className="h-9 px-4 text-xs font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                type="button"
-                disabled={bulkDatesList.filter(d => d.selected).length === 0}
-                onClick={handleCreateBulkSeries}
-                className="h-9 px-5 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center"
-              >
-                <Check className="w-4 h-4 mr-1.5" />
-                Xác nhận tạo {bulkDatesList.filter(d => d.selected).length} Tour khởi hành
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Custom Delete Confirmation Modal */}
       {catToDelete && (

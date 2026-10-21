@@ -26,8 +26,8 @@ export function extractSkuPrefix(code: string): string {
 
   // 1. Nhận diện các mẫu ngày tháng / mã đợt khởi hành ở đuôi:
   // - 4 đến 8 chữ số đại diện cho ngày tháng: ví dụ 201026 (YYMMDD), 20261015 (YYYYMMDD), 151026 (DDMMYY), 1510 (DDMM)
-  // - Ký hiệu đợt khởi hành: D1, D01, DOT1, DOT-1, T10, T11 (tháng 10, tháng 11)
-  const departureSuffixRegex = /^(.*?)([-_])([0-9]{4,8}|[dD][0-9]{1,3}|[dD][oO][tT][0-9]{1,3}|[tT][0-9]{1,2})$/i;
+  // - Ký hiệu đợt khởi hành: D1, D01, K01, DOT1, DOT-1, KY1, T10, T11 (tháng 10, tháng 11)
+  const departureSuffixRegex = /^(.*?)([-_])([0-9]{4,8}|[dDkK][0-9]{1,3}|[dD][oO][tT][0-9]{1,3}|[kK][yY][0-9]{1,3}|[tT][0-9]{1,2})$/i;
   const match = trimmed.match(departureSuffixRegex);
   if (match && match[1]) {
     return match[1].trim();
@@ -295,3 +295,69 @@ export function groupToursByParentProduct<T extends {
 
   return parentGroups;
 }
+
+export const groupToursByProgram = groupToursByParentProduct;
+
+/**
+ * Chuẩn hóa text tiếng Việt không dấu
+ */
+export function normalizeText(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .trim();
+}
+
+/**
+ * Bí danh tương thích cho extractSkuPrefix
+ */
+export const extractSkuFromTourCode = extractSkuPrefix;
+
+/**
+ * Tìm sản phẩm WooCommerce tương ứng cho một Tour CRM (hợp nhất từ skuHelper)
+ */
+export function findMatchedProductForTour<T extends {
+  id: number;
+  name: string;
+  sku?: string;
+  permalink?: string;
+  departures?: string[];
+}>(
+  tour: { id: string; name?: string; code?: string; wp_product_id?: string | number | null; wp_product_sku?: string | null },
+  productsList: T[]
+): {
+  targetProductId: number | null;
+  matchedType: 'linked' | 'sku_matched' | 'name_matched' | 'new';
+  matchedSku?: string;
+  matchedProductName?: string;
+  productUrl?: string;
+} {
+  const normalizedTour = {
+    id: tour.id,
+    name: tour.name || '',
+    code: tour.code || '',
+    wp_product_id: tour.wp_product_id,
+    wp_product_sku: tour.wp_product_sku
+  };
+  const result = matchTourToWooCommerceProduct(normalizedTour, productsList);
+  
+  let mappedType: 'linked' | 'sku_matched' | 'name_matched' | 'new' = 'new';
+  if (result.matchedType === 'linked') {
+    mappedType = 'linked';
+  } else if (result.matchedType === 'sku_matched' || result.matchedType === 'departure_matched') {
+    mappedType = 'sku_matched';
+  } else if (result.matchedType === 'auto_matched') {
+    mappedType = 'name_matched';
+  }
+
+  return {
+    targetProductId: result.targetProductId,
+    matchedType: mappedType,
+    matchedSku: result.matchedProductSku,
+    matchedProductName: result.matchedProductName,
+    productUrl: result.productUrl
+  };
+}
+

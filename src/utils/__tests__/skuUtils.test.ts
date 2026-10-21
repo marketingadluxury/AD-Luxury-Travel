@@ -157,18 +157,17 @@ describe('groupToursByProgram (Gom nhóm theo Chương trình Tour / SKU Web)', 
     }
   ];
 
-  it('gom nhóm nhiều ngày khởi hành có cùng wp_product_sku về 1 TourProgramGroup duy nhất', () => {
+  it('gom nhóm nhiều ngày khởi hành có cùng wp_product_sku về 1 ParentTourGroup duy nhất', () => {
     const tours = [
       { id: 't1', name: 'Tour Úc 7N6Đ (Đợt 1)', code: 'OBAU231026', wp_product_sku: 'OBAU-SYDMEL-JQ' },
       { id: 't2', name: 'Tour Úc 7N6Đ (Đợt 2)', code: 'OBAU051126', wp_product_sku: 'OBAU-SYDMEL-JQ' },
       { id: 't3', name: 'Tour Úc 7N6Đ (Đợt 3)', code: 'OBAU191126', wp_product_sku: 'OBAU-SYDMEL-JQ' }
     ];
 
-    const groups = groupToursByProgram(tours, mockProducts);
+    const groups = groupToursByProgram(tours);
     expect(groups.length).toBe(1);
-    expect(groups[0].skuWeb).toBe('OBAU-SYDMEL-JQ');
-    expect(groups[0].tours.length).toBe(3);
-    expect(groups[0].targetProductId).toBe(201);
+    expect(groups[0].sku).toBe('OBAU-SYDMEL-JQ');
+    expect(groups[0].departures.length).toBe(3);
   });
 
   it('gom nhóm các ngày khởi hành có cùng tên chương trình tour', () => {
@@ -177,9 +176,10 @@ describe('groupToursByProgram (Gom nhóm theo Chương trình Tour / SKU Web)', 
       { id: 't5', name: 'Tour Singapore - Malaysia 5N4Đ', code: 'SINMAL-02' }
     ];
 
-    const groups = groupToursByProgram(tours, []);
+    const groups = groupToursByProgram(tours);
     expect(groups.length).toBe(1);
-    expect(groups[0].tours.length).toBe(2);
-    expect(groups[0].programName).toBe('Tour Singapore - Malaysia 5N4Đ');
+    expect(groups[0].departures.length).toBe(2);
+    expect(groups[0].name).toBe('Tour Singapore - Malaysia 5N4Đ');
   });
 });
+

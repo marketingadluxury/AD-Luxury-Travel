@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { useCRM } from '@/context/CRMContext';
 import { Tour, TourStatus } from '@/types';
 import { CustomSelect } from '@/components/CustomSelect';
+import { NumericFormatInput } from '@/components/NumericFormatInput';
 import {
   Plus,
   User,
@@ -53,57 +54,7 @@ const getItineraryFiles = (urlStr: string): { name: string; url: string }[] => {
   }
 };
 
-// Formatted numeric input component with thousands separators on input
-const NumericFormatInput: React.FC<{
-  label: string;
-  value: number | '';
-  onChange: (val: number | '') => void;
-  required?: boolean;
-  placeholder?: string;
-  className?: string;
-}> = ({ label, value, onChange, required = false, placeholder = '', className = '' }) => {
-  const [displayValue, setDisplayValue] = useState(() => {
-    if (value === '' || value === undefined || value === null) return '';
-    return new Intl.NumberFormat('vi-VN').format(value);
-  });
-
-  useEffect(() => {
-    if (value === '' || value === undefined || value === null) {
-      setDisplayValue('');
-    } else {
-      const parsedDisplay = displayValue.replace(/\./g, '');
-      if (Number(parsedDisplay) !== value) {
-        setDisplayValue(new Intl.NumberFormat('vi-VN').format(value));
-      }
-    }
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\D/g, ''); // digits only
-    if (rawValue === '') {
-      setDisplayValue('');
-      onChange('');
-    } else {
-      const numValue = Number(rawValue);
-      setDisplayValue(new Intl.NumberFormat('vi-VN').format(numValue));
-      onChange(numValue);
-    }
-  };
-
-  return (
-    <div className={className}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input
-        type="text"
-        required={required}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-        value={displayValue}
-        onChange={handleChange}
-      />
-    </div>
-  );
-};
+// End of getItineraryFiles
 
 // Helper to format tour code based on base code and departure date (DDMMYY)
 const getFormattedCode = (currentCode: string, departureDateIso: string) => {

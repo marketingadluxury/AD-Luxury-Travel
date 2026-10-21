@@ -6,6 +6,26 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.102 Refactor Toàn Diện Mã Nguồn, Loại Bỏ Code Thừa & Hệ Thống Hóa Modular Architecture
+- **Mô tả yêu cầu:**
+  - Refactor toàn bộ mã nguồn: Loại bỏ code thừa và tiện ích trùng lặp, hệ thống hóa lại cấu trúc components theo domain nghiệp vụ, giảm kích thước các file monolithic, bảo đảm 100% tính năng hoạt động ổn định và thuận tiện cho bảo trì, mở rộng về sau.
+- **Giải pháp triển khai:**
+  1. **Loại bỏ trùng lặp & Hợp nhất tiện ích:**
+     - Xóa bỏ `src/utils/skuHelper.ts` cũ, hợp nhất toàn bộ hàm so khớp 4 tầng và bóc tách tiền tố SKU regex sang `src/utils/skuUtils.ts`.
+     - Tách component nhập số tiền phân tách hàng nghìn `NumericFormatInput` dùng chung tại `src/components/common/NumericFormatInput.tsx`, loại bỏ các khai báo inline trùng lặp ở `ToursManagement.tsx` và `VisaServices.tsx`.
+  2. **Hệ thống hóa cấu trúc Components theo Domain:**
+     - Xây dựng các thư mục domain kèm barrel index:
+       + `src/components/common/`: DatePicker, CustomSelect, NumericFormatInput, ActionModal, TimeRangeFilter.
+       + `src/components/tours/`: BulkSeriesModal, BulkSyncWooCommerceModal, SyncTourToWooCommerceModal, TourCostsManagement, TourGallery, TourMediaUploader, DashboardOperator, HDVQuickLinkModal, HDVQuickUploadModal.
+       + `src/components/orders/`: EditOrderModal, EditPassengerModal, PaymentModal, PassengerInputModal, PassengerDocumentList, PotentialLeadsTab.
+       + `src/components/hr/`: LeaveBalanceManagement, LeaveManagementTab, CreateLeaveRequestModal, LeaveRequestPrintModal, PaymentProposalPrintModal, TimesheetManagement.
+       + `src/components/settings/`: GoogleDriveSettingsSection, MetaCapiSettingsSection, PancakeSettingsSection, WooCommerceSettingsSection, UserManagement, DesktopNotificationSettingsModal, TaxMcpConfigModal, DatabaseKeepAliveSettings, MetaAdsPerformanceDashboard.
+     - Tạo `src/components/index.ts` và `src/utils/index.ts` re-export trung tâm, đảm bảo 100% tương thích ngược không gãy bất kỳ import nào.
+  3. **Tách nhỏ module nguyên khối trong Quản lý Tour:**
+     - Tách `BulkSeriesModal.tsx` thành component độc lập trong `src/components/tours/`, giải phóng hơn 200 dòng code khỏi `ToursManagement.tsx`.
+  4. **Kiểm thử tự động:** Vượt qua 100% kiểm tra TypeScript linter (`npm run lint`), toàn bộ 69 bài Unit Tests Vitest (`npm test`), 21 kịch bản Simulation phân quyền (`npm run test:simulation`), và biên dịch thành công (`compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.101 Cơ Chế Bóc Tách Tiền Tố SKU, So Khớp 4 Tầng Thông Minh & Khắc Phục Lỗi Tải Sản Phẩm WooCommerce
 - **Mô tả yêu cầu & Vấn đề thực tế:**
   1. Website du lịch WooCommerce thiết kế mỗi tour là một sản phẩm mẹ với 1 mã SKU duy nhất và có nhiều ngày khởi hành trong bảng ACF Repeater. Trên CRM, mỗi tour là một đợt khởi hành gắn với một mã lịch trình riêng (ví dụ: `AD-US01-201026`). Cần xây dựng cơ chế tự động bóc tách tiền tố SKU và cập nhật đợt khởi hành vào bảng ACF kèm tính tổng chỗ trống.
