@@ -11,13 +11,17 @@ import {
   FileCheck2,
   Cloud,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Download,
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import { Order, Tour, Passenger } from '@/types';
 import { numberToVietnameseWords } from '@/utils/numberToWords';
 import { NumericFormatInput } from '@/components/common/NumericFormatInput';
 import { useCRM } from '@/context/CRMContext';
 import { safeFetchApi } from '@/lib/utils';
+import { exportElementToPdfBlob, downloadPdfBlob } from '@/utils/pdfGenerator';
 import toast from 'react-hot-toast';
 
 export interface TourContractCustomField {
@@ -77,20 +81,19 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
   passengers = [],
   onContractSaved
 }) => {
-  if (!isOpen || !order) return null;
-
   const { updateOrder } = useCRM();
   const [isSavingDrive, setIsSavingDrive] = useState(false);
-  const [currentContractUrl, setCurrentContractUrl] = useState<string | undefined>(order.contract_url);
+  const [currentContractUrl, setCurrentContractUrl] = useState<string | undefined>(order?.contract_url);
 
   useEffect(() => {
-    setCurrentContractUrl(order.contract_url);
-  }, [order.contract_url, order.id]);
+    setCurrentContractUrl(order?.contract_url);
+  }, [order?.contract_url, order?.id]);
 
   // Lọc hành khách thuộc đơn hàng
   const orderPassengers = useMemo(() => {
+    if (!order?.id) return [];
     return passengers.filter(p => p.order_id === order.id);
-  }, [passengers, order.id]);
+  }, [passengers, order?.id]);
 
   const firstPassenger = orderPassengers[0];
 
@@ -113,20 +116,20 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
 
   // Thông tin tiêu đề & số HĐ
   const currentYear = new Date().getFullYear();
-  const orderShortId = order.id.substring(0, 8).toUpperCase();
+  const orderShortId = order?.id ? order.id.substring(0, 8).toUpperCase() : '';
   const destinationName = tour?.destination || 'QUỐC TẾ';
   const defaultContractTitle = `HỢP ĐỒNG DỊCH VỤ DU LỊCH ${destinationName.toUpperCase()}`;
   
   // Format số hợp đồng theo mẫu: _____/HĐDV/2026 – [Mã Tour].[Tên Sale/Mã Đơn]
   const tourCodeClean = (tour?.code || 'TOUR').replace(/\s+/g, '');
-  const saleCodeClean = (order.created_by || orderShortId).replace(/\s+/g, '').toUpperCase().substring(0, 6);
+  const saleCodeClean = (order?.created_by || orderShortId || 'SALE').replace(/\s+/g, '').toUpperCase().substring(0, 6);
   const defaultContractNumber = `_____/HĐDV/${currentYear} – ${tourCodeClean}.${saleCodeClean}`;
 
   const [contractTitle, setContractTitle] = useState(defaultContractTitle);
   const [contractNumber, setContractNumber] = useState(defaultContractNumber);
   
   // Ngày lập hợp đồng: "ngày 04 tháng 06 năm 2026"
-  const createdDate = order.created_at ? new Date(order.created_at) : new Date();
+  const createdDate = order?.created_at ? new Date(order.created_at) : new Date();
   const [signDay, setSignDay] = useState(String(createdDate.getDate()).padStart(2, '0'));
   const [signMonth, setSignMonth] = useState(String(createdDate.getMonth() + 1).padStart(2, '0'));
   const [signYear, setSignYear] = useState(String(createdDate.getFullYear()));
@@ -147,34 +150,34 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
   const [visaRejectFee, setVisaRejectFee] = useState<number>(initialPartyA.visaRejectFee);
 
   // Bên B State (Bên sử dụng dịch vụ - Khách hàng)
-  const [partyBName, setPartyBName] = useState(order.customer_name || order.booker_name || '');
-  const [partyBAddress, setPartyBAddress] = useState(order.vat_address || 'Thành phố Hồ Chí Minh');
-  const [partyBPhone, setPartyBPhone] = useState(order.customer_phone || order.booker_phone || '');
+  const [partyBName, setPartyBName] = useState(order?.customer_name || order?.booker_name || '');
+  const [partyBAddress, setPartyBAddress] = useState(order?.vat_address || 'Thành phố Hồ Chí Minh');
+  const [partyBPhone, setPartyBPhone] = useState(order?.customer_phone || order?.booker_phone || '');
   const [partyBIdNumber, setPartyBIdNumber] = useState(firstPassenger?.passport_number || '');
 
   // Điều 1: Tuyến tour & Khách
   const [tourRoute, setTourRoute] = useState(tour?.name || `${destinationName} trọn gói`);
-  const [startDateStr, setStartDateStr] = useState(formatDate(tour?.start_date || order.created_at));
-  const [endDateStr, setEndDateStr] = useState(formatDate(tour?.end_date || order.created_at));
+  const [startDateStr, setStartDateStr] = useState(formatDate(tour?.start_date || order?.created_at));
+  const [endDateStr, setEndDateStr] = useState(formatDate(tour?.end_date || order?.created_at));
   const [tourDurationStr, setTourDurationStr] = useState(tour?.duration || '5 ngày 4 đêm');
   
   const totalPassengerCount = useMemo(() => {
-    if (order.adult_count !== undefined) {
+    if (order?.adult_count !== undefined) {
       return (order.adult_count || 0) + (order.child_count || 0) + (order.infant_count || 0);
     }
     return orderPassengers.length || 1;
-  }, [order.adult_count, order.child_count, order.infant_count, orderPassengers.length]);
+  }, [order?.adult_count, order?.child_count, order?.infant_count, orderPassengers.length]);
 
   // Điều 2: Bảng giá trị hợp đồng
-  const totalContractPrice = order.total_price || 0;
-  const adultCount = order.adult_count ?? orderPassengers.length ?? 1;
-  const childCount = order.child_count ?? 0;
-  const infantCount = order.infant_count ?? 0;
+  const totalContractPrice = order?.total_price || 0;
+  const adultCount = order?.adult_count ?? orderPassengers.length ?? 1;
+  const childCount = order?.child_count ?? 0;
+  const infantCount = order?.infant_count ?? 0;
   const adultPrice = tour?.price_adult ?? tour?.price ?? (totalContractPrice / Math.max(1, adultCount));
   const childPrice = tour?.price_child ?? Math.round(adultPrice * 0.85);
   const infantPrice = tour?.price_infant ?? Math.round(adultPrice * 0.3);
-  const discountAmount = order.discount_value || 0;
-  const singleRoomSurcharge = (order.single_room_count || 0) * (tour?.single_room_surcharge || 0);
+  const discountAmount = order?.discount_value || 0;
+  const singleRoomSurcharge = (order?.single_room_count || 0) * (tour?.single_room_surcharge || 0);
 
   // Điều 3: Tiến độ thanh toán (2 đợt hoặc 3 đợt)
   const [paymentPlanType, setPaymentPlanType] = useState<'3_steps' | '2_steps'>('3_steps');
@@ -185,7 +188,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
     ? Math.max(0, Math.round((totalContractPrice - defaultDepositStep1) * 0.5))
     : 0;
 
-  const [step1Amount, setStep1Amount] = useState<number>(order.paid_amount || defaultDepositStep1);
+  const [step1Amount, setStep1Amount] = useState<number>(order?.paid_amount || defaultDepositStep1);
   const [step2Amount, setStep2Amount] = useState<number>(defaultDepositStep2);
   const [step2DateNote, setStep2DateNote] = useState<string>('Trong khoảng ngày 05 đến 15 của tháng khởi hành hoặc khi nộp visa');
   const [step3DaysBefore, setStep3DaysBefore] = useState<number>(10);
@@ -366,28 +369,35 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
 </html>`;
   };
 
-  // Đóng gói và lưu hợp đồng vào Google Drive trong thư mục đơn hàng
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  // Đóng gói và lưu hợp đồng dưới định dạng PDF vào Google Drive trong thư mục đơn hàng
   const saveContractToGoogleDrive = async (silent = false): Promise<string | null> => {
     if (!order) return null;
+    if (currentContractUrl) {
+      toast('Hợp đồng này đã được lưu trên Google Drive rồi!', { icon: 'ℹ️' });
+      return currentContractUrl;
+    }
     setIsSavingDrive(true);
     let toastId: string | undefined;
     if (!silent) {
-      toastId = toast.loading('Đang đóng gói và lưu hợp đồng lên Google Drive...');
+      toastId = toast.loading('Đang khởi tạo file PDF và lưu lên Google Drive...');
     }
 
     try {
-      const htmlContent = generateContractHtmlDocument();
-      if (!htmlContent) {
+      const printElement = document.getElementById('official-tour-contract-print-area');
+      if (!printElement) {
         throw new Error('Chưa thể lấy nội dung hợp đồng để lưu');
       }
 
       const maTour = cleanFileNamePart(tour?.code) || 'TOUR';
       const tenKhach = cleanFileNamePart(partyBName) || cleanFileNamePart(order.booker_name) || cleanFileNamePart(order.customer_name) || 'KhachHang';
       const maDon = `DH-${orderShortId}`;
-      const fileName = `HopDong_${maTour}_${tenKhach}_${maDon}.html`;
+      const fileName = `HopDong_${maTour}_${tenKhach}_${maDon}.pdf`;
 
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-      const file = new File([blob], fileName, { type: 'text/html;charset=utf-8' });
+      // Tạo file PDF A4 thực thụ từ phần tử hợp đồng
+      const pdfBlob = await exportElementToPdfBlob(printElement, { filename: fileName });
+      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
       const formData = new FormData();
       formData.append('file', file);
@@ -411,9 +421,9 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
           onContractSaved(resData.url);
         }
         if (!silent && toastId) {
-          toast.success(`Đã lưu hợp đồng lên Google Drive: ${fileName}`, { id: toastId });
+          toast.success(`Đã lưu hợp đồng PDF lên Google Drive: ${fileName}`, { id: toastId });
         } else if (silent) {
-          toast.success(`Đã tự động lưu hợp đồng lên Google Drive`, { duration: 3000 });
+          toast.success(`Đã lưu hợp đồng PDF lên Google Drive`, { duration: 3000 });
         }
         return resData.url;
       }
@@ -421,7 +431,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
     } catch (err: any) {
       console.error('[Save Contract To Drive Error]:', err);
       if (!silent && toastId) {
-        toast.error(err?.message || 'Không thể lưu hợp đồng lên Google Drive', { id: toastId });
+        toast.error(err?.message || 'Không thể lưu hợp đồng PDF lên Google Drive', { id: toastId });
       }
       return null;
     } finally {
@@ -429,11 +439,38 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
     }
   };
 
-  // In hợp đồng kèm tự động lưu file lên Google Drive
+  // Tải file PDF trực tiếp về máy tính
+  const handleDownloadPdf = async () => {
+    const printElement = document.getElementById('official-tour-contract-print-area');
+    if (!printElement) {
+      toast.error('Chưa thể lấy nội dung hợp đồng để tải về');
+      return;
+    }
+    const toastId = toast.loading('Đang khởi tạo file PDF hợp đồng chuẩn A4...');
+    try {
+      setIsDownloadingPdf(true);
+      const maTour = cleanFileNamePart(tour?.code) || 'TOUR';
+      const tenKhach = cleanFileNamePart(partyBName) || cleanFileNamePart(order.booker_name) || cleanFileNamePart(order.customer_name) || 'KhachHang';
+      const maDon = `DH-${orderShortId}`;
+      const fileName = `HopDong_${maTour}_${tenKhach}_${maDon}.pdf`;
+
+      const pdfBlob = await exportElementToPdfBlob(printElement, { filename: fileName });
+      downloadPdfBlob(pdfBlob, fileName);
+      toast.success(`Đã tải file PDF về máy: ${fileName}`, { id: toastId });
+    } catch (err: any) {
+      console.error('[Download PDF Error]:', err);
+      toast.error(err?.message || 'Lỗi khi tạo file PDF', { id: toastId });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  // In hợp đồng ra máy in / trình duyệt (KHÔNG tự động upload lên Drive)
   const handlePrint = () => {
-    saveContractToGoogleDrive(true).catch(err => console.warn('Lỗi tự động lưu hợp đồng lên Drive:', err));
     window.print();
   };
+
+  if (!isOpen || !order) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static print:overflow-visible">
@@ -447,13 +484,27 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
               <FileCheck2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-sm sm:text-base flex items-center gap-2 tracking-wide">
-                Hợp Đồng Dịch Vụ Du Lịch AD Luxury
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-extrabold text-sm sm:text-base tracking-wide">
+                  Hợp Đồng Dịch Vụ Du Lịch AD Luxury
+                </h3>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Chuẩn A4 Đứng • 12 Điều Khoản
                 </span>
-              </h3>
-              <p className="text-[11px] text-slate-300 truncate max-w-md sm:max-w-xl">
+                {/* Badge tình trạng lưu Google Drive */}
+                {currentContractUrl ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-2xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Đã lưu Google Drive</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-2xs">
+                    <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Chưa lưu Google Drive</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-300 truncate max-w-md sm:max-w-xl mt-0.5">
                 Booking #{orderShortId} • {tour?.name || tour?.code || 'Tour du lịch'} • Khách: {partyBName}
               </p>
             </div>
@@ -466,7 +517,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                 target="_blank"
                 rel="noreferrer"
                 className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                title="Mở xem file hợp đồng trên Google Drive"
+                title="Mở xem file PDF hợp đồng trực tiếp trên Google Drive"
               >
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                 <span className="hidden md:inline">Xem trên Drive</span>
@@ -475,24 +526,58 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
 
             <button
               type="button"
-              disabled={isSavingDrive}
-              onClick={() => saveContractToGoogleDrive(false)}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-              title="Lưu file hợp đồng này vào đúng thư mục đơn hàng trên Google Drive"
+              disabled={isDownloadingPdf}
+              onClick={handleDownloadPdf}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer border border-slate-700"
+              title="Tải file PDF hợp đồng chuẩn A4 trực tiếp về máy"
             >
-              {isSavingDrive ? (
+              {isDownloadingPdf ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Đang lưu Drive...</span>
+                  <span>Đang tạo PDF...</span>
                 </>
               ) : (
                 <>
-                  <Cloud className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Lưu Google Drive</span>
-                  <span className="sm:hidden">Lưu Drive</span>
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Tải PDF</span>
                 </>
               )}
             </button>
+
+            {/* Nút Lưu Google Drive: Khóa nếu đã lưu */}
+            {currentContractUrl ? (
+              <button
+                type="button"
+                disabled
+                className="px-3 py-1.5 bg-emerald-950/70 text-emerald-300/80 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-emerald-500/30 cursor-not-allowed opacity-90 shadow-2xs"
+                title="Hợp đồng này đã được lưu thành công trên Google Drive"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Đã lưu Google Drive</span>
+                <span className="sm:hidden">Đã lưu Drive</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={isSavingDrive}
+                onClick={() => saveContractToGoogleDrive(false)}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                title="Lưu file PDF hợp đồng này vào đúng thư mục đơn hàng trên Google Drive"
+              >
+                {isSavingDrive ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang lưu Drive...</span>
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Lưu Google Drive</span>
+                    <span className="sm:hidden">Lưu Drive</span>
+                  </>
+                )}
+              </button>
+            )}
 
             <button
               type="button"

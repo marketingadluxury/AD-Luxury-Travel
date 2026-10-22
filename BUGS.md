@@ -6,6 +6,35 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.106 Chuẩn Hóa Cơ Chế Lưu Hợp Đồng PDF Lên Google Drive: Khóa Lưu Trùng, Chế Độ Thủ Công & Tìm Kiếm Đa Tầng Thư Mục Đơn Hàng
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  1. File hợp đồng đơn hàng `31F7EDA9` được tải lên Google Drive nhưng người dùng kiểm tra thư mục đơn hàng `31F7EDA9` thì không thấy file (do thư mục trên Drive có thể chứa tiền tố `DH-`, `BK-`, hoặc tên khách, trong khi hệ thống trước đây chỉ so khớp tên tuyệt đối `name = '31F7EDA9'`).
+  2. Việc lưu hợp đồng cần chuyển hẳn sang chế độ **thủ công** khi người dùng chủ động bấm nút "Lưu Google Drive", tách biệt hoàn toàn khỏi nút "In Hợp đồng / PDF".
+  3. Khóa không cho phép lưu lại (tránh lưu trùng lặp) nếu hợp đồng của đơn hàng đã được lưu trên Drive (`contract_url` đã tồn tại).
+  4. Thiết kế trực quan **Tình trạng hợp đồng đã lưu chưa** trên cả Modal in hợp đồng và Danh sách quản lý đơn hàng.
+- **Giải pháp triển khai:**
+  1. **Nâng cấp Thuật toán Tìm kiếm Đa Tầng Thư mục Đơn hàng (`server/services/googleDriveService.ts`):**
+     - Xây dựng hàm `searchFolderContaining(keyword, parentId, token)` hỗ trợ tìm kiếm thư mục linh hoạt theo chuỗi ký tự chứa mã đơn.
+     - Nâng cấp `getOrCreateOrderFolderV2`:
+       + Tầng 1: Tìm chính xác theo mã đơn sạch `cleanOrderCode` (`31F7EDA9`).
+       + Tầng 2: Tìm chính xác theo tiền tố `DH-[cleanOrderCode]` (`DH-31F7EDA9`) hoặc `BK-[cleanOrderCode]`.
+       + Tầng 3: Tìm thư mục có chứa mã đơn (`name contains '31F7EDA9'`) trong thư mục `Đơn hàng` (ví dụ: `31F7EDA9 - Nguyen Minh Truc Tien`).
+       + Tầng 4: Tìm thư mục chứa mã đơn trực tiếp trong cây thư mục của Tour.
+       + Tầng 5: Nếu chưa có, mới tiến hành tạo mới thư mục với tên chuẩn `31F7EDA9` trong thư mục `Đơn hàng`. Đảm bảo 100% file PDF hợp đồng được lưu đúng thư mục mà người dùng theo dõi.
+  2. **Tách Biệt In Ấn & Chuyển Sang Lưu Thủ Công 100% (`src/components/orders/TourContractPrintModal.tsx`):**
+     - Gỡ bỏ hoàn toàn việc gọi lưu ngầm lên Drive trong `handlePrint()`. Thao tác bấm "In Hợp đồng / PDF" chỉ mở hộp thoại in của trình duyệt.
+     - Quá trình upload chỉ chạy khi người dùng chủ động click nút "Lưu Google Drive".
+  3. **Khóa Lưu Trùng & Hiển Thị Tình Trạng Hợp Đồng Trên Modal In (`TourContractPrintModal.tsx`):**
+     - Kiểm tra nếu đơn hàng đã có `currentContractUrl`: Nút "Lưu Google Drive" tự động vô hiệu hóa (disabled), hiển thị nhãn `✓ Đã lưu Google Drive` với biểu tượng tích xanh `CheckCircle2`, ngăn chặn bấm đúp lưu nhiều file rác lên Drive.
+     - Bổ sung Huy hiệu (Badge) nổi bật trên thanh Header: `✓ Đã lưu Google Drive` (xanh lá) khi đã có file hoặc `⏳ Chưa lưu Google Drive` (hổ phách) khi chưa lưu.
+     - Duy trì nút "Xem trên Drive" với icon `ExternalLink` mở trực tiếp PDF trên Google Drive.
+  4. **Đồng Bộ Tình Trạng Hợp Đồng Trên Quản Lý Đơn Hàng (`src/pages/OrdersManagement.tsx`):**
+     - **Thẻ tóm tắt đơn hàng:** Hiển thị Badge `✓ HĐ Drive` (nhấp để mở xem ngay) hoặc `⏳ Chưa lưu HĐ` (nhấp để mở modal in hợp đồng).
+     - **Tab Thông tin liên hệ:** Cập nhật trạng thái Hợp đồng dịch vụ rõ ràng (`Đã lưu Google Drive` kèm nút xem, hoặc `Chưa lưu Google Drive` kèm nút tải file lên Drive).
+     - **Thanh thao tác (Action Bar):** Nút in hợp đồng tự động đổi trạng thái sang `HĐ (Đã lưu)` với viền xanh lá tinh tế khi đơn đã có file Drive.
+  5. **Kiểm thử tự động:** Vượt qua 100% kiểm tra TypeScript linter (`npm run lint`), toàn bộ 69 bài Unit Tests Vitest (`npm test`), 21 kịch bản Simulation phân quyền 4 vai trò (`npm run test:simulation`), và biên dịch thành công (`compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.103 Tính Năng Tạo & In Hợp Đồng Du Lịch Online Chuẩn A4 Theo Đúng Mẫu Thực Tế AD Luxury (12 Điều Khoản Pháp Lý)
 - **Mô tả yêu cầu & Căn cứ tài liệu thực tế:**
   - Chuẩn hóa toàn bộ mẫu in hợp đồng du lịch online sang đúng quy chuẩn văn bản pháp lý thực tế của công ty AD Luxury (theo file đính kèm `H_P___NG__C_-_OBAU040726.F2.NMTT.docx_4c90f1d6.pdf`).
@@ -31,26 +60,27 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   4. **Kiểm thử tự động:** Vượt qua 100% kiểm tra TypeScript linter (`npm run lint`), toàn bộ 69 bài Unit Tests Vitest (`npm test`), 21 kịch bản Simulation 4 vai trò (`npm run test:simulation`), và biên dịch thành công (`compile_applet`).
 - **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
 
-### 1.104 Tự Động Lưu File Hợp Đồng Dịch Vụ Du Lịch Vào Google Drive Thư Mục Đơn Hàng Của Booking
+### 1.104 Tự Động Lưu File Hợp Đồng Dịch Vụ Du Lịch Dưới Dạng PDF Vào Google Drive Thư Mục Đơn Hàng
 - **Mô tả yêu cầu:**
-  - Tự động đóng gói và lưu file hợp đồng dịch vụ du lịch vào Google Drive ngay khi người dùng bấm "In Hợp đồng / PDF", đồng thời cung cấp nút "Lưu Google Drive" chủ động trên thanh tiêu đề Modal.
+  - Tự động đóng gói và lưu file hợp đồng dịch vụ du lịch dưới dạng file **PDF chuẩn A4** vào Google Drive ngay khi người dùng bấm "In Hợp đồng / PDF", đồng thời cung cấp nút "Lưu Google Drive" và nút "Tải PDF" trực tiếp về máy.
   - Vị trí lưu trữ: Lưu đúng vào thư mục đơn hàng của booking theo cấu trúc chuẩn: `AD Luxury Travel / Tour / [Mã Tour] / Đơn hàng / [Mã Đơn Hàng]`.
-  - Quy chuẩn đặt tên file: `HopDong_[MaTour]_[TenKhach]_[MaDon].html` (ví dụ: `HopDong_OBAU040726_NguyenMinhTrucTien_DH-4C90F1D6.html`).
+  - Quy chuẩn đặt tên file: `HopDong_[MaTour]_[TenKhach]_[MaDon].pdf` (ví dụ: `HopDong_OBAU040726_NguyenMinhTrucTien_DH-4C90F1D6.pdf`).
   - Gắn liên kết xem file trực tiếp (`order.contract_url`) vào đơn hàng trên hệ thống CRM để người dùng có thể nhấp xem ngay trên thẻ đơn hàng hoặc modal hợp đồng mà không cần tìm kiếm thủ công trong thư mục Drive.
 - **Giải pháp triển khai:**
   1. **Nâng cấp Backend Endpoint Upload Google Drive (`server/routes/uploadRoutes.ts`):**
-     - Mở rộng endpoint `/api/upload-invoice-receipt` và tạo alias `/api/upload-contract` tiếp nhận file hợp đồng.
+     - Mở rộng endpoint `/api/upload-invoice-receipt` và tạo alias `/api/upload-contract` tiếp nhận file PDF (`application/pdf`).
      - Tích hợp hàm `getActiveDriveConfig()` tự động ưu tiên lấy cấu hình kết nối Google Drive từ Supabase `app_settings` (hoặc biến môi trường), tránh lỗi xác thực khi tài khoản Drive được kết nối từ trang Cài đặt.
-     - Hỗ trợ tham số `customFileName` để đặt tên file chính xác theo chuẩn `HopDong_[MaTour]_[TenKhach]_[MaDon]`.
+     - Hỗ trợ tham số `customFileName` để đặt tên file chính xác theo chuẩn `HopDong_[MaTour]_[TenKhach]_[MaDon].pdf`.
      - Cơ chế tự động tìm/tạo thư mục đơn hàng qua `getOrCreateOrderFolderV2(tourCode, actualOrderCode, token)` chuẩn xác theo cấu trúc `AD Luxury Travel / Tour / [tourCode] / Đơn hàng / [actualOrderCode]`.
      - Tự động cập nhật cột `contract_url` vào bảng `bookings` trong database Supabase ngay khi tải file lên thành công.
-  2. **Tích hợp Tự Động Đóng Gói & Lưu Trữ Trên Frontend (`src/components/orders/TourContractPrintModal.tsx`):**
-     - Xây dựng hàm `generateContractHtmlDocument()` trích xuất nội dung toàn bộ hợp đồng 12 Điều khoản và Phụ lục từ DOM, bọc trong khung HTML độc lập đầy đủ mã hóa UTF-8, CSS in ấn chuẩn Times New Roman khổ A4 đứng (210mm x 297mm).
-     - Xây dựng hàm `cleanFileNamePart()` loại bỏ hoàn toàn dấu tiếng Việt và ký tự đặc biệt theo đúng định dạng `HopDong_[MaTour]_[TenKhach]_[MaDon].html`.
-     - Xây dựng hàm `saveContractToGoogleDrive()` gọi API `/api/upload-contract`, tự động cập nhật state React CRMContext thông qua `updateOrder(order.id, { contract_url })` và callback `onContractSaved`.
-     - Tích hợp cơ chế tự động gọi lưu lên Drive ngầm trong `handlePrint()` khi người dùng bấm "In Hợp đồng / PDF".
+  2. **Tích hợp Tự Động Đóng Gói PDF & Lưu Trữ Trên Frontend (`src/components/orders/TourContractPrintModal.tsx` & `src/utils/pdfGenerator.ts`):**
+     - Xây dựng tiện ích `pdfGenerator.ts` sử dụng thư viện `html2pdf.js` chuẩn hóa xuất file PDF từ DOM element khổ A4 đứng (210mm x 297mm), độ phân giải cao `scale: 2`, tự động tránh ngắt trang các điều khoản và bảng biểu.
+     - Xây dựng hàm `cleanFileNamePart()` loại bỏ hoàn toàn dấu tiếng Việt và ký tự đặc biệt theo đúng định dạng `HopDong_[MaTour]_[TenKhach]_[MaDon].pdf`.
+     - Xây dựng hàm `saveContractToGoogleDrive()` tạo file PDF dạng Blob, gọi API `/api/upload-contract`, tự động cập nhật state React CRMContext thông qua `updateOrder(order.id, { contract_url })` và callback `onContractSaved`.
+     - Tích hợp cơ chế tự động gọi lưu PDF lên Drive ngầm trong `handlePrint()` khi người dùng bấm "In Hợp đồng / PDF".
+     - Bổ sung nút bấm độc lập "Tải PDF" với icon `Download` cho phép tải ngay tệp PDF về máy tính cá nhân.
      - Bổ sung nút bấm độc lập "Lưu Google Drive" trên thanh Header của Modal kèm icon trực quan và trạng thái loading `isSavingDrive`.
-     - Bổ sung nút "Xem trên Drive" với icon `ExternalLink` ngay trên thanh Header của Modal khi đơn hàng đã có `contract_url`.
+     - Bổ sung nút "Xem trên Drive" với icon `ExternalLink` ngay trên thanh Header của Modal khi đơn hàng đã có `contract_url` mở trực tiếp PDF trên trình đọc của Drive.
   3. **Kiểm thử tự động:** Vượt qua 100% kiểm tra TypeScript linter (`npm run lint`), toàn bộ 69 bài Unit Tests Vitest (`npm test`), 21 kịch bản Simulation phân quyền 4 vai trò (`npm run test:simulation`), và biên dịch thành công (`compile_applet`).
 - **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
 

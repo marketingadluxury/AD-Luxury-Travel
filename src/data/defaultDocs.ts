@@ -275,18 +275,19 @@ File hợp đồng sẽ được lưu đúng vào thư mục đơn hàng của b
 ### Quy chuẩn đặt tên file:
 Hệ thống tự động chuẩn hóa tiếng Việt sạch không dấu theo công thức:
 
-\`HopDong_[MaTour]_[TenKhach]_[MaDon].html\`
+\`HopDong_[MaTour]_[TenKhach]_[MaDon].pdf\`
 
 > 📌 **Ví dụ:** Booking mã \`4C90F1D6\`, tour Úc \`OBAU040726\`, khách Nguyễn Minh Trúc Tiên sẽ có tên file là:  
-> \`HopDong_OBAU040726_NguyenMinhTrucTien_DH-4C90F1D6.html\`
+> \`HopDong_OBAU040726_NguyenMinhTrucTien_DH-4C90F1D6.pdf\`
 
-### Hai hình thức lưu trữ linh hoạt:
-1. **Tự động lưu khi in:** Ngay khi bấm **"In Hợp đồng / PDF"**, hệ thống tự động đóng gói toàn bộ hợp đồng thành file HTML độc lập và đẩy lên Google Drive ngầm, trong khi hộp thoại in của trình duyệt vẫn mở bình thường mà không phải chờ đợi.
-2. **Nút chủ động "Lưu Google Drive":** Nằm ngay trên thanh công cụ Modal, cho phép nhân viên lưu file lên Drive bất kỳ lúc nào mà không cần bấm lệnh in.
+### Các hình thức lưu trữ & xuất file linh hoạt:
+1. **Tự động lưu PDF khi in:** Ngay khi bấm **"In Hợp đồng / PDF"**, hệ thống tự động xuất hợp đồng thành tệp PDF chuẩn khổ A4 đứng và tải lên Google Drive ngầm, trong khi hộp thoại in của trình duyệt vẫn mở bình thường mà không phải chờ đợi.
+2. **Nút chủ động "Lưu Google Drive":** Nằm ngay trên thanh công cụ Modal, cho phép nhân viên lưu file PDF lên Drive bất kỳ lúc nào mà không cần bấm lệnh in.
+3. **Nút "Tải PDF":** Cho phép tải ngay tệp PDF hợp đồng chuẩn A4 về máy tính cá nhân để gửi qua Zalo, Email hoặc lưu trữ offline.
 
 ### Gắn liên kết xem file trực tiếp vào đơn hàng:
 - Ngay sau khi lưu thành công, đường dẫn xem trực tiếp (\`contract_url\`) được tự động cập nhật vào cơ sở dữ liệu của đơn hàng:
-  - Trên Modal xuất hiện nút **"Xem trên Drive"** để mở xem file ngay trên trình duyệt.
+  - Trên Modal xuất hiện nút **"Xem trên Drive"** để mở xem file PDF ngay trên trình duyệt qua trình đọc PDF của Google Drive.
   - Trên danh sách đơn hàng (\`/orders\`) xuất hiện huy hiệu **"Đã tải hợp đồng"** kèm nút **"Xem file"** cho toàn bộ nhân viên liên quan tra cứu thuận tiện.
 
 ---
@@ -296,8 +297,8 @@ Hệ thống tự động chuẩn hóa tiếng Việt sạch không dấu theo c
 1. Truy cập trang **Quản lý Đơn hàng** (\`/orders\`) hoặc mở chi tiết booking cần in hợp đồng.
 2. Tại khối Hợp đồng dịch vụ hoặc danh sách thao tác nhanh, bấm **"In HĐ Online"**.
 3. Xem trước hợp đồng trên giao diện chuẩn A4. Nếu cần điều chỉnh đợt thanh toán hoặc thông tin đại diện, bấm **"Tùy biến HĐ"**.
-4. Bấm **"In Hợp đồng / PDF"** để in ra giấy/xuất PDF cho khách ký, hoặc bấm **"Lưu Google Drive"** để lưu trữ lên hệ thống đám mây.
-5. Sau vài giây, kiểm tra huy hiệu **"Đã tải hợp đồng"** trên đơn hàng để xác nhận file đã được lưu thành công vào đúng thư mục booking trên Google Drive.`,
+4. Bấm **"In Hợp đồng / PDF"** để in ra giấy/xuất PDF cho khách ký, hoặc bấm **"Tải PDF"** để lưu về máy, hoặc bấm **"Lưu Google Drive"** để lưu trữ lên hệ thống đám mây.
+5. Sau vài giây, kiểm tra huy hiệu **"Đã tải hợp đồng"** trên đơn hàng để xác nhận file PDF đã được lưu thành công vào đúng thư mục booking trên Google Drive.`,
     author: 'Phòng Kinh Doanh & CNTT',
     updated_at: '2026-10-22T00:00:00Z',
   },

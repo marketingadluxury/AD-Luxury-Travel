@@ -446,15 +446,77 @@ export async function getOrCreateTourSubFolderV2(tourCode: string, subFolder: '�
   return subFolderId;
 }
 
+export async function searchFolderContaining(keyword: string, parentId?: string, token?: string): Promise<{ id: string; name: string } | null> {
+  const safeKeyword = keyword.replace(/'/g, "\\'");
+  let query = `mimeType = 'application/vnd.google-apps.folder' and name contains '${safeKeyword}' and trashed = false`;
+  if (parentId) {
+    query += ` and '${parentId}' in parents`;
+  }
+  
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,capabilities/canAddChildren,capabilities/canEdit)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error('[Drive] Search folder containing failed:', errText);
+    return null;
+  }
+  
+  const data: any = await res.json();
+  if (data.files && data.files.length > 0) {
+    const writableFolder = data.files.find((f: any) => f.capabilities?.canAddChildren !== false);
+    if (writableFolder) {
+      return { id: writableFolder.id, name: writableFolder.name };
+    }
+  }
+  return null;
+}
+
 export async function getOrCreateOrderFolderV2(tourCode: string, orderCode: string, token: string): Promise<string> {
   const donHangFolderId = await getOrCreateTourSubFolderV2(tourCode, 'Đơn hàng', token);
-
   const cleanOrderCode = formatOrderCode(orderCode).replace(/[\/\\\:\*\?\"\<\>\|]/g, '_');
+
+  // 1. Tìm chính xác theo cleanOrderCode (ví dụ: "31F7EDA9")
   let orderFolderId = await searchFolder(cleanOrderCode, donHangFolderId, token);
-  if (!orderFolderId) {
-    orderFolderId = await createFolder(cleanOrderCode, donHangFolderId, token);
-    await makeFolderPublic(orderFolderId, token);
+  if (orderFolderId) {
+    console.log(`[Drive Order Folder] Đã tìm thấy thư mục chính xác: ${cleanOrderCode} (${orderFolderId})`);
+    return orderFolderId;
   }
+
+  // 2. Tìm chính xác theo "DH-[cleanOrderCode]" hoặc "BK-[cleanOrderCode]"
+  orderFolderId = await searchFolder(`DH-${cleanOrderCode}`, donHangFolderId, token);
+  if (orderFolderId) {
+    console.log(`[Drive Order Folder] Đã tìm thấy thư mục tiền tố DH-: DH-${cleanOrderCode} (${orderFolderId})`);
+    return orderFolderId;
+  }
+
+  orderFolderId = await searchFolder(`BK-${cleanOrderCode}`, donHangFolderId, token);
+  if (orderFolderId) {
+    console.log(`[Drive Order Folder] Đã tìm thấy thư mục tiền tố BK-: BK-${cleanOrderCode} (${orderFolderId})`);
+    return orderFolderId;
+  }
+
+  // 3. Tìm thư mục có chứa mã cleanOrderCode trong thư mục "Đơn hàng" (ví dụ: "31F7EDA9 - Nguyễn Văn A")
+  const partialMatchInDonHang = await searchFolderContaining(cleanOrderCode, donHangFolderId, token);
+  if (partialMatchInDonHang) {
+    console.log(`[Drive Order Folder] Đã tìm thấy thư mục khớp tiền tố/tên trong Đơn hàng: ${partialMatchInDonHang.name} (${partialMatchInDonHang.id})`);
+    return partialMatchInDonHang.id;
+  }
+
+  // 4. Tìm thư mục có chứa mã cleanOrderCode trực tiếp trong thư mục Tour
+  const tourFolderId = await getOrCreateTourFolderV2(tourCode, token);
+  const partialMatchInTour = await searchFolderContaining(cleanOrderCode, tourFolderId, token);
+  if (partialMatchInTour) {
+    console.log(`[Drive Order Folder] Đã tìm thấy thư mục khớp trong Tour: ${partialMatchInTour.name} (${partialMatchInTour.id})`);
+    return partialMatchInTour.id;
+  }
+
+  // 5. Nếu chưa có, tạo mới thư mục với tên chuẩn cleanOrderCode trong thư mục "Đơn hàng"
+  console.log(`[Drive Order Folder] Chưa có thư mục cho đơn ${cleanOrderCode}, tạo mới trong Đơn hàng...`);
+  orderFolderId = await createFolder(cleanOrderCode, donHangFolderId, token);
+  await makeFolderPublic(orderFolderId, token);
 
   return orderFolderId;
 }
