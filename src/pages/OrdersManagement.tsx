@@ -5,13 +5,14 @@ import Select from 'react-select';
 import { useCRM, canUnlockOrder, isOrderLocked } from '@/context/CRMContext';
 import { useAuth } from '@/context/AuthContext';
 import { Order, Passenger } from '@/types';
-import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy, Filter, RotateCcw, Layers, List, Calendar, MapPin, Building, Coins, Phone, Share2, Megaphone, UserCheck, Globe } from 'lucide-react';
+import { ShoppingCart, User, Users, Clock, FileText, Check, X, Plus, ChevronDown, ChevronUp, ChevronRight, ShieldCheck, Trash2, Info, Edit, ExternalLink, AlertCircle, Search, CreditCard, DollarSign, TrendingUp, UploadCloud, CheckCircle, Eye, Upload, Lock, Unlock, Copy, Filter, RotateCcw, Layers, List, Calendar, MapPin, Building, Coins, Phone, Share2, Megaphone, UserCheck, Globe, Printer } from 'lucide-react';
 import { format, differenceInHours } from 'date-fns';
 import ActionModal from '../components/ActionModal';
 import PassengerInputModal from '../components/PassengerInputModal';
 import EditPassengerModal from '../components/EditPassengerModal';
 import EditOrderModal from '../components/EditOrderModal';
 import PaymentModal from '../components/PaymentModal';
+import { TourContractPrintModal } from '../components/orders/TourContractPrintModal';
 import { PassengerDocumentList } from '../components/PassengerDocumentList';
 import { TimeRangeFilter } from '../components/TimeRangeFilter';
 import { CustomSelect } from '../components/CustomSelect';
@@ -35,6 +36,7 @@ export default function OrdersManagement() {
   const [orderFilterPaymentStatus, setOrderFilterPaymentStatus] = useState('all');
   const [orderFilterHoldStatus, setOrderFilterHoldStatus] = useState('all');
   const [contractUploadProgress, setContractUploadProgress] = useState<Record<string, boolean>>({});
+  const [contractPrintOrder, setContractPrintOrder] = useState<Order | null>(null);
 
   // Overview Stats Detail Modal state
   const [overviewModalType, setOverviewModalType] = useState<'hold' | 'sure' | 'revenue' | 'paid' | 'remaining' | null>(null);
@@ -2506,6 +2508,16 @@ export default function OrdersManagement() {
                                     <FileText className="w-4 h-4 text-blue-600 shrink-0" /> Hợp đồng dịch vụ:
                                   </span>
                                   <div className="flex items-center gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => setContractPrintOrder(order)}
+                                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border border-indigo-200 cursor-pointer shadow-2xs"
+                                      title="Mở mẫu in hợp đồng du lịch online chuẩn A4"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                                      In HĐ Online
+                                    </button>
+
                                     {order.contract_url ? (
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <span className="px-2.5 py-1 rounded font-bold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -2517,13 +2529,13 @@ export default function OrdersManagement() {
                                           rel="noreferrer"
                                           className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                                         >
-                                          <Eye className="w-3.5 h-3.5 shrink-0" /> Xem
+                                          <Eye className="w-3.5 h-3.5 shrink-0" /> Xem file
                                         </a>
                                         {(['admin', 'operator'].includes(currentRole) || order.user_id === profile?.id || order.created_by === profile?.full_name) && (
                                           <button
                                             onClick={() => handleDeleteContract(order.id)}
                                             className="p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded-lg transition-colors cursor-pointer shrink-0 border border-transparent hover:border-rose-200"
-                                            title="Gỡ hợp đồng"
+                                            title="Gỡ file hợp đồng"
                                           >
                                             <Trash2 className="w-4 h-4" />
                                           </button>
@@ -2533,7 +2545,7 @@ export default function OrdersManagement() {
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <label className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm">
                                           <Upload className="w-3.5 h-3.5 shrink-0" />
-                                          Tải hợp đồng lên
+                                          Tải file lên
                                           <input
                                             type="file"
                                             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
@@ -3395,6 +3407,18 @@ export default function OrdersManagement() {
                               </button>
                             );
                           })()}
+
+                          {order.status !== 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => setContractPrintOrder(order)}
+                              className="px-3 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors inline-flex items-center cursor-pointer shadow-2xs"
+                              title="Tạo & In hợp đồng du lịch online chuẩn A4"
+                            >
+                              <Printer className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
+                              In HĐ
+                            </button>
+                          )}
 
                           {order.status !== 'cancelled' && order.status !== 'paid' && !isFullyPaid && (
                             <button
@@ -4565,6 +4589,19 @@ export default function OrdersManagement() {
           setPaymentOrder(null);
         }}
         order={paymentOrder}
+      />
+
+      <TourContractPrintModal
+        isOpen={Boolean(contractPrintOrder)}
+        onClose={() => setContractPrintOrder(null)}
+        order={contractPrintOrder}
+        tour={contractPrintOrder ? tours.find(t => t.id === contractPrintOrder.tour_id) : undefined}
+        passengers={passengers}
+        onContractSaved={(url) => {
+          if (contractPrintOrder) {
+            setContractPrintOrder(prev => prev ? ({ ...prev, contract_url: url }) : null);
+          }
+        }}
       />
     </div>
   );

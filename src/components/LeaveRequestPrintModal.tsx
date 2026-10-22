@@ -59,43 +59,6 @@ export default function LeaveRequestPrintModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
-      {/* Print Stylesheet */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #leave-request-print-area, #leave-request-print-area * {
-            visibility: visible !important;
-          }
-          #leave-request-print-area {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            min-height: auto !important;
-            height: auto !important;
-            margin: 0 !important;
-            padding: 10mm 14mm 8mm 14mm !important;
-            background: white !important;
-            z-index: 999999 !important;
-            box-shadow: none !important;
-            border: none !important;
-            color: #000 !important;
-            font-family: 'Times New Roman', Times, serif !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            page-break-inside: avoid !important;
-            page-break-after: avoid !important;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-        }
-      `}</style>
-
       {/* Modal Container */}
       <div className="bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
         {/* Modal Toolbar (Screen only) */}

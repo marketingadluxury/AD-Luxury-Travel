@@ -1,6 +1,6 @@
 {
-  "summary": "Kế hoạch chi tiết đồng bộ dữ liệu giữa Mã lịch trình trên CRM và SKU Sản phẩm Tour trên Website WooCommerce. Đề xuất quy tắc bóc tách tiền tố SKU, cơ chế thêm/cập nhật đợt khởi hành vào ACF Repeater, tính tổng chỗ trống tự động và giao diện chọn ghép nối/tạo mới trên Modal đồng bộ.",
-  "updatedAt": "2026-10-15T03:10:59.559709059Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "Kế hoạch tích hợp tính năng tự động sao lưu hợp đồng vào thư mục Booking trên Google Drive theo định dạng HopDong_[MaTour]_[TenKhach]_[MaDon] khi bấm in hợp đồng và cập nhật link trực tiếp vào đơn hàng.",
+  "updatedAt":  "2026-10-22T04:21:19.852063269Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }

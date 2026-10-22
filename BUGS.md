@@ -6,6 +6,67 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.103 Tính Năng Tạo & In Hợp Đồng Du Lịch Online Chuẩn A4 Theo Đúng Mẫu Thực Tế AD Luxury (12 Điều Khoản Pháp Lý)
+- **Mô tả yêu cầu & Căn cứ tài liệu thực tế:**
+  - Chuẩn hóa toàn bộ mẫu in hợp đồng du lịch online sang đúng quy chuẩn văn bản pháp lý thực tế của công ty AD Luxury (theo file đính kèm `H_P___NG__C_-_OBAU040726.F2.NMTT.docx_4c90f1d6.pdf`).
+  - Hỗ trợ đầy đủ 12 Điều khoản chuẩn nghiệp vụ lữ hành quốc tế, cấu hình Bên A chính thức (Đại diện Phó Giám Đốc Nguyễn Thị Hoàng Yến theo Giấy ủy quyền số 02/2026/GUQ-ADL, Giấy phép LHQT số 79-1514/2022/TCDL-GP LHQT, MST 0317463744), Bên B đại diện khách hàng, tự động trích xuất lịch trình, hành trình bay, danh sách khách, biểu giá và đọc tiền thành chữ Tiếng Việt chuẩn tài chính.
+  - Hỗ trợ chuyển đổi linh hoạt giữa **3 đợt thanh toán** (theo đúng hợp đồng thực tế) hoặc **2 đợt thanh toán**, tự động sinh mã VietQR Napas 24/7 (Vietcombank CN Tân Định - 1031141893), tùy chọn in kèm Phụ lục chương trình tour & lưu ý, cùng Drawer cài đặt live edit mọi trường thông tin.
+  - **Tối ưu chuẩn in A4 Vertical (Portrait) & Dấu phân cách hàng nghìn:** Điều chỉnh tỷ lệ kích thước text về chuẩn 11pt, line-height 1.45, khung giấy `max-w-[794px]` (210mm x 297mm), bổ sung quy tắc chống ngắt trang dở dang `avoid-break`, và tích hợp `NumericFormatInput` cho 100% các ô nhập số tiền trong Drawer cài đặt hiển thị phân tách hàng nghìn bằng dấu chấm rõ ràng.
+- **Giải pháp triển khai:**
+  1. **Component In Hợp Đồng Chuẩn Pháp Lý 12 Điều (`src/components/orders/TourContractPrintModal.tsx`):**
+     - Quốc hiệu - Tiêu ngữ, tiêu đề tự động `HỢP ĐỒNG DỊCH VỤ DU LỊCH [QUỐC GIA/ĐIỂM ĐẾN]`, số hợp đồng chuẩn `Số: _____/HĐDV/[Năm] – [Mã Tour].[Ký hiệu Sale/Đơn]`.
+     - **Bên A (Bên cung cấp dịch vụ):** Công ty TNHH Thương Mại và Dịch Vụ AD Luxury, Đại diện Bà Nguyễn Thị Hoàng Yến - Phó Giám Đốc, Giấy ủy quyền 02/2026/GUQ-ADL, 463B/18 Cách Mạng Tháng 8, Phường Hoà Hưng, TP.HCM, Hotline 0911832955, MST 0317463744, Giấy phép LHQT Tổng cục Du lịch cấp.
+     - **Bên B (Bên sử dụng dịch vụ):** Họ và tên khách hàng, địa chỉ, điện thoại, số hộ chiếu/CCCD.
+     - **Điều 1:** Nội dung dịch vụ trọn gói bằng máy bay, thời gian khởi hành (từ ngày... đến ngày... X ngày Y đêm), số lượng khách dự kiến, bảng danh sách khách (STT, Họ tên khách, số hộ chiếu/CCCD, ngày sinh `p.dob`).
+     - **Điều 2:** Bảng giá trị hợp đồng gồm Người lớn, Trẻ em, Em bé, Phụ thu phòng đơn, Giảm giá/Chiết khấu, Tổng giá trị hợp đồng và dòng Bằng chữ chuẩn Tiếng Việt tài chính.
+     - **Điều 3:** Thời hạn & Phương thức thanh toán (hỗ trợ chuyển đổi 2 đợt hoặc 3 đợt thanh toán theo đúng thực tế, thời hạn từng đợt, bảng số tài khoản Vietcombank CN Tân Định STK 1031141893 kèm VietQR Napas 24/7, điều khoản phát sinh chi phí tăng thanh toán trong vòng 03 ngày).
+     - **Điều 4 đến Điều 12:** Điều khoản thị thực (hỗ trợ visa, miễn trách nhiệm LSQ/hải quan từ chối); Quyền & Trách nhiệm của Bên A; Quyền & Trách nhiệm của Bên B; Điều kiện hoàn/hủy (chi phí không hoàn lại khi rớt visa mặc định 5.000.000 đ, các mốc phạt hủy 30% - 50% - 85% - 100%); Bất khả kháng; Bồi thường thiệt hại & Phạt vi phạm; Luật điều chỉnh & Giải quyết tranh chấp tại Tòa kinh tế; Bảo hiểm du lịch nước ngoài tối đa lên đến 1.200.000.000 đồng/khách/vụ; Điều khoản chung (lập 03 bản).
+     - **Chữ ký 2 bên:** ĐẠI DIỆN BÊN A (Bà Nguyễn Thị Hoàng Yến - Phó giám đốc) & ĐẠI DIỆN BÊN B.
+     - **Phụ lục 1 (Tùy chọn in kèm):** Nối tiếp trang Phụ lục chương trình tour chi tiết, thông tin chuyến bay dự kiến, giá bao gồm, giá không bao gồm, lưu ý và hướng dẫn hồ sơ xin visa.
+  2. **Chuẩn Hóa Kích Thước Chữ & Định Dạng In A4 Vertical:**
+     - Thiết lập cỡ chữ chuẩn thể thức hành chính: Tiêu đề HĐ 15pt bold, Quốc hiệu - Tiêu ngữ 12pt bold, các Điều khoản 11.5pt bold, nội dung văn bản 11pt line-height 1.45, các bảng kê 10pt gọn gàng.
+     - Bổ sung quy tắc in `@page { size: A4 portrait; margin: 15mm 12mm 15mm 15mm; }` cùng class `.avoid-break` trên mỗi khối Điều khoản, bảng biểu và khối chữ ký giúp các trang in không bị xé đôi giữa chừng.
+  3. **Tích Hợp Dấu Phân Cách Hàng Nghìn Trong Drawer Cài Đặt:**
+     - Áp dụng component `NumericFormatInput` cho Số tiền Đợt 1 (`step1Amount`), Số tiền Đợt 2 (`step2Amount`) và Phí rớt visa (`visaRejectFee`), hiển thị dấu chấm phân cách hàng nghìn rõ ràng ngay trong ô input (ví dụ: `22.896.000 VNĐ`).
+  4. **Kiểm thử tự động:** Vượt qua 100% kiểm tra TypeScript linter (`npm run lint`), toàn bộ 69 bài Unit Tests Vitest (`npm test`), 21 kịch bản Simulation 4 vai trò (`npm run test:simulation`), và biên dịch thành công (`compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.104 Tự Động Lưu File Hợp Đồng Dịch Vụ Du Lịch Vào Google Drive Thư Mục Đơn Hàng Của Booking
+- **Mô tả yêu cầu:**
+  - Tự động đóng gói và lưu file hợp đồng dịch vụ du lịch vào Google Drive ngay khi người dùng bấm "In Hợp đồng / PDF", đồng thời cung cấp nút "Lưu Google Drive" chủ động trên thanh tiêu đề Modal.
+  - Vị trí lưu trữ: Lưu đúng vào thư mục đơn hàng của booking theo cấu trúc chuẩn: `AD Luxury Travel / Tour / [Mã Tour] / Đơn hàng / [Mã Đơn Hàng]`.
+  - Quy chuẩn đặt tên file: `HopDong_[MaTour]_[TenKhach]_[MaDon].html` (ví dụ: `HopDong_OBAU040726_NguyenMinhTrucTien_DH-4C90F1D6.html`).
+  - Gắn liên kết xem file trực tiếp (`order.contract_url`) vào đơn hàng trên hệ thống CRM để người dùng có thể nhấp xem ngay trên thẻ đơn hàng hoặc modal hợp đồng mà không cần tìm kiếm thủ công trong thư mục Drive.
+- **Giải pháp triển khai:**
+  1. **Nâng cấp Backend Endpoint Upload Google Drive (`server/routes/uploadRoutes.ts`):**
+     - Mở rộng endpoint `/api/upload-invoice-receipt` và tạo alias `/api/upload-contract` tiếp nhận file hợp đồng.
+     - Tích hợp hàm `getActiveDriveConfig()` tự động ưu tiên lấy cấu hình kết nối Google Drive từ Supabase `app_settings` (hoặc biến môi trường), tránh lỗi xác thực khi tài khoản Drive được kết nối từ trang Cài đặt.
+     - Hỗ trợ tham số `customFileName` để đặt tên file chính xác theo chuẩn `HopDong_[MaTour]_[TenKhach]_[MaDon]`.
+     - Cơ chế tự động tìm/tạo thư mục đơn hàng qua `getOrCreateOrderFolderV2(tourCode, actualOrderCode, token)` chuẩn xác theo cấu trúc `AD Luxury Travel / Tour / [tourCode] / Đơn hàng / [actualOrderCode]`.
+     - Tự động cập nhật cột `contract_url` vào bảng `bookings` trong database Supabase ngay khi tải file lên thành công.
+  2. **Tích hợp Tự Động Đóng Gói & Lưu Trữ Trên Frontend (`src/components/orders/TourContractPrintModal.tsx`):**
+     - Xây dựng hàm `generateContractHtmlDocument()` trích xuất nội dung toàn bộ hợp đồng 12 Điều khoản và Phụ lục từ DOM, bọc trong khung HTML độc lập đầy đủ mã hóa UTF-8, CSS in ấn chuẩn Times New Roman khổ A4 đứng (210mm x 297mm).
+     - Xây dựng hàm `cleanFileNamePart()` loại bỏ hoàn toàn dấu tiếng Việt và ký tự đặc biệt theo đúng định dạng `HopDong_[MaTour]_[TenKhach]_[MaDon].html`.
+     - Xây dựng hàm `saveContractToGoogleDrive()` gọi API `/api/upload-contract`, tự động cập nhật state React CRMContext thông qua `updateOrder(order.id, { contract_url })` và callback `onContractSaved`.
+     - Tích hợp cơ chế tự động gọi lưu lên Drive ngầm trong `handlePrint()` khi người dùng bấm "In Hợp đồng / PDF".
+     - Bổ sung nút bấm độc lập "Lưu Google Drive" trên thanh Header của Modal kèm icon trực quan và trạng thái loading `isSavingDrive`.
+     - Bổ sung nút "Xem trên Drive" với icon `ExternalLink` ngay trên thanh Header của Modal khi đơn hàng đã có `contract_url`.
+  3. **Kiểm thử tự động:** Vượt qua 100% kiểm tra TypeScript linter (`npm run lint`), toàn bộ 69 bài Unit Tests Vitest (`npm test`), 21 kịch bản Simulation phân quyền 4 vai trò (`npm run test:simulation`), và biên dịch thành công (`compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.105 Khắc Phục Lỗi React 19 "Expected static flag was missing" Do Nhúng Thẻ Style Trực Tiếp Trong JSX
+- **Hiện tượng lỗi:**
+  - Hệ thống ghi nhận lỗi: `Internal React error: Expected static flag was missing. Please notify the React team.`
+- **Nguyên nhân kỹ thuật:**
+  - Trong React 19, các thẻ `<style>`, `<link>`, `<meta>` và `<title>` được nâng cấp thành các thẻ tài nguyên tự động di dời (Document Metadata & Asset Hoisting).
+  - Khi một thẻ `<style>{...}</style>` chứa chuỗi template string được nhúng trực tiếp vào cây JSX của component (như trong các modal in ấn `TourContractPrintModal`, `PaymentProposalPrintModal`, `LeaveRequestPrintModal`), thuật toán reconciler của React 19 yêu cầu cờ `Static` phải tồn tại trong quá trình duyệt fiber node. Khi component được render hoặc unmount trong modal có điều kiện (`isOpen && ...`), việc thiếu cờ này dẫn đến ngoại lệ `Expected static flag was missing`.
+- **Giải pháp triển khai:**
+  1. Chuyển toàn bộ các quy tắc CSS in ấn khổ A4 (`@media print`) từ các component React vào tệp CSS toàn cục `src/index.css`.
+  2. Xóa bỏ hoàn toàn 100% các thẻ `<style>` nhúng trong JSX của `TourContractPrintModal.tsx`, `PaymentProposalPrintModal.tsx`, và `LeaveRequestPrintModal.tsx`.
+  3. Duy trì đầy đủ các quy tắc in ấn chuyên nghiệp (ẩn thành phần ngoài, hiển thị vùng in, font Times New Roman, phân trang `.avoid-break`, `.page-break`, khổ `@page { size: A4 portrait; margin: 10mm; }`).
+  4. Kiểm thử: Linter (`npm run lint`), Unit Tests (`npm test`), Simulation (`npm run test:simulation`) và build applet (`npm run build`) đạt 100% thành công.
+- **Trạng thái:** Đã khắc phục triệt để.
+
 ### 1.102 Refactor Toàn Diện Mã Nguồn, Loại Bỏ Code Thừa & Hệ Thống Hóa Modular Architecture
 - **Mô tả yêu cầu:**
   - Refactor toàn bộ mã nguồn: Loại bỏ code thừa và tiện ích trùng lặp, hệ thống hóa lại cấu trúc components theo domain nghiệp vụ, giảm kích thước các file monolithic, bảo đảm 100% tính năng hoạt động ổn định và thuận tiện cho bảo trì, mở rộng về sau.

@@ -1,11 +1,12 @@
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import { X, Bed, Percent, Info, RefreshCw, Lock, Copy, Coins, Plus, Trash2, Tag, Share2, Megaphone, UserCheck, Globe } from 'lucide-react';
+import { X, Bed, Percent, Info, RefreshCw, Lock, Copy, Coins, Plus, Trash2, Tag, Share2, Megaphone, UserCheck, Globe, FileText, Printer } from 'lucide-react';
 import { Order, SurchargeItem } from '../types';
 import { useCRM, canUnlockOrder, isOrderLocked } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
 import { CustomSelect } from './CustomSelect';
 import { formatNumber, parseNumber, calculateOrderFinancials } from '@/lib/utils';
+import { TourContractPrintModal } from './orders/TourContractPrintModal';
 
 interface EditOrderModalProps {
   isOpen: boolean;
@@ -20,8 +21,9 @@ export default function EditOrderModal({
   order,
   onSave,
 }: EditOrderModalProps) {
-  const { tours, currentRole, profilesList } = useCRM();
+  const { tours, currentRole, profilesList, passengers } = useCRM();
   const { profile } = useAuth();
+  const [showContractModal, setShowContractModal] = useState(false);
   
   const [singleRoomCount, setSingleRoomCount] = useState(0);
   const [roomShareInfo, setRoomShareInfo] = useState('');
@@ -994,23 +996,35 @@ export default function EditOrderModal({
               <span>Booking sẽ bị khóa sau khi lưu thông tin để tránh ảnh hưởng đến nghiệp vụ kế toán, hãy check thật kỹ.</span>
             </p>
           )}
-          <div className="flex items-center gap-3 w-full justify-end whitespace-nowrap">
+          <div className="flex items-center justify-between gap-3 w-full flex-wrap">
             <button
               type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors whitespace-nowrap shrink-0"
+              onClick={() => setShowContractModal(true)}
+              className="px-3.5 py-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              title="Xem và in hợp đồng du lịch online cho booking này"
             >
-              Hủy bỏ
+              <Printer className="w-3.5 h-3.5 text-blue-600" />
+              <span>In Hợp đồng Online</span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleSave(false)}
-              disabled={isSaving}
-              className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap shrink-0"
-            >
-              {isSaving ? 'Đang lưu...' : 'Lưu thông tin'}
-            </button>
+
+            <div className="flex items-center gap-3 ml-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSaving}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors whitespace-nowrap shrink-0"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave(false)}
+                disabled={isSaving}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap shrink-0"
+              >
+                {isSaving ? 'Đang lưu...' : 'Lưu thông tin'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1051,6 +1065,17 @@ export default function EditOrderModal({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Tour Contract Print Modal */}
+      {showContractModal && (
+        <TourContractPrintModal
+          isOpen={showContractModal}
+          onClose={() => setShowContractModal(false)}
+          order={order}
+          tour={tour}
+          passengers={passengers}
+        />
       )}
     </div>
   );

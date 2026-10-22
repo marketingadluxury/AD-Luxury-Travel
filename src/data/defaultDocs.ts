@@ -223,6 +223,85 @@ Bảng kê hoa hồng trong đơn hàng được trình bày rõ ràng thành 4 
     updated_at: '2026-09-09T00:00:00Z',
   },
   {
+    id: 'doc-tour-contract-drive',
+    slug: 'tour-contract-google-drive',
+    title: 'Hướng dẫn Tạo, In Hợp Đồng Du Lịch & Lưu Vào Google Drive',
+    category: 'sale',
+    order_index: 4,
+    target_roles: ['sale', 'sale_leader', 'operator', 'accounting', 'admin', 'bod'],
+    badge: 'Hợp Đồng & Drive',
+    summary: 'Quy trình tạo mẫu hợp đồng du lịch 12 điều khoản pháp lý, tùy biến trực tiếp, in chuẩn A4 đứng và cơ chế tự động lưu file vào Google Drive thư mục booking.',
+    content: `## 1. Tổng quan Hợp Đồng Du Lịch Online Chuẩn AD Luxury
+
+Mẫu hợp đồng dịch vụ du lịch online trên hệ thống được xây dựng hoàn toàn dựa trên văn bản pháp lý chính thức của **AD Luxury Travel**, phục vụ cho việc ký kết với khách hàng lẻ và đoàn theo từng Booking Tour.
+
+### Các đặc điểm cốt lõi:
+- **Chuẩn pháp lý 12 Điều khoản:** Quy định rõ ràng quyền & nghĩa vụ hai bên, quy định thị thực visa, điều kiện hoàn/hủy chi tiết (phí rớt visa mặc định 5.000.000 đ, các mốc phạt 30% - 50% - 85% - 100%), bảo hiểm du lịch nước ngoài tối đa lên đến 1.200.000.000 đồng/khách/vụ.
+- **Tự động trích xuất dữ liệu booking:** Tên tour, tuyến điểm, thời gian đi/về, chuyến bay, danh sách hành khách đoàn (họ tên, số hộ chiếu/CCCD, ngày sinh), bảng phân tích giá trị hợp đồng (người lớn, trẻ em, phụ thu phòng đơn, giảm giá).
+- **Đọc số tiền thành chữ Tiếng Việt tài chính:** Tự động chuyển đổi tổng giá trị hợp đồng thành chuỗi chữ tiếng Việt chuẩn xác (ví dụ: *Bốn mươi lăm triệu bảy trăm chín mươi nghìn đồng chẵn*).
+- **Mã VietQR Napas 24/7 thông minh:** Tự động tạo mã QR động dẫn thẳng về tài khoản Vietcombank CN Tân Định - STK \`1031141893\` của AD Luxury kèm số tiền và nội dung chuyển khoản theo mã booking.
+- **Linh hoạt 2 đợt hoặc 3 đợt thanh toán:** Cho phép chuyển đổi dễ dàng giữa tiến độ thanh toán 2 đợt hoặc 3 đợt (kèm thời hạn cụ thể từng đợt).
+
+---
+
+## 2. Chuẩn Khổ In A4 Đứng (Vertical / Portrait) & Tùy Biến Trực Tiếp
+
+### Thiết kế tối ưu cho in ấn văn bản hành chính:
+- **Khổ giấy:** Chuẩn A4 đứng (\`size: A4 portrait; margin: 15mm 12mm 15mm 15mm;\`).
+- **Phông chữ & cỡ chữ:** Font Times New Roman thanh lịch; Tiêu đề 15pt in hoa đậm; Quốc hiệu 12pt đậm; Các điều khoản 11.5pt đậm; Nội dung 11pt giãn dòng 1.45; Bảng biểu 10pt.
+- **Cơ chế chống ngắt trang dở dang (\`.avoid-break\`):** Mỗi điều khoản, bảng số liệu và khối chữ ký hai bên được bao bọc bởi quy tắc chống rách trang giữa chừng, đảm bảo văn bản in ra liền mạch, đẹp mắt.
+
+### Bảng cài đặt tùy biến (Drawer):
+- Bấm nút **"Tùy biến HĐ"** trên thanh tiêu đề Modal để mở Drawer chỉnh sửa:
+  - **Tab Thanh toán:** Chọn 2 đợt hoặc 3 đợt, ngày hạn từng đợt, số tiền từng đợt (hỗ trợ phân tách hàng nghìn bằng dấu chấm rõ ràng).
+  - **Tab Bên A (AD Luxury):** Cho phép sửa thông tin người đại diện, chức vụ, số giấy ủy quyền, tài khoản ngân hàng, mức bảo hiểm, phí rớt visa.
+  - **Tab Bên B (Khách hàng):** Chỉnh sửa người đại diện ký, số CCCD/Hộ chiếu, địa chỉ, số điện thoại.
+  - **Tab Tùy chọn:** Bật/tắt in Phụ lục chương trình tour chi tiết & hướng dẫn hồ sơ visa.
+  - **Tab Điều khoản:** Bổ sung các cam kết đặc thù theo từng đoàn khách.
+- **Nút Lưu mẫu:** Lưu cấu hình Bên A vào máy để tái sử dụng cho các lần sau.
+- **Nút Khôi phục mặc định:** Trả lại mẫu nguyên bản chuẩn của AD Luxury chỉ với 1 click.
+
+---
+
+## 3. Cơ Chế Tự Động Lưu File Hợp Đồng Vào Google Drive
+
+Hệ thống tích hợp cơ chế đồng bộ và lưu trữ tệp hợp đồng trực tiếp lên Google Drive của công ty, hoàn toàn tự động và an toàn.
+
+### Vị trí lưu trữ trong Google Drive:
+File hợp đồng sẽ được lưu đúng vào thư mục đơn hàng của booking:
+
+\`Google Drive > AD Luxury Travel > Tour > [Mã Tour] > Đơn hàng > [Mã Đơn Hàng]\`
+
+### Quy chuẩn đặt tên file:
+Hệ thống tự động chuẩn hóa tiếng Việt sạch không dấu theo công thức:
+
+\`HopDong_[MaTour]_[TenKhach]_[MaDon].html\`
+
+> 📌 **Ví dụ:** Booking mã \`4C90F1D6\`, tour Úc \`OBAU040726\`, khách Nguyễn Minh Trúc Tiên sẽ có tên file là:  
+> \`HopDong_OBAU040726_NguyenMinhTrucTien_DH-4C90F1D6.html\`
+
+### Hai hình thức lưu trữ linh hoạt:
+1. **Tự động lưu khi in:** Ngay khi bấm **"In Hợp đồng / PDF"**, hệ thống tự động đóng gói toàn bộ hợp đồng thành file HTML độc lập và đẩy lên Google Drive ngầm, trong khi hộp thoại in của trình duyệt vẫn mở bình thường mà không phải chờ đợi.
+2. **Nút chủ động "Lưu Google Drive":** Nằm ngay trên thanh công cụ Modal, cho phép nhân viên lưu file lên Drive bất kỳ lúc nào mà không cần bấm lệnh in.
+
+### Gắn liên kết xem file trực tiếp vào đơn hàng:
+- Ngay sau khi lưu thành công, đường dẫn xem trực tiếp (\`contract_url\`) được tự động cập nhật vào cơ sở dữ liệu của đơn hàng:
+  - Trên Modal xuất hiện nút **"Xem trên Drive"** để mở xem file ngay trên trình duyệt.
+  - Trên danh sách đơn hàng (\`/orders\`) xuất hiện huy hiệu **"Đã tải hợp đồng"** kèm nút **"Xem file"** cho toàn bộ nhân viên liên quan tra cứu thuận tiện.
+
+---
+
+## 4. Hướng dẫn thao tác nhanh cho Nhân viên Sale & Điều hành
+
+1. Truy cập trang **Quản lý Đơn hàng** (\`/orders\`) hoặc mở chi tiết booking cần in hợp đồng.
+2. Tại khối Hợp đồng dịch vụ hoặc danh sách thao tác nhanh, bấm **"In HĐ Online"**.
+3. Xem trước hợp đồng trên giao diện chuẩn A4. Nếu cần điều chỉnh đợt thanh toán hoặc thông tin đại diện, bấm **"Tùy biến HĐ"**.
+4. Bấm **"In Hợp đồng / PDF"** để in ra giấy/xuất PDF cho khách ký, hoặc bấm **"Lưu Google Drive"** để lưu trữ lên hệ thống đám mây.
+5. Sau vài giây, kiểm tra huy hiệu **"Đã tải hợp đồng"** trên đơn hàng để xác nhận file đã được lưu thành công vào đúng thư mục booking trên Google Drive.`,
+    author: 'Phòng Kinh Doanh & CNTT',
+    updated_at: '2026-10-22T00:00:00Z',
+  },
+  {
     id: 'doc-tour-management',
     slug: 'tour-management',
     title: 'Quy trình Khai báo Tour mới & Quản lý Overbooking (+OB)',

@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import {
   getGoogleDriveAccessToken,
+  getActiveDriveConfig,
   getFolderWebViewLink,
   getOrCreatePassengerFolder,
   getOrCreateTourSubFolderV2,
@@ -379,8 +380,8 @@ router.post(['/upload', '/api/upload'], (req, res, next) => {
   }
 });
 
-// Unified Invoice Receipt Upload API
-router.post(['/upload-invoice-receipt', '/api/upload-invoice-receipt', '/drive/upload', '/api/drive/upload'], upload.single('file'), async (req, res) => {
+// Unified Invoice Receipt & Contract Upload API
+router.post(['/upload-invoice-receipt', '/api/upload-invoice-receipt', '/upload-contract', '/api/upload-contract', '/drive/upload', '/api/drive/upload'], upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
     if (!file) {
@@ -394,15 +395,18 @@ router.post(['/upload-invoice-receipt', '/api/upload-invoice-receipt', '/drive/u
 
     const orderCodeReq = decodeUTF8(req.body.orderCode);
     const bodyTourCodeReq = decodeUTF8(req.body.tourCode);
+    const customFileName = req.body.customFileName ? decodeUTF8(req.body.customFileName) : null;
+    const isContract = req.body.isContract === 'true' || req.body.isContract === true || req.body.uploadType === 'contract';
 
     if (!orderCodeReq && !bodyTourCodeReq) {
       res.status(400).json({ error: 'Thiếu thông tin mã đơn hàng hoặc mã tour.' });
       return;
     }
 
-    const hasServiceAccount = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY);
-    const hasOAuth = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
-    const driveActive = hasServiceAccount || hasOAuth;
+    const driveConfig = await getActiveDriveConfig();
+    const hasServiceAccount = !!(driveConfig.service_account_email && driveConfig.service_account_private_key);
+    const hasOAuth = !!(driveConfig.client_id && driveConfig.client_secret && driveConfig.refresh_token);
+    const driveActive = (driveConfig.is_active !== false) && (hasServiceAccount || hasOAuth);
 
     if (!driveActive) {
       res.status(400).json({ error: 'Chưa cấu hình tài khoản Google Drive. Hệ thống yêu cầu chỉ lưu trữ file trên Google Drive.' });
@@ -414,7 +418,7 @@ router.post(['/upload-invoice-receipt', '/api/upload-invoice-receipt', '/drive/u
 
     const actualOrderCode = formatOrderCode(orderId || orderCodeReq || bodyTourCodeReq || 'CHIPHI');
     const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
-    const fileName = `${actualOrderCode}_${Date.now()}_${cleanOriginalName}`;
+    const fileName = customFileName ? customFileName.trim() : `${actualOrderCode}_${Date.now()}_${cleanOriginalName}`;
 
     try {
       const token = await getGoogleDriveAccessToken();
@@ -429,9 +433,24 @@ router.post(['/upload-invoice-receipt', '/api/upload-invoice-receipt', '/drive/u
       }
 
       const result = await uploadFileToGoogleDrive(fileName, file.mimetype, file.buffer, folderId, token);
+
+      // Nếu là hợp đồng dịch vụ du lịch, tự động cập nhật contract_url vào bảng bookings
+      if (isContract && (orderId || orderCodeReq)) {
+        const targetBookingId = orderId || orderCodeReq;
+        try {
+          await supabase
+            .from('bookings')
+            .update({ contract_url: result.webViewLink })
+            .or(`id.eq.${targetBookingId},code.eq.${targetBookingId}`);
+        } catch (dbErr) {
+          console.warn('[Upload Contract] Lỗi cập nhật contract_url trong database:', dbErr);
+        }
+      }
+
       res.json({
         success: true,
         url: result.webViewLink,
+        fileId: result.id,
         fileName: fileName,
         storage: 'drive'
       });

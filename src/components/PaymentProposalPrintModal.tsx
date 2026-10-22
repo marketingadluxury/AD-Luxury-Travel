@@ -142,37 +142,6 @@ export default function PaymentProposalPrintModal({ isOpen, onClose, proposal }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
-      {/* Print Stylesheet */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #payment-proposal-print-area, #payment-proposal-print-area * {
-            visibility: visible !important;
-          }
-          #payment-proposal-print-area {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100vw !important;
-            min-height: 100vh !important;
-            margin: 0 !important;
-            padding: 18mm 20mm 20mm 20mm !important;
-            background: white !important;
-            z-index: 999999 !important;
-            box-shadow: none !important;
-            border: none !important;
-            color: #000 !important;
-            font-family: 'Times New Roman', Times, serif !important;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-        }
-      `}</style>
-
       {/* Modal Container */}
       <div className="bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
         {/* Modal Toolbar (Screen only) */}
