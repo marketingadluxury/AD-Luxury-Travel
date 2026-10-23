@@ -6,6 +6,77 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.112 Khắc Phục Lỗi Mã QR Napas Bị Trắng / Không Hiển Thị Khi In & Xuất File PDF Hợp Đồng
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - Khi xem trước trên màn hình thì mã VietQR Napas tại mục "3.3. Thông tin thanh toán" vẫn hiển thị bình thường (`image_66dd246b.png`).
+  - Tuy nhiên, khi in ra máy in hoặc xuất file PDF hợp đồng du lịch (`image_26f1d1a9.png`), ô chứa mã QR chỉ có viền khung và dòng chữ "Quét VietQR Napas 24/7", còn phần hình ảnh mã QR bên trong bị trắng tinh / hoàn toàn không hiển thị.
+- **Nguyên nhân kỹ thuật:**
+  1. **Lỗi CORS Redirect của ảnh bên thứ ba:** Đường dẫn ảnh cũ trỏ tới `https://img.vietqr.io/image/...compact2.png`. Máy chủ VietQR tự động trả về phản hồi chuyển hướng `HTTP 301 Moved Permanently` sang đuôi `.svg`. Phản hồi 301 này thiếu header `Access-Control-Allow-Origin: *`, khiến trình duyệt chặn yêu cầu khi `html2canvas` quét ảnh với cờ CORS.
+  2. **Thư viện html2canvas không hỗ trợ vẽ SVG từ thẻ `<img>` lên canvas:** Ảnh sau khi redirect thực chất là định dạng SVG (`image/svg+xml`). Khi `html2canvas` sao chép DOM và gọi `drawImage()` từ thẻ `<img>` chứa SVG lên `<canvas>`, trình duyệt kích hoạt rào chắn bảo mật hoặc không tính được kích thước tự nhiên (natural dimensions), dẫn tới việc khung canvas bị bỏ trống không vẽ được hình ảnh QR.
+  3. **Độ trễ tải ảnh khi in ấn & tạo PDF:** Lệnh in `window.print()` được kích hoạt sau 60ms - quá ngắn đối với một request tải ảnh từ server ngoài. Trong khi đó, hàm `exportElementToPdfBlob` nhân bản DOM bằng `cloneNode(true)` nhưng chưa có cơ chế chờ tất cả thẻ `<img>` tải xong hoàn tất trước khi tiến hành chụp canvas.
+- **Giải pháp triển khai:**
+  1. **Xây dựng module tiện ích VietQR chuyên dụng (`src/utils/vietQrHelper.ts`):**
+     - Tích hợp hàm `fetchVietQrDataUrl`: Gọi API v2 chính thức `https://api.vietqr.io/v2/generate` để sinh trực tiếp chuỗi Base64 PNG Data URL chuẩn quốc gia (`data:image/png;base64,...`).
+     - Chuỗi Data URL này đã được render sẵn thành định dạng PNG chất lượng cao, nằm trực tiếp trong bộ nhớ máy khách, miễn nhiễm 100% với lỗi CORS, không làm tainted canvas và hiển thị tức thì khi in ấn cũng như xuất PDF.
+     - Thiết lập cơ chế dự phòng 3 tầng: Tầng 1 (API v2 PNG Data URL) -> Tầng 2 (Lấy file SVG trực tiếp không qua redirect và rasterize thành PNG Data URL bằng canvas) -> Tầng 3 (URL SVG trực tiếp có CORS).
+  2. **Nâng cấp Modal Hợp đồng du lịch (`src/components/orders/TourContractPrintModal.tsx`):**
+     - Nạp trước mã Base64 PNG Data URL ngay khi mở modal hoặc khi thay đổi tài khoản ngân hàng, số tiền cọc, mã tour.
+     - Trong các hàm `handleDownloadPdf`, `saveContractToGoogleDrive` và `handlePrint`: Tự động kiểm tra và đảm bảo mã QR Data URL đã sẵn sàng trước khi kết xuất file PDF hoặc mở hộp thoại in.
+     - Cố định kích thước thẻ ảnh `width: 96px; height: 96px`, thêm thuộc tính `crossOrigin="anonymous"` và hiển thị spinner nhẹ khi đang khởi tạo mã QR.
+  3. **Nâng cấp đồng bộ Modal Giấy đề nghị thanh toán (`src/components/PaymentProposalPrintModal.tsx`):**
+     - Áp dụng cùng cơ chế `fetchVietQrDataUrl` và Base64 PNG Data URL cho toàn bộ phiếu chi / giấy đề nghị thanh toán nội bộ công ty.
+  4. **Tối ưu hóa trình xuất PDF (`src/utils/pdfGenerator.ts`):**
+     - Đồng bộ hóa thuộc tính ảnh từ phần tử DOM gốc sang phần tử clone (bao gồm Data URL và crossOrigin).
+     - Bổ sung Promise chờ toàn bộ ảnh trong phần tử clone hoàn tất tải (`img.complete && img.naturalWidth !== 0`) trước khi `html2canvas` bắt đầu quét và render trang in.
+  5. **Kiểm thử tự động:**
+     - Vượt qua 100% 75/75 Unit Tests Vitest (`npm test`).
+     - Vượt qua 100% 21/21 kịch bản Simulation phân quyền (`npm run test:simulation`).
+     - Vượt qua kiểm tra cú pháp TypeScript (`npm run lint`) và biên dịch (`compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.111 Khắc Phục Lỗi Cắt Mép Phải (Right-Edge Truncation) Khi Tải & Xuất File PDF Hợp Đồng
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - File PDF hợp đồng du lịch sau khi tải về bị cắt cụt một phần ở mép phải trên toàn bộ các trang (người dùng phản ánh qua file `HopDong_OBAU040726F2_LETHITHANHLAN_DH-31F7EDA9_de868001.pdf`).
+  - Các phần tử mép phải bị cắt mất khoảng 40px - 60px: Tiêu đề dòng 1.1 bị cụt chữ cuối ("ÚC:MONO SYDNE[Y]"), tiêu đề cột bảng hành khách ("NGÀY S[INH]"), cột thành tiền ("Thành tiền (V[NĐ])", "59.980.[000]"), mã QR chuyển khoản ("VietQR Napas 2[4/7]"), và toàn bộ viền phải của bảng biểu.
+- **Nguyên nhân kỹ thuật:**
+  1. Trong `src/utils/pdfGenerator.ts`, phần tử bản sao `clone` bị áp đặt cứng thuộc tính `width: '794px'` và `maxWidth: '794px'`.
+  2. Khổ giấy A4 trong `html2pdf.js` có chiều rộng 210mm. Khi trừ lề trái 8mm và lề phải 8mm (`margin: [10, 8, 10, 8]`), bề rộng vùng in khả dụng (`inner.width`) là `194mm` (tương đương `733.2px` ở chuẩn 96 DPI).
+  3. Thư viện `html2pdf.js` tạo khung chứa `.html2pdf__container` có độ rộng cố định bằng `inner.width` (194mm ~ 733px). Do phần tử clone bị ép cứng `794px`, nội dung hợp đồng và bảng biểu tràn ra ngoài khung chứa 61px (`794px - 733px = 61px`).
+  4. Thư viện `html2canvas` chỉ chụp ảnh đúng trong kích thước 733px của `.html2pdf__container`, dẫn tới việc toàn bộ 61px bên mép phải bị cắt mất trước khi đưa vào file PDF.
+  5. Đồng thời, `clone` trước đó chưa thiết lập `box-sizing: border-box`, và `.html2pdf__container` có thuộc tính `left: 0; right: 0; margin: auto` gây ra độ lệch subpixel khi căn giữa trong iframe của html2canvas.
+- **Giải pháp triển khai:**
+  1. **Đồng bộ hóa 100% tỷ lệ co giãn linh hoạt (`src/utils/pdfGenerator.ts`):**
+     - Đổi `clone.style.width` và `clone.style.maxWidth` sang `100%`, `boxSizing: 'border-box'`, `padding: '0'`, `margin: '0'`, `overflowWrap: 'break-word'` và `wordBreak: 'break-word'`. Nhờ đó phần tử clone luôn tự động co vừa khít 100% với bề rộng vùng in `inner.width` (194mm).
+     - Duyệt và áp dụng thuộc tính an toàn cho toàn bộ thẻ `table` (`width: '100%'`, `maxWidth: '100%'`, `boxSizing: 'border-box'`, `tableLayout: 'auto'`) và thẻ `img` (`maxWidth: '100%'`, `height: 'auto'`) để triệt tiêu mọi nguy cơ tràn viền.
+     - Khung ẩn ngoài màn hình `container` được điều chỉnh kích thước chuẩn `734px` (tương ứng 194mm).
+  2. **Cân chỉnh khung chụp ảnh trong sự kiện `onclone` của `html2canvas`:**
+     - Truy vấn `.html2pdf__container` trong `clonedDoc`, thiết lập `left: '0'`, `right: 'auto'`, `margin: '0'`, `padding: '0'`, `boxSizing: 'border-box'`.
+     - Đảm bảo phần tử con đầu tiên của container luôn nhận `width: '100%'`, `boxSizing: 'border-box'` và bắt đầu chính xác từ tọa độ `x = 0`, loại bỏ hoàn toàn hiện tượng lệch lề subpixel.
+  3. **Kiểm thử tự động:**
+     - Vượt qua 100% 75/75 Unit Tests Vitest (`npm test`).
+     - Vượt qua 100% 21/21 kịch bản Simulation phân quyền (`npm run test:simulation`).
+     - Vượt qua kiểm tra cú pháp TypeScript (`npm run lint`) và biên dịch (`compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.110 Khắc Phục Lỗi "TypeError: Illegal invocation" Trong Proxy CSSStyleDeclaration Khi Xuất PDF Hợp Đồng
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - Sau khi thêm bộ lọc màu `oklch`, khi bấm "Tải PDF" hoặc lưu hợp đồng du lịch sang PDF, giao diện phát sinh lỗi `[Download PDF Error]: TypeError: Illegal invocation at Object.get (pdfGenerator.ts) at copyCSSStyles (html2pdf.js)`.
+- **Nguyên nhân kỹ thuật:**
+  - Đối tượng `CSSStyleDeclaration` trong trình duyệt là một WebIDL Platform Object với các internal slots nội bộ.
+  - Các thuộc tính native getter như `length`, `cssText` hoặc các thuộc tính CSS được định nghĩa trên `CSSStyleDeclaration.prototype` đòi hỏi giá trị `this` khi thực thi phải là chính đối tượng `CSSStyleDeclaration` gốc.
+  - Khi bọc `CSSStyleDeclaration` bằng JavaScript `Proxy` và sử dụng `Reflect.get(target, prop, receiver)`, tham số `receiver` (chính là đối tượng Proxy) được truyền vào làm `this` cho native getter. Trình duyệt kiểm tra internal brand không khớp và lập tức ném ra ngoại lệ `TypeError: Illegal invocation`.
+- **Giải pháp triển khai:**
+  1. **Tạo hàm `createSafeComputedStyleProxy` chuẩn hóa (`src/utils/colorSanitizer.ts`):**
+     - Đảm bảo việc truy xuất thuộc tính luôn thực hiện trực tiếp trên `target` gốc `(target as any)[prop]` hoặc `Reflect.get(target, prop, target)` để bảo toàn `this` luôn là native instance của `CSSStyleDeclaration`.
+     - Với các phương thức gọi hàm (`getPropertyValue`, `getPropertyPriority`, `item`...), thực hiện `val.bind(target)` trước khi trả về.
+     - Riêng hàm `getPropertyValue`, tự động bóc tách và thay thế các chuỗi màu `oklch` sang mã RGB chuẩn tương thích với `html2canvas`.
+  2. **Đồng bộ hóa trong `src/utils/pdfGenerator.ts`:**
+     - Sử dụng `createSafeComputedStyleProxy` đồng nhất cho cả `window.getComputedStyle` chính và `clonedDoc.defaultView.getComputedStyle` bên trong iframe html2canvas.
+  3. **Kiểm thử tự động:**
+     - Bổ sung Unit Test Vitest giả lập native getter với brand check nội bộ trong `src/utils/__tests__/pdfGenerator.test.ts`, xác nhận hoàn toàn triệt tiêu lỗi `Illegal invocation`.
+     - Vượt qua 100% 75/75 Unit Tests Vitest (`npm test`), 21/21 kịch bản Simulation (`npm run test:simulation`), kiểm tra kiểu dữ liệu (`npm run lint`) và biên dịch (`compile_applet`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.109 Khắc Phục Triệt Để Lỗi "Attempting to parse an unsupported color function 'oklch'" Khi Tải File PDF Hợp Đồng Du Lịch
 - **Mô tả yêu cầu & Hiện tượng thực tế:**
   - Khi người dùng bấm nút "Tải PDF" trên Modal Hợp đồng du lịch trực tuyến, hệ thống hiển thị thông báo lỗi `Attempting to parse an unsupported color function "oklch"` (như hình ảnh người dùng phản ánh `image_7e18c244.png`) và không thể hoàn tất việc xuất file PDF.

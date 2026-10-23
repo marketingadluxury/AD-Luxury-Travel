@@ -96,3 +96,49 @@ export function sanitizeOklchColors(str: string): string {
     }
   });
 }
+
+/**
+ * Bọc CSSStyleDeclaration trong Proxy an toàn để chuyển đổi các giá trị oklch sang rgb.
+ * Lưu ý cốt tử: Tuyệt đối KHÔNG truyền receiver vào Reflect.get vì các native getter của
+ * CSSStyleDeclaration (length, cssText, các thuộc tính CSS) yêu cầu "this" phải là native instance.
+ * Nếu truyền Proxy receiver, WebIDL binding của trình duyệt sẽ ném lỗi "TypeError: Illegal invocation".
+ */
+export function createSafeComputedStyleProxy(style: CSSStyleDeclaration): CSSStyleDeclaration {
+  if (!style) return style;
+
+  return new Proxy(style, {
+    get(target, prop) {
+      // 1. Luôn truy xuất trực tiếp trên target (hoặc dùng target làm receiver) để đảm bảo "this"
+      // bên trong các getter native (length, cssText, ...) luôn là CSSStyleDeclaration instance thật
+      let val: any;
+      try {
+        val = (target as any)[prop];
+      } catch {
+        val = Reflect.get(target, prop, target);
+      }
+
+      // 2. Nếu là hàm phương thức (getPropertyValue, getPropertyPriority, item...), bind với target
+      if (typeof val === 'function') {
+        const boundFn = val.bind(target);
+        if (prop === 'getPropertyValue') {
+          return function(propertyName: string) {
+            const res = boundFn(propertyName);
+            if (typeof res === 'string' && res.includes('oklch')) {
+              return sanitizeOklchColors(res);
+            }
+            return res;
+          };
+        }
+        return boundFn;
+      }
+
+      // 3. Nếu là chuỗi màu chứa oklch (ví dụ truy xuất style.color hoặc style.backgroundColor)
+      if (typeof val === 'string' && val.includes('oklch')) {
+        return sanitizeOklchColors(val);
+      }
+
+      return val;
+    }
+  });
+}
+

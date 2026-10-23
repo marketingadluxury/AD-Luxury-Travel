@@ -24,6 +24,7 @@ import { NumericFormatInput } from '@/components/common/NumericFormatInput';
 import { useCRM } from '@/context/CRMContext';
 import { safeFetchApi } from '@/lib/utils';
 import { exportElementToPdfBlob, downloadPdfBlob } from '@/utils/pdfGenerator';
+import { buildVietQrDirectUrl, fetchVietQrDataUrl, getBankBinFromName } from '@/utils/vietQrHelper';
 import toast from 'react-hot-toast';
 
 export interface TourContractCustomField {
@@ -122,10 +123,10 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
   const destinationName = tour?.destination || 'QUỐC TẾ';
   const defaultContractTitle = `HỢP ĐỒNG DỊCH VỤ DU LỊCH ${destinationName.toUpperCase()}`;
   
-  // Format số hợp đồng theo mẫu: _____/HĐDV/2026 – [Mã Tour].[Tên Sale/Mã Đơn]
-  const tourCodeClean = (tour?.code || 'TOUR').replace(/\s+/g, '');
-  const saleCodeClean = (order?.created_by || orderShortId || 'SALE').replace(/\s+/g, '').toUpperCase().substring(0, 6);
-  const defaultContractNumber = `_____/HĐDV/${currentYear} – ${tourCodeClean}.${saleCodeClean}`;
+  // Format số hợp đồng theo mẫu: _____/HDDV/2026 – [Mã Tour]
+  const rawTourCode = tour?.code || 'TOUR';
+  const tourCodeClean = rawTourCode.split('.')[0].replace(/\s+/g, '');
+  const defaultContractNumber = `_____/HDDV/${currentYear} – ${tourCodeClean}`;
 
   const [contractTitle, setContractTitle] = useState(defaultContractTitle);
   const [contractNumber, setContractNumber] = useState(defaultContractNumber);
@@ -217,14 +218,62 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
   // Điều khoản bổ sung tùy biến (Custom Fields)
   const [customFields, setCustomFields] = useState<TourContractCustomField[]>([]);
 
-  // VietQR URL
+  // VietQR State & Helpers
+  const [vietQrDataUrl, setVietQrDataUrl] = useState<string>('');
+  const [isLoadingQr, setIsLoadingQr] = useState<boolean>(false);
+
+  // Bank BIN cho ngân hàng Bên A
+  const partyABankBin = useMemo(() => {
+    return getBankBinFromName(partyABankName);
+  }, [partyABankName]);
+
+  // VietQR URL trực tiếp (SVG chuẩn CORS)
   const vietQrUrl = useMemo(() => {
-    const cleanAccount = partyABankAccount.replace(/\s+/g, '');
-    const amount = step1Amount || totalContractPrice;
-    const memo = encodeURIComponent(`HD ${tourCodeClean} ${partyBName.replace(/\s+/g, '')}`.substring(0, 25));
-    // Vietcombank BIN: 970436
-    return `https://img.vietqr.io/image/970436-${cleanAccount}-compact2.png?amount=${amount}&addInfo=${memo}&accountName=${encodeURIComponent(partyABankAccountHolder)}`;
-  }, [partyABankAccount, partyABankAccountHolder, step1Amount, totalContractPrice, tourCodeClean, partyBName]);
+    return buildVietQrDirectUrl({
+      bankBin: partyABankBin,
+      accountNo: partyABankAccount,
+      accountName: partyABankAccountHolder,
+      amount: 0, // Không điền sẵn số tiền theo yêu cầu
+      memo: `HD ${tourCodeClean} ${partyBName.replace(/\s+/g, '')}`,
+      template: 'compact2'
+    });
+  }, [partyABankBin, partyABankAccount, partyABankAccountHolder, tourCodeClean, partyBName]);
+
+  // Tự động tải Base64 PNG Data URL cho mã QR để in ấn và xuất PDF sắc nét 100%
+  useEffect(() => {
+    if (!isOpen || !includeVietQR || !partyABankAccount) return;
+    let isMounted = true;
+    setIsLoadingQr(true);
+
+    fetchVietQrDataUrl({
+      bankBin: partyABankBin,
+      accountNo: partyABankAccount,
+      accountName: partyABankAccountHolder,
+      amount: 0, // Không điền sẵn số tiền theo yêu cầu
+      memo: `HD ${tourCodeClean} ${partyBName.replace(/\s+/g, '')}`,
+      template: 'compact2'
+    }).then(dataUrl => {
+      if (isMounted && dataUrl) {
+        setVietQrDataUrl(dataUrl);
+      }
+    }).catch(err => {
+      console.warn('[TourContractPrintModal] Lỗi tải VietQR Data URL:', err);
+    }).finally(() => {
+      if (isMounted) setIsLoadingQr(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    isOpen,
+    includeVietQR,
+    partyABankBin,
+    partyABankAccount,
+    partyABankAccountHolder,
+    tourCodeClean,
+    partyBName
+  ]);
 
   // Thêm custom field
   const handleAddCustomField = () => {
@@ -388,6 +437,26 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
     }
 
     try {
+      // Đảm bảo mã QR VietQR đã nạp thành Data URL trước khi kết xuất PDF
+      if (includeVietQR && !vietQrDataUrl && partyABankAccount) {
+        try {
+          const freshQr = await fetchVietQrDataUrl({
+            bankBin: partyABankBin,
+            accountNo: partyABankAccount,
+            accountName: partyABankAccountHolder,
+            amount: 0,
+            memo: `HD ${tourCodeClean} ${partyBName.replace(/\s+/g, '')}`,
+            template: 'compact2'
+          });
+          if (freshQr) {
+            setVietQrDataUrl(freshQr);
+            await new Promise(r => setTimeout(r, 100));
+          }
+        } catch (e) {
+          console.warn('[saveContractToGoogleDrive] Không thể nạp trước QR:', e);
+        }
+      }
+
       const printElement = document.getElementById('official-tour-contract-print-area');
       if (!printElement) {
         throw new Error('Chưa thể lấy nội dung hợp đồng để lưu');
@@ -457,6 +526,27 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
     const toastId = toast.loading('Đang khởi tạo file PDF hợp đồng chuẩn A4...');
     try {
       setIsDownloadingPdf(true);
+
+      // Đảm bảo mã QR VietQR đã nạp thành Data URL trước khi kết xuất PDF
+      if (includeVietQR && !vietQrDataUrl && partyABankAccount) {
+        try {
+          const freshQr = await fetchVietQrDataUrl({
+            bankBin: partyABankBin,
+            accountNo: partyABankAccount,
+            accountName: partyABankAccountHolder,
+            amount: 0,
+            memo: `HD ${tourCodeClean} ${partyBName.replace(/\s+/g, '')}`,
+            template: 'compact2'
+          });
+          if (freshQr) {
+            setVietQrDataUrl(freshQr);
+            await new Promise(r => setTimeout(r, 100));
+          }
+        } catch (e) {
+          console.warn('[handleDownloadPdf] Không thể nạp trước QR:', e);
+        }
+      }
+
       const maTour = cleanFileNamePart(tour?.code) || 'TOUR';
       const tenKhach = cleanFileNamePart(partyBName) || cleanFileNamePart(order.booker_name) || cleanFileNamePart(order.customer_name) || 'KhachHang';
       const maDon = `DH-${orderShortId}`;
@@ -486,11 +576,29 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
   }, []);
 
   // In hợp đồng ra máy in / trình duyệt (KHÔNG tự động upload lên Drive)
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (includeVietQR && !vietQrDataUrl && partyABankAccount) {
+      try {
+        const freshQr = await fetchVietQrDataUrl({
+          bankBin: partyABankBin,
+          accountNo: partyABankAccount,
+          accountName: partyABankAccountHolder,
+          amount: 0,
+          memo: `HD ${tourCodeClean} ${partyBName.replace(/\s+/g, '')}`,
+          template: 'compact2'
+        });
+        if (freshQr) {
+          setVietQrDataUrl(freshQr);
+          await new Promise(r => setTimeout(r, 100));
+        }
+      } catch (e) {
+        console.warn('[handlePrint] Không thể nạp trước QR:', e);
+      }
+    }
     document.body.classList.add('is-printing-contract');
     setTimeout(() => {
       window.print();
-    }, 60);
+    }, 100);
   };
 
   if (!isOpen || !order) return null;
@@ -501,7 +609,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
       <div className="contract-modal-container relative bg-slate-100 rounded-2xl w-full max-w-5xl my-auto shadow-2xl flex flex-col border border-slate-300 overflow-hidden print:border-none print:shadow-none print:bg-white print:w-full print:max-w-none print:rounded-none print:static print:block print:m-0 print:p-0 print:overflow-visible">
         
         {/* Modal Top Bar (Screen only) */}
-        <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shadow-md shrink-0 no-print">
+        <div className="px-4 py-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-wrap items-center justify-between gap-3 shadow-md shrink-0 no-print">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
               <FileCheck2 className="w-5 h-5" />
@@ -533,17 +641,17 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 justify-end">
             {currentContractUrl && (
               <a
                 href={currentContractUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                className="h-9 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
                 title="Mở xem file PDF hợp đồng trực tiếp trên Google Drive"
               >
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden md:inline">Xem trên Drive</span>
+                <span>Xem trên Drive</span>
               </a>
             )}
 
@@ -551,18 +659,18 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
               type="button"
               disabled={isDownloadingPdf}
               onClick={handleDownloadPdf}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer border border-slate-700"
+              className="h-9 px-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer border border-slate-700 whitespace-nowrap"
               title="Tải file PDF hợp đồng chuẩn A4 trực tiếp về máy"
             >
               {isDownloadingPdf ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Đang tạo PDF...</span>
+                  <span>Đang tải...</span>
                 </>
               ) : (
                 <>
-                  <Download className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Tải PDF</span>
+                  <Download className="w-3.5 h-3.5 shrink-0" />
+                  <span>Tải PDF</span>
                 </>
               )}
             </button>
@@ -573,7 +681,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                 type="button"
                 disabled={isSavingDrive}
                 onClick={() => setShowConfirmOverwrite(true)}
-                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer border border-amber-500/40"
+                className="h-9 px-3 bg-amber-600 hover:bg-amber-500 active:scale-95 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer border border-amber-500/40 whitespace-nowrap"
                 title="Hợp đồng đã có trên Google Drive. Bấm để lưu lại bản hợp đồng mới (sẽ xóa bản cũ)"
               >
                 {isSavingDrive ? (
@@ -583,9 +691,8 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="w-3.5 h-3.5 text-amber-100" />
-                    <span className="hidden sm:inline">Cập nhật lại HĐ mới</span>
-                    <span className="sm:hidden">Lưu lại HĐ</span>
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-100 shrink-0" />
+                    <span>Cập nhật HĐ mới</span>
                   </>
                 )}
               </button>
@@ -594,19 +701,18 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                 type="button"
                 disabled={isSavingDrive}
                 onClick={() => saveContractToGoogleDrive(false, false)}
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                className="h-9 px-3 bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
                 title="Lưu file PDF hợp đồng này vào đúng thư mục đơn hàng trên Google Drive"
               >
                 {isSavingDrive ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Đang lưu Drive...</span>
+                    <span>Đang lưu...</span>
                   </>
                 ) : (
                   <>
-                    <Cloud className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Lưu Google Drive</span>
-                    <span className="sm:hidden">Lưu Drive</span>
+                    <Cloud className="w-3.5 h-3.5 shrink-0" />
+                    <span>Lưu Drive</span>
                   </>
                 )}
               </button>
@@ -615,30 +721,30 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
             <button
               type="button"
               onClick={() => setShowCustomizer(!showCustomizer)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+              className={`h-9 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border whitespace-nowrap ${
                 showCustomizer 
                   ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs' 
                   : 'bg-white/10 hover:bg-white/20 text-slate-200 border-white/10'
               }`}
               title="Mở bảng cấu hình tùy biến hợp đồng"
             >
-              <Settings2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{showCustomizer ? 'Ẩn cài đặt' : 'Tùy biến HĐ'}</span>
+              <Settings2 className="w-3.5 h-3.5 shrink-0" />
+              <span>{showCustomizer ? 'Ẩn cài đặt' : 'Tùy biến HĐ'}</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              className="h-9 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-3.5 h-3.5 shrink-0" />
               <span>In Hợp đồng / PDF</span>
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              className="w-9 h-9 rounded-lg bg-white/10 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
               title="Đóng cửa sổ"
             >
               <X className="w-4 h-4" />
@@ -655,7 +761,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
             <div 
               id="official-tour-contract-print-area" 
               className="w-full max-w-[794px] bg-white shadow-xl rounded-sm p-8 sm:p-10 text-slate-900 border border-slate-300 print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full print:block print:static"
-              style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '11pt', lineHeight: 1.45 }}
+              style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '11pt', lineHeight: 1.45, boxSizing: 'border-box' }}
             >
               
               {/* QUỐC HIỆU - TIÊU NGỮ */}
@@ -671,7 +777,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                   {contractTitle}
                 </h1>
                 <p className="text-[11pt] font-semibold text-slate-800">
-                  Số: : <span className="font-mono tracking-tight">{contractNumber}</span>
+                  Số: <span className="font-mono tracking-tight">{contractNumber}</span>
                 </p>
               </div>
 
@@ -808,18 +914,18 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                         {orderPassengers.length > 0 ? (
                           orderPassengers.map((p, idx) => (
                             <tr key={p.id || idx}>
-                              <td className="border border-slate-700 px-2 py-0.5 text-center font-mono">{idx + 1}</td>
-                              <td className="border border-slate-700 px-2 py-0.5 font-bold uppercase">{p.full_name}</td>
-                              <td className="border border-slate-700 px-2 py-0.5 text-center font-mono">{p.passport_number || '---'}</td>
-                              <td className="border border-slate-700 px-2 py-0.5 text-center font-mono">{formatDate(p.dob || (p as any).birthday) || '---'}</td>
+                              <td className="border border-slate-700 px-2 py-1.5 text-center font-mono leading-relaxed">{idx + 1}</td>
+                              <td className="border border-slate-700 px-2.5 py-1.5 font-bold uppercase leading-relaxed">{p.full_name}</td>
+                              <td className="border border-slate-700 px-2 py-1.5 text-center font-mono leading-relaxed">{p.passport_number || '---'}</td>
+                              <td className="border border-slate-700 px-2 py-1.5 text-center font-mono leading-relaxed">{formatDate(p.dob || (p as any).birthday) || '---'}</td>
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td className="border border-slate-700 px-2 py-0.5 text-center font-mono">1</td>
-                            <td className="border border-slate-700 px-2 py-0.5 font-bold uppercase">{partyBName}</td>
-                            <td className="border border-slate-700 px-2 py-0.5 text-center font-mono">{partyBIdNumber || '---'}</td>
-                            <td className="border border-slate-700 px-2 py-0.5 text-center font-mono">---</td>
+                            <td className="border border-slate-700 px-2 py-1.5 text-center font-mono leading-relaxed">1</td>
+                            <td className="border border-slate-700 px-2.5 py-1.5 font-bold uppercase leading-relaxed">{partyBName}</td>
+                            <td className="border border-slate-700 px-2 py-1.5 text-center font-mono leading-relaxed">{partyBIdNumber || '---'}</td>
+                            <td className="border border-slate-700 px-2 py-1.5 text-center font-mono leading-relaxed">---</td>
                           </tr>
                         )}
                       </tbody>
@@ -846,53 +952,53 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="border border-slate-700 px-2 py-1 font-medium">Khách Người lớn</td>
-                        <td className="border border-slate-700 px-2 py-1 text-center font-mono">{String(adultCount).padStart(2, '0')}</td>
-                        <td className="border border-slate-700 px-2 py-1 text-right font-mono">{formatCurrency(adultPrice)}</td>
-                        <td className="border border-slate-700 px-2 py-1 text-right font-mono font-bold">{formatCurrency(adultCount * adultPrice)}</td>
+                        <td className="border border-slate-700 px-2.5 py-2.5 font-medium leading-relaxed">Khách Người lớn</td>
+                        <td className="border border-slate-700 px-2.5 py-2.5 text-center font-mono leading-relaxed">{String(adultCount).padStart(2, '0')}</td>
+                        <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono leading-relaxed">{formatCurrency(adultPrice)}</td>
+                        <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono font-bold leading-relaxed">{formatCurrency(adultCount * adultPrice)}</td>
                       </tr>
 
                       {childCount > 0 && (
                         <tr>
-                          <td className="border border-slate-700 px-2 py-1 font-medium">Khách Trẻ em (2 - 11 tuổi)</td>
-                          <td className="border border-slate-700 px-2 py-1 text-center font-mono">{String(childCount).padStart(2, '0')}</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono">{formatCurrency(childPrice)}</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono font-bold">{formatCurrency(childCount * childPrice)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 font-medium leading-relaxed">Khách Trẻ em (2 - 11 tuổi)</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-center font-mono leading-relaxed">{String(childCount).padStart(2, '0')}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono leading-relaxed">{formatCurrency(childPrice)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono font-bold leading-relaxed">{formatCurrency(childCount * childPrice)}</td>
                         </tr>
                       )}
 
                       {infantCount > 0 && (
                         <tr>
-                          <td className="border border-slate-700 px-2 py-1 font-medium">Khách Em bé (&lt; 2 tuổi)</td>
-                          <td className="border border-slate-700 px-2 py-1 text-center font-mono">{String(infantCount).padStart(2, '0')}</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono">{formatCurrency(infantPrice)}</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono font-bold">{formatCurrency(infantCount * infantPrice)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 font-medium leading-relaxed">Khách Em bé (&lt; 2 tuổi)</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-center font-mono leading-relaxed">{String(infantCount).padStart(2, '0')}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono leading-relaxed">{formatCurrency(infantPrice)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono font-bold leading-relaxed">{formatCurrency(infantCount * infantPrice)}</td>
                         </tr>
                       )}
 
                       {singleRoomSurcharge > 0 && (
                         <tr>
-                          <td className="border border-slate-700 px-2 py-1 font-medium">Phụ thu phòng đơn</td>
-                          <td className="border border-slate-700 px-2 py-1 text-center font-mono">{String(order.single_room_count || 1).padStart(2, '0')}</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono">{formatCurrency(tour?.single_room_surcharge || 0)}</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono font-bold">{formatCurrency(singleRoomSurcharge)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 font-medium leading-relaxed">Phụ thu phòng đơn</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-center font-mono leading-relaxed">{String(order.single_room_count || 1).padStart(2, '0')}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono leading-relaxed">{formatCurrency(tour?.single_room_surcharge || 0)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono font-bold leading-relaxed">{formatCurrency(singleRoomSurcharge)}</td>
                         </tr>
                       )}
 
                       {discountAmount > 0 && (
                         <tr>
-                          <td className="border border-slate-700 px-2 py-1 font-medium text-rose-800">Giảm giá / Ưu đãi</td>
-                          <td className="border border-slate-700 px-2 py-1 text-center font-mono">01</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono text-rose-800">-{formatCurrency(discountAmount)}</td>
-                          <td className="border border-slate-700 px-2 py-1 text-right font-mono font-bold text-rose-800">-{formatCurrency(discountAmount)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 font-medium text-rose-800 leading-relaxed">Giảm giá / Ưu đãi</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-center font-mono leading-relaxed">01</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono text-rose-800 leading-relaxed">-{formatCurrency(discountAmount)}</td>
+                          <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono font-bold text-rose-800 leading-relaxed">-{formatCurrency(discountAmount)}</td>
                         </tr>
                       )}
 
                       <tr className="bg-slate-100 font-bold">
-                        <td colSpan={3} className="border border-slate-700 px-2 py-1.5 text-right uppercase tracking-wide">
+                        <td colSpan={3} className="border border-slate-700 px-2.5 py-2.5 text-right uppercase tracking-wide leading-relaxed">
                           Tổng giá trị hợp đồng
                         </td>
-                        <td className="border border-slate-700 px-2 py-1.5 text-right font-mono text-[11pt] text-slate-950">
+                        <td className="border border-slate-700 px-2.5 py-2.5 text-right font-mono text-[11pt] text-slate-950 leading-relaxed">
                           {formatCurrency(totalContractPrice)}
                         </td>
                       </tr>
@@ -940,33 +1046,50 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
                   </div>
 
                   <p><strong>3.3. Thông tin thanh toán:</strong></p>
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_150px] gap-2.5 items-center bg-slate-50 p-2.5 rounded-lg border border-slate-300 text-[10.5pt]">
-                    <div className="space-y-0.5">
-                      <div className="grid grid-cols-[110px_10px_1fr]">
-                        <span className="font-medium">Tên tài khoản</span>
-                        <span>:</span>
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_160px] gap-4 items-center bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-3.5 rounded-xl border border-slate-300/80 shadow-2xs text-[10.5pt]">
+                    <div className="space-y-1.5">
+                      <div className="grid grid-cols-[110px_10px_1fr] items-center">
+                        <span className="font-semibold text-slate-700">Tên tài khoản</span>
+                        <span className="text-slate-400">:</span>
                         <span className="font-bold uppercase text-slate-950">{partyABankAccountHolder}</span>
                       </div>
-                      <div className="grid grid-cols-[110px_10px_1fr]">
-                        <span className="font-medium">Số Tài khoản</span>
-                        <span>:</span>
-                        <span className="font-bold font-mono text-[11.5pt] text-indigo-950 tracking-wider">{partyABankAccount}</span>
+                      <div className="grid grid-cols-[110px_10px_1fr] items-center">
+                        <span className="font-semibold text-slate-700">Số tài khoản</span>
+                        <span className="text-slate-400">:</span>
+                        <span className="font-bold font-mono text-[11.5pt] text-indigo-950 tracking-wider bg-indigo-50/50 px-2 py-0.5 rounded border border-indigo-100">{partyABankAccount}</span>
                       </div>
-                      <div className="grid grid-cols-[110px_10px_1fr]">
-                        <span className="font-medium">Ngân hàng</span>
-                        <span>:</span>
-                        <span>{partyABankName}</span>
+                      <div className="grid grid-cols-[110px_10px_1fr] items-center">
+                        <span className="font-semibold text-slate-700">Ngân hàng</span>
+                        <span className="text-slate-400">:</span>
+                        <span className="text-slate-900 font-medium">{partyABankName}</span>
                       </div>
                     </div>
 
                     {includeVietQR && (
-                      <div className="flex flex-col items-center justify-center p-1 bg-white rounded border border-slate-300">
-                        <img 
-                          src={vietQrUrl} 
-                          alt="VietQR Chuyển khoản" 
-                          className="w-24 h-24 object-contain"
-                        />
-                        <span className="text-[8.5pt] text-slate-500 font-sans mt-0.5 font-bold">Quét VietQR Napas 24/7</span>
+                      <div className="flex flex-col items-center justify-center p-2 bg-white rounded-xl border border-slate-200 shadow-xs">
+                        {vietQrDataUrl ? (
+                          <img 
+                            src={vietQrDataUrl} 
+                            alt="VietQR Chuyển khoản" 
+                            className="w-24 h-24 object-contain block rounded"
+                            style={{ width: '96px', height: '96px', maxWidth: '96px', maxHeight: '96px' }}
+                            crossOrigin="anonymous"
+                          />
+                        ) : isLoadingQr ? (
+                          <div className="w-24 h-24 flex flex-col items-center justify-center text-slate-400">
+                            <Loader2 className="w-5 h-5 animate-spin text-indigo-600 mb-1" />
+                            <span className="text-[8pt] font-sans">Đang tạo QR...</span>
+                          </div>
+                        ) : (
+                          <img 
+                            src={vietQrUrl} 
+                            alt="VietQR Chuyển khoản" 
+                            className="w-24 h-24 object-contain block rounded"
+                            style={{ width: '96px', height: '96px', maxWidth: '96px', maxHeight: '96px' }}
+                            crossOrigin="anonymous"
+                          />
+                        )}
+                        <span className="text-[8pt] text-indigo-900 font-sans mt-1 font-bold whitespace-nowrap bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">Quét VietQR 24/7</span>
                       </div>
                     )}
                   </div>
@@ -1183,7 +1306,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
 
               {/* PHỤ LỤC CHƯƠNG TRÌNH TOUR & LƯU Ý (NẾU ĐƯỢC CHỌN) */}
               {includeAppendix && (
-                <div className="page-break pt-6 border-t-2 border-slate-800">
+                <div className="page-break pt-6 pb-6 border-t-2 border-slate-800">
                   <div className="text-center mb-5">
                     <p className="font-bold text-xs uppercase tracking-widest text-slate-500 mb-1">Phụ lục 1 đính kèm hợp đồng</p>
                     <h2 className="font-bold text-[14pt] uppercase tracking-wide text-indigo-950">

@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Printer, X, Download, FileText, CheckCircle2, QrCode } from 'lucide-react';
 import { PaymentProposal } from '@/types';
 import { numberToVietnameseWords } from '@/utils/numberToWords';
+import { fetchVietQrDataUrl, buildVietQrDirectUrl, getBankBinFromName } from '@/utils/vietQrHelper';
 
 interface PaymentProposalPrintModalProps {
   isOpen: boolean;
@@ -131,12 +132,63 @@ export default function PaymentProposalPrintModal({ isOpen, onClose, proposal }:
   const position = getPositionFromRole(proposal.created_by_role, proposal.created_by_name);
   const paymentDateStr = formatDateShort(proposal.due_date || proposal.created_at);
 
-  const bankCode = getBankCode(proposal.bank_name);
+  const bankBin = getBankBinFromName(proposal.bank_name);
   const qrUrl = proposal.account_number
-    ? `https://img.vietqr.io/image/${bankCode}-${proposal.account_number}-compact.png?amount=${proposal.amount}&addInfo=${encodeURIComponent(proposal.code || 'Thanh toan de nghi')}&accountName=${encodeURIComponent(proposal.account_name || '')}`
+    ? buildVietQrDirectUrl({
+        bankBin,
+        accountNo: proposal.account_number,
+        accountName: proposal.account_name || proposal.created_by_name || '',
+        amount: proposal.amount,
+        memo: proposal.code || 'Thanh toan de nghi',
+        template: 'compact'
+      })
     : '';
 
-  const handlePrint = () => {
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!isOpen || !proposal?.account_number) return;
+    let isMounted = true;
+
+    fetchVietQrDataUrl({
+      bankBin,
+      accountNo: proposal.account_number,
+      accountName: proposal.account_name || proposal.created_by_name || '',
+      amount: proposal.amount,
+      memo: proposal.code || 'Thanh toan de nghi',
+      template: 'compact'
+    }).then(dataUrl => {
+      if (isMounted && dataUrl) {
+        setQrDataUrl(dataUrl);
+      }
+    }).catch(err => {
+      console.warn('[PaymentProposalPrintModal] VietQR error:', err);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, proposal?.account_number, proposal?.amount, proposal?.code, proposal?.account_name, proposal?.bank_name, bankBin]);
+
+  const handlePrint = async () => {
+    if (!qrDataUrl && proposal?.account_number) {
+      try {
+        const fresh = await fetchVietQrDataUrl({
+          bankBin,
+          accountNo: proposal.account_number,
+          accountName: proposal.account_name || proposal.created_by_name || '',
+          amount: proposal.amount,
+          memo: proposal.code || 'Thanh toan de nghi',
+          template: 'compact'
+        });
+        if (fresh) {
+          setQrDataUrl(fresh);
+          await new Promise(r => setTimeout(r, 80));
+        }
+      } catch {
+        // continue
+      }
+    }
     window.print();
   };
 
@@ -280,9 +332,11 @@ export default function PaymentProposalPrintModal({ isOpen, onClose, proposal }:
                   {qrUrl && (
                     <div className="my-5 flex flex-col sm:flex-row items-center gap-4 p-3 rounded-xl border border-slate-200 bg-slate-50/50 max-w-sm">
                       <img
-                        src={qrUrl}
+                        src={qrDataUrl || qrUrl}
                         alt="VietQR Chuyển khoản"
-                        className="w-36 h-36 object-contain rounded-lg border border-slate-300 bg-white p-1"
+                        className="w-36 h-36 object-contain rounded-lg border border-slate-300 bg-white p-1 block"
+                        style={{ width: '144px', height: '144px', maxWidth: '144px', maxHeight: '144px' }}
+                        crossOrigin="anonymous"
                         onError={(e) => {
                           // Hide broken image gracefully if offline
                           (e.target as HTMLElement).style.display = 'none';
