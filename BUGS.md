@@ -6,6 +6,69 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.109 Khắc Phục Triệt Để Lỗi "Attempting to parse an unsupported color function 'oklch'" Khi Tải File PDF Hợp Đồng Du Lịch
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - Khi người dùng bấm nút "Tải PDF" trên Modal Hợp đồng du lịch trực tuyến, hệ thống hiển thị thông báo lỗi `Attempting to parse an unsupported color function "oklch"` (như hình ảnh người dùng phản ánh `image_7e18c244.png`) và không thể hoàn tất việc xuất file PDF.
+- **Nguyên nhân kỹ thuật:**
+  1. Tailwind CSS v4 định nghĩa các màu sắc hệ thống (slate, emerald, amber, border...) bằng hàm màu hiện đại `oklch(...)`.
+  2. Khi trình duyệt Chromium/Safari hiển thị trang, hàm `window.getComputedStyle(element)` tự động trả về các giá trị màu sắc dạng `oklch(...)` cho các thuộc tính `color`, `backgroundColor`, `borderColor`, `boxShadow`, v.v.
+  3. Thư viện `html2canvas` (được tích hợp bên trong `html2pdf.js`) sử dụng bộ phân tích cú pháp màu nội bộ cũ chỉ hỗ trợ các hàm `rgb()`, `rgba()`, `hsl()`, `hsla()`. Khi gặp chuỗi `oklch(...)`, `html2canvas` ném ra ngoại lệ chưa được xử lý `Attempting to parse an unsupported color function "oklch"`, làm hỏng tiến trình xuất PDF.
+- **Giải pháp triển khai:**
+  1. **Xây dựng module chuyển đổi màu sắc chuyên dụng (`src/utils/colorSanitizer.ts`):**
+     - Xây dựng thuật toán chuyển đổi chính xác không gian màu Oklab -> CIE XYZ -> linear sRGB -> sRGB gamma (`oklchToRgb`), bảo toàn độ trung thực của màu sắc và độ trong suốt (alpha).
+     - Xây dựng hàm `sanitizeOklchColors(str)` tự động bóc tách và thay thế toàn bộ chuỗi `oklch(...)` trong bất kỳ văn bản CSS, biến CSS hoặc inline style nào.
+  2. **Cơ chế phòng thủ 3 tầng trong trình tạo PDF (`src/utils/pdfGenerator.ts`):**
+     - *Tầng 1 (Cây DOM trước khi render):* Quét toàn bộ phần tử trong container clone, bóc tách và ghi đè inline styles các thuộc tính màu sắc sang mã RGB chuẩn.
+     - *Tầng 2 (Proxy getComputedStyle động):* Sử dụng Javascript `Proxy` bao bọc phương thức `getComputedStyle` của cả `window` chính và `clonedDoc.defaultView` trong iframe của html2canvas. Khi html2canvas truy vấn bất kỳ thuộc tính màu sắc nào có chứa `oklch`, Proxy tự động chuyển đổi sang mã RGB tương ứng trước khi trả về.
+     - *Tầng 3 (Quét thẻ style iframe):* Trong sự kiện `onclone` của `html2canvas`, quét sạch toàn bộ các thẻ `<style>` trong iframe cloned document và chuẩn hóa triệt để.
+  3. **Kiểm thử tự động:**
+     - Bổ sung bộ Unit Test Vitest `src/utils/__tests__/pdfGenerator.test.ts` kiểm tra độ chính xác của các trường hợp chuyển đổi màu oklch thường, có alpha, giá trị `none` và phần trăm.
+     - Vượt qua kiểm tra linter (`npm run lint`), biên dịch dự án (`npm run build`).
+     - Đạt 100% kết quả 74/74 Unit Tests Vitest (`npm test`) và 21/21 kịch bản Simulation phân quyền (`npm run test:simulation`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.108 Tính Năng Cập Nhật & Lưu Lại Hợp Đồng Mới: Tự Động Xóa File Cũ Trên Google Drive Và Lưu File Mới Thay Thế
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - Cho phép người dùng bấm lưu lại file hợp đồng mới khi có chỉnh sửa hoặc cập nhật thông tin đơn hàng, hệ thống sẽ tự động xóa file hợp đồng cũ trên Google Drive và lưu bản hợp đồng mới nhất vào đúng thư mục đơn hàng, đồng thời cập nhật liên kết mới trong hệ thống.
+- **Giải pháp triển khai:**
+  1. **Nâng Cấp Backend API (`server/routes/uploadRoutes.ts`):**
+     - Endpoint `/api/upload-contract` tiếp nhận thêm tham số `oldContractUrl` từ client, đồng thời tự động truy vấn tìm `contract_url` cũ trong database nếu chưa có.
+     - Khi có URL hợp đồng cũ, backend tự động bóc tách File ID và gọi hàm `deleteGoogleDriveFile(oldFileId, token)` để xóa vĩnh viễn file hợp đồng cũ trên Google Drive trước khi tải file mới lên.
+     - Sau khi upload file PDF mới thành công, hệ thống tự động cập nhật `contract_url` mới nhất vào bảng `bookings` trong database Supabase.
+  2. **Nâng Cấp Giao Diện Modal In Hợp Đồng (`src/components/orders/TourContractPrintModal.tsx`):**
+     - Khi đơn hàng đã có file hợp đồng lưu trên Drive: Thay vì khóa (disabled) nút bấm, hệ thống hiển thị nút **"Cập nhật lại HĐ mới"** nổi bật màu hổ phách (`bg-amber-600 hover:bg-amber-500`) kèm icon xoay `RefreshCw`.
+     - Tích hợp Modal hộp thoại xác nhận chuyên dụng (`showConfirmOverwrite`): Cảnh báo rõ ràng cho nhân viên biết file hợp đồng cũ trên Google Drive sẽ được tự động xóa và thay thế bằng bản hợp đồng mới nhất, tránh trường hợp click nhầm.
+     - Khi xác nhận, hệ thống gửi yêu cầu `overwrite: true` kèm `oldContractUrl` lên backend, cập nhật lại state `currentContractUrl`, gọi callback `onContractSaved` và hiển thị thông báo thành công.
+  3. **Kiểm thử tự động:**
+     - Vượt qua kiểm tra linter (`npm run lint`), biên dịch dự án (`npm run build`).
+     - Đạt 100% kết quả 69/69 Unit Tests Vitest (`npm test`) và 21/21 kịch bản Simulation phân quyền (`npm run test:simulation`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
+### 1.107 Khắc Phục Triệt Để Hiện Tượng Hộp Thoại In Bị Trắng Tinh (Blank Print Page) Khi In Hợp Đồng Du Lịch
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - Khi người dùng bấm nút "In Hợp đồng / PDF" trên Modal Hợp đồng du lịch trực tuyến, hộp thoại in của trình duyệt (`window.print()`) hiện ra một trang trắng tinh không có thông tin (hiển thị trang 1/1 trống trơn như hình ảnh người dùng phản ánh `image_e316d5a5.png`).
+- **Nguyên nhân kỹ thuật:**
+  1. Trong file CSS in ấn toàn cục `src/index.css`, khối `@media print` sử dụng quy tắc `body * { visibility: hidden; }` kết hợp với `position: absolute !important` trên phần tử `#official-tour-contract-print-area`.
+  2. Khi phần tử in nằm sâu bên trong 7 lớp thẻ cha của Modal (`#root` -> `Layout` -> `main` -> `fixed inset-0` -> `relative overflow-hidden` -> `flex-1 overflow-y-auto`):
+     - Tất cả các thẻ cha đều bị `visibility: hidden`, có `overflow: hidden`, `max-height: 85vh` và `position: relative`.
+     - Theo đặc tả rendering in ấn của trình duyệt Chromium/Blink, phần tử con có `position: absolute` nằm trong một cây DOM cha bị `visibility: hidden` và clip bởi `overflow: hidden` sẽ bị tính kích thước in của body bằng `0 x 0`, dẫn đến trình duyệt in ra 1 trang hoàn toàn trắng tinh!
+     - Ngoài ra, thuộc tính `position: absolute` rút phần tử ra khỏi luồng tài liệu tự nhiên (document flow), khiến trình duyệt không thể tính điểm ngắt trang tự động (pagination) cho hợp đồng dài nhiều trang A4.
+- **Giải pháp triển khai:**
+  1. **Tái Cấu Trúc Toàn Diện CSS In Ấn Đa Trang A4 (`src/index.css`):**
+     - Loại bỏ việc dùng `body * { visibility: hidden; }` và `position: absolute` cho hợp đồng du lịch.
+     - Sử dụng bộ chọn hiện đại `body.is-printing-contract, body:has(#official-tour-contract-print-area)`:
+       + Ẩn các thành phần giao diện không in bằng `display: none !important` (`nav`, `header`, `aside`, `footer`, `.no-print`, các container khác của trang quản lý đơn hàng nằm dưới modal).
+       + Đưa toàn bộ các thẻ cha bao bọc modal (`#root`, `main`, `.contract-modal-overlay`, `.contract-modal-container`, `.contract-modal-body`, `.contract-modal-scroll`) về luồng tĩnh (`position: static !important; display: block !important; overflow: visible !important; max-height: none !important; height: auto !important; width: 100% !important; border: none !important; box-shadow: none !important; background: transparent !important`).
+       + Chuyển `#official-tour-contract-print-area` về luồng hiển thị tự nhiên (`position: static !important; display: block !important; width: 100% !important; overflow: visible !important; page-break-inside: auto`).
+  2. **Đồng Bộ State & Class In Ấn Trong Modal (`src/components/orders/TourContractPrintModal.tsx`):**
+     - Bổ sung các class định danh chuyên biệt cho các tầng container: `contract-modal-overlay`, `contract-modal-container`, `contract-modal-body`, `contract-modal-scroll`.
+     - Cập nhật hàm `handlePrint`: Tự động gắn class `is-printing-contract` lên `document.body` trước khi gọi `window.print()` và dọn dẹp an toàn qua sự kiện `afterprint`.
+     - Bổ sung đầy đủ các class tiện ích Tailwind `print:static print:overflow-visible print:max-h-none print:min-h-0 print:h-auto print:block print:w-full print:p-0` trên từng thẻ cha.
+  3. **Kiểm thử tự động:**
+     - Vượt qua kiểm tra linter (`npm run lint`), biên dịch dự án (`npm run build`).
+     - Đạt 100% kết quả 69/69 Unit Tests Vitest (`npm test`) và 21/21 kịch bản Simulation phân quyền (`npm run test:simulation`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.106 Chuẩn Hóa Cơ Chế Lưu Hợp Đồng PDF Lên Google Drive: Khóa Lưu Trùng, Chế Độ Thủ Công & Tìm Kiếm Đa Tầng Thư Mục Đơn Hàng
 - **Mô tả yêu cầu & Hiện tượng thực tế:**
   1. File hợp đồng đơn hàng `31F7EDA9` được tải lên Google Drive nhưng người dùng kiểm tra thư mục đơn hàng `31F7EDA9` thì không thấy file (do thư mục trên Drive có thể chứa tiền tố `DH-`, `BK-`, hoặc tên khách, trong khi hệ thống trước đây chỉ so khớp tên tuyệt đối `name = '31F7EDA9'`).

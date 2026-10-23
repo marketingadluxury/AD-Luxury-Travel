@@ -14,7 +14,9 @@ import {
   ExternalLink,
   Download,
   CheckCircle2,
-  Clock
+  Clock,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { Order, Tour, Passenger } from '@/types';
 import { numberToVietnameseWords } from '@/utils/numberToWords';
@@ -370,18 +372,19 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
   };
 
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [showConfirmOverwrite, setShowConfirmOverwrite] = useState(false);
 
-  // Đóng gói và lưu hợp đồng dưới định dạng PDF vào Google Drive trong thư mục đơn hàng
-  const saveContractToGoogleDrive = async (silent = false): Promise<string | null> => {
+  // Đóng gói và lưu hợp đồng dưới định dạng PDF vào Google Drive trong thư mục đơn hàng (hỗ trợ ghi đè/xóa file cũ)
+  const saveContractToGoogleDrive = async (silent = false, overwrite = false): Promise<string | null> => {
     if (!order) return null;
-    if (currentContractUrl) {
-      toast('Hợp đồng này đã được lưu trên Google Drive rồi!', { icon: 'ℹ️' });
+    if (currentContractUrl && !overwrite) {
+      toast('Hợp đồng này đã được lưu trên Google Drive rồi! Bạn có thể chọn "Cập nhật lại HĐ mới".', { icon: 'ℹ️' });
       return currentContractUrl;
     }
     setIsSavingDrive(true);
     let toastId: string | undefined;
     if (!silent) {
-      toastId = toast.loading('Đang khởi tạo file PDF và lưu lên Google Drive...');
+      toastId = toast.loading(overwrite ? 'Đang tạo bản PDF mới và ghi đè lên Google Drive (xóa bản cũ)...' : 'Đang khởi tạo file PDF và lưu lên Google Drive...');
     }
 
     try {
@@ -409,6 +412,11 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
       formData.append('isContract', 'true');
       formData.append('uploadType', 'contract');
 
+      // Nếu có yêu cầu ghi đè và đã có hợp đồng cũ, gửi URL cũ để backend xóa file cũ trên Google Drive
+      if (overwrite && currentContractUrl) {
+        formData.append('oldContractUrl', currentContractUrl);
+      }
+
       const resData = await safeFetchApi('/api/upload-contract', {
         method: 'POST',
         body: formData,
@@ -421,7 +429,7 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
           onContractSaved(resData.url);
         }
         if (!silent && toastId) {
-          toast.success(`Đã lưu hợp đồng PDF lên Google Drive: ${fileName}`, { id: toastId });
+          toast.success(overwrite ? `Đã cập nhật hợp đồng mới và thay thế bản cũ thành công!` : `Đã lưu hợp đồng PDF lên Google Drive: ${fileName}`, { id: toastId });
         } else if (silent) {
           toast.success(`Đã lưu hợp đồng PDF lên Google Drive`, { duration: 3000 });
         }
@@ -465,17 +473,32 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
     }
   };
 
+  // Quản lý dọn dẹp class in ấn khi đóng hộp thoại in
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      document.body.classList.remove('is-printing-contract');
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+      document.body.classList.remove('is-printing-contract');
+    };
+  }, []);
+
   // In hợp đồng ra máy in / trình duyệt (KHÔNG tự động upload lên Drive)
   const handlePrint = () => {
-    window.print();
+    document.body.classList.add('is-printing-contract');
+    setTimeout(() => {
+      window.print();
+    }, 60);
   };
 
   if (!isOpen || !order) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static print:overflow-visible">
+    <div className="contract-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-white print:static print:block print:w-full print:overflow-visible print:border-none print:shadow-none">
       {/* Main Container */}
-      <div className="relative bg-slate-100 rounded-2xl w-full max-w-5xl my-auto shadow-2xl flex flex-col border border-slate-300 overflow-hidden print:border-none print:shadow-none print:bg-white print:w-full print:max-w-none print:rounded-none">
+      <div className="contract-modal-container relative bg-slate-100 rounded-2xl w-full max-w-5xl my-auto shadow-2xl flex flex-col border border-slate-300 overflow-hidden print:border-none print:shadow-none print:bg-white print:w-full print:max-w-none print:rounded-none print:static print:block print:m-0 print:p-0 print:overflow-visible">
         
         {/* Modal Top Bar (Screen only) */}
         <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shadow-md shrink-0 no-print">
@@ -544,24 +567,34 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
               )}
             </button>
 
-            {/* Nút Lưu Google Drive: Khóa nếu đã lưu */}
+            {/* Nút Lưu Google Drive / Cập Nhật Lại Bản HĐ Mới */}
             {currentContractUrl ? (
               <button
                 type="button"
-                disabled
-                className="px-3 py-1.5 bg-emerald-950/70 text-emerald-300/80 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-emerald-500/30 cursor-not-allowed opacity-90 shadow-2xs"
-                title="Hợp đồng này đã được lưu thành công trên Google Drive"
+                disabled={isSavingDrive}
+                onClick={() => setShowConfirmOverwrite(true)}
+                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer border border-amber-500/40"
+                title="Hợp đồng đã có trên Google Drive. Bấm để lưu lại bản hợp đồng mới (sẽ xóa bản cũ)"
               >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Đã lưu Google Drive</span>
-                <span className="sm:hidden">Đã lưu Drive</span>
+                {isSavingDrive ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang cập nhật...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-100" />
+                    <span className="hidden sm:inline">Cập nhật lại HĐ mới</span>
+                    <span className="sm:hidden">Lưu lại HĐ</span>
+                  </>
+                )}
               </button>
             ) : (
               <button
                 type="button"
                 disabled={isSavingDrive}
-                onClick={() => saveContractToGoogleDrive(false)}
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                onClick={() => saveContractToGoogleDrive(false, false)}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
                 title="Lưu file PDF hợp đồng này vào đúng thư mục đơn hàng trên Google Drive"
               >
                 {isSavingDrive ? (
@@ -614,14 +647,14 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
         </div>
 
         {/* Modal Body: Left Preview, Right Drawer (Collapsible) */}
-        <div className="flex flex-1 overflow-hidden relative min-h-[600px] max-h-[85vh] print:max-h-none print:overflow-visible">
+        <div className="contract-modal-body flex flex-1 overflow-hidden relative min-h-[600px] max-h-[85vh] print:max-h-none print:min-h-0 print:h-auto print:overflow-visible print:static print:block print:w-full print:m-0 print:p-0 print:border-none print:shadow-none">
           
           {/* A4 Paper Preview Area (A4 Vertical: 210mm x 297mm) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-200/80 flex justify-center print:p-0 print:bg-white print:overflow-visible">
+          <div className="contract-modal-scroll flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-200/80 flex justify-center print:p-0 print:m-0 print:bg-white print:overflow-visible print:static print:block print:w-full">
             
             <div 
               id="official-tour-contract-print-area" 
-              className="w-full max-w-[794px] bg-white shadow-xl rounded-sm p-8 sm:p-10 text-slate-900 border border-slate-300 print:shadow-none print:border-none print:p-0 print:max-w-none"
+              className="w-full max-w-[794px] bg-white shadow-xl rounded-sm p-8 sm:p-10 text-slate-900 border border-slate-300 print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full print:block print:static"
               style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '11pt', lineHeight: 1.45 }}
             >
               
@@ -1703,6 +1736,58 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
         </div>
 
       </div>
+
+      {/* Modal Xác Nhận Cập Nhật Lại / Ghi Đè Hợp Đồng Trên Google Drive */}
+      {showConfirmOverwrite && (
+        <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 no-print">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-extrabold text-sm text-slate-900">
+                  Xác nhận lưu lại hợp đồng mới?
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Đơn hàng này đã có 1 bản hợp đồng lưu trên Google Drive. Khi xác nhận, hệ thống sẽ <strong>xóa file hợp đồng cũ</strong> và lưu <strong>bản hợp đồng mới nhất</strong> vào đúng thư mục đơn hàng.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 text-[11px] text-amber-900 flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Thao tác này sẽ ghi đè file trên Google Drive</span>
+              </div>
+              <p className="text-amber-800 text-[10.5px]">
+                Đường dẫn liên kết xem file trong hệ thống sẽ được tự động cập nhật sang file mới.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowConfirmOverwrite(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all cursor-pointer border border-slate-200"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowConfirmOverwrite(false);
+                  await saveContractToGoogleDrive(false, true);
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 active:scale-95 rounded-xl transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Xác nhận &amp; Lưu mới</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -397,6 +397,7 @@ router.post(['/upload-invoice-receipt', '/api/upload-invoice-receipt', '/upload-
     const bodyTourCodeReq = decodeUTF8(req.body.tourCode);
     const customFileName = req.body.customFileName ? decodeUTF8(req.body.customFileName) : null;
     const isContract = req.body.isContract === 'true' || req.body.isContract === true || req.body.uploadType === 'contract';
+    const oldContractUrl = req.body.oldContractUrl ? decodeUTF8(req.body.oldContractUrl) : null;
 
     if (!orderCodeReq && !bodyTourCodeReq) {
       res.status(400).json({ error: 'Thiếu thông tin mã đơn hàng hoặc mã tour.' });
@@ -420,8 +421,41 @@ router.post(['/upload-invoice-receipt', '/api/upload-invoice-receipt', '/upload-
     const cleanOriginalName = file.originalname.trim().replace(/\s+/g, '_');
     const fileName = customFileName ? customFileName.trim() : `${actualOrderCode}_${Date.now()}_${cleanOriginalName}`;
 
+    // Xác định URL hợp đồng cũ cần xóa (ưu tiên từ request client, fallback tìm trong DB)
+    let contractUrlToDelete = oldContractUrl;
+    if (!contractUrlToDelete && isContract && (orderId || orderCodeReq)) {
+      try {
+        const targetBookingId = orderId || orderCodeReq;
+        const { data: existingBooking } = await supabase
+          .from('bookings')
+          .select('contract_url')
+          .or(`id.eq.${targetBookingId},code.eq.${targetBookingId}`)
+          .maybeSingle();
+        if (existingBooking?.contract_url) {
+          contractUrlToDelete = existingBooking.contract_url;
+        }
+      } catch (findOldErr) {
+        console.warn('[Upload Contract] Không thể lấy contract_url cũ từ database:', findOldErr);
+      }
+    }
+
     try {
       const token = await getGoogleDriveAccessToken();
+
+      // Nếu có hợp đồng cũ, xóa file cũ trên Google Drive trước khi lưu bản mới
+      if (contractUrlToDelete) {
+        try {
+          const oldFileId = getGoogleDriveFileId(contractUrlToDelete);
+          if (oldFileId) {
+            console.log(`[Drive] Đang xóa file hợp đồng cũ trên Google Drive (File ID: ${oldFileId})...`);
+            await deleteGoogleDriveFile(oldFileId, token);
+            console.log(`[Drive] Đã xóa file hợp đồng cũ thành công trước khi lưu bản mới.`);
+          }
+        } catch (delOldErr) {
+          console.warn('[Drive] Không thể xóa file hợp đồng cũ (có thể file đã bị xóa trước đó):', delOldErr);
+        }
+      }
+
       let folderId = '';
 
       if (isTourCodeDirectly) {
