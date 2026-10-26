@@ -6,6 +6,16 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.113 Khắc Phục Lỗi Hiển Thị Sai Định Dạng Ngày Vào Làm (Date of Hire) Trên Đơn Xin Nghỉ Phép
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - Trên biểu mẫu in Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`), trường `Date of Hire / Ngày vào làm` hiển thị chuỗi thời gian ISO thô từ database (ví dụ: `2026-07-13T09:54:29.956092+00:00`) thay vì định dạng chuẩn `dd/mm/yyyy`.
+- **Nguyên nhân kỹ thuật:**
+  - Giá trị `hireDate` truyền vào từ `join_date` hoặc `created_at` của hồ sơ nhân sự được hiển thị trực tiếp ra giao diện JSX mà chưa đi qua hàm chuẩn hóa `formatDate`.
+- **Giải pháp triển khai:**
+  - Cập nhật hàm `formatDate` trong `src/components/LeaveRequestPrintModal.tsx` hỗ trợ nhận diện và chuyển đổi an toàn mọi định dạng (`dd/mm/yyyy`, `YYYY-MM-DD`, chuỗi ISO timestamp) về chuẩn `dd/mm/yyyy`.
+  - Áp dụng `formattedHireDate = formatDate(hireDate) || '01/01/2025'` tại mục `Date of Hire / Ngày vào làm` và bổ sung ưu tiên lấy `join_date` -> `official_start_date` -> `created_at` trong `src/pages/LeaveRequestsPage.tsx`.
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.112 Khắc Phục Lỗi Mã QR Napas Bị Trắng / Không Hiển Thị Khi In & Xuất File PDF Hợp Đồng
 - **Mô tả yêu cầu & Hiện tượng thực tế:**
   - Khi xem trước trên màn hình thì mã VietQR Napas tại mục "3.3. Thông tin thanh toán" vẫn hiển thị bình thường (`image_66dd246b.png`).

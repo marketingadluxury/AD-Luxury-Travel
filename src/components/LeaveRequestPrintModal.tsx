@@ -12,9 +12,16 @@ interface LeaveRequestPrintModalProps {
 }
 
 // Format dd/mm/yyyy
-function formatDate(dateStr?: string): string {
+function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const trimmed = dateStr.trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) return trimmed;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [year, month, day] = trimmed.split('-');
+    return `${day}/${month}/${year}`;
+  }
+  const d = new Date(trimmed);
+  if (isNaN(d.getTime())) return trimmed;
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -31,6 +38,7 @@ export default function LeaveRequestPrintModal({
 }: LeaveRequestPrintModalProps) {
   if (!isOpen || !leaveRequest) return null;
 
+  const formattedHireDate = formatDate(hireDate) || '01/01/2025';
   const dateOfApplication = formatDate(leaveRequest.created_at);
   const startDateStr = formatDate(leaveRequest.start_date);
   const endDateStr = formatDate(leaveRequest.end_date);
@@ -156,7 +164,7 @@ export default function LeaveRequestPrintModal({
 
                   <div>
                     <span className="text-slate-600 italic">Date of Hire / Ngày vào làm: </span>
-                    <span className="text-black">{hireDate}</span>
+                    <span className="text-black">{formattedHireDate}</span>
                   </div>
 
                   <div className="col-span-2">
