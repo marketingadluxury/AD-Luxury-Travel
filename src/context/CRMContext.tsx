@@ -2535,6 +2535,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
         // 3.6. Payment Proposals
         try {
+          const savedPropsRaw = localStorage.getItem('crm_payment_proposals');
+          const localProps: PaymentProposal[] = savedPropsRaw ? JSON.parse(savedPropsRaw) : [];
+
           const { data: proposalsData, error: proposalsErr } = await supabase
             .from('payment_proposals')
             .select('*')
@@ -2542,14 +2545,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           if (proposalsErr) throw proposalsErr;
 
           if (proposalsData && proposalsData.length > 0) {
-            setPaymentProposals(proposalsData.map(p => ({
-              ...p,
-              amount: Number(p.amount)
-            })));
+            const remoteMapped: PaymentProposal[] = proposalsData.map(p => {
+              const localMatch = localProps.find(lp => lp.id === p.id || (lp.code && lp.code === p.code));
+              return {
+                ...p,
+                amount: Number(p.amount),
+                note: p.note || (p as any).notes || (p as any).description || localMatch?.note || undefined
+              };
+            });
+            setPaymentProposals(remoteMapped);
             console.log('Đã nạp thành công Payment Proposals từ Supabase');
-          } else {
-            const savedProps = localStorage.getItem('crm_payment_proposals');
-            if (savedProps) setPaymentProposals(JSON.parse(savedProps));
+          } else if (localProps.length > 0) {
+            setPaymentProposals(localProps);
           }
         } catch (err) {
           console.warn('Lỗi khi tải Payment Proposals từ Supabase (sử dụng fallback local):', err);
@@ -6248,17 +6255,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       status: 'pending_leader'
     };
 
-    setPaymentProposals(prev => [newProposal, ...prev]);
+    setPaymentProposals(prev => {
+      const next = [newProposal, ...prev];
+      try {
+        localStorage.setItem('crm_payment_proposals', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
     logActivity({
       action: 'Tạo Đề nghị thanh toán',
       module: 'Kế toán',
-      details: `Mã đề nghị: ${code} - Nội dung: ${proposalData.title} - Số tiền: ${proposalData.amount.toLocaleString('vi-VN')} đ`
+      details: `Mã đề nghị: ${code} - Nội dung: ${proposalData.title} - Số tiền: ${proposalData.amount.toLocaleString('vi-VN')} đ${proposalData.note ? ` - Ghi chú: ${proposalData.note}` : ''}`
     });
 
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('payment_proposals').insert({
+        const insertPayload: Record<string, any> = {
           id: toUuid(newProposal.id),
           code: newProposal.code,
           proposal_type: newProposal.proposal_type,
@@ -6280,7 +6293,25 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           leader_status: 'pending',
           accounting_status: 'pending',
           status: 'pending_leader'
-        });
+        };
+
+        let { error: insertErr } = await supabase.from('payment_proposals').insert(insertPayload);
+        let retryCount = 0;
+        while (insertErr && retryCount < 5) {
+          const msg = insertErr.message || '';
+          const colMatch = msg.match(/Could not find the '([^']+)' column/i) || msg.match(/column "([^"]+)" of relation "payment_proposals" does not exist/i);
+          if (colMatch && colMatch[1] && colMatch[1] in insertPayload) {
+            delete insertPayload[colMatch[1]];
+            const retryRes = await supabase.from('payment_proposals').insert(insertPayload);
+            insertErr = retryRes.error;
+            retryCount++;
+          } else {
+            break;
+          }
+        }
+        if (insertErr) {
+          console.warn('Lỗi khi lưu payment_proposal vào Supabase:', insertErr);
+        }
       } catch (err) {
         console.warn('Lỗi khi lưu payment_proposal vào Supabase:', err);
       }

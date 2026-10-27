@@ -2697,7 +2697,23 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
     4. Thiết lập thứ tự phân tầng (`relative z-20`, `relative z-10`, `relative z-0`) cho các trường form nằm kề nhau theo chiều dọc.
 - **Trạng thái:** Đã ban hành thành quy tắc bắt buộc trong `AGENTS.md` và `BUGS.md`.
 
+### 1.111 Hiển Thị & Bảo Toàn Trường Ghi Chú Chi Tiết / Giải Trình Trong Đề Nghị Thanh Toán (`PaymentProposals.tsx` & `CRMContext.tsx`)
+- **Mô tả yêu cầu / Vấn đề:**
+  - Đề nghị thanh toán sau khi tạo xong không hiển thị nội dung phần "Ghi chú chi tiết / Giải trình" (`note`) khi bấm vào xem chi tiết.
+- **Nguyên nhân:**
+  1. Trong modal Xem chi tiết (`showDetailModal`) và modal Xác nhận duyệt/chi tiền (`actionModal`) tại `src/pages/PaymentProposals.tsx`, trường `selectedProposal.note` chưa được render ra giao diện.
+  2. Khi nạp danh sách `payment_proposals` từ Supabase hoặc khi insert bản ghi mới trong `CRMContext.tsx`, cần cơ chế đồng bộ & hợp nhất `note` với `localStorage` (`crm_payment_proposals`) kèm self-healing khi cột `note` chưa tồn tại trên DB.
+- **Giải pháp:**
+  1. **Hiển thị đầy đủ trên Giao diện (`src/pages/PaymentProposals.tsx`):**
+     - Bổ sung khối **"Ghi chú chi tiết / Giải trình"** nổi bật trong Modal Xem chi tiết đề nghị (`showDetailModal`), hỗ trợ hiển thị nhiều dòng (`whitespace-pre-wrap`).
+     - Hiển thị ghi chú giải trình trong hộp tóm tắt của Modal Duyệt / Từ chối / Chi tiền (`actionModal`) để Leader và Kế toán nắm rõ thông tin trước khi phê duyệt.
+     - Hiển thị dòng tóm tắt ghi chú trực tiếp trên thẻ Kanban và dòng danh sách (List View), đồng thời hỗ trợ tìm kiếm theo nội dung ghi chú.
+  2. **Lưu trữ & Đồng bộ bền vững (`src/context/CRMContext.tsx`):**
+     - Lưu tức thì `crm_payment_proposals` vào `localStorage` ngay khi tạo đề nghị mới, kèm cơ chế tự động thử lại (self-healing) khi insert lên Supabase và hợp nhất `note` khi tải dữ liệu.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)
 *(Hiện tại không có lỗi nào chưa được xử lý)*
+

@@ -104,9 +104,11 @@ export default function PaymentProposals() {
       if (isHau && (role === 'sale_leader' || !role)) {
         role = 'marketing_leader';
       }
+      const resolvedNote = p.note || (p as any).notes || (p as any).description || undefined;
       return {
         ...p,
-        created_by_role: role
+        created_by_role: role,
+        note: resolvedNote
       };
     });
   }, [paymentProposals, profilesList]);
@@ -402,8 +404,9 @@ export default function PaymentProposals() {
         const matchCreator = p.created_by_name?.toLowerCase().includes(term);
         const matchBank = p.bank_name?.toLowerCase().includes(term) || p.account_number?.includes(term) || p.account_name?.toLowerCase().includes(term);
         const matchTour = p.tour_code?.toLowerCase().includes(term) || p.tour_name?.toLowerCase().includes(term);
+        const matchNote = p.note?.toLowerCase().includes(term);
 
-        if (!matchCode && !matchTitle && !matchCreator && !matchBank && !matchTour) return false;
+        if (!matchCode && !matchTitle && !matchCreator && !matchBank && !matchTour && !matchNote) return false;
       }
 
       // Status filter
@@ -799,6 +802,11 @@ export default function PaymentProposals() {
                                   </div>
                                 </div>
                                 <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug" title={proposal.title}>{proposal.title}</h4>
+                                {proposal.note && (
+                                  <div className="text-[11px] text-slate-600 bg-amber-50/70 border border-amber-200/70 rounded-lg px-2 py-1 line-clamp-2 whitespace-pre-line" title={proposal.note}>
+                                    <span className="font-semibold text-amber-800">Ghi chú: </span>{proposal.note}
+                                  </div>
+                                )}
                                 
                                 <div className="pt-1 mt-auto">
                                   <div className="text-sm font-black text-rose-600 mb-1.5">
@@ -942,6 +950,11 @@ export default function PaymentProposals() {
                       {/* Title & Type */}
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="font-bold text-gray-900 line-clamp-2">{p.title}</div>
+                        {p.note && (
+                          <div className="text-[11px] text-amber-900 bg-amber-50/80 border border-amber-200/70 rounded-lg px-2 py-1 mt-1 line-clamp-2 whitespace-pre-line" title={p.note}>
+                            <span className="font-semibold">Ghi chú: </span>{p.note}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mt-1">
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                             p.proposal_type === 'tour'
@@ -1467,6 +1480,15 @@ export default function PaymentProposals() {
                 <div className="text-gray-600">
                   Người đề nghị: <strong className="text-gray-800">{actionModal.proposal.created_by_name}</strong> ({getRoleConfig(actionModal.proposal.created_by_role, customRoles).label})
                 </div>
+                {actionModal.proposal.note && (
+                  <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-amber-950 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200/60 whitespace-pre-wrap">
+                    <div className="font-bold text-amber-800 text-[11px] mb-0.5 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Ghi chú chi tiết / Giải trình:</span>
+                    </div>
+                    <div className="text-gray-800 leading-relaxed">{actionModal.proposal.note}</div>
+                  </div>
+                )}
                 {actionModal.proposal.payment_method === 'Chuyển khoản' && (
                   <div className="mt-2 pt-2 border-t border-gray-200 text-[11px] text-blue-900 font-semibold bg-blue-50/50 p-2 rounded-lg">
                     <div>Ngân hàng: {actionModal.proposal.bank_name}</div>
@@ -1590,10 +1612,30 @@ export default function PaymentProposals() {
                     <div className="flex items-center gap-1.5"><span>Vai trò:</span> {renderRoleBadge(selectedProposal.created_by_role)}</div>
                     <div>Hình thức: <strong>{selectedProposal.payment_method}</strong></div>
                     <div>Ngày tạo: <strong>{selectedProposal.created_at ? formatDateTimeVi(selectedProposal.created_at) : ''}</strong></div>
+                    {selectedProposal.tour_code && (
+                      <div className="col-span-2">Tour liên kết: <strong className="text-indigo-700 font-mono">{selectedProposal.tour_code}</strong> {selectedProposal.tour_name ? `- ${selectedProposal.tour_name}` : ''}</div>
+                    )}
                     {selectedProposal.due_date && (
                       <div className="col-span-2">Hạn thanh toán dự kiến: <strong className="text-rose-600">{formatDateVi(selectedProposal.due_date)}</strong></div>
                     )}
                   </div>
+                </div>
+
+                {/* Ghi chú chi tiết / Giải trình */}
+                <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200/80 space-y-1.5">
+                  <div className="font-bold text-amber-900 flex items-center gap-1.5 text-xs">
+                    <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Ghi chú chi tiết / Giải trình</span>
+                  </div>
+                  {selectedProposal.note ? (
+                    <div className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed bg-white/80 p-3 rounded-lg border border-amber-100">
+                      {selectedProposal.note}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-400 italic">
+                      Không có ghi chú chi tiết
+                    </div>
+                  )}
                 </div>
 
                 {selectedProposal.payment_method === 'Chuyển khoản' && (
