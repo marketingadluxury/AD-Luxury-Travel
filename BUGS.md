@@ -2744,9 +2744,9 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   1. Cho phép người dùng chỉnh sửa, tải lên hoặc xóa ảnh đại diện (Avatar) trực tiếp trong trang Thông tin cá nhân (`/profile`).
   2. Tại các mục Quản lý nhân sự (`UserManagement.tsx`, `LeaveBalanceManagement.tsx`, `TimesheetManagement.tsx`), sắp xếp thứ tự nhân sự theo phòng ban (`ROLE_DEPARTMENT_ORDER`) và đặt bộ lọc trạng thái làm việc mặc định là **Đang làm việc** (`working`).
 - **Giải pháp thực hiện:**
-  1. **Ảnh đại diện cá nhân (`Profile.tsx`, `AuthContext.tsx`, `CRMContext.tsx`, `Layout.tsx`):**
+  1. **Ảnh đại diện cá nhân (`Profile.tsx`, `MyDashboard.tsx`, `AuthContext.tsx`, `CRMContext.tsx`, `Layout.tsx`):**
      - Bổ sung trường `avatar_url` vào bảng `profiles` (`supabase-schema.sql`) và các interface `User`, `Profile`, `UserProfile`, `ManagedUser`.
-     - Cho phép chọn ảnh tải lên Supabase Storage (`crm-attachments/avatars/`) kèm cơ chế nén ảnh thông minh dự phòng và đồng bộ tức thì lên Header, Mobile Drawer và danh sách nhân sự.
+     - Cho phép chọn ảnh tải lên Supabase Storage (`crm-attachments/avatars/`) kèm cơ chế nén ảnh thông minh dự phòng và đồng bộ tức thì lên Header, Mobile Drawer, thẻ hồ sơ cá nhân tại trang Bảng công & Phép cá nhân (`/my-dashboard`) và danh sách nhân sự.
   2. **Sắp xếp theo phòng ban & Bộ lọc mặc định Đang làm việc (`UserManagement.tsx`, `LeaveBalanceManagement.tsx`, `TimesheetManagement.tsx`):**
      - Thiết lập trạng thái mặc định của bộ lọc trạng thái làm việc là `'working'` (`🟢 Đang làm việc`), tự động ẩn nhân sự đã nghỉ việc/tạm nghỉ khi mở trang.
      - Sắp xếp danh sách nhân sự theo thứ tự phòng ban chuẩn (`ROLE_DEPARTMENT_ORDER`) và theo tên Tiếng Việt (`localeCompare('vi')`).

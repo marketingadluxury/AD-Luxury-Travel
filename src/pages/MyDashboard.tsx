@@ -50,9 +50,35 @@ export default function MyDashboard() {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
 
-  // Thông tin user hiện tại
+  // Thông tin user hiện tại (hợp nhất dữ liệu mới nhất từ AuthContext, CRMContext và bộ nhớ avatar)
   const myProfile = useMemo(() => {
-    return profilesList.find(p => p.id === (profile?.id || user?.id)) || profile;
+    const found = profilesList.find(p => p.id === (profile?.id || user?.id));
+    let overrideAvatar: string | undefined;
+    try {
+      const rawAvatars = localStorage.getItem('tour_crm_avatar_overrides');
+      if (rawAvatars) {
+        const parsed = JSON.parse(rawAvatars);
+        const emailKey = (profile?.email || found?.email || user?.email || '').toLowerCase().trim();
+        overrideAvatar =
+          (profile?.id ? parsed[profile.id] : undefined) ||
+          (found?.id ? parsed[found.id] : undefined) ||
+          (emailKey ? parsed[emailKey] : undefined);
+      }
+    } catch {
+      // ignore
+    }
+    const base = found ? { ...found, ...profile } : profile;
+    if (!base) return null;
+    const resolvedAvatar =
+      profile?.avatar_url !== undefined && profile?.avatar_url !== null
+        ? profile.avatar_url
+        : found?.avatar_url !== undefined && found?.avatar_url !== null
+          ? found.avatar_url
+          : overrideAvatar ?? null;
+    return {
+      ...base,
+      avatar_url: resolvedAvatar,
+    };
   }, [profilesList, profile, user]);
 
   const userId = myProfile?.id || user?.id || '';
@@ -191,16 +217,28 @@ export default function MyDashboard() {
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
             {/* Avatar */}
-            <div className="relative">
+            <Link
+              to="/profile"
+              title="Bấm để chỉnh sửa thông tin cá nhân & ảnh đại diện"
+              className="relative group block shrink-0"
+            >
               <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-sm">
-                <div className="w-full h-full rounded-[14px] bg-white flex items-center justify-center text-2xl font-black text-blue-600">
-                  {myProfile?.full_name ? myProfile.full_name.charAt(0).toUpperCase() : 'U'}
+                <div className="w-full h-full rounded-[14px] bg-white flex items-center justify-center text-2xl font-black text-blue-600 overflow-hidden">
+                  {myProfile?.avatar_url ? (
+                    <img
+                      src={myProfile.avatar_url}
+                      alt={myProfile.full_name || 'Avatar'}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                  ) : (
+                    myProfile?.full_name ? myProfile.full_name.charAt(0).toUpperCase() : 'U'
+                  )}
                 </div>
               </div>
               <div className="absolute -bottom-1 -right-1 p-0.5 bg-white rounded-full">
                 <div className={`w-3.5 h-3.5 rounded-full ${empStatus === 'official' ? 'bg-emerald-500 ring-2 ring-white' : 'bg-amber-500 ring-2 ring-white'}`} />
               </div>
-            </div>
+            </Link>
 
             {/* Profile Info */}
             <div className="space-y-1.5">
