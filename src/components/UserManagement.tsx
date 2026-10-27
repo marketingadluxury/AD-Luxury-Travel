@@ -189,7 +189,8 @@ export default function UserManagement() {
     official_start_date: '',
     leader_id: '',
     team_id: '',
-    team_name: ''
+    team_name: '',
+    avatar_url: '' as string | null
   });
 
   const fetchUsers = async () => {
@@ -392,7 +393,8 @@ export default function UserManagement() {
       official_start_date: user.official_start_date ? user.official_start_date.split('T')[0] : '',
       leader_id: user.leader_id || '',
       team_id: user.team_id || '',
-      team_name: user.team_name || ''
+      team_name: user.team_name || '',
+      avatar_url: user.avatar_url || ''
     });
     setShowPassword(false);
     setIsFormOpen(true);
@@ -441,6 +443,7 @@ export default function UserManagement() {
           phone: formData.phone,
           company_name: formData.company_name,
           role: formData.role,
+          avatar_url: formData.avatar_url || null,
           employment_status: formData.employment_status,
           resigned_at: bodyData.resigned_at,
           resigned_note: bodyData.resigned_note,
@@ -450,6 +453,23 @@ export default function UserManagement() {
           team_id: formData.team_id || null,
           team_name: bodyData.team_name || null
         });
+
+        // Sync avatar overrides in localStorage
+        try {
+          let avatarOverrides: Record<string, string> = {};
+          const raw = localStorage.getItem('tour_crm_avatar_overrides');
+          if (raw) avatarOverrides = JSON.parse(raw);
+          if (formData.avatar_url) {
+            avatarOverrides[editingUser.id] = formData.avatar_url;
+            if (formData.email) avatarOverrides[formData.email.toLowerCase().trim()] = formData.avatar_url;
+          } else {
+            delete avatarOverrides[editingUser.id];
+            if (formData.email) delete avatarOverrides[formData.email.toLowerCase().trim()];
+          }
+          localStorage.setItem('tour_crm_avatar_overrides', JSON.stringify(avatarOverrides));
+        } catch {
+          // ignore
+        }
       }
 
       const response = await fetch(url, {
@@ -1807,20 +1827,89 @@ export default function UserManagement() {
                   </div>
                 </div>
 
-                {/* Full name */}
+                {/* Full name & Avatar upload */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1">
                     <Users className="w-3.5 h-3.5 text-gray-400" />
                     <span>Họ và Tên *</span>
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Nguyễn Văn A"
-                    required
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                  />
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      placeholder="Nguyễn Văn A"
+                      required
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                      className="flex-1 px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                    />
+                    {editingUser && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="w-10 h-10 rounded-full border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">
+                          {formData.avatar_url ? (
+                            <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xs font-bold text-slate-600">
+                              {formData.full_name ? formData.full_name.charAt(0).toUpperCase() : 'U'}
+                            </span>
+                          )}
+                        </div>
+                        <label className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition-all border border-slate-200">
+                          Đổi ảnh
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 5 * 1024 * 1024) {
+                                alert('Kích thước ảnh không được vượt quá 5MB.');
+                                return;
+                              }
+                              try {
+                                const fileExt = file.name.split('.').pop() || 'png';
+                                const fileName = `admin_avatar_${editingUser.id}_${Date.now()}.${fileExt}`;
+                                const filePath = `avatars/${fileName}`;
+
+                                const { error: uploadErr } = await supabase.storage
+                                  .from('crm-attachments')
+                                  .upload(filePath, file, { upsert: true });
+
+                                if (!uploadErr) {
+                                  const { data: urlData } = supabase.storage
+                                    .from('crm-attachments')
+                                    .getPublicUrl(filePath);
+                                  if (urlData?.publicUrl) {
+                                    setFormData({ ...formData, avatar_url: urlData.publicUrl });
+                                    return;
+                                  }
+                                }
+                              } catch (uploadEx) {
+                                console.warn('Storage upload warning:', uploadEx);
+                              }
+
+                              // Fallback to DataURL
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const result = ev.target?.result as string;
+                                if (result) setFormData({ ...formData, avatar_url: result });
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                        {formData.avatar_url && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, avatar_url: '' })}
+                            className="text-xs text-rose-600 hover:underline font-bold px-1"
+                          >
+                            Xóa
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Phone */}

@@ -2750,4 +2750,6 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
   2. **Sắp xếp theo phòng ban & Bộ lọc mặc định Đang làm việc (`UserManagement.tsx`, `LeaveBalanceManagement.tsx`, `TimesheetManagement.tsx`):**
      - Thiết lập trạng thái mặc định của bộ lọc trạng thái làm việc là `'working'` (`🟢 Đang làm việc`), tự động ẩn nhân sự đã nghỉ việc/tạm nghỉ khi mở trang.
      - Sắp xếp danh sách nhân sự theo thứ tự phòng ban chuẩn (`ROLE_DEPARTMENT_ORDER`) và theo tên Tiếng Việt (`localeCompare('vi')`).
+  3. **Admin Quản trị sửa Avatar mọi nhân sự (`UserManagement.tsx`):**
+     - Bổ sung giao diện tải lên ảnh đại diện (`avatar_url`) trực tiếp trong modal chỉnh sửa thông tin nhân sự dành riêng cho Quản trị viên (Admin), cho phép chọn ảnh từ máy, tải lên Supabase Storage và cập nhật avatar cho bất kỳ thành viên nào trong công ty.
 - **Trạng thái:** Đã hoàn thành, kiểm tra build thành công 100%.
