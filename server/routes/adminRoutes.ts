@@ -124,11 +124,27 @@ router.post(['/admin/users', '/api/admin/users'], async (req, res) => {
       created_at: new Date().toISOString()
     };
 
-    const { data: newProfile, error: profileError } = await supabaseAdmin
+    let { data: newProfile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert(profileData)
       .select()
       .single();
+
+    if (profileError) {
+      const errMsg = profileError.message || '';
+      if (profileError.code === '23514' || errMsg.includes('profiles_role_check')) {
+        const fallbackRole = (role || '').includes('visa') ? 'visa' : (role || '').includes('marketing') ? 'marketing' : 'sale';
+        const retryRes = await supabaseAdmin
+          .from('profiles')
+          .upsert({ ...profileData, role: fallbackRole })
+          .select()
+          .single();
+        if (!retryRes.error && retryRes.data) {
+          newProfile = { ...retryRes.data, role };
+          profileError = null;
+        }
+      }
+    }
 
     if (profileError) {
       console.error('[Admin API] Lỗi khi tạo/lưu profile:', profileError);
@@ -179,12 +195,29 @@ router.put(['/admin/users/:id', '/api/admin/users/:id'], async (req, res) => {
     if (resigned_at !== undefined && employment_status === 'resigned') updateData.resigned_at = resigned_at;
     if (resigned_note !== undefined) updateData.resigned_note = resigned_note;
 
-    const { data: updatedProfile, error: updateError } = await supabaseAdmin
+    let { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from('profiles')
       .update(updateData)
       .eq('id', id)
       .select()
       .single();
+
+    if (updateError) {
+      const errMsg = updateError.message || '';
+      if (updateError.code === '23514' || errMsg.includes('profiles_role_check')) {
+        const fallbackRole = (role || '').includes('visa') ? 'visa' : (role || '').includes('marketing') ? 'marketing' : 'sale';
+        const retryRes = await supabaseAdmin
+          .from('profiles')
+          .update({ ...updateData, role: fallbackRole })
+          .eq('id', id)
+          .select()
+          .single();
+        if (!retryRes.error && retryRes.data) {
+          updatedProfile = { ...retryRes.data, role };
+          updateError = null;
+        }
+      }
+    }
 
     if (updateError) {
       console.error('[Admin API] Lỗi khi cập nhật profile:', updateError);
@@ -364,6 +397,13 @@ router.post(['/teams', '/api/teams', '/admin/teams', '/api/admin/teams'], async 
       return;
     }
 
+    if (leader_id) {
+      await supabaseAdmin
+        .from('profiles')
+        .update({ team_id: team.id })
+        .eq('id', leader_id);
+    }
+
     if (member_ids && Array.isArray(member_ids) && member_ids.length > 0) {
       const { error: updateError } = await supabaseAdmin
         .from('profiles')
@@ -410,6 +450,13 @@ router.put(['/teams/:id', '/api/teams/:id', '/admin/teams/:id', '/api/admin/team
       console.error('[Teams API] Lỗi khi cập nhật nhóm:', teamError);
       res.status(500).json({ error: teamError.message });
       return;
+    }
+
+    if (leader_id) {
+      await supabaseAdmin
+        .from('profiles')
+        .update({ team_id: team.id })
+        .eq('id', leader_id);
     }
 
     if (member_ids && Array.isArray(member_ids)) {

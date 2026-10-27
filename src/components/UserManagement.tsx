@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { calculateSeniority } from '../lib/payrollUtils';
 import { DatePicker } from './DatePicker';
 import { CustomSelect } from './CustomSelect';
-import { Role, Team, EmploymentStatus, EMPLOYMENT_STATUS_LABELS, CustomRole } from '../types';
+import { Role, Team, EmploymentStatus, EMPLOYMENT_STATUS_LABELS, CustomRole, ROLE_DEPARTMENT_ORDER } from '../types';
 import { 
   Users, UserPlus, Edit2, Trash2, Shield, Key, Mail, Phone, 
   Building2, Search, X, Check, AlertCircle, RefreshCw, Eye, EyeOff,
@@ -22,6 +22,7 @@ interface ManagedUser {
   phone: string;
   company_name: string;
   role: Role;
+  avatar_url?: string | null;
   employment_status?: EmploymentStatus;
   resigned_at?: string | null;
   resigned_note?: string | null;
@@ -36,7 +37,7 @@ interface ManagedUser {
 const DEFAULT_ROLE_LABELS: Record<string, { label: string; color: string; bg: string; border: string; department?: string; is_system?: boolean; description?: string }> = {
   admin: { label: 'Quản trị viên (Full)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200', department: 'Ban Quản Trị', is_system: true, description: 'Toàn quyền cấu hình, quản trị người dùng, phân quyền và dữ liệu' },
   bod: { label: 'BOD (Ban Giám đốc)', color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200', department: 'Ban Giám Đốc', is_system: true, description: 'Xem toàn bộ báo cáo doanh thu, lãi lỗ và phê duyệt thu chi/nghỉ phép' },
-  sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300', department: 'Kinh doanh & Sale', is_system: true, description: 'Quản lý nhóm Sale, theo dõi KPI, duyệt chỗ và tạo tour gửi đối tác' },
+  sale_leader: { label: 'Sale Leader', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300', department: 'Kinh doanh & Sale', is_system: true, description: 'Quản lý nhóm Sale, theo dõi KPI, duyệt chỗ và tạo tour gửi đối tác' },
   sale: { label: 'Sale', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', department: 'Kinh doanh & Sale', is_system: true, description: 'Tư vấn, giữ chỗ và tạo đơn hàng cho khách hàng cá nhân/đoàn' },
   operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', department: 'Phòng Điều hành', is_system: true, description: 'Tạo tour, điều phối booking, duyệt chốt chỗ và quản lý giá tour' },
   visa_leader: { label: 'Trưởng bộ phận Visa', color: 'text-indigo-900', bg: 'bg-indigo-100', border: 'border-indigo-300', department: 'Phòng Visa', is_system: true, description: 'Quản lý toàn diện hồ sơ và chuyên viên bộ phận Visa, phân công và duyệt hồ sơ visa' },
@@ -105,7 +106,7 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [teamFilter, setTeamFilter] = useState<string>('all');
-  const [employmentFilter, setEmploymentFilter] = useState<string>('all');
+  const [employmentFilter, setEmploymentFilter] = useState<string>('working');
   const [seniorityFilter, setSeniorityFilter] = useState<string>('all');
   
   // User Modal state
@@ -257,21 +258,53 @@ export default function UserManagement() {
         }
       }
 
+      let roleOverrides: Record<string, string> = {};
+      try {
+        const rawOverrides = localStorage.getItem('tour_crm_role_overrides');
+        if (rawOverrides) roleOverrides = JSON.parse(rawOverrides);
+      } catch {
+        // ignore parse error
+      }
+
+      let avatarOverrides: Record<string, string> = {};
+      try {
+        const rawAvatars = localStorage.getItem('tour_crm_avatar_overrides');
+        if (rawAvatars) avatarOverrides = JSON.parse(rawAvatars);
+      } catch {
+        // ignore parse error
+      }
+
       const normalizedUsers = loadedUsers.map(u => {
-        if (!u.email) {
-          if (u.id === 'admin-default-1') return { ...u, email: 'marketing@adluxury.net' };
-          if (u.id === 'admin-default-2') return { ...u, email: 'marketing.adluxury@gmail.com' };
-          if (u.full_name) {
+        let resolvedEmail = u.email;
+        if (!resolvedEmail) {
+          if (u.id === 'admin-default-1') resolvedEmail = 'marketing@adluxury.net';
+          else if (u.id === 'admin-default-2') resolvedEmail = 'marketing.adluxury@gmail.com';
+          else if (u.full_name) {
             const slug = u.full_name
               .normalize('NFD')
               .replace(/[\u0300-\u036f]/g, '')
               .toLowerCase()
               .replace(/[^a-z0-9]/g, '');
-            return { ...u, email: `${slug}@adluxury.net` };
+            resolvedEmail = `${slug}@adluxury.net`;
+          } else {
+            resolvedEmail = 'user@adluxury.net';
           }
-          return { ...u, email: 'user@adluxury.net' };
         }
-        return u;
+
+        let resolvedRole = u.role;
+        const emailKey = (resolvedEmail || '').toLowerCase().trim();
+        const overrideRole = roleOverrides[u.id] || (emailKey ? roleOverrides[emailKey] : undefined);
+        if (overrideRole) {
+          resolvedRole = overrideRole as Role;
+        } else if ((u.full_name || '').toLowerCase().includes('hoàng thơ') && u.role === 'visa') {
+          resolvedRole = 'visa_leader';
+        }
+
+        const resolvedAvatar = u.avatar_url !== undefined && u.avatar_url !== null
+          ? u.avatar_url
+          : (avatarOverrides[u.id] || (emailKey ? avatarOverrides[emailKey] : undefined) || null);
+
+        return { ...u, email: resolvedEmail, role: resolvedRole, avatar_url: resolvedAvatar };
       });
 
       const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
@@ -609,10 +642,20 @@ export default function UserManagement() {
         throw new Error(errJson.error || 'Thao tác không thành công.');
       }
 
+      if (selectedLeader) {
+        const isVisaTeam = teamFormData.name.toLowerCase().includes('visa');
+        const nextRole = isVisaTeam && selectedLeader.role === 'visa' ? 'visa_leader' : selectedLeader.role;
+        await updateUserProfile(selectedLeader.id, {
+          role: nextRole,
+          team_name: teamFormData.name.trim()
+        });
+      }
+
       setActionSuccess(editingTeam ? 'Cập nhật thông tin Team thành công!' : 'Tạo Team mới thành công!');
       setIsTeamFormOpen(false);
-      fetchTeams();
-      fetchUsers();
+      await fetchTeams();
+      await fetchUsers();
+      await refreshProfiles();
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || 'Lỗi khi lưu thông tin Team.');
@@ -799,6 +842,18 @@ export default function UserManagement() {
     }
 
     return matchesSearch && matchesRole && matchesTeam && matchesEmployment && matchesSeniority;
+  }).sort((a, b) => {
+    const getEffectiveRole = (u: ManagedUser) => {
+      const ledTeam = teams.find(t =>
+        t.leader_id === u.id ||
+        (t.leader_name && u.full_name && t.leader_name.toLowerCase().includes(u.full_name.toLowerCase().trim()))
+      );
+      return (ledTeam && (ledTeam.name || '').toLowerCase().includes('visa') && u.role === 'visa') ? 'visa_leader' : u.role;
+    };
+    const orderA = ROLE_DEPARTMENT_ORDER[getEffectiveRole(a)] || 99;
+    const orderB = ROLE_DEPARTMENT_ORDER[getEffectiveRole(b)] || 99;
+    if (orderA !== orderB) return orderA - orderB;
+    return (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'vi');
   });
 
   return (
@@ -824,7 +879,7 @@ export default function UserManagement() {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-xl flex-wrap">
           <button
-            onClick={() => { setActiveTab('company'); setRoleFilter('all'); setEmploymentFilter('all'); setSeniorityFilter('all'); }}
+            onClick={() => { setActiveTab('company'); setRoleFilter('all'); setEmploymentFilter('working'); setSeniorityFilter('all'); }}
             className={`px-4 py-2.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'company' 
                 ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80' 
@@ -834,7 +889,7 @@ export default function UserManagement() {
             <Users className="w-4 h-4 text-blue-600" />
             <span>Quản lý Nhân sự Công ty</span>
             <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-extrabold">
-              {companyUsers.length}
+              {companyUsers.filter(u => u.employment_status !== 'resigned' && u.employment_status !== 'suspended').length}
             </span>
           </button>
 
@@ -1058,15 +1113,20 @@ export default function UserManagement() {
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {filteredUsers.map((u) => {
                       const isResigned = u.employment_status === 'resigned';
-                      const roleConfig = mergedRoleLabels[u.role] || { 
-                        label: u.role, 
+                      const ledTeam = teams.find(t =>
+                        t.leader_id === u.id ||
+                        (t.leader_name && u.full_name && t.leader_name.toLowerCase().includes(u.full_name.toLowerCase().trim()))
+                      );
+                      const effectiveRoleKey = (ledTeam && (ledTeam.name || '').toLowerCase().includes('visa') && u.role === 'visa') ? 'visa_leader' : u.role;
+                      const roleConfig = mergedRoleLabels[effectiveRoleKey] || { 
+                        label: effectiveRoleKey, 
                         color: 'text-gray-700', 
                         bg: 'bg-gray-100', 
                         border: 'border-gray-200' 
                       };
 
-                      const leaderObj = users.find(l => l.id === u.leader_id);
-                      const teamObj = teams.find(t => t.id === u.team_id) || (u.team_name ? { name: u.team_name } : null);
+                      const teamObj = teams.find(t => t.id === u.team_id) || ledTeam || (u.team_name ? { name: u.team_name, leader_id: null } : null);
+                      const leaderObj = users.find(l => l.id === u.leader_id) || (teamObj?.leader_id && teamObj.leader_id !== u.id ? users.find(l => l.id === teamObj.leader_id) : undefined);
                       const empStatus = u.employment_status || 'official';
                       const statusConfig = EMPLOYMENT_STATUS_LABELS[empStatus] || EMPLOYMENT_STATUS_LABELS.official;
                       const seniority = calculateSeniority(u.join_date || u.created_at, null, u.resigned_at);
@@ -1078,12 +1138,16 @@ export default function UserManagement() {
                         >
                           <td className="py-3.5 px-4 font-black text-slate-800">
                             <div className="flex items-center gap-2.5">
-                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs shadow-xs ${
+                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs shadow-xs overflow-hidden shrink-0 ${
                                 isResigned 
                                   ? 'bg-slate-200 border-slate-300 text-slate-600' 
                                   : 'bg-blue-50 border-blue-200 text-blue-700'
                               }`}>
-                                {u.full_name ? u.full_name.charAt(0).toUpperCase() : 'U'}
+                                {u.avatar_url ? (
+                                  <img src={u.avatar_url} alt={u.full_name || 'Avatar'} className="w-full h-full object-cover" />
+                                ) : (
+                                  u.full_name ? u.full_name.charAt(0).toUpperCase() : 'U'
+                                )}
                               </div>
                               <div>
                                 <div className="flex items-center gap-1.5">
@@ -1208,6 +1272,11 @@ export default function UserManagement() {
                                 <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                                 <span>{leaderObj.full_name}</span>
                               </div>
+                            ) : ledTeam ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold">
+                                <Award className="w-3 h-3 text-amber-600" />
+                                <span>Trưởng nhóm ({ledTeam.name})</span>
+                              </span>
                             ) : (
                               <span className="text-gray-300 italic font-semibold">Tự do / Top Leader</span>
                             )}
@@ -2060,7 +2129,7 @@ export default function UserManagement() {
                     options={[
                       { value: '', label: '-- Chưa chọn Leader --' },
                       ...users
-                        .filter(u => u.role === 'sale_leader' || u.role === 'admin' || u.role === 'bod' || u.role === 'marketing_leader' || u.role === 'visa_leader')
+                        .filter(u => !['agent', 'CTV'].includes(u.role) && u.employment_status !== 'resigned')
                         .map(u => ({
                           value: u.id,
                           label: `${u.full_name} (${mergedRoleLabels[u.role]?.label || u.role}) - ${u.email}`

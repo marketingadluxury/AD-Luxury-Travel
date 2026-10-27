@@ -54,7 +54,7 @@ export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, EmploymentStatus
 
 export const ROLE_LABELS: Record<string, RoleConfig> = {
   admin: { label: 'Quản trị viên (Admin)', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
-  sale_leader: { label: 'Sale Leader (Trưởng nhóm)', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
+  sale_leader: { label: 'Sale Leader', color: 'text-amber-800', bg: 'bg-amber-100', border: 'border-amber-300' },
   sale: { label: 'Sale', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
   operator: { label: 'Điều hành Tour', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
   visa_leader: { label: 'Trưởng bộ phận Visa', color: 'text-indigo-900', bg: 'bg-indigo-100', border: 'border-indigo-300' },
@@ -117,6 +117,7 @@ export interface User {
   email: string;
   full_name: string;
   role: Role;
+  avatar_url?: string | null;
   employment_status?: EmploymentStatus;
   resigned_at?: string | null;
   resigned_note?: string | null;
@@ -132,6 +133,7 @@ export interface Profile {
   phone?: string;
   company_name?: string;
   role: Role;
+  avatar_url?: string | null;
   employment_status?: EmploymentStatus;
   resigned_at?: string | null;
   resigned_note?: string | null;

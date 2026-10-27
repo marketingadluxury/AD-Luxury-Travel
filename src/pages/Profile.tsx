@@ -1,20 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useCRM } from '@/context/CRMContext';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getRoleConfig } from '@/types';
 import { calculateSeniority } from '@/lib/payrollUtils';
-import { User, Save, Mail, Loader2, Key, Lock, Eye, EyeOff, Calendar, Clock, Briefcase, Shield, PartyPopper } from 'lucide-react';
+import { User, Save, Mail, Loader2, Key, Lock, Eye, EyeOff, Calendar, Clock, Shield, PartyPopper, Camera, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Profile() {
   const { profile, updateProfile, updatePassword, user } = useAuth();
+  const { updateUserProfile, customRoles } = useCRM();
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
     phone: profile?.phone || '',
     company_name: profile?.company_name || '',
   });
   const [loading, setLoading] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        full_name: profile.full_name || '',
+        phone: profile.phone || '',
+        company_name: profile.company_name || '',
+      });
+    }
+  }, [profile?.id, profile?.full_name, profile?.phone, profile?.company_name]);
 
   const seniority = calculateSeniority(profile?.join_date || profile?.created_at, null, profile?.resigned_at);
+  const roleConfig = getRoleConfig(profile?.role, customRoles);
 
   // Password change states
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -26,12 +43,127 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const resizeImageAsDataUrl = (file: File, maxSize = 256): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxSize) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Không thể khởi tạo canvas'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file hình ảnh hợp lệ (JPG, PNG, WEBP)!');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Kích thước ảnh không được vượt quá 5MB!');
+      return;
+    }
+
+    setAvatarUploading(true);
+    try {
+      let finalAvatarUrl = '';
+
+      if (isSupabaseConfigured()) {
+        const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const fileName = `avatars/${user.id}-${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('crm-attachments')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('crm-attachments')
+            .getPublicUrl(fileName);
+          if (publicUrlData?.publicUrl) {
+            finalAvatarUrl = publicUrlData.publicUrl;
+          }
+        } else {
+          console.warn('Tải ảnh lên Supabase Storage không thành công, chuyển sang chế độ nén tối ưu:', uploadError.message);
+        }
+      }
+
+      if (!finalAvatarUrl) {
+        finalAvatarUrl = await resizeImageAsDataUrl(file, 256);
+      }
+
+      await updateProfile({ avatar_url: finalAvatarUrl });
+      await updateUserProfile(user.id, { avatar_url: finalAvatarUrl });
+      toast.success('Đã cập nhật ảnh đại diện thành công!');
+    } catch (err) {
+      console.error('Lỗi cập nhật ảnh đại diện:', err);
+      toast.error('Không thể cập nhật ảnh đại diện. Vui lòng thử lại!');
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    setAvatarUploading(true);
+    try {
+      await updateProfile({ avatar_url: null });
+      await updateUserProfile(user.id, { avatar_url: null });
+      toast.success('Đã xóa ảnh đại diện!');
+    } catch (err) {
+      console.error('Lỗi xóa ảnh đại diện:', err);
+      toast.error('Không thể xóa ảnh đại diện.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
     try {
       await updateProfile(formData);
+      if (user?.id) {
+        await updateUserProfile(user.id, formData);
+      }
       setMessage({ type: 'success', text: 'Cập nhật thông tin thành công!' });
       toast.success('Đã cập nhật thông tin thành công!');
     } catch (err) {
@@ -76,13 +208,48 @@ export default function Profile() {
 
       {/* Seniority & Employment Info Card */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-md border border-slate-700 space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 font-black text-lg shadow-inner">
-              {profile?.full_name ? profile.full_name.charAt(0).toUpperCase() : 'U'}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="relative group shrink-0">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarUploading}
+                title="Bấm để thay đổi ảnh đại diện"
+                className="w-16 h-16 rounded-2xl bg-blue-500/20 border-2 border-blue-400/40 flex items-center justify-center text-blue-400 font-black text-xl shadow-inner overflow-hidden relative cursor-pointer transition-all hover:border-blue-400 focus:outline-none"
+              >
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={profile?.full_name || 'Avatar'}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{profile?.full_name ? profile.full_name.charAt(0).toUpperCase() : 'U'}</span>
+                )}
+
+                <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
+                  {avatarUploading ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-300" />
+                  ) : (
+                    <>
+                      <Camera className="w-4 h-4 text-blue-300" />
+                      <span className="text-[9px] font-bold mt-0.5">Đổi ảnh</span>
+                    </>
+                  )}
+                </div>
+              </button>
             </div>
+
             <div>
-              <h2 className="text-base font-black text-white flex items-center gap-2">
+              <h2 className="text-base font-black text-white flex items-center gap-2 flex-wrap">
                 <span>{profile?.full_name || user?.email}</span>
                 {seniority.isAnniversaryMonth && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-400/30 text-[10px] font-bold animate-pulse">
@@ -91,14 +258,37 @@ export default function Profile() {
                   </span>
                 )}
               </h2>
-              <p className="text-xs text-slate-400 font-medium">{profile?.role || 'Thành viên'} • {profile?.company_name || 'AD Luxury Travel'}</p>
+              <p className="text-xs text-slate-400 font-medium">{roleConfig.label || profile?.role || 'Thành viên'} • {profile?.company_name || 'AD Luxury Travel'}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-400/30 text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {avatarUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
+                  <span>{avatarUploading ? 'Đang tải...' : 'Đổi ảnh đại diện'}</span>
+                </button>
+                {profile?.avatar_url && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    disabled={avatarUploading}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-400/30 text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                    title="Xóa ảnh đại diện"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Xóa ảnh</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold">
               <Shield className="w-3.5 h-3.5 text-blue-400" />
-              <span>{profile?.role}</span>
+              <span>{roleConfig.label || profile?.role}</span>
             </span>
           </div>
         </div>

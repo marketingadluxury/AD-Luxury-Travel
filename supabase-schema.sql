@@ -1189,6 +1189,9 @@ ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_sync_status TEXT DEFAULT 'not_sync
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_last_synced_at TIMESTAMPTZ;
 ALTER TABLE tours ADD COLUMN IF NOT EXISTS wp_sync_message TEXT;
 
+-- Bổ sung cột ảnh đại diện (avatar_url) vào bảng profiles
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
 
 
 

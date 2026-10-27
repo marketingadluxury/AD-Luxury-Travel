@@ -128,6 +128,10 @@ export function isUserAuthorizedToApproveLeaveL1(
     return currentProfile.team_id === creatorProfile.team_id;
   }
 
+  // Trường hợp cùng bộ phận chuyên môn (Visa Leader duyệt Visa, Marketing Leader duyệt Marketing)
+  if (currentUserRole === 'visa_leader' && creatorProfile?.role === 'visa') return true;
+  if (currentUserRole === 'marketing_leader' && creatorProfile?.role === 'marketing') return true;
+
   // Trường hợp dự phòng cho HR khi nhân viên chưa có nhóm
   if (currentUserRole === 'hr') return true;
 

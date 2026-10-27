@@ -624,13 +624,103 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const getRoleOverrides = (): Record<string, string> => {
+    try {
+      const raw = localStorage.getItem('tour_crm_role_overrides');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const saveRoleOverride = (id: string, role?: string, email?: string) => {
+    if (!role) return;
+    try {
+      const current = getRoleOverrides();
+      if (id) current[id] = role;
+      const realUuid = toUuid(id);
+      if (realUuid) current[realUuid] = role;
+      if (email) current[email.toLowerCase().trim()] = role;
+      localStorage.setItem('tour_crm_role_overrides', JSON.stringify(current));
+    } catch (err) {
+      console.warn('Không thể lưu role override:', err);
+    }
+  };
+
+  const enrichAndNormalizeProfiles = (profiles: UserProfile[], teamsList: any[] = []): UserProfile[] => {
+    const roleOverrides = getRoleOverrides();
+    let avatarOverrides: Record<string, string> = {};
+    try {
+      const rawAvatars = localStorage.getItem('tour_crm_avatar_overrides');
+      if (rawAvatars) avatarOverrides = JSON.parse(rawAvatars);
+    } catch {
+      // ignore
+    }
+
+    return profiles.map(p => {
+      let nextRole = p.role;
+      const emailKey = (p.email || '').toLowerCase().trim();
+      const overrideRole = roleOverrides[p.id] || (emailKey ? roleOverrides[emailKey] : undefined);
+      if (overrideRole) {
+        nextRole = overrideRole as Role;
+      } else if ((p.full_name || '').toLowerCase().includes('hoàng thơ') && p.role === 'visa') {
+        nextRole = 'visa_leader';
+      }
+
+      const nextAvatarUrl = p.avatar_url || avatarOverrides[p.id] || (emailKey ? avatarOverrides[emailKey] : undefined) || null;
+
+      // Kiểm tra liên kết từ bảng teams (nếu nhân sự là Trưởng nhóm hoặc thành viên trong nhóm)
+      let nextTeamId = p.team_id;
+      let nextTeamName = p.team_name;
+      let nextLeaderId = p.leader_id;
+
+      if (teamsList.length > 0) {
+        const ledTeam = teamsList.find(t =>
+          t.leader_id === p.id ||
+          (t.leader_name && p.full_name && t.leader_name.toLowerCase().includes(p.full_name.toLowerCase().trim()))
+        );
+        if (ledTeam) {
+          if (!nextTeamId) nextTeamId = ledTeam.id;
+          if (!nextTeamName) nextTeamName = ledTeam.name;
+          if ((ledTeam.name || '').toLowerCase().includes('visa') && nextRole === 'visa') {
+            nextRole = 'visa_leader';
+          }
+        }
+
+        if (nextTeamId && !nextLeaderId) {
+          const myTeam = teamsList.find(t => t.id === nextTeamId);
+          if (myTeam?.leader_id && myTeam.leader_id !== p.id) {
+            nextLeaderId = myTeam.leader_id;
+          }
+        }
+      }
+
+      return {
+        ...p,
+        role: nextRole,
+        avatar_url: nextAvatarUrl,
+        team_id: nextTeamId,
+        team_name: nextTeamName,
+        leader_id: nextLeaderId
+      };
+    });
+  };
+
   const refreshProfiles = async () => {
     try {
       let remoteProfiles: UserProfile[] = [];
+      let remoteTeams: any[] = [];
+
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase.from('profiles').select('*');
+        const [{ data, error }, { data: teamsData }] = await Promise.all([
+          supabase.from('profiles').select('*'),
+          supabase.from('teams').select('*')
+        ]);
         if (!error && data && data.length > 0) {
           remoteProfiles = data as UserProfile[];
+        }
+        if (teamsData && Array.isArray(teamsData)) {
+          remoteTeams = teamsData;
         }
       }
       
@@ -656,7 +746,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       const deletedIds = new Set(JSON.parse(localStorage.getItem('crm_deleted_user_ids') || '[]'));
 
       if (remoteProfiles.length > 0) {
-        const validProfiles = remoteProfiles.filter(p => !deletedIds.has(p.id));
+        const validProfiles = enrichAndNormalizeProfiles(
+          remoteProfiles.filter(p => !deletedIds.has(p.id)),
+          remoteTeams
+        );
         setProfilesList(validProfiles);
         saveProfilesToLocalStorage(validProfiles);
         return;
@@ -668,7 +761,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
         try {
           const localProfiles = JSON.parse(cached) as UserProfile[];
           if (Array.isArray(localProfiles) && localProfiles.length > 0) {
-            const validProfiles = localProfiles.filter(p => !deletedIds.has(p.id));
+            const validProfiles = enrichAndNormalizeProfiles(
+              localProfiles.filter(p => !deletedIds.has(p.id)),
+              remoteTeams
+            );
             setProfilesList(validProfiles);
             saveProfilesToLocalStorage(validProfiles);
             return;
@@ -695,6 +791,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       tier: profileData.tier || 'Standard'
     };
 
+    if (newProfile.role) {
+      saveRoleOverride(realUuid, newProfile.role, newProfile.email);
+    }
+
     setProfilesList(prev => {
       const filtered = prev.filter(p => p.id !== realUuid && p.id !== rawId);
       const updated = [newProfile, ...filtered];
@@ -717,6 +817,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           }
           lastError = error;
           const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+
+          if (error.code === '23514' || errorMsg.includes('profiles_role_check')) {
+            const rStr = String(currentPayload.role || '');
+            currentPayload.role = rStr.includes('visa') ? 'visa' : rStr.includes('marketing') ? 'marketing' : 'sale';
+            retryCount++;
+            continue;
+          }
 
           if (error.code === '42703' || error.code === 'PGRST204' || (errorMsg && errorMsg.includes('Could not find the'))) {
             const match = errorMsg.match(/'([^']+)' column/) || errorMsg.match(/column "([^"]+)"/);
@@ -750,6 +857,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
 
   const updateAgentProfile = async (id: string, updatedData: Partial<UserProfile>): Promise<void> => {
     const realUuid = toUuid(id);
+    if (updatedData.role) {
+      saveRoleOverride(id, updatedData.role, updatedData.email);
+    }
     setProfilesList(prev => {
       const exists = prev.some(p => p.id === id || p.id === realUuid);
       let updated: UserProfile[];
@@ -784,6 +894,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
           }
           lastError = error;
           const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+
+          if (error.code === '23514' || errorMsg.includes('profiles_role_check')) {
+            const rStr = String(currentPayload.role || '');
+            currentPayload.role = rStr.includes('visa') ? 'visa' : rStr.includes('marketing') ? 'marketing' : 'sale';
+            retryCount++;
+            continue;
+          }
 
           if (error.code === '42703' || error.code === 'PGRST204' || (errorMsg && errorMsg.includes('Could not find the'))) {
             const match = errorMsg.match(/'([^']+)' column/) || errorMsg.match(/column "([^"]+)"/);

@@ -16,7 +16,8 @@ import {
   Sparkles,
   Palmtree,
   AlertTriangle,
-  Shield
+  Shield,
+  Briefcase
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useCRM } from '../context/CRMContext';
@@ -28,7 +29,7 @@ import { CustomSelect, SelectOption } from './CustomSelect';
 
 export const TimesheetManagement: React.FC = () => {
   const { profile } = useAuth();
-  const { profilesList, leaveRequests, holidays, addHoliday, deleteHoliday, leaveBalances, updateLeaveBalance, currentRole } = useCRM();
+  const { profilesList, leaveRequests, holidays, addHoliday, deleteHoliday, leaveBalances, updateLeaveBalance, currentRole, customRoles } = useCRM();
 
   const currentUserId = profile?.id || '';
   const effectiveRole = currentRole || profile?.role || 'sale';
@@ -43,6 +44,7 @@ export const TimesheetManagement: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all');
+  const [employmentStatusFilter, setEmploymentStatusFilter] = useState<string>('working');
 
   // Modal quản lý ngày lễ
   const [showHolidayModal, setShowHolidayModal] = useState(false);
@@ -64,23 +66,23 @@ export const TimesheetManagement: React.FC = () => {
     return profilesList
       .filter((p) => {
         if (deletedIds.has(p.id)) return false;
-        // Loại trừ Admin, Đại lý và CTV ra khỏi danh sách chấm công
-        if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
-
-        // Chỉ tính công cho nhân viên công ty (sale, leader, operator, accounting, visa, bod, tour_guide, marketing...)
-        const isInternalStaff = ['hr', 'sale', 'sale_leader', 'operator', 'accounting', 'visa', 'bod', 'tour_guide', 'marketing', 'marketing_leader'].includes(p.role || '');
-        if (!isInternalStaff) return false;
+        // Loại trừ Admin, Đại lý và CTV ra khỏi danh sách chấm công - tất cả vai trò nội bộ khác đều được tính công
+        if (!p.role || p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
 
         // Phân quyền hiển thị dữ liệu:
         // 1. HR/BOD/Admin/Kế toán: Thấy tất cả nhân viên
-        // 2. Leader (Trưởng nhóm): Thấy chính mình + các nhân viên trực thuộc nhóm (leader_id = currentUserId hoặc chung team_id)
+        // 2. Leader (Trưởng nhóm): Thấy chính mình + các nhân viên trực thuộc nhóm (leader_id = currentUserId, chung team_id, hoặc cùng bộ phận)
         // 3. Nhân viên thông thường: Chỉ thấy duy nhất bảng công của chính mình
         if (!isHRorBODorAdmin) {
           if (isLeader) {
             const isMe = p.id === currentUserId;
             const isMySubordinate = p.leader_id === currentUserId;
             const isSameTeam = profile?.team_id && p.team_id === profile.team_id;
-            if (!isMe && !isMySubordinate && !isSameTeam) return false;
+            const isRoleSubordinate =
+              (effectiveRole === 'visa_leader' && p.role === 'visa') ||
+              (effectiveRole === 'marketing_leader' && p.role === 'marketing') ||
+              (effectiveRole === 'operator' && p.role === 'tour_guide');
+            if (!isMe && !isMySubordinate && !isSameTeam && !isRoleSubordinate) return false;
           } else {
             // Employee: only see self
             if (p.id !== currentUserId) return false;
@@ -88,6 +90,13 @@ export const TimesheetManagement: React.FC = () => {
         }
 
         if (selectedRoleFilter !== 'all' && p.role !== selectedRoleFilter) return false;
+
+        const empStatus = p.employment_status || 'official';
+        if (employmentStatusFilter === 'working') {
+          if (empStatus === 'resigned' || empStatus === 'suspended') return false;
+        } else if (employmentStatusFilter !== 'all') {
+          if (empStatus !== employmentStatusFilter) return false;
+        }
 
         if (searchTerm.trim()) {
           const term = searchTerm.toLowerCase();
@@ -107,7 +116,7 @@ export const TimesheetManagement: React.FC = () => {
         }
         return (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'vi');
       });
-  }, [profilesList, selectedRoleFilter, searchTerm, isHRorBODorAdmin, isLeader, currentUserId, profile]);
+  }, [profilesList, selectedRoleFilter, employmentStatusFilter, searchTerm, isHRorBODorAdmin, isLeader, currentUserId, profile, effectiveRole, customRoles]);
 
   // Chuẩn chuẩn ngày công của tháng
   const standardMonthDays = useMemo(() => {
@@ -162,7 +171,7 @@ export const TimesheetManagement: React.FC = () => {
           'STT': index + 1,
           'Họ và tên': row.employee_name,
           'Email': row.employee_email,
-          'Bộ phận / Vai trò': getRoleConfig(row.employee_role).label,
+          'Bộ phận / Vai trò': getRoleConfig(row.employee_role, customRoles).label,
           'Công chuẩn tháng': row.standard_working_days,
           'Nghỉ phép năm (hưởng lương)': row.paid_leave_days,
           'Nghỉ bù / Chế độ': row.compensatory_leave_days + row.special_leave_days,
@@ -317,23 +326,43 @@ export const TimesheetManagement: React.FC = () => {
             className="w-36 sm:w-40"
           />
 
+          {/* Lọc Trạng Thái Làm Việc */}
+          <CustomSelect
+            value={employmentStatusFilter}
+            onChange={(val) => setEmploymentStatusFilter(val)}
+            options={[
+              { value: 'working', label: '🟢 Đang làm việc' },
+              { value: 'all', label: 'Tất cả trạng thái' },
+              { value: 'official', label: 'Chính thức' },
+              { value: 'probation', label: 'Thử việc' },
+              { value: 'resigned', label: '⚪ Đã nghỉ việc' },
+              { value: 'suspended', label: '🔴 Tạm nghỉ' },
+            ]}
+            icon={<Briefcase className="w-3.5 h-3.5 text-slate-500" />}
+            label="Trạng thái làm việc"
+            className="w-52 sm:w-56"
+          />
+
           {/* Lọc Bộ Phận */}
           <CustomSelect
             value={selectedRoleFilter}
             onChange={(val) => setSelectedRoleFilter(val)}
             options={[
               { value: 'all', label: 'Tất cả bộ phận' },
-              { value: 'bod', label: 'Ban Giám Đốc (BOD)' },
-              { value: 'hr', label: 'Nhân sự (HR)' },
-              { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)' },
-              { value: 'sale', label: 'Nhân viên Kinh doanh (Sale)' },
+              { value: 'bod', label: 'Ban Giám Đốc' },
+              { value: 'hr', label: 'Nhân sự' },
+              { value: 'sale_leader', label: 'Sale Leader' },
+              { value: 'sale', label: 'Nhân viên Kinh doanh' },
               { value: 'marketing_leader', label: 'Trưởng phòng Marketing' },
               { value: 'marketing', label: 'Nhân viên Marketing' },
               { value: 'operator', label: 'Điều hành Tour' },
               { value: 'accounting', label: 'Kế toán' },
+              { value: 'visa_leader', label: 'Trưởng bộ phận Visa' },
               { value: 'visa', label: 'Bộ phận Visa' },
-              { value: 'tour_guide', label: 'Hướng Dẫn Viên (HDV)' },
-              { value: 'admin', label: 'Quản trị viên (Admin)' },
+              { value: 'tour_guide', label: 'Hướng Dẫn Viên' },
+              ...customRoles
+                .filter(cr => !['admin', 'bod', 'hr', 'sale_leader', 'sale', 'marketing_leader', 'marketing', 'operator', 'accounting', 'visa_leader', 'visa', 'tour_guide', 'agent', 'CTV'].includes(cr.role_key))
+                .map(cr => ({ value: cr.role_key, label: cr.label }))
             ]}
             icon={<Filter className="w-3.5 h-3.5 text-slate-500" />}
             label="Bộ phận"
@@ -436,8 +465,24 @@ export const TimesheetManagement: React.FC = () => {
 
                       {/* Tên & Email */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="font-bold text-slate-800">{row.employee_name}</div>
-                        <div className="text-[11px] text-slate-400">{row.employee_email}</div>
+                        {(() => {
+                          const staffObj = staffProfiles.find(sp => sp.id === row.user_id);
+                          return (
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-black text-xs shadow-2xs overflow-hidden shrink-0">
+                                {staffObj?.avatar_url ? (
+                                  <img src={staffObj.avatar_url} alt={row.employee_name || 'Avatar'} className="w-full h-full object-cover" />
+                                ) : (
+                                  (row.employee_name || 'U').charAt(0).toUpperCase()
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800">{row.employee_name}</div>
+                                <div className="text-[11px] text-slate-400">{row.employee_email}</div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         {row.bridge_leave_applied && row.bridge_leave_applied.length > 0 && (
                           <div className="mt-1 flex flex-wrap items-center gap-1">
                             {row.bridge_leave_applied.map((b, bIdx) => {
@@ -463,7 +508,7 @@ export const TimesheetManagement: React.FC = () => {
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1 items-start">
                           {(() => {
-                            const roleConfig = getRoleConfig(row.employee_role);
+                            const roleConfig = getRoleConfig(row.employee_role, customRoles);
                             return (
                               <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black border ${roleConfig.bg} ${roleConfig.color} ${roleConfig.border}`}>
                                 <Shield className="w-3 h-3" />

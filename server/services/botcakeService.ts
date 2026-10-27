@@ -270,7 +270,7 @@ export async function processBotcakeWebhook(payload: BotcakeWebhookPayload) {
     console.warn('[Botcake Webhook] Lưu lead:', leadDbErr.message);
   }
 
-  // 3. Kích hoạt trigger thông báo tới Google Chat & CRM Notifications
+  // 3. Kích hoạt trigger thông báo nội bộ CRM Notifications
   await sendInternalSystemNotification({
     fullName,
     phone: primaryPhone,

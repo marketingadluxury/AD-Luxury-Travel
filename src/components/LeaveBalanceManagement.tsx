@@ -13,7 +13,8 @@ import {
   ShieldCheck,
   Shield,
   Clock,
-  PartyPopper
+  PartyPopper,
+  Briefcase
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,12 +25,13 @@ import { DatePicker } from './DatePicker';
 
 export const LeaveBalanceManagement: React.FC = () => {
   const { profile } = useAuth();
-  const { profilesList, leaveBalances, updateLeaveBalance, updateUserProfile, leaveRequests, holidays } = useCRM();
+  const { profilesList, leaveBalances, updateLeaveBalance, updateUserProfile, leaveRequests, holidays, customRoles } = useCRM();
 
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [employmentStatusFilter, setEmploymentStatusFilter] = useState<string>('working');
 
   // Kiểm tra quyền chỉnh sửa trạng thái nhân sự (HR, Admin, BOD)
   const canManageEmploymentStatus = ['admin', 'bod', 'hr'].includes(profile?.role || '');
@@ -50,13 +52,17 @@ export const LeaveBalanceManagement: React.FC = () => {
     return profilesList
       .filter((p) => {
         if (deletedIds.has(p.id)) return false;
-        // Loại trừ Admin, Đại lý và CTV
-        if (p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
-
-        const isInternal = ['hr', 'sale', 'sale_leader', 'operator', 'accounting', 'visa', 'bod', 'tour_guide', 'marketing', 'marketing_leader'].includes(p.role || '');
-        if (!isInternal) return false;
+        // Loại trừ Admin, Đại lý và CTV - tất cả các vai trò nội bộ khác (bao gồm visa_leader và custom role) đều thuộc danh sách nhân sự
+        if (!p.role || p.role === 'admin' || p.role === 'agent' || p.role === 'CTV') return false;
 
         if (roleFilter !== 'all' && p.role !== roleFilter) return false;
+
+        const empStatus = p.employment_status || 'official';
+        if (employmentStatusFilter === 'working') {
+          if (empStatus === 'resigned' || empStatus === 'suspended') return false;
+        } else if (employmentStatusFilter !== 'all') {
+          if (empStatus !== employmentStatusFilter) return false;
+        }
 
         if (searchTerm.trim()) {
           const term = searchTerm.toLowerCase();
@@ -76,7 +82,7 @@ export const LeaveBalanceManagement: React.FC = () => {
         }
         return (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'vi');
       });
-  }, [profilesList, roleFilter, searchTerm]);
+  }, [profilesList, roleFilter, employmentStatusFilter, searchTerm, customRoles]);
 
   // Mở modal điều chỉnh
   const handleOpenEdit = (staff: Profile) => {
@@ -208,6 +214,23 @@ export const LeaveBalanceManagement: React.FC = () => {
       {/* Bộ Lọc & Tìm Kiếm */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col md:flex-row items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-2.5 w-full md:w-auto">
+          {/* Lọc Trạng Thái Làm Việc */}
+          <CustomSelect
+            value={employmentStatusFilter}
+            onChange={(val) => setEmploymentStatusFilter(val)}
+            options={[
+              { value: 'working', label: '🟢 Đang làm việc' },
+              { value: 'all', label: 'Tất cả trạng thái' },
+              { value: 'official', label: 'Chính thức' },
+              { value: 'probation', label: 'Thử việc' },
+              { value: 'resigned', label: '⚪ Đã nghỉ việc' },
+              { value: 'suspended', label: '🔴 Tạm nghỉ' },
+            ]}
+            icon={<Briefcase className="w-3.5 h-3.5 text-slate-500" />}
+            label="Trạng thái làm việc"
+            className="w-52 sm:w-56"
+          />
+
           {/* Lọc Vai Trò */}
           <CustomSelect
             value={roleFilter}
@@ -216,15 +239,18 @@ export const LeaveBalanceManagement: React.FC = () => {
               { value: 'all', label: 'Tất cả bộ phận' },
               { value: 'bod', label: 'Ban Giám Đốc (BOD)' },
               { value: 'hr', label: 'Nhân sự (HR)' },
-              { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)' },
+              { value: 'sale_leader', label: 'Sale Leader' },
               { value: 'sale', label: 'Nhân viên Kinh doanh (Sale)' },
               { value: 'marketing_leader', label: 'Trưởng phòng Marketing' },
               { value: 'marketing', label: 'Nhân viên Marketing' },
               { value: 'operator', label: 'Điều hành Tour' },
               { value: 'accounting', label: 'Kế toán' },
+              { value: 'visa_leader', label: 'Trưởng bộ phận Visa' },
               { value: 'visa', label: 'Bộ phận Visa' },
               { value: 'tour_guide', label: 'Hướng Dẫn Viên (HDV)' },
-              { value: 'admin', label: 'Quản trị viên (Admin)' },
+              ...customRoles
+                .filter(cr => !['admin', 'bod', 'hr', 'sale_leader', 'sale', 'marketing_leader', 'marketing', 'operator', 'accounting', 'visa_leader', 'visa', 'tour_guide', 'agent', 'CTV'].includes(cr.role_key))
+                .map(cr => ({ value: cr.role_key, label: cr.label }))
             ]}
             icon={<Users className="w-3.5 h-3.5 text-slate-500" />}
             label="Bộ phận"
@@ -297,18 +323,29 @@ export const LeaveBalanceManagement: React.FC = () => {
 
                       {/* Tên & Email */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="font-bold text-slate-800">{staff.full_name || 'Chưa cập nhật'}</div>
-                        <div className="text-[11px] text-slate-400">{staff.email || staff.phone || '-'}</div>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-0.5">
-                            <Calendar className="w-2.5 h-2.5 text-slate-400" />
-                            <span>{staffSeniority.joinDateFormatted !== '---' ? staffSeniority.joinDateFormatted : (staff.created_at ? new Date(staff.created_at).toLocaleDateString('vi-VN') : '-')}</span>
-                          </span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
-                            staffSeniority.years >= 5 ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            {staffSeniority.text}
-                          </span>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-cyan-50 border border-cyan-200 text-cyan-700 flex items-center justify-center font-black text-xs shadow-2xs overflow-hidden shrink-0">
+                            {staff.avatar_url ? (
+                              <img src={staff.avatar_url} alt={staff.full_name || 'Avatar'} className="w-full h-full object-cover" />
+                            ) : (
+                              (staff.full_name || 'U').charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-800">{staff.full_name || 'Chưa cập nhật'}</div>
+                            <div className="text-[11px] text-slate-400">{staff.email || staff.phone || '-'}</div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-0.5">
+                                <Calendar className="w-2.5 h-2.5 text-slate-400" />
+                                <span>{staffSeniority.joinDateFormatted !== '---' ? staffSeniority.joinDateFormatted : (staff.created_at ? new Date(staff.created_at).toLocaleDateString('vi-VN') : '-')}</span>
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                                staffSeniority.years >= 5 ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {staffSeniority.text}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </td>
 
@@ -316,7 +353,7 @@ export const LeaveBalanceManagement: React.FC = () => {
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1 items-start">
                           {(() => {
-                            const roleConfig = getRoleConfig(staff.role);
+                            const roleConfig = getRoleConfig(staff.role, customRoles);
                             return (
                               <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black border ${roleConfig.bg} ${roleConfig.color} ${roleConfig.border}`}>
                                 <Shield className="w-3 h-3" />
@@ -417,7 +454,7 @@ export const LeaveBalanceManagement: React.FC = () => {
                 <div>
                   <h3 className="text-base font-bold text-slate-800">Điều Chỉnh Quỹ Phép Năm {selectedYear}</h3>
                   <p className="text-xs text-slate-500">
-                    Nhân viên: <strong className="text-slate-700">{editingStaff.full_name || editingStaff.email}</strong> ({editingStaff.role})
+                    Nhân viên: <strong className="text-slate-700">{editingStaff.full_name || editingStaff.email}</strong> ({getRoleConfig(editingStaff.role, customRoles).label})
                   </p>
                 </div>
               </div>

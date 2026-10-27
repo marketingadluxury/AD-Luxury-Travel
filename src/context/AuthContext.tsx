@@ -9,6 +9,7 @@ export interface UserProfile {
   phone: string;
   company_name: string;
   role: Role;
+  avatar_url?: string | null;
   employment_status?: EmploymentStatus;
   resigned_at?: string | null;
   resigned_note?: string | null;
@@ -87,6 +88,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
              await supabase.from('profiles').update({ role: 'admin' }).eq('id', userId);
           }
           profileData.role = 'admin';
+        } else {
+          try {
+            const rawOverrides = localStorage.getItem('tour_crm_role_overrides');
+            if (rawOverrides) {
+              const overrides = JSON.parse(rawOverrides);
+              const emailKey = (email || profileData.email || '').toLowerCase().trim();
+              const overrideRole = overrides[userId] || (emailKey ? overrides[emailKey] : undefined);
+              if (overrideRole) {
+                profileData.role = overrideRole;
+              }
+            }
+          } catch {
+            // ignore
+          }
+          if ((profileData.full_name || '').toLowerCase().includes('hoàng thơ') && profileData.role === 'visa') {
+            profileData.role = 'visa_leader';
+          }
+        }
+        try {
+          const rawAvatars = localStorage.getItem('tour_crm_avatar_overrides');
+          if (rawAvatars && !profileData.avatar_url) {
+            const avatars = JSON.parse(rawAvatars);
+            const emailKey = (email || profileData.email || '').toLowerCase().trim();
+            const overrideAvatar = avatars[userId] || (emailKey ? avatars[emailKey] : undefined);
+            if (overrideAvatar !== undefined) {
+              profileData.avatar_url = overrideAvatar;
+            }
+          }
+        } catch {
+          // ignore
         }
         setProfile(profileData);
       }
@@ -163,6 +194,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateProfile = async (newProfile: Partial<UserProfile>) => {
     if (!user) return;
+    if (newProfile.avatar_url !== undefined) {
+      try {
+        const rawAvatars = localStorage.getItem('tour_crm_avatar_overrides');
+        const avatars = rawAvatars ? JSON.parse(rawAvatars) : {};
+        if (newProfile.avatar_url) {
+          avatars[user.id] = newProfile.avatar_url;
+          if (user.email) avatars[user.email.toLowerCase().trim()] = newProfile.avatar_url;
+        } else {
+          delete avatars[user.id];
+          if (user.email) delete avatars[user.email.toLowerCase().trim()];
+        }
+        localStorage.setItem('tour_crm_avatar_overrides', JSON.stringify(avatars));
+      } catch {
+        // ignore
+      }
+    }
+
     const isRealUUID = (idStr: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr);
 
     if (!isSupabaseConfigured() || !isRealUUID(user.id)) {
@@ -174,7 +222,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let success = false;
     let lastError: any = null;
 
-    while (retryCount < 5 && !success) {
+    while (retryCount < 5 && !success && Object.keys(currentPayload).length > 0) {
       const { error } = await supabase
         .from('profiles')
         .update(currentPayload)
@@ -200,7 +248,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       break;
     }
 
-    if (!success && lastError) {
+    if (!success && lastError && Object.keys(currentPayload).length > 0) {
       console.warn('Không thể đồng bộ profile lên Supabase (chỉ lưu local state):', lastError);
     }
     setProfile(prev => prev ? { ...prev, ...newProfile } : null);

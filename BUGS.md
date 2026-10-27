@@ -2712,8 +2712,42 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
      - Lưu tức thì `crm_payment_proposals` vào `localStorage` ngay khi tạo đề nghị mới, kèm cơ chế tự động thử lại (self-healing) khi insert lên Supabase và hợp nhất `note` khi tải dữ liệu.
 - **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
 
+### 1.112 Gỡ Bỏ Hoàn Toàn Cấu Hình OAuth Google Chat, File Cấu Hình OAuth Client & Các File Chat Cũ Để Mở Khóa Chia Sẻ Dự Án
+- **Mô tả yêu cầu / Vấn đề:**
+  - Người dùng muốn chia sẻ dự án miễn phí cho cộng đồng và yêu cầu loại bỏ toàn bộ phần tích hợp với Google Chat (bao gồm cấu hình OAuth Scopes Google Chat và file cấu hình OAuth/Firebase tự động sinh ra khiến hệ thống vẫn báo còn 1 integration khi share/remix).
+- **Giải pháp:**
+  1. Gỡ bỏ toàn bộ OAuth Scopes của Google Chat và Google Workspace khỏi cấu hình OAuth của ứng dụng.
+  2. Xóa bỏ file cấu hình tích hợp `firebase-applet-config.json` (chứa `oAuthClientId` và thông tin project tự động sinh ra khi bật Google Chat OAuth trước đây) và gỡ dependency `firebase` không sử dụng khỏi `package.json`.
+  3. Xóa bỏ các file giao diện chat dư thừa không còn sử dụng (`src/pages/TeamChat.tsx`, `src/components/chat/FloatingChatDrawer.tsx`) và dọn dẹp tham chiếu trong `server/services/botcakeService.ts`.
+- **Trạng thái:** Đã hoàn thành, kiểm tra linter và biên dịch (`npm run build`) thành công 100%.
+
 ---
 
 ## 2. Các Vấn Về Đang Theo Dõi (Open Issues)
 *(Hiện tại không có lỗi nào chưa được xử lý)*
 
+
+
+
+### [Fix] Đồng Bộ Vai Trò Trưởng Bộ Phận Visa (`visa_leader`) & Team Leader Trong Quản Lý Nhân Sự Và Nghỉ Phép
+- **Triệu chứng:** Trong Cài đặt hệ thống, nhân sự Hoàng Thơ được cấu hình là Trưởng team Visa (`visa_leader` hoặc Trưởng nhóm của Team Visa), nhưng khi sang trang Quản lý nhân sự (`/employees`) hoặc Nghỉ phép & Chấm công (`/leave-requests` - tab Quỹ phép năm & Bảng chấm công) thì không hiển thị hoặc không nhận diện đúng vai trò Trưởng bộ phận Visa.
+- **Nguyên nhân:**
+  1. Trong `LeaveBalanceManagement.tsx` (Quỹ phép năm) và `TimesheetManagement.tsx` (Bảng chấm công), danh sách vai trò nhân sự nội bộ (`isInternal` / `isInternalStaff`) bị giới hạn cứng và bỏ sót mã vai trò `'visa_leader'` cùng các chức danh tùy chỉnh (`customRoles`), dẫn đến nhân sự giữ vai trò `visa_leader` bị lọc ẩn hoàn toàn khỏi bảng quỹ phép và bảng chấm công.
+  2. Khi cập nhật vai trò người dùng sang `visa_leader` hoặc gán Trưởng nhóm cho Team Visa trên cơ sở dữ liệu có ràng buộc `profiles_role_check` cũ, dữ liệu trả về từ DB có thể bị giữ ở `'visa'` hoặc chưa tự động liên kết `team_id` / `leader_id` cho Trưởng nhóm và thành viên trong nhóm.
+- **Giải pháp:**
+  1. Cập nhật bộ lọc nhân sự nội bộ và dropdown lọc Bộ phận trong `LeaveBalanceManagement.tsx` và `TimesheetManagement.tsx` để bao gồm đầy đủ `'visa_leader'` (Trưởng bộ phận Visa) và mọi vai trò nội bộ tùy chỉnh (`customRoles`).
+  2. Bổ sung cơ chế tự động đồng bộ vai trò (`tour_crm_role_overrides`), tự động suy diễn liên kết Team Leader từ bảng `teams`, và cơ chế tự phục hồi (self-healing) khi gặp ràng buộc `profiles_role_check` trong `CRMContext.tsx`, `UserManagement.tsx`, `AuthContext.tsx` và `adminRoutes.ts`.
+  3. Cập nhật `permissionUtils.ts` để `visa_leader` có đầy đủ quyền duyệt đơn nghỉ phép Cấp 1 và xem bảng chấm công của nhân viên thuộc bộ phận Visa.
+
+### [Feature] Chỉnh Sửa Ảnh Đại Diện (Avatar) Cá Nhân & Mặc Định Sắp Xếp Phòng Ban / Lọc Nhân Sự Đang Làm Việc
+- **Mô tả yêu cầu:**
+  1. Cho phép người dùng chỉnh sửa, tải lên hoặc xóa ảnh đại diện (Avatar) trực tiếp trong trang Thông tin cá nhân (`/profile`).
+  2. Tại các mục Quản lý nhân sự (`UserManagement.tsx`, `LeaveBalanceManagement.tsx`, `TimesheetManagement.tsx`), sắp xếp thứ tự nhân sự theo phòng ban (`ROLE_DEPARTMENT_ORDER`) và đặt bộ lọc trạng thái làm việc mặc định là **Đang làm việc** (`working`).
+- **Giải pháp thực hiện:**
+  1. **Ảnh đại diện cá nhân (`Profile.tsx`, `AuthContext.tsx`, `CRMContext.tsx`, `Layout.tsx`):**
+     - Bổ sung trường `avatar_url` vào bảng `profiles` (`supabase-schema.sql`) và các interface `User`, `Profile`, `UserProfile`, `ManagedUser`.
+     - Cho phép chọn ảnh tải lên Supabase Storage (`crm-attachments/avatars/`) kèm cơ chế nén ảnh thông minh dự phòng và đồng bộ tức thì lên Header, Mobile Drawer và danh sách nhân sự.
+  2. **Sắp xếp theo phòng ban & Bộ lọc mặc định Đang làm việc (`UserManagement.tsx`, `LeaveBalanceManagement.tsx`, `TimesheetManagement.tsx`):**
+     - Thiết lập trạng thái mặc định của bộ lọc trạng thái làm việc là `'working'` (`🟢 Đang làm việc`), tự động ẩn nhân sự đã nghỉ việc/tạm nghỉ khi mở trang.
+     - Sắp xếp danh sách nhân sự theo thứ tự phòng ban chuẩn (`ROLE_DEPARTMENT_ORDER`) và theo tên Tiếng Việt (`localeCompare('vi')`).
+- **Trạng thái:** Đã hoàn thành, kiểm tra build thành công 100%.

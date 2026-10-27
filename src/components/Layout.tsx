@@ -59,17 +59,17 @@ import {
 } from '@/utils/desktopNotification';
 
 const roleOptions = [
-  { value: 'agent', label: 'Đại lý (Agent)', icon: <Handshake className="w-4 h-4 text-amber-600" /> },
-  { value: 'bod', label: 'BOD (Ban Giám đốc)', icon: <Building className="w-4 h-4 text-violet-600" /> },
+  { value: 'agent', label: 'Đại lý', icon: <Handshake className="w-4 h-4 text-amber-600" /> },
+  { value: 'bod', label: 'Ban Giám đốc', icon: <Building className="w-4 h-4 text-violet-600" /> },
   { value: 'operator', label: 'Điều hành Tour', icon: <Sliders className="w-4 h-4 text-purple-600" /> },
-  { value: 'sale_leader', label: 'Sale Leader (Trưởng nhóm)', icon: <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> },
+  { value: 'sale_leader', label: 'Sale Leader', icon: <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> },
   { value: 'sale', label: 'Sale', icon: <Briefcase className="w-4 h-4 text-blue-600" /> },
   { value: 'visa_leader', label: 'Trưởng bộ phận Visa', icon: <Globe className="w-4 h-4 text-indigo-900" /> },
   { value: 'visa', label: 'Bộ phận Visa', icon: <Globe className="w-4 h-4 text-indigo-600" /> },
   { value: 'accounting', label: 'Kế toán', icon: <Calculator className="w-4 h-4 text-emerald-600" /> },
-  { value: 'hr', label: 'Nhân sự (HR)', icon: <UserCheck className="w-4 h-4 text-cyan-600" /> },
-  { value: 'tour_guide', label: 'Hướng Dẫn Viên (HDV)', icon: <Flag className="w-4 h-4 text-teal-600" /> },
-  { value: 'admin', label: 'Quản trị viên (Full)', icon: <Key className="w-4 h-4 text-rose-600" /> },
+  { value: 'hr', label: 'Nhân sự', icon: <UserCheck className="w-4 h-4 text-cyan-600" /> },
+  { value: 'tour_guide', label: 'Hướng Dẫn Viên', icon: <Flag className="w-4 h-4 text-teal-600" /> },
+  { value: 'admin', label: 'Quản trị viên', icon: <Key className="w-4 h-4 text-rose-600" /> },
   { value: 'marketing_leader', label: 'Trưởng phòng Marketing', icon: <Megaphone className="w-4 h-4 text-fuchsia-600" /> },
   { value: 'marketing', label: 'Nhân viên Marketing', icon: <BarChart3 className="w-4 h-4 text-pink-500" /> },
 ];
@@ -1116,12 +1116,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
                 {/* Profile Menu */}
                 <div className="relative group">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs cursor-pointer ring-2 ring-blue-100">
-                    {user?.email ? user.email.charAt(0).toUpperCase() : 'AD'}
+                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs cursor-pointer ring-2 ring-blue-100 overflow-hidden">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt={profile.full_name || 'Avatar'} className="w-full h-full object-cover" />
+                    ) : (
+                      (profile?.full_name || user?.email || 'AD').charAt(0).toUpperCase()
+                    )}
                   </div>
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-40 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                      <div className="px-4 py-3 border-b border-gray-100 overflow-hidden bg-slate-50">
-                        <p className="text-xs font-bold text-gray-900 truncate">{user?.email || 'Tài khoản'}</p>
+                        <p className="text-xs font-bold text-gray-900 truncate">{profile?.full_name || user?.email || 'Tài khoản'}</p>
                         <p className="text-[10px] text-blue-600 font-semibold">{getRoleLabel(displayRole)}</p>
                      </div>
                      <Link 
@@ -1556,11 +1560,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ) : (
               <div className="p-4 border-t border-gray-200 bg-slate-50 flex items-center justify-between">
                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                    {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+                  <div className="h-8 w-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt={profile.full_name || 'Avatar'} className="w-full h-full object-cover" />
+                    ) : (
+                      (profile?.full_name || user?.email || 'U').charAt(0).toUpperCase()
+                    )}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-gray-800 truncate">{user?.email || 'Tài khoản'}</p>
+                    <p className="text-xs font-bold text-gray-800 truncate">{profile?.full_name || user?.email || 'Tài khoản'}</p>
                     <p className="text-[10px] text-gray-500 font-medium">{getRoleLabel(displayRole)}</p>
                   </div>
                 </div>
