@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Printer, X, FileText } from 'lucide-react';
 import { LeaveRequest } from '@/types';
 
@@ -55,8 +56,22 @@ export default function LeaveRequestPrintModal({
     applyingLeaveFrom = `từ ngày ${startDateStr} đến ngày ${endDateStr}`;
   }
 
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      document.body.classList.remove('is-printing-leave-request');
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+      document.body.classList.remove('is-printing-leave-request');
+    };
+  }, []);
+
   const handlePrint = () => {
-    window.print();
+    document.body.classList.add('is-printing-leave-request');
+    setTimeout(() => {
+      window.print();
+    }, 80);
   };
 
   // Xác định checkbox tick
@@ -65,12 +80,12 @@ export default function LeaveRequestPrintModal({
   const isCompensatory = leaveRequest.type === 'compensatory';
   const isSpecial = leaveRequest.type === 'special';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+  return createPortal(
+    <div className="leave-modal-overlay print-portal-root fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150 print:p-0 print:m-0 print:bg-transparent print:static print:block print:w-full print:overflow-visible print:border-none print:shadow-none">
       {/* Modal Container */}
-      <div className="bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
+      <div className="leave-modal-container relative bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto print:border-none print:shadow-none print:bg-white print:w-full print:max-w-none print:rounded-none print:static print:block print:m-0 print:p-0 print:overflow-visible">
         {/* Modal Toolbar (Screen only) */}
-        <div className="bg-white px-5 py-3 border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs">
+        <div className="bg-white px-5 py-3 border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs no-print">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
               <FileText className="w-4 h-4" />
@@ -104,7 +119,7 @@ export default function LeaveRequestPrintModal({
         </div>
 
         {/* Paper Sheet Preview Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex justify-center bg-slate-200/70">
+        <div className="leave-modal-scroll flex-1 overflow-y-auto p-4 sm:p-6 flex justify-center bg-slate-200/70 print:p-0 print:m-0 print:bg-transparent print:block print:w-full print:overflow-visible">
           <div
             id="leave-request-print-area"
             className="w-full max-w-[210mm] min-h-[297mm] bg-white p-8 sm:p-12 shadow-lg text-slate-900 font-serif leading-normal text-[12px] sm:text-[13px] flex flex-col justify-between relative"
@@ -373,6 +388,7 @@ export default function LeaveRequestPrintModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -371,7 +371,8 @@ export default function UserManagement() {
       official_start_date: new Date().toISOString().split('T')[0],
       leader_id: '',
       team_id: '',
-      team_name: ''
+      team_name: '',
+      avatar_url: ''
     });
     setShowPassword(false);
     setIsFormOpen(true);

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Printer, 
   X, 
@@ -603,8 +604,8 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
 
   if (!isOpen || !order) return null;
 
-  return (
-    <div className="contract-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-white print:static print:block print:w-full print:overflow-visible print:border-none print:shadow-none">
+  return createPortal(
+    <div className="contract-modal-overlay print-portal-root fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-transparent print:static print:block print:w-full print:overflow-visible print:border-none print:shadow-none">
       {/* Main Container */}
       <div className="contract-modal-container relative bg-slate-100 rounded-2xl w-full max-w-5xl my-auto shadow-2xl flex flex-col border border-slate-300 overflow-hidden print:border-none print:shadow-none print:bg-white print:w-full print:max-w-none print:rounded-none print:static print:block print:m-0 print:p-0 print:overflow-visible">
         
@@ -1911,7 +1912,8 @@ export const TourContractPrintModal: React.FC<TourContractPrintModalProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 

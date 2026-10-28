@@ -132,61 +132,64 @@ input, select, textarea {
    and ensures 100% full multi-page document flow without blank print pages.
    ========================================================================== */
 @media print {
-  /* Ẩn toàn bộ nút bấm, thanh điều khiển có đánh dấu no-print */
+  /* 1. Thiết lập trang in toàn cục chuẩn A4 Portrait */
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 2. Ẩn toàn bộ nút bấm, toolbar và phần tử có đánh dấu no-print */
   .no-print,
   [data-no-print="true"] {
     display: none !important;
   }
 
-  /* --------------------------------------------------------------------------
-     1. Hợp đồng dịch vụ du lịch AD Luxury (In Đa Trang A4 Đứng / Portrait)
-     -------------------------------------------------------------------------- */
-  body.is-printing-contract,
-  body:has(#official-tour-contract-print-area) {
-    background: #ffffff !important;
-    color: #000000 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-  }
-
-  /* Ẩn các thanh layout ngoài (Sidebar, Header, Nav, Footer) */
-  body.is-printing-contract nav,
-  body:has(#official-tour-contract-print-area) nav,
-  body.is-printing-contract header,
-  body:has(#official-tour-contract-print-area) header,
-  body.is-printing-contract aside,
-  body:has(#official-tour-contract-print-area) aside,
-  body.is-printing-contract footer,
-  body:has(#official-tour-contract-print-area) footer,
-  body.is-printing-contract #root > div > *:not(main),
-  body:has(#official-tour-contract-print-area) #root > div > *:not(main) {
-    display: none !important;
-  }
-
-  /* Ẩn toàn bộ nội dung của trang quản lý đơn hàng nằm sau modal */
-  body.is-printing-contract main > *:not(.contract-modal-overlay),
-  body:has(#official-tour-contract-print-area) main > *:not(.contract-modal-overlay) {
-    display: none !important;
-  }
-
-  /* Giải phóng hoàn toàn các thẻ cha bao bọc modal về static flow, loại bỏ overflow-hidden */
-  body.is-printing-contract #root,
+  /* 3. ẨN TOÀN BỘ GIAO DIỆN CRM (#root) KHI MỞ BẤT KỲ VÙNG IN NÀO
+     Vì các Modal in được render qua createPortal trực tiếp vào document.body,
+     #root là phần tử ANH EM (sibling), KHÔNG PHẢI tổ tiên của vùng in.
+     Việc ẩn #root hoàn toàn an toàn, sạch sẽ, triệt tiêu lỗi che giấu vùng in. */
   body:has(#official-tour-contract-print-area) #root,
-  body.is-printing-contract #root > div,
-  body:has(#official-tour-contract-print-area) #root > div,
-  body.is-printing-contract main,
-  body:has(#official-tour-contract-print-area) main,
-  body.is-printing-contract .contract-modal-overlay,
-  body:has(#official-tour-contract-print-area) .contract-modal-overlay,
-  body.is-printing-contract .contract-modal-container,
-  body:has(#official-tour-contract-print-area) .contract-modal-container,
-  body.is-printing-contract .contract-modal-body,
-  body:has(#official-tour-contract-print-area) .contract-modal-body,
-  body.is-printing-contract .contract-modal-scroll,
-  body:has(#official-tour-contract-print-area) .contract-modal-scroll {
+  body:has(#leave-request-print-area) #root,
+  body:has(#payment-proposal-print-area) #root,
+  body.is-printing-contract #root,
+  body.is-printing-leave-request #root,
+  body.is-printing-payment-proposal #root {
+    display: none !important;
+  }
+
+  /* Ẩn các thanh toast thông báo nổi ngoài lề */
+  #toaster-root,
+  .toaster-container,
+  [data-hot-toast] {
+    display: none !important;
+  }
+
+  /* 4. GIẢI PHÓNG TOÀN BỘ WRAPPER CỦA MODAL (Portal Root) VỀ STATIC FLOW
+     Loại bỏ position:fixed, overflow-y:auto, backdrop-blur, padding, margin, max-height */
+  .contract-modal-overlay,
+  .contract-modal-container,
+  .leave-modal-overlay,
+  .leave-modal-container,
+  .leave-modal-scroll,
+  .payment-modal-overlay,
+  .payment-modal-container,
+  .payment-modal-scroll,
+  .print-portal-root {
     position: static !important;
     display: block !important;
     overflow: visible !important;
@@ -204,15 +207,18 @@ input, select, textarea {
     inset: auto !important;
     z-index: auto !important;
     transform: none !important;
+    animation: none !important;
   }
 
-  /* Vùng in hợp đồng chính thức: Luồng tài liệu tự nhiên, ngắt trang đa trang mượt mà */
+  /* 5. VÙNG IN HỢP ĐỒNG DU LỊCH (Đa trang A4: Luồng tự nhiên, phân trang mượt mà) */
   #official-tour-contract-print-area {
     display: block !important;
     visibility: visible !important;
     position: static !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-height: auto !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 2mm 4mm !important;
     border: none !important;
@@ -223,7 +229,7 @@ input, select, textarea {
     font-size: 11pt !important;
     line-height: 1.45 !important;
     overflow: visible !important;
-    page-break-inside: auto;
+    page-break-inside: auto !important;
   }
 
   #official-tour-contract-print-area * {
@@ -231,78 +237,79 @@ input, select, textarea {
     color: #000000 !important;
   }
 
-  /* Đảm bảo mã QR và hình ảnh in rõ nét */
   #official-tour-contract-print-area img {
     max-width: 100% !important;
     print-color-adjust: exact !important;
     -webkit-print-color-adjust: exact !important;
   }
 
-  /* --------------------------------------------------------------------------
-     2. Giấy đề nghị thanh toán (DNTT - Đơn trang A4)
-     -------------------------------------------------------------------------- */
-  body:has(#payment-proposal-print-area) nav,
-  body:has(#payment-proposal-print-area) header,
-  body:has(#payment-proposal-print-area) aside,
-  body:has(#payment-proposal-print-area) footer,
-  body:has(#payment-proposal-print-area) #root > div > *:not(main) {
-    display: none !important;
-  }
-
-  #payment-proposal-print-area,
-  #payment-proposal-print-area * {
-    visibility: visible !important;
-  }
+  /* 6. VÙNG IN GIẤY ĐỀ NGHỊ THANH TOÁN (Đơn trang A4) */
   #payment-proposal-print-area {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100vw !important;
-    min-height: 100vh !important;
-    margin: 0 !important;
-    padding: 18mm 20mm 20mm 20mm !important;
-    background: white !important;
-    z-index: 999999 !important;
-    box-shadow: none !important;
-    border: none !important;
-    color: #000 !important;
-    font-family: 'Times New Roman', Times, serif !important;
-  }
-
-  /* --------------------------------------------------------------------------
-     3. Đơn xin nghỉ phép (Đơn trang A4)
-     -------------------------------------------------------------------------- */
-  body:has(#leave-request-print-area) nav,
-  body:has(#leave-request-print-area) header,
-  body:has(#leave-request-print-area) aside,
-  body:has(#leave-request-print-area) footer,
-  body:has(#leave-request-print-area) #root > div > *:not(main) {
-    display: none !important;
-  }
-
-  #leave-request-print-area,
-  #leave-request-print-area * {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
     visibility: visible !important;
-  }
-  #leave-request-print-area {
     position: static !important;
     left: auto !important;
     top: auto !important;
     width: 100% !important;
-    min-height: auto !important;
+    max-width: 100% !important;
+    min-height: 260mm !important;
     margin: 0 auto !important;
-    padding: 10mm 14mm 8mm 14mm !important;
-    background: white !important;
-    z-index: 999999 !important;
+    padding: 2mm 6mm !important;
+    background: #ffffff !important;
     box-shadow: none !important;
     border: none !important;
-    color: #000 !important;
+    color: #000000 !important;
     font-family: 'Times New Roman', Times, serif !important;
+    line-height: 1.5 !important;
+    overflow: visible !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
-  /* --------------------------------------------------------------------------
-     Quy tắc ngắt trang chung cho in ấn khổ A4
-     -------------------------------------------------------------------------- */
+  #payment-proposal-print-area * {
+    visibility: visible !important;
+    color: #000000 !important;
+  }
+
+  #payment-proposal-print-area img {
+    max-width: 100% !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* 7. VÙNG IN ĐƠN XIN NGHỈ PHÉP (Đơn trang A4) */
+  #leave-request-print-area {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    visibility: visible !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 260mm !important;
+    margin: 0 auto !important;
+    padding: 2mm 6mm !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    color: #000000 !important;
+    font-family: 'Times New Roman', Times, serif !important;
+    line-height: 1.4 !important;
+    overflow: visible !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #leave-request-print-area * {
+    visibility: visible !important;
+    color: #000000 !important;
+  }
+
+  /* 8. QUY TẮC NGẮT TRANG & BẢNG BIỂU CHUNG */
   .page-break {
     page-break-before: always !important;
     break-before: page !important;
@@ -321,10 +328,11 @@ input, select, textarea {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
-
-  @page {
-    size: A4 portrait;
-    margin: 10mm 12mm;
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
   }
 }
 

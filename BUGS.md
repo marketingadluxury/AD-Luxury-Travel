@@ -6,6 +6,33 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.114 Khắc Phục Triệt Để Lỗi In / Xuất PDF Bị Trắng Trang A4 (Blank Page Print Bug)
+- **Mô tả yêu cầu & Hiện tượng thực tế:**
+  - Khi người dùng bấm nút "In / Tải PDF" trên Modal Đơn xin nghỉ phép (`LeaveRequestPrintModal`), Giấy đề nghị thanh toán (`PaymentProposalPrintModal`), hoặc Hợp đồng du lịch (`TourContractPrintModal`), trình duyệt (Chrome, Edge, Firefox) mở hộp thoại in với 1 trang trắng tinh không có nội dung văn bản (như phản ánh trong hình ảnh đính kèm `image_f5c64d5a.png`).
+- **Nguyên nhân kỹ thuật gốc (Root Cause):**
+  1. **Ẩn nhầm phần tử tổ tiên (Ancestor Hiding):**
+     - Trong `src/components/Layout.tsx`, thẻ `#root > div` chứa `<aside>` và thẻ bọc `<div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">` bao bọc `<header>` và `<main>`.
+     - Quy tắc CSS `@media print` cũ sử dụng selector `#root > div > *:not(main)`. Vì thẻ bọc `<div className="flex-1...">` là thẻ `div` chứ không phải `<main>`, bộ chọn `:not(main)` lập tức khớp và áp đặt `display: none !important` lên toàn bộ thẻ bọc chứa `<main>`. Khi tổ tiên bị ẩn, toàn bộ nội dung `<main>` và các modal nằm bên trong đều bị triệt tiêu hiển thị.
+     - Tương tự, selector `main > *:not(.contract-modal-overlay)` thiết lập `display: none !important` lên component trang quản lý (`OrdersManagement`, `LeaveRequestsPage`, `PaymentProposals`) vốn đang bao bọc modal.
+  2. **Thuộc tính position: fixed trên vùng in:**
+     - Trong CSS cũ, `#payment-proposal-print-area` có `position: fixed !important; width: 100vw; min-height: 100vh;`, khiến công cụ render in ấn của Chromium/Blink tính sai bounding box khổ giấy A4 và gây lỗi cắt cụt/trắng trang.
+- **Giải pháp kiến trúc triển khai:**
+  1. **Tách rời luồng in độc lập bằng React `createPortal` vào `document.body`:**
+     - Nâng cấp cả 3 modal in (`TourContractPrintModal`, `LeaveRequestPrintModal`, `PaymentProposalPrintModal`) sử dụng `createPortal(modalJSX, document.body)`.
+     - Nhờ đó, phần tử gốc của modal được gắn trực tiếp làm con của `document.body`, trở thành phần tử **ANH EM (sibling)** ngang hàng với `#root` thay vì nằm sâu trong cây DOM của `#root`.
+  2. **Tái cấu trúc triệt để CSS in ấn `@media print` (`src/index.css`):**
+     - Loại bỏ 100% các selector ẩn tổ tiên `:not(main)` và `main > *:not(...)`.
+     - Khi kích hoạt in bất kỳ tài liệu nào (`body:has(#official-tour-contract-print-area)`, `body:has(#leave-request-print-area)`, `body:has(#payment-proposal-print-area)` hoặc các class `is-printing-*`), hệ thống chỉ cần ẩn `#root` (`#root { display: none !important; }`). Vì `#root` là sibling chứ không phải ancestor, việc ẩn `#root` giấu sạch toàn bộ thanh công cụ, sidebar, header và trang nền CRM mà tuyệt đối không ảnh hưởng tới modal in.
+     - Giải phóng toàn bộ các tầng wrapper của modal (`.contract-modal-overlay`, `.leave-modal-overlay`, `.payment-modal-overlay`, `.print-portal-root`) về luồng tĩnh (`position: static !important; overflow: visible !important; height: auto !important; max-height: none !important; margin: 0 !important; padding: 0 !important; background: transparent !important;`).
+     - Đưa `#payment-proposal-print-area` và `#leave-request-print-area` về luồng hiển thị khối chuẩn A4, loại bỏ `position: fixed`, tối ưu lề in và tự động neo chữ ký ở chân trang A4.
+     - Đảm bảo `#official-tour-contract-print-area` tự động phân trang đa trang A4 mượt mà với quy tắc `.avoid-break`.
+  3. **Kiểm thử tự động:**
+     - Vượt qua kiểm tra cú pháp TypeScript linter (`npm run lint` / `tsc --noEmit`).
+     - Đạt 100% kết quả 75/75 Unit Tests Vitest (`npm test`).
+     - Đạt 100% kết quả 21/21 kịch bản Simulation phân quyền 4 vai trò (`npm run test:simulation`).
+     - Biên dịch thành công 100% bản build sản xuất (`npm run build`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.113 Khắc Phục Lỗi Hiển Thị Sai Định Dạng Ngày Vào Làm (Date of Hire) Trên Đơn Xin Nghỉ Phép
 - **Mô tả yêu cầu & Hiện tượng thực tế:**
   - Trên biểu mẫu in Đơn xin nghỉ phép (`LeaveRequestPrintModal.tsx`), trường `Date of Hire / Ngày vào làm` hiển thị chuỗi thời gian ISO thô từ database (ví dụ: `2026-07-13T09:54:29.956092+00:00`) thay vì định dạng chuẩn `dd/mm/yyyy`.
