@@ -1,6 +1,6 @@
 {
-  "short_name": "Tour CRM",
-  "name": "Tour CRM - AD Luxury Travel",
+  "short_name": "AD OMS",
+  "name": "AD OMS - Operating Management System",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -14,5 +14,5 @@
   "theme_color": "#2563eb",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "description": "Hệ thống quản lý Tour, Đơn hàng, Visa và Kế toán AD Luxury Travel"
+  "description": "AD OMS - AD Luxury Operating Management System: Hệ thống quản trị điều hành Tour, Đơn hàng, Visa và Kế toán AD Luxury Travel"
 }

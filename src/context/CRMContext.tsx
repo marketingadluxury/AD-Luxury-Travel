@@ -166,6 +166,7 @@ interface CRMContextType {
   clearActivityLogs: () => Promise<void>;
   paymentProposals: PaymentProposal[];
   createPaymentProposal: (proposalData: Omit<PaymentProposal, 'id' | 'code' | 'created_at' | 'leader_status' | 'accounting_status' | 'status'>) => Promise<PaymentProposal>;
+  updatePaymentProposal: (id: string, proposalData: Partial<PaymentProposal>) => Promise<void>;
   approvePaymentProposalLeader: (id: string, leaderName: string, leaderNote?: string) => Promise<void>;
   rejectPaymentProposalLeader: (id: string, leaderName: string, leaderNote?: string) => Promise<void>;
   approvePaymentProposalAccounting: (id: string, accountingName: string, accountingNote?: string, proofUrl?: string) => Promise<void>;
@@ -194,6 +195,7 @@ interface CRMContextType {
   deleteHoliday: (id: string) => Promise<void>;
   leaveRequests: LeaveRequest[];
   createLeaveRequest: (requestData: Omit<LeaveRequest, 'id' | 'status' | 'created_at'>) => Promise<LeaveRequest>;
+  updateLeaveRequest: (id: string, requestData: Partial<LeaveRequest>) => Promise<void>;
   approveLeaveRequestLevel1: (id: string, approverName: string) => Promise<void>;
   approveLeaveRequestFinal: (id: string, approverName: string) => Promise<void>;
   rejectLeaveRequest: (id: string, approverName: string, reason: string) => Promise<void>;
@@ -1917,6 +1919,106 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
 
     toast.success('Đã xóa đơn xin nghỉ phép');
+  };
+
+  const updateLeaveRequest = async (id: string, requestData: Partial<LeaveRequest>): Promise<void> => {
+    const target = leaveRequests.find(r => r.id === id);
+    if (!target) return;
+
+    const oldType = target.type;
+    const oldStatus = target.status;
+    const updatedReq: LeaveRequest = {
+      ...target,
+      ...requestData
+    };
+
+    setLeaveRequests(prev => {
+      const next = prev.map(r => r.id === id ? updatedReq : r);
+      localStorage.setItem('crm_leave_requests', JSON.stringify(next));
+      return next;
+    });
+
+    // Nếu đơn đã duyệt hoàn tất (approved_final) hoặc thay đổi loại/số ngày/trạng thái đối với phép năm (annual):
+    // Tự động tính toán lại và cập nhật chính xác vào leaveBalances
+    if (oldType === 'annual' || updatedReq.type === 'annual' || oldStatus === 'approved_final' || updatedReq.status === 'approved_final') {
+      const requestYear = updatedReq.start_date ? new Date(updatedReq.start_date).getFullYear() : new Date().getFullYear();
+      const mockRequests = leaveRequests.map(r => r.id === id ? updatedReq : r);
+      const allApprovedAnnualDays = calculateTotalUsedAnnualDays(updatedReq.user_id, requestYear, mockRequests, holidays);
+
+      setLeaveBalances(prev => {
+        const existing = prev.find(b => b.user_id === updatedReq.user_id && b.year === requestYear);
+        if (existing) {
+          const updatedBalances = prev.map(b => (b.user_id === updatedReq.user_id && b.year === requestYear) ? {
+            ...b,
+            used_days: allApprovedAnnualDays,
+            remaining_days: Math.max(0, (b.total_days || 12) - allApprovedAnnualDays)
+          } : b);
+          localStorage.setItem('crm_leave_balances', JSON.stringify(updatedBalances));
+          return updatedBalances;
+        }
+        return prev;
+      });
+
+      if (isSupabaseConfigured()) {
+        try {
+          const existingInState = leaveBalances.find(b => b.user_id === updatedReq.user_id && b.year === requestYear);
+          if (existingInState) {
+            const totalDaysToSave = existingInState.total_days || 12;
+            await supabase.from('leave_balances').upsert([{
+              user_id: updatedReq.user_id,
+              year: requestYear,
+              total_days: totalDaysToSave,
+              used_days: allApprovedAnnualDays,
+              remaining_days: Math.max(0, totalDaysToSave - allApprovedAnnualDays),
+              updated_at: new Date().toISOString()
+            }], { onConflict: 'user_id,year' });
+          }
+        } catch (e) {
+          console.warn('Lỗi cập nhật quỹ phép sau khi sửa đơn:', e);
+        }
+      }
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const safeHandoverId = isValidUuid(updatedReq.handover_user_id) ? updatedReq.handover_user_id : null;
+        const updatePayload: Record<string, any> = {
+          start_date: updatedReq.start_date,
+          end_date: updatedReq.end_date,
+          type: updatedReq.type,
+          reason: updatedReq.reason,
+          handover_user_id: safeHandoverId,
+          handover_user_name: updatedReq.handover_user_name || null,
+          leave_session: updatedReq.leave_session || 'all_day',
+          total_days: updatedReq.total_days || 1
+        };
+        if (requestData.status !== undefined) updatePayload.status = requestData.status;
+
+        const { error: updErr } = await supabase.from('leave_requests').update(updatePayload).eq('id', id);
+        if (updErr) {
+          console.warn('Lỗi update leave_requests (thử fallback):', updErr.message);
+          const fallbackPayload: any = {
+            start_date: updatedReq.start_date,
+            end_date: updatedReq.end_date,
+            type: updatedReq.type,
+            reason: `${updatedReq.leave_session && updatedReq.leave_session !== 'all_day' ? `[Nghỉ ${updatedReq.leave_session === 'morning' ? 'Buổi sáng (0.5 ngày)' : 'Buổi chiều (0.5 ngày)'}] ` : ''}${updatedReq.reason}`,
+            handover_user_id: safeHandoverId
+          };
+          if (requestData.status !== undefined) fallbackPayload.status = requestData.status;
+          await supabase.from('leave_requests').update(fallbackPayload).eq('id', id);
+        }
+      } catch (err: any) {
+        console.warn('Lỗi cập nhật leave_requests lên Supabase:', err?.message || err);
+      }
+    }
+
+    logActivity({
+      action: `Chỉnh sửa đơn xin nghỉ phép: ${updatedReq.user_name || 'Nhân viên'}`,
+      module: 'Thành viên',
+      details: `Từ ${updatedReq.start_date} đến ${updatedReq.end_date} - Loại: ${updatedReq.type} - Số ngày: ${updatedReq.total_days || 1}`
+    });
+
+    toast.success('Đã cập nhật đơn xin nghỉ phép thành công!');
   };
 
   const updateLeaveBalance = async (userId: string, year: number, balanceData: Partial<LeaveBalance>): Promise<void> => {
@@ -6695,6 +6797,71 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
     }
   };
 
+  const updatePaymentProposal = async (id: string, proposalData: Partial<PaymentProposal>): Promise<void> => {
+    const target = paymentProposals.find(p => p.id === id);
+    if (!target) return;
+
+    const updatedProposal: PaymentProposal = {
+      ...target,
+      ...proposalData
+    };
+
+    setPaymentProposals(prev => {
+      const next = prev.map(p => p.id === id ? updatedProposal : p);
+      try {
+        localStorage.setItem('crm_payment_proposals', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    logActivity({
+      action: 'Chỉnh sửa Đề nghị thanh toán',
+      module: 'Kế toán',
+      details: `Mã đề nghị: ${target.code} - Tiêu đề: ${updatedProposal.title} - Số tiền: ${updatedProposal.amount.toLocaleString('vi-VN')} đ`
+    });
+
+    if (isSupabaseConfigured()) {
+      try {
+        const updatePayload: Record<string, any> = {};
+        if (proposalData.title !== undefined) updatePayload.title = proposalData.title;
+        if (proposalData.proposal_type !== undefined) updatePayload.proposal_type = proposalData.proposal_type;
+        if (proposalData.amount !== undefined) updatePayload.amount = proposalData.amount;
+        if (proposalData.payment_method !== undefined) updatePayload.payment_method = proposalData.payment_method;
+        if (proposalData.bank_name !== undefined) updatePayload.bank_name = proposalData.bank_name || null;
+        if (proposalData.account_number !== undefined) updatePayload.account_number = proposalData.account_number || null;
+        if (proposalData.account_name !== undefined) updatePayload.account_name = proposalData.account_name || null;
+        if (proposalData.tour_id !== undefined) updatePayload.tour_id = proposalData.tour_id ? toUuid(proposalData.tour_id) : null;
+        if (proposalData.tour_code !== undefined) updatePayload.tour_code = proposalData.tour_code || null;
+        if (proposalData.tour_name !== undefined) updatePayload.tour_name = proposalData.tour_name || null;
+        if (proposalData.due_date !== undefined) updatePayload.due_date = proposalData.due_date || null;
+        if (proposalData.file_url !== undefined) updatePayload.file_url = proposalData.file_url || null;
+        if (proposalData.note !== undefined) updatePayload.note = proposalData.note || null;
+        if (proposalData.status !== undefined) updatePayload.status = proposalData.status;
+        if (proposalData.leader_status !== undefined) updatePayload.leader_status = proposalData.leader_status;
+        if (proposalData.accounting_status !== undefined) updatePayload.accounting_status = proposalData.accounting_status;
+
+        let { error: updateErr } = await supabase.from('payment_proposals').update(updatePayload).eq('id', toUuid(id));
+        let retryCount = 0;
+        while (updateErr && retryCount < 5) {
+          const msg = updateErr.message || '';
+          const colMatch = msg.match(/Could not find the '([^']+)' column/i) || msg.match(/column "([^"]+)" of relation "payment_proposals" does not exist/i);
+          if (colMatch && colMatch[1] && colMatch[1] in updatePayload) {
+            delete updatePayload[colMatch[1]];
+            const res = await supabase.from('payment_proposals').update(updatePayload).eq('id', toUuid(id));
+            updateErr = res.error;
+          } else {
+            break;
+          }
+          retryCount++;
+        }
+      } catch (e) {
+        console.warn('Lỗi update payment_proposals lên Supabase:', e);
+      }
+    }
+
+    toast.success('Đã cập nhật Đề nghị thanh toán thành công!');
+  };
+
   const fetchTourMedia = async (tourIdOrCode?: string): Promise<TourMedia[]> => {
     if (isSupabaseConfigured()) {
       try {
@@ -7085,6 +7252,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       clearActivityLogs,
       paymentProposals,
       createPaymentProposal,
+      updatePaymentProposal,
       approvePaymentProposalLeader,
       rejectPaymentProposalLeader,
       approvePaymentProposalAccounting,
@@ -7111,6 +7279,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode; initialRole?: Ro
       deleteHoliday,
       leaveRequests,
       createLeaveRequest,
+      updateLeaveRequest,
       approveLeaveRequestLevel1,
       approveLeaveRequestFinal,
       rejectLeaveRequest,

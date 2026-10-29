@@ -56,7 +56,7 @@ export const GoogleDriveSettingsSection: React.FC = () => {
 
   const currentOrigin = window.location.origin;
   const callbackUrlDev = `${currentOrigin}/api/drive/oauth/callback`;
-  const callbackUrlProd = `https://tours-agency.vercel.app/api/drive/oauth/callback`;
+  const callbackUrlProd = `https://oms.adluxury.net/api/drive/oauth/callback`;
 
   const fetchConfig = async (silent = false) => {
     try {

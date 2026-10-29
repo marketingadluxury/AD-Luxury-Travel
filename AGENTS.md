@@ -1,12 +1,12 @@
-# Tour CRM - Bộ Não Dự Án (Project Brain & Instructions)
+# AD OMS (AD Luxury Operating Management System) - Bộ Não Dự Án (Project Brain & Instructions)
 
-Tài liệu này lưu trữ toàn bộ thông tin cốt lõi, quy tắc phát triển, cấu trúc dữ liệu và các lưu ý quan trọng của dự án **Tour CRM - Quản lý Công ty Du lịch**. File này được hệ thống AI tự động đọc để đảm bảo tính nhất quán và hiểu sâu sắc về dự án trong mọi phiên làm việc tiếp theo.
+Tài liệu này lưu trữ toàn bộ thông tin cốt lõi, quy tắc phát triển, cấu trúc dữ liệu và các lưu ý quan trọng của dự án **AD OMS - AD Luxury Operating Management System** (trước đây là Tour CRM). File này được hệ thống AI tự động đọc để đảm bảo tính nhất quán và hiểu sâu sắc về dự án trong mọi phiên làm việc tiếp theo.
 
 ---
 
 ## 1. Thông Tin Tổng Quan Dự Án
-- **Tên ứng dụng:** Tour CRM - Quản lý cty du lịch
-- **Mô tả:** Hệ thống quản lý Tour du lịch, Đại lý, Visa và Kế toán dành cho công ty du lịch lữ hành.
+- **Tên ứng dụng:** AD OMS - Operating Management System (`AD Luxury Operating Management System`)
+- **Mô tả:** Hệ thống quản trị điều hành Tour du lịch, Đại lý, Visa, Nhân sự và Kế toán dành cho công ty du lịch lữ hành AD Luxury Travel.
 - **Công nghệ chính:**
   - **Frontend:** React 19, Vite, Tailwind CSS, Lucide-React, Motion (Framer Motion).
   - **Backend & Database:** Supabase (PostgreSQL, Auth, Storage).

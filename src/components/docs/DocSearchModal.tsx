@@ -167,7 +167,7 @@ export const DocSearchModal: React.FC<DocSearchModalProps> = ({
             <span>Dùng <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-bold">↑</kbd> <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-bold">↓</kbd> để di chuyển</span>
             <span><kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-bold">Enter</kbd> để mở bài</span>
           </div>
-          <span className="text-blue-600 font-bold">Tour CRM Docs</span>
+          <span className="text-blue-600 font-bold">AD OMS Docs</span>
         </div>
       </div>
     </div>

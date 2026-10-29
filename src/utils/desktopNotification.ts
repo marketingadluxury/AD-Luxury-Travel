@@ -207,8 +207,8 @@ export function sendTestDesktopNotification(): boolean {
   }
 
   sendDesktopNotification({
-    title: '🔔 AD Luxury Tours - Kiểm Tra Thông Báo',
-    body: 'Hệ thống thông báo đẩy Desktop đã được kích hoạt thành công! Bạn sẽ nhận được thông báo ngay cả khi đang làm việc trên ứng dụng khác.',
+    title: '🔔 AD OMS - Kiểm Tra Thông Báo',
+    body: 'Hệ thống thông báo đẩy Desktop (AD OMS) đã được kích hoạt thành công! Bạn sẽ nhận được thông báo ngay cả khi đang làm việc trên ứng dụng khác.',
     url: '/leave-requests',
     playSound: true
   });

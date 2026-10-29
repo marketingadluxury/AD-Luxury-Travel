@@ -34,15 +34,15 @@ export const DEFAULT_DOCS: SystemDoc[] = [
   {
     id: 'doc-intro',
     slug: 'intro',
-    title: 'Giới thiệu tổng quan hệ thống Tour CRM',
+    title: 'Giới thiệu tổng quan hệ thống AD OMS',
     category: 'overview',
     order_index: 1,
     target_roles: ['all'],
     badge: 'Khởi đầu',
-    summary: 'Tổng quan kiến trúc, mục tiêu và các phân hệ chức năng chính của Tour CRM - AD Luxury Travel.',
-    content: `## 1. Tổng quan về Tour CRM
+    summary: 'Tổng quan kiến trúc, mục tiêu và các phân hệ chức năng chính của AD OMS - AD Luxury Operating Management System.',
+    content: `## 1. Tổng quan về AD OMS
 
-**Tour CRM** là nền tảng quản trị vận hành du lịch lữ hành toàn diện dành riêng cho **AD Luxury Travel**, kết nối liền mạch từ khâu tiếp cận khách hàng (Marketing, Meta CAPI, Pancake), kinh doanh (Sale, CTV, Đại lý), điều phối (Điều hành Tour, HDV), đến tài chính (Kế toán, BOD) và nhân sự (HR).
+**AD OMS (AD Luxury Operating Management System)** là nền tảng quản trị điều hành du lịch lữ hành toàn diện dành riêng cho **AD Luxury Travel**, kết nối liền mạch từ khâu tiếp cận khách hàng (Marketing, Meta CAPI, Pancake), kinh doanh (Sale, CTV, Đại lý), điều phối (Điều hành Tour, HDV), đến tài chính (Kế toán, BOD) và nhân sự (HR).
 
 > 💡 **Mục tiêu cốt lõi:** Chuẩn hóa 100% luồng dữ liệu, loại bỏ sai lệch số liệu giữ chỗ, kiểm soát chặt chẽ lãi lỗ từng đoàn tour và tự động hóa thanh toán hoa hồng cho Đại lý/CTV.
 
@@ -81,7 +81,7 @@ Hệ thống được chia thành 7 phân hệ chính tương ứng với quy tr
     summary: 'Quy định chi tiết về phạm vi truy cập, quyền hạn và trách nhiệm của từng vai trò nhân sự trong hệ thống.',
     content: `## 1. Danh sách 12 vai trò trong hệ thống
 
-Hệ thống Tour CRM thiết lập ma trận phân quyền chặt chẽ (RBAC) để đảm bảo bảo mật và minh bạch dữ liệu:
+Hệ thống AD OMS thiết lập ma trận phân quyền chặt chẽ (RBAC) để đảm bảo bảo mật và minh bạch dữ liệu:
 
 | Vai trò (Role) | Ký hiệu | Phạm vi trách nhiệm chính |
 | :--- | :--- | :--- |
@@ -421,7 +421,7 @@ Hệ thống tự động điều hướng trực tiếp đến đường dẫn:
     summary: 'Công thức tích lũy phép năm 1 ngày/tháng, cách tính số ngày còn lại và quy trình phê duyệt 2 cấp chuẩn hóa.',
     content: `## 1. Cơ chế Tích lũy Quỹ phép năm Động (1 Ngày / Tháng)
 
-Nhằm đảm bảo tính công bằng và chính xác theo Luật Lao động, hệ thống Tour CRM áp dụng cơ chế tính quỹ phép lũy tiến theo từng tháng làm việc:
+Nhằm đảm bảo tính công bằng và chính xác theo Luật Lao động, hệ thống AD OMS áp dụng cơ chế tính quỹ phép lũy tiến theo từng tháng làm việc:
 
 \`Số ngày phép năm khả dụng = Số tháng đã làm việc trong năm hiện tại (Mỗi tháng +1 ngày)\`
 

@@ -265,7 +265,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
                 Góp Ý & Báo Lỗi
               </h3>
               <p className="text-xs font-medium text-slate-400 mt-0.5">
-                Bản quyền Tour CRM - AD Luxury Travel
+                Bản quyền AD OMS - AD Luxury Travel
               </p>
             </div>
           </div>

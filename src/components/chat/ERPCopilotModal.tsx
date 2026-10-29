@@ -33,7 +33,7 @@ export const ERPCopilotModal: React.FC = () => {
     {
       id: 'welcome',
       role: 'model',
-      content: `Xin chào! Tôi là **Trợ lý hướng dẫn** 🤖 - Trợ lý AI thông minh chuyên hỗ trợ vận hành hệ thống Tour CRM AD Luxury Travel.\n\nBạn có thể hỏi tôi về các quy trình nghiệp vụ, phân quyền vai trò (**${displayRole?.toUpperCase() || 'HỆ THỐNG'}**), cơ chế tính hoa hồng, nộp file Visa hoặc cách khởi tạo tour!`,
+      content: `Xin chào! Tôi là **Trợ lý hướng dẫn** 🤖 - Trợ lý AI thông minh chuyên hỗ trợ vận hành hệ thống AD OMS (AD Luxury Operating Management System).\n\nBạn có thể hỏi tôi về các quy trình nghiệp vụ, phân quyền vai trò (**${displayRole?.toUpperCase() || 'HỆ THỐNG'}**), cơ chế tính hoa hồng, nộp file Visa hoặc cách khởi tạo tour!`,
       timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -312,7 +312,7 @@ export const ERPCopilotModal: React.FC = () => {
                 onClick={() => setMessages([{
                   id: 'welcome',
                   role: 'model',
-                  content: `Xin chào! Tôi là **Trợ lý hướng dẫn** 🤖 - Trợ lý AI thông minh chuyên hỗ trợ vận hành hệ thống Tour CRM AD Luxury Travel.\n\nBạn có thể hỏi tôi về các quy trình nghiệp vụ, phân quyền vai trò (**${displayRole?.toUpperCase() || 'HỆ THỐNG'}**), cơ chế tính hoa hồng, nộp file Visa hoặc cách khởi tạo tour!`,
+                  content: `Xin chào! Tôi là **Trợ lý hướng dẫn** 🤖 - Trợ lý AI thông minh chuyên hỗ trợ vận hành hệ thống AD OMS (AD Luxury Operating Management System).\n\nBạn có thể hỏi tôi về các quy trình nghiệp vụ, phân quyền vai trò (**${displayRole?.toUpperCase() || 'HỆ THỐNG'}**), cơ chế tính hoa hồng, nộp file Visa hoặc cách khởi tạo tour!`,
                   timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                 }])}
                 className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"

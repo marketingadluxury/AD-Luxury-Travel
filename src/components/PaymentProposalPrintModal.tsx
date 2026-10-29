@@ -418,7 +418,7 @@ export default function PaymentProposalPrintModal({ isOpen, onClose, proposal }:
 
             {/* Document footer code */}
             <div className="mt-8 text-[11px] text-slate-400 text-right font-sans">
-              Hệ thống Tour CRM AD Luxury Travel · Mã phiếu: {proposal.code}
+              Hệ thống AD OMS - AD Luxury Travel · Mã phiếu: {proposal.code}
             </div>
           </div>
         </div>

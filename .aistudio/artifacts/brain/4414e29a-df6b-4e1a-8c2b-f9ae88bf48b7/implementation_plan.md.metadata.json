@@ -1,6 +1,6 @@
 {
-  "summary":  "Kế hoạch chuẩn hóa, đóng gói và phát hành mã nguồn mở (Open-Source Public Repository) cho hệ thống Tour CRM dành cho các công ty du lịch lữ hành.",
-  "updatedAt":  "2026-10-27T06:54:58.444884152Z",
+  "summary":  "Kế hoạch đổi tên thương hiệu toàn hệ thống từ Tour CRM sang AD OMS (AD Luxury Operating Management System), đồng bộ cấu hình tên miền oms.adluxury.net và hoàn tất chỉnh sửa giao diện sửa Đề nghị thanh toán / Đơn nghỉ phép.",
+  "updatedAt":  "2026-10-29T03:30:21.237548517Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

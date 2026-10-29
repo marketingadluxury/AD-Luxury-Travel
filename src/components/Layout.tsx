@@ -674,7 +674,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         }
 
         sendDesktopNotification({
-          title: notif.title || '🔔 Thông báo từ Tour CRM',
+          title: notif.title || '🔔 Thông báo từ AD OMS',
           body: (notif.message || '').replace(/\b([0-9a-fA-F]{8})-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g, '$1'),
           url: targetUrl,
           tag: notif.id,
@@ -799,8 +799,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <img src="/favicon.svg" alt="Vé máy bay logo" className="w-full h-full object-contain" />
           </div>
           <div className="min-w-0">
-            <span className="text-base font-black text-gray-900 tracking-tight block leading-none truncate">Tour CRM</span>
-            <span className="text-[10px] text-blue-600 font-extrabold uppercase tracking-wider block mt-0.5 truncate">AD Luxury Travel</span>
+            <span className="text-base font-black text-gray-900 tracking-tight block leading-none truncate">AD OMS</span>
+            <span className="text-[10px] text-blue-600 font-extrabold tracking-wide block mt-0.5 truncate">Operating Management System</span>
           </div>
         </div>
         
@@ -959,7 +959,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="flex items-center gap-2 min-w-0">
               <h1 className="text-[28px] font-bold text-gray-900 truncate" style={{ fontSize: '28px' }}>
-                {isGuest ? 'Lịch khởi hành tour' : (allNavItems.find(n => n.href === location.pathname)?.name || 'Tour CRM')}
+                {isGuest ? 'Lịch khởi hành tour' : (allNavItems.find(n => n.href === location.pathname)?.name || 'AD OMS')}
               </h1>
               <span className="hidden sm:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">
                 {isGuest ? 'Khách vãng lai' : getRoleLabel(displayRole)}
@@ -1363,8 +1363,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <img src="/favicon.svg" alt="Vé máy bay logo" className="w-full h-full object-contain" />
                 </div>
                 <div>
-                  <span className="text-sm font-black tracking-tight block leading-none">Tour CRM</span>
-                  <span className="text-[9px] text-blue-400 font-bold uppercase tracking-wider block mt-0.5">AD Luxury Travel</span>
+                  <span className="text-sm font-black tracking-tight block leading-none">AD OMS</span>
+                  <span className="text-[9px] text-blue-400 font-bold tracking-wide block mt-0.5">Operating Management System</span>
                 </div>
               </div>
               <button

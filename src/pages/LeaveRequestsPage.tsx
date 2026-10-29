@@ -72,6 +72,7 @@ export default function LeaveRequestsPage() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'my_leaves' | 'team_approval' | 'final_approval' | 'timesheet' | 'leave_balances' | 'holidays_settings'>('my_leaves');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingLeaveRequest, setEditingLeaveRequest] = useState<LeaveRequest | null>(null);
 
   // Bộ lọc cho danh sách đơn
   const [statusFilter, setStatusFilter] = useState<'all' | LeaveStatus>('all');
@@ -388,7 +389,10 @@ export default function LeaveRequestsPage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() => {
+              setEditingLeaveRequest(null);
+              setIsCreateModalOpen(true);
+            }}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
@@ -925,6 +929,7 @@ export default function LeaveRequestsPage() {
                       : getLeaveRequestWorkdaysCount(req.start_date, req.end_date, holidays, session);
                     const isMyRequest = req.user_id === currentUserId;
                     const canDelete = (isMyRequest && (req.status === 'pending' || req.status === 'rejected')) || isHRorBODorAdmin;
+                    const canEdit = isHRorBODorAdmin || isLeader || (isMyRequest && (req.status === 'pending' || req.status === 'rejected'));
 
                     const creator = profilesList.find((p) => p.id === req.user_id);
 
@@ -1014,6 +1019,22 @@ export default function LeaveRequestsPage() {
                               <span className="hidden sm:inline">Xuất đơn</span>
                             </button>
 
+                            {/* Nút Chỉnh sửa Đơn (Leader, Admin, HR, Người tạo) */}
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLeaveRequest(req);
+                                  setIsCreateModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs border border-amber-200 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
+                                title="Chỉnh sửa đơn xin nghỉ phép"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Sửa</span>
+                              </button>
+                            )}
+
                             {/* Nút Duyệt Cấp 1 (Trưởng nhóm) */}
                             {canApproveL1 && (
                               <button
@@ -1076,10 +1097,14 @@ export default function LeaveRequestsPage() {
         </div>
       )}
 
-      {/* Modal Tạo Đơn Xin Nghỉ Phép */}
+      {/* Modal Tạo / Chỉnh Sửa Đơn Xin Nghỉ Phép */}
       <CreateLeaveRequestModal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingLeaveRequest(null);
+        }}
+        editingRequest={editingLeaveRequest}
       />
 
       {/* Modal Từ Chối Đơn */}

@@ -6,6 +6,22 @@ Tài liệu này lưu trữ lịch sử sửa lỗi và các vấn đề cần l
 
 ## 1. Các Vấn Đề Đã Được Khắc Phục (Resolved Issues)
 
+### 1.115 Đổi Tên Hệ Thống Sang AD OMS (AD Luxury Operating Management System) & Bổ Sung Quyền Chỉnh Sửa Phiếu Đề Nghị Thanh Toán / Đơn Nghỉ Phép Cho Leader & Admin
+- **Mô tả yêu cầu:**
+  1. Đổi tên toàn bộ hệ thống từ `Tour CRM` sang **`AD OMS`** (*AD Luxury Operating Management System*), đồng bộ trên Sidebar, Mobile Drawer, Tiêu đề tab trình duyệt (`AD OMS - Operating Management System`), PWA Manifest, Trang Đăng nhập (`/login`), Thông báo đẩy Desktop, Trung tâm Tài liệu (`/docs`) và biểu mẫu in ấn.
+  2. Cập nhật URL callback mặc định cho môi trường Production sang tên miền mới `https://oms.adluxury.net`.
+  3. Cho phép Trưởng bộ phận (`sale_leader`, `marketing_leader`, `operator`, `visa_leader`), Nhân sự (`hr`), Ban Giám đốc (`bod`) và Quản trị viên (`admin`) chỉnh sửa **Phiếu đề nghị thanh toán** và **Đơn xin nghỉ phép** đã tạo.
+- **Giải pháp triển khai:**
+  1. **Đồng bộ thương hiệu `AD OMS` toàn hệ thống:**
+     - Cập nhật `index.html`, `public/manifest.json`, `metadata.json` với tên chính thức `AD OMS - Operating Management System` và tên rút gọn `AD OMS`.
+     - Cập nhật cụm nhận diện thương hiệu trên Sidebar máy tính và Menu di động (`Layout.tsx`) với dòng chính `AD OMS` và dòng phụ `Operating Management System`.
+     - Đồng bộ tiêu đề thông báo đẩy Desktop (`Layout.tsx`, `desktopNotification.ts`), trang Đăng nhập (`Auth.tsx`), Trung tâm Tài liệu (`DocsPage.tsx`, `DocSearchModal.tsx`, `defaultDocs.ts`), Trợ lý hướng dẫn (`ERPCopilotModal.tsx`), Modal Góp ý (`FeedbackModal.tsx`) và chân trang biểu mẫu in (`PaymentProposalPrintModal.tsx`).
+     - Cập nhật `callbackUrlProd` trong `GoogleDriveSettingsSection.tsx` sang `https://oms.adluxury.net/api/drive/oauth/callback`.
+  2. **Phân quyền & Giao diện Chỉnh sửa Đề nghị thanh toán (`PaymentProposals.tsx`) và Đơn nghỉ phép (`LeaveManagement.tsx`):**
+     - Bổ sung hàm kiểm tra quyền `canEditProposal` và `canEditLeave`: Cho phép người tạo sửa khi phiếu đang chờ duyệt cấp 1 (`pending`), đồng thời cho phép Trưởng bộ phận phụ trách, HR, BOD và Admin chỉnh sửa thông tin phiếu trước khi hoàn tất chi tiền/duyệt cuối.
+     - Bổ sung nút **Chỉnh sửa** trực tiếp trên dòng danh sách và trong Modal Xem chi tiết; đồng bộ tiêu đề Modal (`Chỉnh Sửa Đề Nghị Thanh Toán` / `Chỉnh Sửa Đơn Xin Nghỉ Phép`) và nút lưu (`Lưu Cập Nhật`).
+- **Trạng thái:** Đã hoàn thành và kiểm thử thành công 100%.
+
 ### 1.114 Khắc Phục Triệt Để Lỗi In / Xuất PDF Bị Trắng Trang A4 (Blank Page Print Bug)
 - **Mô tả yêu cầu & Hiện tượng thực tế:**
   - Khi người dùng bấm nút "In / Tải PDF" trên Modal Đơn xin nghỉ phép (`LeaveRequestPrintModal`), Giấy đề nghị thanh toán (`PaymentProposalPrintModal`), hoặc Hợp đồng du lịch (`TourContractPrintModal`), trình duyệt (Chrome, Edge, Firefox) mở hộp thoại in với 1 trang trắng tinh không có nội dung văn bản (như phản ánh trong hình ảnh đính kèm `image_f5c64d5a.png`).

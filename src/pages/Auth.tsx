@@ -229,19 +229,22 @@ export default function Auth({ initialIsUpdatePassword = false }: AuthProps) {
               <div className="bg-white p-2 rounded-lg">
                 <Ticket className="w-6 h-6 text-blue-700" />
               </div>
-              <span className="text-2xl font-bold tracking-tight">AD Luxury Travel</span>
+              <div className="flex flex-col">
+                <span className="text-2xl font-bold tracking-tight leading-none">AD OMS</span>
+                <span className="text-xs text-blue-200 font-semibold mt-1">Operating Management System</span>
+              </div>
             </div>
             
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 leading-snug">
-              Quản lý Tour &amp; Dịch vụ chuyên nghiệp
+              Quản trị &amp; Điều hành lữ hành chuyên nghiệp
             </h1>
             <p className="text-blue-100 mb-8 text-sm leading-relaxed">
-              Hệ thống CRM dành riêng cho công ty du lịch. Quản lý điều hành, quỹ chỗ, visa và khách hàng một cách liền mạch.
+              Hệ thống AD Luxury Operating Management System (AD OMS). Quản lý điều hành, quỹ chỗ, visa, kế toán và khách hàng một cách liền mạch.
             </p>
           </div>
 
           <div className="relative z-10 text-sm text-blue-200 font-medium">
-            &copy; 2026 AD Luxury Travel CRM. All rights reserved.
+            &copy; 2026 AD OMS - AD Luxury Travel. All rights reserved.
           </div>
         </div>
 

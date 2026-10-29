@@ -298,15 +298,15 @@ export default function DocsPage() {
               <Menu className="w-4 h-4" />
             </button>
 
-            {/* Back to CRM button */}
+            {/* Back to OMS button */}
             <Link
               to="/"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-bold text-xs transition-all border border-slate-200/90 shadow-2xs group shrink-0 active:scale-95"
-              title="Quay lại giao diện phần mềm Tour CRM"
+              title="Quay lại giao diện phần mềm AD OMS"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-600 group-hover:-translate-x-0.5 transition-transform" />
-              <span className="hidden sm:inline">Quay lại Tour CRM</span>
-              <span className="sm:hidden">CRM</span>
+              <span className="hidden sm:inline">Quay lại AD OMS</span>
+              <span className="sm:hidden">OMS</span>
             </Link>
 
             <div className="h-5 w-px bg-slate-200 hidden sm:block shrink-0" />
@@ -317,7 +317,7 @@ export default function DocsPage() {
                 <BookOpen className="w-4 h-4" />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-black text-slate-900 tracking-tight leading-none hidden xs:inline">Tour CRM</span>
+                <span className="text-sm font-black text-slate-900 tracking-tight leading-none hidden xs:inline">AD OMS</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-200/80 uppercase">Docs</span>
               </div>
             </div>

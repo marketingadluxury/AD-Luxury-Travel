@@ -43,6 +43,7 @@ import {
   RotateCcw,
   Compass,
   Printer,
+  Edit3,
   X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -74,6 +75,7 @@ export default function PaymentProposals() {
   const {
     paymentProposals = [],
     createPaymentProposal,
+    updatePaymentProposal,
     approvePaymentProposalLeader,
     rejectPaymentProposalLeader,
     approvePaymentProposalAccounting,
@@ -148,6 +150,7 @@ export default function PaymentProposals() {
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingProposal, setEditingProposal] = useState<PaymentProposal | null>(null);
   const [selectedProposal, setSelectedProposal] = useState<PaymentProposal | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedProposalForPrint, setSelectedProposalForPrint] = useState<PaymentProposal | null>(null);
@@ -178,6 +181,66 @@ export default function PaymentProposals() {
     file_url: '',
     note: ''
   });
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      proposal_type: 'individual',
+      amount: '',
+      payment_method: 'Chuyển khoản',
+      bank_name: 'Vietcombank (VCB)',
+      custom_bank: '',
+      account_number: '',
+      account_name: '',
+      tour_id: '',
+      due_date: '',
+      file_url: '',
+      note: ''
+    });
+    setEditingProposal(null);
+  };
+
+  // Quyền chỉnh sửa Đề nghị thanh toán:
+  // 1. Admin/BOD sửa được tất cả
+  // 2. Leader sửa được nếu chưa chi tiền
+  // 3. Người tạo sửa được khi đang chờ duyệt hoặc bị từ chối
+  const canEditProposal = (p: PaymentProposal) => {
+    const isCreator = p.created_by_id === profile?.id || p.created_by_id === user?.id;
+    const isAdminOrBod = ['admin', 'bod'].includes(effectiveRole);
+
+    if (p.status === 'approved_accounting') {
+      return isAdminOrBod;
+    }
+
+    if (isAdminOrBod) return true;
+    if (isLeader) return true;
+
+    if (isCreator && (p.status === 'pending_leader' || p.status === 'rejected_leader' || p.status === 'rejected_accounting')) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleOpenEdit = (p: PaymentProposal) => {
+    const isCustomBank = p.bank_name && !VIETNAM_BANKS.includes(p.bank_name);
+    setFormData({
+      title: p.title || '',
+      proposal_type: p.proposal_type || 'individual',
+      amount: p.amount ? String(p.amount) : '',
+      payment_method: p.payment_method || 'Chuyển khoản',
+      bank_name: isCustomBank ? 'Khác (Nhập chi tiết bên dưới)' : (p.bank_name || 'Vietcombank (VCB)'),
+      custom_bank: isCustomBank ? (p.bank_name || '') : '',
+      account_number: p.account_number || '',
+      account_name: p.account_name || '',
+      tour_id: p.tour_id || '',
+      due_date: p.due_date || '',
+      file_url: p.file_url || '',
+      note: p.note || ''
+    });
+    setEditingProposal(p);
+    setShowCreateModal(true);
+  };
 
   // Uploading status
   const [isUploading, setIsUploading] = useState(false);
@@ -306,47 +369,55 @@ export default function PaymentProposals() {
         ? (formData.bank_name === 'Khác (Nhập chi tiết bên dưới)' ? formData.custom_bank.trim() : formData.bank_name)
         : undefined;
 
-      await createPaymentProposal({
-        proposal_type: formData.proposal_type,
-        title: formData.title.trim(),
-        amount: numAmount,
-        payment_method: formData.payment_method,
-        bank_name: finalBank,
-        account_number: formData.payment_method === 'Chuyển khoản' ? formData.account_number.trim() : undefined,
-        account_name: formData.payment_method === 'Chuyển khoản' ? formData.account_name.trim().toUpperCase() : undefined,
-        tour_id: formData.proposal_type === 'tour' ? formData.tour_id : undefined,
-        tour_code: selectedTour?.code,
-        tour_name: selectedTour?.name,
-        due_date: formData.due_date || undefined,
-        file_url: formData.file_url || undefined,
-        note: formData.note.trim() || undefined,
-        created_by_id: profile?.id || user?.id,
-        created_by_name: profile?.full_name || user?.email || 'Nhân viên',
-        created_by_role: (user?.email === 'marketing.adluxury@gmail.com' || profile?.full_name?.toLowerCase().includes('hậu'))
-          ? (currentRole === 'admin' ? 'admin' : (currentRole === 'marketing' ? 'marketing' : 'marketing_leader'))
-          : (profile?.role || displayRole || currentRole || 'sale')
-      });
+      if (editingProposal) {
+        await updatePaymentProposal(editingProposal.id, {
+          proposal_type: formData.proposal_type,
+          title: formData.title.trim(),
+          amount: numAmount,
+          payment_method: formData.payment_method,
+          bank_name: finalBank,
+          account_number: formData.payment_method === 'Chuyển khoản' ? formData.account_number.trim() : undefined,
+          account_name: formData.payment_method === 'Chuyển khoản' ? formData.account_name.trim().toUpperCase() : undefined,
+          tour_id: formData.proposal_type === 'tour' ? formData.tour_id : undefined,
+          tour_code: selectedTour?.code,
+          tour_name: selectedTour?.name,
+          due_date: formData.due_date || undefined,
+          file_url: formData.file_url || undefined,
+          note: formData.note.trim() || undefined
+        });
 
-      toast.success('Đã gửi Đề nghị thanh toán thành công! Hồ sơ đang chờ Leader duyệt.');
-      setShowCreateModal(false);
-      // Reset form
-      setFormData({
-        title: '',
-        proposal_type: 'individual',
-        amount: '',
-        payment_method: 'Chuyển khoản',
-        bank_name: 'Vietcombank (VCB)',
-        custom_bank: '',
-        account_number: '',
-        account_name: '',
-        tour_id: '',
-        due_date: '',
-        file_url: '',
-        note: ''
-      });
+        toast.success('Đã cập nhật Đề nghị thanh toán thành công!');
+        setShowCreateModal(false);
+        resetForm();
+      } else {
+        await createPaymentProposal({
+          proposal_type: formData.proposal_type,
+          title: formData.title.trim(),
+          amount: numAmount,
+          payment_method: formData.payment_method,
+          bank_name: finalBank,
+          account_number: formData.payment_method === 'Chuyển khoản' ? formData.account_number.trim() : undefined,
+          account_name: formData.payment_method === 'Chuyển khoản' ? formData.account_name.trim().toUpperCase() : undefined,
+          tour_id: formData.proposal_type === 'tour' ? formData.tour_id : undefined,
+          tour_code: selectedTour?.code,
+          tour_name: selectedTour?.name,
+          due_date: formData.due_date || undefined,
+          file_url: formData.file_url || undefined,
+          note: formData.note.trim() || undefined,
+          created_by_id: profile?.id || user?.id,
+          created_by_name: profile?.full_name || user?.email || 'Nhân viên',
+          created_by_role: (user?.email === 'marketing.adluxury@gmail.com' || profile?.full_name?.toLowerCase().includes('hậu'))
+            ? (currentRole === 'admin' ? 'admin' : (currentRole === 'marketing' ? 'marketing' : 'marketing_leader'))
+            : (profile?.role || displayRole || currentRole || 'sale')
+        });
+
+        toast.success('Đã gửi Đề nghị thanh toán thành công! Hồ sơ đang chờ Leader duyệt.');
+        setShowCreateModal(false);
+        resetForm();
+      }
     } catch (err: any) {
       console.error(err);
-      toast.error('Lỗi khi tạo đề nghị thanh toán: ' + (err.message || 'Thử lại sau'));
+      toast.error('Lỗi khi lưu đề nghị thanh toán: ' + (err.message || 'Thử lại sau'));
     } finally {
       setIsSubmitting(false);
     }
@@ -538,7 +609,10 @@ export default function PaymentProposals() {
           </div>
 
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
             className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white text-[#0038A8] hover:bg-blue-50 font-bold rounded-xl shadow-md transition-all duration-200 hover:scale-[1.02] cursor-pointer whitespace-nowrap self-start sm:self-auto"
           >
             <Plus className="w-5 h-5 text-[#0038A8]" />
@@ -786,14 +860,27 @@ export default function PaymentProposals() {
                                   <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shrink-0">
                                     {proposal.code}
                                   </span>
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1">
+                                    {canEditProposal(proposal) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenEdit(proposal);
+                                        }}
+                                        className="p-1 hover:bg-amber-100 text-slate-400 hover:text-amber-700 rounded-md transition-colors cursor-pointer"
+                                        title="Chỉnh sửa đề nghị thanh toán"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedProposalForPrint(proposal);
                                       }}
-                                      className="p-1 hover:bg-blue-100 text-slate-400 hover:text-blue-700 rounded-md transition-colors"
+                                      className="p-1 hover:bg-blue-100 text-slate-400 hover:text-blue-700 rounded-md transition-colors cursor-pointer"
                                       title="Xuất / In giấy đề nghị thanh toán"
                                     >
                                       <Printer className="w-3.5 h-3.5" />
@@ -1127,11 +1214,22 @@ export default function PaymentProposals() {
                           {/* Export / Print Proposal */}
                           <button
                             onClick={() => setSelectedProposalForPrint(p)}
-                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200 cursor-pointer"
                             title="Xuất / In giấy đề nghị thanh toán"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
+
+                          {/* Edit Proposal Button */}
+                          {canEditProposal(p) && (
+                            <button
+                              onClick={() => handleOpenEdit(p)}
+                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors border border-amber-200 cursor-pointer"
+                              title="Chỉnh sửa đề nghị thanh toán"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          )}
 
                           {/* Detail View */}
                           <button
@@ -1139,7 +1237,7 @@ export default function PaymentProposals() {
                               setSelectedProposal(p);
                               setShowDetailModal(true);
                             }}
-                            className="p-1.5 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200"
+                            className="p-1.5 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200 cursor-pointer"
                             title="Xem chi tiết"
                           >
                             <Eye className="w-4 h-4" />
@@ -1183,11 +1281,16 @@ export default function PaymentProposals() {
               <div className="bg-gradient-to-r from-[#0038A8] to-blue-900 px-6 py-4 text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileCheck className="w-5 h-5 text-blue-200" />
-                  <h2 className="text-lg font-bold">Tạo Đề Nghị Thanh Toán Mới</h2>
+                  <h2 className="text-lg font-bold">
+                    {editingProposal ? `Chỉnh Sửa Đề Nghị Thanh Toán (${editingProposal.code})` : 'Tạo Đề Nghị Thanh Toán Mới'}
+                  </h2>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setEditingProposal(null);
+                  }}
                   className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                   title="Đóng"
                 >
@@ -1420,7 +1523,10 @@ export default function PaymentProposals() {
                 <div className="pt-4 border-t border-gray-200 flex items-center justify-end gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setEditingProposal(null);
+                    }}
                     className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-colors"
                   >
                     Hủy bỏ
@@ -1431,7 +1537,7 @@ export default function PaymentProposals() {
                     className="px-6 py-2.5 bg-[#0038A8] hover:bg-blue-900 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     <Send className="w-4 h-4" />
-                    <span>Gửi Đề Nghị Thanh Toán</span>
+                    <span>{editingProposal ? 'Lưu Cập Nhật' : 'Gửi Đề Nghị Thanh Toán'}</span>
                   </button>
                 </div>
               </form>
@@ -1581,6 +1687,20 @@ export default function PaymentProposals() {
                   <h2 className="text-lg font-bold">{selectedProposal.code}</h2>
                 </div>
                 <div className="flex items-center gap-2">
+                  {canEditProposal(selectedProposal) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDetailModal(false);
+                        handleOpenEdit(selectedProposal);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/90 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-white/20"
+                      title="Chỉnh sửa phiếu đề nghị"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Chỉnh sửa</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setSelectedProposalForPrint(selectedProposal)}
@@ -1749,7 +1869,7 @@ export default function PaymentProposals() {
 
               {/* DETAIL MODAL ACTION FOOTER */}
               <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
-                <div>
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setShowDetailModal(false)}
@@ -1757,6 +1877,21 @@ export default function PaymentProposals() {
                   >
                     Đóng
                   </button>
+
+                  {canEditProposal(selectedProposal) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDetailModal(false);
+                        handleOpenEdit(selectedProposal);
+                      }}
+                      className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-xl text-xs border border-amber-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Chỉnh sửa đề nghị thanh toán"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      <span>Chỉnh sửa đề nghị</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">

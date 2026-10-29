@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, AlertCircle, Clock, CheckCircle2, UserCheck, X, Sun, Sunset, Plus } from 'lucide-react';
+import { Calendar, AlertCircle, Clock, CheckCircle2, UserCheck, X, Sun, Sunset, Plus, Edit3 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { useAuth } from '../context/AuthContext';
-import { LeaveType, LeaveSession } from '../types';
+import { LeaveType, LeaveSession, LeaveRequest } from '../types';
 import { getLeaveRequestWorkdaysCount, getEffectiveLeaveBalance } from '../lib/payrollUtils';
 import { DatePicker } from './DatePicker';
 import { CustomSelect } from './CustomSelect';
@@ -11,18 +11,22 @@ import { CustomSelect } from './CustomSelect';
 interface CreateLeaveRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editingRequest?: LeaveRequest | null;
 }
 
-export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = ({ isOpen, onClose }) => {
+export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = ({ isOpen, onClose, editingRequest }) => {
   const { user, profile } = useAuth();
-  const { profilesList, createLeaveRequest, holidays, leaveBalances, leaveRequests } = useCRM();
+  const { profilesList, createLeaveRequest, updateLeaveRequest, holidays, leaveBalances, leaveRequests } = useCRM();
 
   const currentYear = new Date().getFullYear();
   const currentUserId = profile?.id || user?.id || '';
 
+  const targetUserId = editingRequest?.user_id || currentUserId;
+  const targetUserProfile = profilesList.find(p => p.id === targetUserId) || (targetUserId === currentUserId ? profile : undefined);
+
   const userBalance = useMemo(() => {
-    return getEffectiveLeaveBalance(currentUserId, currentYear, leaveBalances, profile, undefined, leaveRequests, holidays);
-  }, [leaveBalances, currentUserId, currentYear, profile, leaveRequests, holidays]);
+    return getEffectiveLeaveBalance(targetUserId, currentYear, leaveBalances, targetUserProfile, undefined, leaveRequests, holidays);
+  }, [leaveBalances, targetUserId, currentYear, targetUserProfile, leaveRequests, holidays]);
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -31,6 +35,24 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
   const [reason, setReason] = useState('');
   const [handoverNote, setHandoverNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (editingRequest) {
+      setStartDate(editingRequest.start_date || '');
+      setEndDate(editingRequest.end_date || '');
+      setLeaveSession(editingRequest.leave_session || 'all_day');
+      setLeaveType(editingRequest.type || 'annual');
+      setReason(editingRequest.reason || '');
+      setHandoverNote(editingRequest.handover_user_name || '');
+    } else {
+      setStartDate('');
+      setEndDate('');
+      setLeaveSession('all_day');
+      setLeaveType('annual');
+      setReason('');
+      setHandoverNote('');
+    }
+  }, [editingRequest, isOpen]);
 
   // Kiểm tra xem có phải đơn xin nghỉ trong 1 ngày không (để cho phép chọn Buổi sáng / Buổi chiều / Cả ngày)
   const isSingleDay = startDate && endDate && startDate === endDate;
@@ -70,20 +92,36 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
     try {
       const sessionToSave: LeaveSession = isSingleDay ? leaveSession : 'all_day';
 
-      await createLeaveRequest({
-        user_id: currentUserId,
-        user_name: profile?.full_name || user?.email || 'Nhân viên',
-        user_email: user?.email || '',
-        user_role: profile?.role || 'sale',
-        start_date: startDate,
-        end_date: endDate,
-        leave_session: sessionToSave,
-        total_days: requestedWorkdays,
-        type: leaveType,
-        reason: reason.trim(),
-        handover_user_id: null,
-        handover_user_name: handoverNote.trim() || null,
-      });
+      if (editingRequest) {
+        const isCreator = editingRequest.user_id === currentUserId;
+        const newStatus = isCreator && editingRequest.status !== 'pending' ? 'pending' : editingRequest.status;
+
+        await updateLeaveRequest(editingRequest.id, {
+          start_date: startDate,
+          end_date: endDate,
+          leave_session: sessionToSave,
+          total_days: requestedWorkdays,
+          type: leaveType,
+          reason: reason.trim(),
+          handover_user_name: handoverNote.trim() || null,
+          status: newStatus
+        });
+      } else {
+        await createLeaveRequest({
+          user_id: currentUserId,
+          user_name: profile?.full_name || user?.email || 'Nhân viên',
+          user_email: user?.email || '',
+          user_role: profile?.role || 'sale',
+          start_date: startDate,
+          end_date: endDate,
+          leave_session: sessionToSave,
+          total_days: requestedWorkdays,
+          type: leaveType,
+          reason: reason.trim(),
+          handover_user_id: null,
+          handover_user_name: handoverNote.trim() || null,
+        });
+      }
 
       onClose();
       // Reset form
@@ -94,7 +132,7 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
       setHandoverNote('');
       setLeaveType('annual');
     } catch (err) {
-      console.error('Lỗi khi tạo đơn nghỉ phép:', err);
+      console.error('Lỗi khi lưu đơn nghỉ phép:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -111,17 +149,25 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold">
-              <Calendar className="w-5 h-5" />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+              editingRequest ? 'bg-amber-600/10 text-amber-600' : 'bg-blue-600/10 text-blue-600'
+            }`}>
+              {editingRequest ? <Edit3 className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Tạo Đơn Xin Nghỉ Phép</h3>
-              <p className="text-xs text-slate-500">Gửi đề xuất nghỉ phép và bàn giao công việc</p>
+              <h3 className="text-lg font-bold text-slate-800">
+                {editingRequest ? 'Chỉnh Sửa Đơn Xin Nghỉ Phép' : 'Tạo Đơn Xin Nghỉ Phép'}
+              </h3>
+              <p className="text-xs text-slate-500">
+                {editingRequest
+                  ? `Đang cập nhật đơn xin nghỉ của ${editingRequest.user_name || 'nhân viên'}`
+                  : 'Gửi đề xuất nghỉ phép và bàn giao công việc'}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -393,9 +439,11 @@ export const CreateLeaveRequestModal: React.FC<CreateLeaveRequestModalProps> = (
             <button
               type="submit"
               disabled={isSubmitting || requestedWorkdays === 0}
-              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-md shadow-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className={`px-5 py-2.5 rounded-xl text-white text-sm font-bold shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer ${
+                editingRequest ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+              }`}
             >
-              {isSubmitting ? 'Đang gửi...' : 'Gửi Đơn Xin Nghỉ'}
+              {isSubmitting ? 'Đang lưu...' : (editingRequest ? 'Lưu Cập Nhật Đơn' : 'Gửi Đơn Xin Nghỉ')}
             </button>
           </div>
         </form>
